@@ -1,0 +1,11 @@
+endpoints:
+  - name: chat
+    endpoint_type: llm/v1/chat
+    model:
+      provider: openai
+      name: ollama/mixtral
+      config:
+        openai_api_key: $OPENAI_API_KEY
+        base_url: http://127.0.0.1:4000
+
+

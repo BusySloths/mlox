@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:latest
+    container_name: milvus-etcd
+    command: ["/usr/local/bin/etcd", "--data-dir=/etcd-data", "--advertise-client-urls=http://0.0.0.0:2379", "--listen-client-urls=http://0.0.0.0:2379"]
+    volumes:
+      - etcd_data:/etcd-data
+    networks:
+      - milvus-network
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: milvus-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "minioadmin"
+    volumes:
+      - minio_data:/data
+    networks:
+      - milvus-network
+    restart: unless-stopped
+
+  milvus:
+    image: milvusdb/milvus:v2.3.0    
+    container_name: milvus
+    environment:
+      ETCD_ENDPOINTS: "etcd:2379"
+      MINIO_ADDRESS: "minio:9000"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      MINIO_USE_SSL: "false"
+    depends_on:
+      - etcd
+      - minio
+    networks:
+      - milvus-network
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+    - seccomp:unconfined
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+      
+volumes:
+  etcd_data:
+  minio_data:
+
+networks:
+  milvus-network:
+    driver: bridge

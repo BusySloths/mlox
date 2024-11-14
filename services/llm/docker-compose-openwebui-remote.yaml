@@ -1,0 +1,80 @@
+version: "3.8"
+
+services:
+
+  traefik-webui:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.https.address=:8085"
+    ports:
+      - ${OPEN_WEBUI_PORT}:8085
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro      
+    networks:
+      - traefik-webui-net
+    labels:
+      - "traefik-webui.enable=true"
+      - "traefik-webui.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik-webui.http.middlewares.https-redirect.redirectscheme.permanent=true"
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: open-webui
+    volumes:
+      - open-webui:/app/backend/data
+      - ./litellm.pem:/etc/ssl/certs/ca-certificates.crt:ro      
+    ports:
+      - 32000:8085
+    environment: 
+      # - 'OLLAMA_BASE_URL=http://ollama:11434'
+      - WEBUI_SECRET_KEY=${OPEN_WEBUI_SECRET_KEY}
+      - WEBUI_URL=https://${OPEN_WEBUI_URL}:${OPEN_WEBUI_PORT}
+      # DO NOT TRACK
+      - SCARF_NO_ANALYTICS=True
+      - DO_NOT_TRACK=True
+      - ANONYMIZED_TELEMETRY=False      
+      - OPENAI_API_BASE_URL=${LITELLM_BASE_URL}
+      - OPENAI_API_KEY=${LITELLM_API_KEY}
+      - SSL_VERIFY=False
+      - WEBUI_AUTH=True
+      - PORT=8085
+      # - https_proxy=https://${OPEN_WEBUI_URL}:${OPEN_WEBUI_PORT}
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt      
+    # extra_hosts:
+    #   - host.docker.internal:host-gateway
+    restart: unless-stopped
+    labels:
+      - "traefik-webui.enable=true"
+
+      - "traefik-webui.http.routers.webui-secure.entrypoints=https"
+      - "traefik-webui.http.routers.webui-secure.rule=Host(`${OPEN_WEBUI_URL:-localhost}`)"
+      - "traefik-webui.http.routers.webui-secure.service=webui"
+      - "traefik-webui.http.routers.webui-secure.tls=true"
+
+      - "traefik-webui.http.services.webui.loadbalancer.server.port=8085"
+      - "traefik-webui.http.services.webui-secure.loadbalancer.server.port=8085"
+      
+      - traefik-webui.http.middlewares.https-redirect.redirectscheme.scheme=https
+      - traefik-webui.http.middlewares.https-redirect.redirectscheme.permanent=true
+      
+      - traefik-webui.http.routers.webui.middlewares=https-redirect  
+    networks:
+      - traefik-webui-net
+
+
+volumes:
+  # Create a volume to store the certificates, there is a constraint to make sure
+  # Traefik is always deployed to the same Docker node with the same volume containing
+  # the HTTPS certificates
+  traefik-public-certificates:  
+  open-webui: {}
+
+networks:
+  traefik-webui-net:

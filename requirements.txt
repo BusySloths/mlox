@@ -1,0 +1,17 @@
+fabric
+pyyaml
+oauth2client
+google-cloud-secret-manager
+streamlit
+pandas
+numpy
+psutil  # used for system metrics logging in mlflow
+mlflow
+# mlflow[extras]
+mlserver
+
+grpcio
+pymilvus
+
+langchain
+langchain-openai

@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7.2-bookworm
+    container_name: "feast_redis"
+    # ports:
+    #   - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - feast_network
+
+  feast:
+    build:
+      context: .  # Use the Dockerfile in the current directory
+    container_name: "feast_server_ssl"  
+    ports:
+      - "6565:6565"  # gRPC endpoint for Feast
+      - "8080:8080"  # HTTP endpoint for Feast
+    volumes:
+      - ./feature_repo:/app/feature_repo
+      - ./feature_store.yaml:/app/feature_store.yaml
+      - ./feature_store.yaml:/app/feature_repo/feature_store.yaml
+      - ./registry.db:/app/registry.db  # works!
+      # - ./offline_store:/app/feature_repo/data # For storing Parquet files
+      - ./cert.pem:/etc/ssl/certs/feast.crt
+      - ./key.pem:/etc/ssl/private/feast.key
+    environment:
+      - SSL_CERTIFICATE_FILE=/etc/ssl/certs/feast.crt
+      - SSL_KEY_FILE=/etc/ssl/private/feast.key
+      # - SSL_CA_FILE=/etc/ssl/certs/ca.crt      
+      - FEAST_PROJECT=${FEAST_PROJECT_NAME:-my_project}
+      - FEAST_CONFIG=/app/feature_store.yaml
+    depends_on:
+      - redis
+    command: >
+      bash -c "
+      env;
+      feast serve"
+    # feast init;
+    # while true; do
+    #   echo 'Waiting...';
+    #   sleep 2;
+    # done"
+    networks:
+      - feast_network
+
+networks:
+  feast_network:
+
+volumes:
+  redis_data:

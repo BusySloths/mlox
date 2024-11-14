@@ -1,0 +1,54 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        tls:
+          cert_file: /etc/cert.pem
+          key_file: /etc/key.pem
+      http:
+        endpoint: 0.0.0.0:4318
+        tls:
+          cert_file: /etc/cert.pem
+          key_file: /etc/key.pem
+
+exporters:
+  otlphttp:
+    endpoint: ${env:MY_OTEL_RELIC_ENDPOINT}
+    headers:
+      api-key: ${env:MY_OTEL_RELIC_KEY}
+
+processors:
+  batch:
+
+connectors:
+  spanmetrics:
+    namespace: myspanmetrics
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133" 
+    path: "/health/status" 
+    tls:
+      cert_file: /etc/cert.pem
+      key_file: /etc/key.pem
+    check_collector_pipeline: 
+      enabled: true 
+      interval: "5m" 
+      exporter_failure_threshold: 5   
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]    
+      processors: [batch]
+      exporters: [spanmetrics, otlphttp]
+    metrics:
+      receivers: [otlp, spanmetrics]
+      processors: [batch]
+      exporters: [otlphttp]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]

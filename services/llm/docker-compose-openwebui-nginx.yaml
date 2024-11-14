@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "${OPEN_WEBUI_PORT}:443"  # Map external port 3001 to NGINX's internal port 443      
+    volumes:
+      - ./open-webui.conf:/etc/nginx/conf.d/open-webui.conf
+      - ./key.pem:/etc/nginx/ssl/nginx.key
+      - ./cert.pem:/etc/nginx/ssl/nginx.crt
+    depends_on:
+      - webui
+    networks:
+      - nginx-webui-net
+
+  webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: open-webui
+    volumes:
+      - open-webui:/app/backend/data
+      - ./litellm.pem:/etc/ssl/certs/ca-certificates.crt:ro      
+    # ports:
+    #   - 32000:8085
+    environment: 
+      # - 'OLLAMA_BASE_URL=http://ollama:11434'
+      - WEBUI_SECRET_KEY=${OPEN_WEBUI_SECRET_KEY}
+      - WEBUI_URL=https://${OPEN_WEBUI_URL}:${OPEN_WEBUI_PORT}
+      # DO NOT TRACK
+      - SCARF_NO_ANALYTICS=True
+      - DO_NOT_TRACK=True
+      - ANONYMIZED_TELEMETRY=False      
+      - OPENAI_API_BASE_URL=${LITELLM_BASE_URL}
+      - OPENAI_API_KEY=${LITELLM_API_KEY}
+      - SSL_VERIFY=False
+      - WEBUI_AUTH=True
+      - PORT=8085
+      # - https_proxy=https://${OPEN_WEBUI_URL}:${OPEN_WEBUI_PORT}
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt      
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+    networks:
+      - nginx-webui-net
+
+
+volumes:
+  open-webui: {}
+
+networks:
+  nginx-webui-net:

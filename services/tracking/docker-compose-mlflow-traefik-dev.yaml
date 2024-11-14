@@ -1,0 +1,106 @@
+version: "3.8"
+
+services:
+
+  traefik:
+    image: traefik:v3.0
+    command:
+      # # Enable the access log, with HTTP requests 
+      - --accesslog
+      # # Enable the Traefik log, for configurations and errors
+      - --log
+      # # Enable the Dashboard and API
+      # - --api    
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # - "--entrypoints.http.address=:80"
+      - "--entrypoints.https.address=:443"
+    ports:
+      # - 80:80
+      # - 443:443
+      - 1234:443
+    volumes:
+      # Add Docker as a mounted volume, so that Traefik can read the labels of other services
+      - /var/run/docker.sock:/var/run/docker.sock:ro      
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+
+      # - "traefik.http.routers.traefik-dashboard-http.rule=Host(`dashboard.localhost`)"
+      # - "traefik.http.routers.traefik-dashboard-http.service=api@internal"
+      # - "traefik.http.routers.traefik-dashboard-http.entrypoints=http"
+      # - "traefik.http.services.traefik-dashboard-http.loadbalancer.server.port=8080"
+
+      # - "traefik.http.routers.traefik-dashboard-https.rule=Host(`dashboard.localhost`)"
+      # - "traefik.http.routers.traefik-dashboard-https.service=api@internal"
+      # - "traefik.http.routers.traefik-dashboard-https.entrypoints=https"
+      # - "traefik.http.routers.traefik-dashboard-https.tls=true"
+      # - "traefik.http.services.traefik-dashboard-https.loadbalancer.server.port=8080"
+
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+      
+      - "traefik.http.routers.traefik-dashboard-http.middlewares=https-redirect"
+
+      # admin-auth middleware with HTTP Basic auth
+      # Using the environment variables USERNAME and HASHED_PASSWORD
+      # - traefik.http.middlewares.admin-auth.basicauth.users=${USERNAME?Variable not set}:${HASHED_PASSWORD?Variable not set}
+      - traefik.http.middlewares.admin-auth.basicauth.users=test:$$2y$$12$$ci.4U63YX83CwkyUrjqxAucnmi2xXOIlEF6T/KdP9824f1Rf1iyNG
+      # Enable HTTP Basic auth, using the middleware created above
+      - traefik.http.routers.traefik-dashboard-https.middlewares=admin-auth        
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: dockerfile-mlflow
+    environment:
+      # - MLFLOW_DEPLOYMENTS_TARGET=http://mlflow-llm:5050/
+      - MLFLOW_TRACKING_USERNAME=${MLFLOW_USERNAME:-admin}
+      - MLFLOW_TRACKING_PASSWORD=${MLFLOW_PASSWORD:-password}
+    restart: always
+    # depends_on:
+    #   - mlflow-llm    
+    container_name: mlflow
+    command: mlflow server --host 0.0.0.0:5002 --app-name basic-auth
+    labels:
+      - "traefik.enable=true"
+      
+      - "traefik.http.routers.mlflow.entrypoints=http"
+      - "traefik.http.routers.mlflow.rule=Host(`localhost`)"
+      - "traefik.http.routers.mlflow.service=mlflow"
+      
+      - "traefik.http.routers.mlflow-secure.entrypoints=https"
+      - "traefik.http.routers.mlflow-secure.rule=Host(`localhost`)"
+      - "traefik.http.routers.mlflow-secure.service=mlflow"
+      - "traefik.http.routers.mlflow-secure.tls=true"
+
+      - "traefik.http.services.mlflow.loadbalancer.server.port=5002"
+      - "traefik.http.services.mlflow-secure.loadbalancer.server.port=5002"
+      
+      - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
+      
+      - traefik.http.routers.mlflow.middlewares=https-redirect  
+    networks:
+      - traefik-net
+    volumes:
+      - mlflow:/mlruns
+
+
+volumes:
+  # Create a volume to store the certificates, there is a constraint to make sure
+  # Traefik is always deployed to the same Docker node with the same volume containing
+  # the HTTPS certificates
+  traefik-public-certificates:  
+
+  mlflow:
+
+
+networks:
+  traefik-net:

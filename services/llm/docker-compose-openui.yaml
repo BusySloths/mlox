@@ -1,0 +1,28 @@
+services:
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: open-webui
+    volumes:
+      - open-webui:/app/backend/data
+      - ./litellm.crt:/etc/ssl/certs/ca-certificates.crt:ro      
+    ports:
+      - ${OPEN_WEBUI_PORT-3000}:8080
+    environment: 
+      # - 'OLLAMA_BASE_URL=http://ollama:11434'
+      - WEBUI_SECRET_KEY=abc
+      # DO NOT TRACK
+      - SCARF_NO_ANALYTICS=True
+      - DO_NOT_TRACK=True
+      - ANONYMIZED_TELEMETRY=False      
+      - OPENAI_API_BASE_URL=${LITELLM_API_BASE}  # 'https://MY_IP:4000/v1'
+      - OPENAI_API_KEY=${LITELLM_API_KEY}
+      - SSL_VERIFY=False
+      - WEBUI_AUTH=False
+      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt      
+    # extra_hosts:
+    #   - host.docker.internal:host-gateway
+    restart: unless-stopped
+
+volumes:
+  open-webui: {}
