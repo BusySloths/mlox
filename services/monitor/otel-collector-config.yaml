@@ -27,9 +27,9 @@ exporters:
       insecure: true    
 
   otlphttp:
-    endpoint: https://otlp.eu01.nr-data.net:4317
+    endpoint: endpoint
     headers:
-      api-key: "eu01xxa33b125351c57e587343f28975FFFFNRAL"
+      api-key: "key"
 
 processors:
   batch:
