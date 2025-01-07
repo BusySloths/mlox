@@ -137,6 +137,9 @@ dmypy.json
 .tmp
 .grav
 .vscode
+.metrics
+
+feature_store.yaml
 
 # certificates/keys
 *.pem
@@ -149,3 +152,4 @@ services/monitor/prometheus/
 services/llm/data/
 services/llm/ollama/
 services/features/feature_repo
+services/features/my_project

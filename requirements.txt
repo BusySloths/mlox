@@ -7,11 +7,14 @@ pandas
 numpy
 psutil  # used for system metrics logging in mlflow
 mlflow
-# mlflow[extras]
+mlflow[extras]
 mlserver
+# pyenv  VIA BREW/BASH 
 
 grpcio
 pymilvus
 
 langchain
 langchain-openai
+
+feast[redis]

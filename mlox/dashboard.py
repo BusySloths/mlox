@@ -4,13 +4,11 @@ from mlox.configs import services
 
 st.set_page_config(page_title="MOPS", page_icon="👋")
 
-st.write("# Welcome to MOPS! 👋")
-
-st.sidebar.success("Select a demo above.")
+st.write("# Welcome to MLOX: MLOps-in-a-Box! 👋")
 
 st.markdown(
     """
-    MOPS main
+    MLOX main
     """
 )
 

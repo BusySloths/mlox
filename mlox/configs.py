@@ -3,7 +3,7 @@ import tempfile
 
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import Dict, List, Type
+from typing import Dict, Type
 from fabric import Connection  # type: ignore
 
 from mlox.remote import (

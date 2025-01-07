@@ -1,24 +1,20 @@
-import os
 import streamlit as st
 
-from mlox.configs import OTel, get_servers, update_service
+from mlox.configs import MLFlow, get_servers, update_service
 from mlox.remote import fs_read_file
 
 
-st.set_page_config(page_title="OpenTelemetry Install Page", page_icon="🌍")
-st.markdown("# OpenTelemetry Install")
+st.set_page_config(page_title="MLServer Install Page", page_icon="🌍")
+st.markdown("# MLServer Serving")
 
 servers = get_servers()
 target_ip = st.selectbox("Choose Server", list(servers.keys()))
 server = servers[target_ip]
 
-target_path = st.text_input("Install Path", f"/home/{server.user}/my_otel")
-relic_endpoint = st.text_input(
-    "New Relic Endpoint", os.environ.get("NEW_RELIC_ENDPOINT", "")
-)
-relic_key = st.text_input("New Relic API Key", os.environ.get("NEW_RELIC_API_KEY", ""))
+target_path = st.text_input("Install Path", f"/home/{server.user}/my_serving")
+port = st.text_input("Port", "1234")
 
-service = OTel(server, target_path, relic_endpoint, relic_key)
+service = MLFlow(server, target_path, ui_user, ui_pw, port)
 update_service(service)
 
 c1, c2, c3, c4 = st.columns([15, 15, 15, 55])
@@ -33,11 +29,8 @@ with st.expander("Details"):
     st.write(service)
 
 files = [
-    "otel-collector-config.yaml",
-    "docker-compose.yaml",
-    "openssl-san.cnf",
-    "service.env",
-    "cert.pem",
+    "docker-compose-mlflow.yaml",
+    "mlflow.env",
 ]
 tabs = st.tabs(files)
 for i in range(len(files)):
@@ -55,4 +48,4 @@ for i in range(len(files)):
             print(res)
 
 st.sidebar.header("Links")
-st.sidebar.page_link(service.get_service_url(), label="OTel")
+st.sidebar.page_link(service.get_service_url(), label="MLFlow")

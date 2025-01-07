@@ -32,6 +32,7 @@ files = [
     "docker-compose.yaml",
     "feature_store.yaml",
     "service.env",
+    "cert.pem",
 ]
 tabs = st.tabs(files)
 for i in range(len(files)):

@@ -1,19 +1,21 @@
 project: my_project
-registry: registry.db
+registry: data/registry.db
 
 provider: local
 
 entity_key_serialization_version: 2
 
-general:
-  serving_enable_ssl: true
-  serving_server_ssl_cert: /etc/ssl/certs/feast.crt
-  serving_server_ssl_key: /etc/ssl/certs/feast.key
+# general:
+#   serving_enable_ssl: true
+#   serving_server_ssl_cert: /etc/ssl/certs/feast.crt
+#   serving_server_ssl_key: /etc/ssl/private/feast.key
 
 
 online_store:
   type: redis
-  connection_string: "rediss://feast_redis:6379"  # Use rediss:// to indicate SSL-enabled Redis
+  # connection_string: "rediss://feast_redis:6379"  # Use rediss:// to indicate SSL-enabled Redis
+  connection_string: "redis:6379"  # Use rediss:// to indicate SSL-enabled Redis
+  # key_ttl_seconds: 604800
   # ssl: True
   # ssl_cert_reqs: "none"  # Disables SSL certificate verification
   # ssl_cert_reqs: "required"
