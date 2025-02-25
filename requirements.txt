@@ -3,6 +3,7 @@ pyyaml
 oauth2client
 google-cloud-secret-manager
 streamlit
+streamlit-navigation-bar
 pandas
 numpy
 psutil  # used for system metrics logging in mlflow
@@ -10,6 +11,7 @@ mlflow
 mlflow[extras]
 mlserver
 # pyenv  VIA BREW/BASH 
+pycryptodome
 
 grpcio
 pymilvus

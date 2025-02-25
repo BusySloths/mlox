@@ -28,8 +28,9 @@ services:
     image: ghcr.io/mlflow/mlflow:latest
     environment:
       # - MLFLOW_TRACKING_TOKEN=${MLFLOW_TOKEN:-token}
-      - MLFLOW_TRACKING_USERNAME=${MLFLOW_USERNAME:-admin}
-      - MLFLOW_TRACKING_PASSWORD=${MLFLOW_PASSWORD:-password}
+      # MLFLOW_TRACKING_USERNAME: ${MLFLOW_USERNAME:-admin}
+      # MLFLOW_TRACKING_PASSWORD: ${MLFLOW_PASSWORD:-password}
+      MLFLOW_AUTH_CONFIG_PATH: "/var/lib/mlflow/mlflow-auth/basic-auth.ini"      
     restart: always
     container_name: mlflow
     command: mlflow server --host 0.0.0.0:5002 --app-name basic-auth
@@ -51,6 +52,7 @@ services:
     networks:
       - traefik-net
     volumes:
+      - ./basic-auth.ini:/var/lib/mlflow/mlflow-auth/basic-auth.ini
       - mlflow-runs:/mlruns
       - mlflow-artifacts:/mlartifacts
 

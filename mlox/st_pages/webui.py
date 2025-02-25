@@ -3,7 +3,7 @@ import streamlit as st
 from mlox.configs import (
     OpenWebUI,
     LiteLLM,
-    get_servers,
+    get_server_connections,
     update_service,
     get_service_by_ip_and_type,
 )
@@ -13,7 +13,7 @@ from mlox.remote import fs_read_file
 st.set_page_config(page_title="OpenWebUI Install Page", page_icon="🌍")
 st.markdown("# OpenWebUI Install")
 
-servers = get_servers()
+servers = get_server_connections()
 target_ip = st.selectbox("Choose Server", list(servers.keys()))
 server = servers[target_ip]
 

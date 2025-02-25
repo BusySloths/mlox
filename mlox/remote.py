@@ -27,44 +27,51 @@ def get_config(ip: str | None = None, sudo_pw: str | None = None) -> Dict:
     return config
 
 
-def open_connection(config: Dict):
-    tmpdir = tempfile.TemporaryDirectory()
-    tmpdirname = tmpdir.name
+def open_ssh_connection(ip: str, user: str, pw: str, port: str):
+    conn = Connection(
+        host=ip,
+        user=user,
+        port=port,
+        connect_kwargs={"password": pw},
+    )
+    return conn
 
-    logger.info(f"Created temporary directory at {tmpdirname}")
-    pub_temp_file = open(f"{tmpdirname}/id_rsa.pub", "w")
-    priv_temp_file = open(f"{tmpdirname}/id_rsa", "w")
-    pub_temp_file.write(config["public_key"])
-    priv_temp_file.write(config["private_key"])
-    pub_temp_file.flush()
-    priv_temp_file.flush()
-    pub_temp_file.close()
-    priv_temp_file.close()
+
+def open_connection(config: Dict):
+    # tmpdir = tempfile.TemporaryDirectory()
+    # tmpdirname = tmpdir.name
+    # logger.info(f"Created temporary directory at {tmpdirname}")
+    # pub_temp_file = open(f"{tmpdirname}/id_rsa.pub", "w")
+    # priv_temp_file = open(f"{tmpdirname}/id_rsa", "w")
+    # pub_temp_file.write(config["public_key"])
+    # priv_temp_file.write(config["private_key"])
+    # pub_temp_file.flush()
+    # priv_temp_file.flush()
+    # pub_temp_file.close()
+    # priv_temp_file.close()
 
     # establish connection
-    sudo_config = Config(overrides={"sudo": {"password": config["sudo_pass"]}})
-
     conn = Connection(
         host=config["host"],
         user=config["user"],
         port=config["port"],
         connect_kwargs={
-            "key_filename": [pub_temp_file.name, priv_temp_file.name],
+            # "key_filename": [pub_temp_file.name, priv_temp_file.name],
             "passphrase": config["passphrase"],
         },
-        config=sudo_config,
+        config=Config(overrides={"sudo": {"password": config["pw"]}}),
     )
     logger.info("SSH connection open.")
-    return conn, tmpdir
+    return conn
 
 
-def close_connection(conn, tmpdir):
-    tmpdir.cleanup()
+def close_connection(conn):
     conn.close()
     logger.info("SSH connection closed and tmp dir deleted.")
 
 
 def exec_command(conn, cmd, sudo=False):
+    print(f"Execute CMD: {cmd}")
     res = None
     if sudo:
         try:
@@ -86,12 +93,31 @@ def sys_disk_free(conn) -> int:
     return 0
 
 
+def sys_root_apt_install(conn, param, upgrade: bool = False):
+    cmd = f"apt install {param}"
+    if upgrade:
+        cmd = "apt upgrade"
+    exec_command(conn, "dpkg --configure -a")
+    return exec_command(conn, cmd)
+
+
 def sys_user_id(conn):
     return exec_command(conn, "id -u")
 
 
 def sys_list_user(conn):
     return exec_command(conn, "ls -l /home | awk '{print $4}'")
+
+
+def sys_add_user(
+    conn, user_name, passwd, with_home_dir: bool = False, sudoer: bool = False
+):
+    p_home_dir = "-m " if with_home_dir else ""
+    command = f"useradd -p `openssl passwd {passwd}` {p_home_dir}-d /home/{user_name} {user_name}"
+    ret = exec_command(conn, command, sudo=True)
+    if sudoer:
+        exec_command(conn, f"usermod -aG sudo {user_name}", sudo=True)
+    return ret
 
 
 def docker_list_container(conn):
@@ -116,10 +142,9 @@ def docker_up(conn, config_yaml, env_file=None):
     return exec_command(conn, command, sudo=True)
 
 
-def sys_add_user(conn, user_name):
-    return exec_command(
-        conn, f"useradd -p test_password -d /home/{user_name} {user_name}", sudo=True
-    )
+def git_clone(conn, repo_url, install_path):
+    exec_command(conn, f"mkdir -p {install_path}")
+    exec_command(conn, f"cd {install_path}; git clone {repo_url}")
 
 
 def fs_copy(conn, src_file, dst_path):
@@ -135,6 +160,7 @@ def fs_touch(conn, fname):
 
 
 def fs_append_line(conn, fname, line):
+    exec_command(conn, f"touch {fname}")
     exec_command(conn, f"echo '{line}' >> {fname}")
 
 
@@ -157,7 +183,7 @@ def fs_read_file(conn, file_path, encoding="utf-8", format="yaml"):
 
 
 def test_mini_bash():
-    conn, tmpdir = open_connection(get_config())
+    conn = open_connection(get_config())
     my_input = ""
     while my_input != "quit":
         my_input = input("remote> ")
@@ -167,21 +193,21 @@ def test_mini_bash():
             print(exec_command(conn, my_input[5:]))
         else:
             print(exec_command(conn, my_input))
-    close_connection(conn, tmpdir)
+    close_connection(conn)
 
 
 def test_remote():
-    conn, tmpdir = open_connection(get_config())
+    conn = open_connection(get_config())
     print(sys_disk_free(conn))
     print(sys_user_id(conn))
     print(sys_add_user(conn, "another_user"))
     print(sys_list_user(conn))
-    close_connection(conn, tmpdir)
+    close_connection(conn)
 
 
 if __name__ == "__main__":
     # test_mini_bash()
-    conn, tmpdir = open_connection(get_config())
+    conn = open_connection(get_config())
 
     print(sys_user_id(conn))
     print(sys_disk_free(conn))
@@ -190,4 +216,4 @@ if __name__ == "__main__":
 
     docker_list_container(conn)
 
-    close_connection(conn, tmpdir)
+    close_connection(conn)
