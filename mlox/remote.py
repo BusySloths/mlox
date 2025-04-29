@@ -8,7 +8,7 @@ from io import BytesIO
 from typing import Dict
 from fabric import Connection, Config  # type: ignore
 
-from mlox.gcp.secret_manager import read_secret_as_yaml
+from mlox.services.gcp.secret_manager import read_secret_as_yaml
 
 logger = logging.getLogger(__name__)
 

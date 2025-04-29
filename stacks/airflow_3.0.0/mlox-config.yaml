@@ -1,0 +1,20 @@
+service: Airflow
+version: 3.0.0
+description: |
+  Apache Airflow is an open-source workflow orchestrator used to schedule and monitor 
+  machine learning pipelines. In MLOX, it enables users to automate tasks like 
+  data preparation, model training, and deployment using easy-to-edit pipeline templates (DAGs). 
+  It integrates seamlessly with other tools like MLFlow and Feast and is included in 
+  MLOX as a preconfigured component installable via the UI.
+maintainer: Your Name
+depends_on: 
+links:
+  project: https://airflow.apache.org/
+  news: https://airflow.apache.org/announcements/
+  security: https://airflow.apache.org/docs/apache-airflow/stable/security.html
+  documentation: https://airflow.apache.org/docs/apache-airflow/stable/index.html
+  changelog: https://airflow.apache.org/docs/apache-airflow/stable/changelog.html
+requirements:
+  cpus: 4.0
+  ram_gb: 6.0
+  disk_gb: 10.0

@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Dict
 from datetime import datetime
 
-from mlox.models import MlopsModelWrapper, MLOpsModelInterface
+from mlox.services.mlflow.models import MlopsModelWrapper, MLOpsModelInterface
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class MyTrackedModel(MLOpsModelInterface):
 
     def tracking(self, mlflow, params: Dict | None = None) -> Dict | None:
         if params is not None:
-            print(f'Tracking: my_train_param_1={params.get("my_train_param_1", None)}')
+            print(f"Tracking: my_train_param_1={params.get('my_train_param_1', None)}")
 
         # DO TRAINING AND STUFF
         df_train = pd.DataFrame([[0, 1], [2, 3]], columns=["ColA", "ColB"])

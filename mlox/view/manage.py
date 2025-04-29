@@ -4,12 +4,12 @@ import streamlit as st
 from dataclasses import asdict
 
 from mlox.configs import Infrastructure
-from mlox.st_pages.server import add_server_to_infrastructure
-from mlox.st_pages.airflow import configure_and_add_airflow
+from mlox.view_st.server import add_server_to_infrastructure
+from mlox.view_st.airflow import configure_and_add_airflow
 
 
-st.set_page_config(initial_sidebar_state="expanded")
-st.write("# Welcome to MLOX: MLOps-in-a-Box!")
+# st.set_page_config(initial_sidebar_state="expanded")
+# st.write("# Welcome to MLOX: MLOps-in-a-Box!")
 
 with st.popover("Add Server", use_container_width=False):
     add_server_to_infrastructure()

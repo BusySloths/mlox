@@ -60,9 +60,9 @@ def read_secret_as_raw_token(secret_name: str, version: str = "latest") -> str |
         value = os.environ.get(ACCESSOR_ENV_NAME, ACCESSOR_FILE_NAME)
         # Attention: Environment variable GOOGLE_APPLICATION_CREDENTIALS with path to secret-accessor-credentials.json is
         # required to access the secret manager
-        assert (
-            value is not None
-        ), f"Could neither find Airflow credentials, {ACCESSOR_FILE_NAME} in project root, or environment variable {ACCESSOR_ENV_NAME}."
+        assert value is not None, (
+            f"Could neither find Airflow credentials, {ACCESSOR_FILE_NAME} in project root, or environment variable {ACCESSOR_ENV_NAME}."
+        )
         logger.info(f"GCP secret manager secret accessor keyfile found ({value}).")
         credentials = service_account.Credentials.from_service_account_file(value)
 

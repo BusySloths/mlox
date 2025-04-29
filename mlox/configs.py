@@ -56,8 +56,10 @@ class AbstractService(ABC):
     target_path: str
     target_docker_script: str = field(default="docker-compose.yaml", init=False)
     target_docker_env: str = field(default="service.env", init=False)
+
     is_running: bool = field(default=False, init=False)
     is_installed: bool = field(default=False, init=False)
+
     service_url: str = field(default="", init=False)
 
     @abstractmethod

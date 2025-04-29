@@ -13,6 +13,8 @@ mlserver
 # pyenv  VIA BREW/BASH 
 pycryptodome
 
+sqlmodel
+
 grpcio
 pymilvus
 
