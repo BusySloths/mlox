@@ -1,0 +1,34 @@
+name: Airflow
+version: 2.9.2
+maintainer: Your Name
+description: |
+  Apache Airflow is an open-source workflow orchestrator used to schedule and monitor 
+  machine learning pipelines. In MLOX, it enables users to automate tasks like 
+  data preparation, model training, and deployment using easy-to-edit pipeline templates (DAGs). 
+  It integrates seamlessly with other tools like MLFlow and Feast and is included in 
+  MLOX as a preconfigured component installable via the UI.
+links:
+  project: https://airflow.apache.org/
+  news: https://airflow.apache.org/announcements/
+  security: https://airflow.apache.org/docs/apache-airflow/stable/security.html
+  documentation: https://airflow.apache.org/docs/apache-airflow/stable/index.html
+  changelog: https://airflow.apache.org/docs/apache-airflow/stable/changelog.html
+requirements:
+  cpus: 2.5
+  ram_gb: 4.0
+  disk_gb: 10.0
+build:
+  docker: 
+    module: mlox.services.airflow.airflow
+    class_name: AirflowDockerService
+    params:
+      template: docker-compose-airflow-2.9.2.yaml 
+      target_path: /home/${MLOX_USER}/airflow
+      path_output: /home/${MLOX_USER}/airflow/output
+      path_dags: /home/${MLOX_USER}/repos/airflow/dags
+      port: ${MLOX_PORT}
+      ui_user: admin
+      ui_pw: ${MLOX_PW}
+      secret_path: ""
+  kubernetes:
+  ansible:

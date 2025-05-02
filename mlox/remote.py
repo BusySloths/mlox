@@ -5,10 +5,10 @@ import logging
 import tempfile
 
 from io import BytesIO
-from typing import Dict
+from typing import Dict, Tuple
 from fabric import Connection, Config  # type: ignore
 
-from mlox.services.gcp.secret_manager import read_secret_as_yaml
+from mlox.integrations.gcp.secret_manager import read_secret_as_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -37,45 +37,56 @@ def open_ssh_connection(ip: str, user: str, pw: str, port: str):
     return conn
 
 
-def open_connection(config: Dict):
-    # tmpdir = tempfile.TemporaryDirectory()
-    # tmpdirname = tmpdir.name
-    # logger.info(f"Created temporary directory at {tmpdirname}")
-    # pub_temp_file = open(f"{tmpdirname}/id_rsa.pub", "w")
-    # priv_temp_file = open(f"{tmpdirname}/id_rsa", "w")
-    # pub_temp_file.write(config["public_key"])
-    # priv_temp_file.write(config["private_key"])
-    # pub_temp_file.flush()
-    # priv_temp_file.flush()
-    # pub_temp_file.close()
-    # priv_temp_file.close()
+def open_connection(
+    config: Dict,
+) -> Tuple[Connection, None | tempfile.TemporaryDirectory]:
+    connect_kwargs = {"password": config["pw"]}
 
-    # establish connection
+    tmpdir = None  # so we can return it if needed
+
+    if "private_key" in config and "passphrase" in config:
+        tmpdir = tempfile.TemporaryDirectory()
+        tmpdirname = tmpdir.name
+        logger.info(f"Created temporary directory at {tmpdirname}")
+
+        private_key_path = os.path.join(tmpdirname, "id_rsa")
+        with open(private_key_path, "w") as priv_file:
+            priv_file.write(config["private_key"])
+        os.chmod(private_key_path, 0o600)  # SSH requires strict perms
+
+        connect_kwargs = {
+            "key_filename": private_key_path,
+            "passphrase": config["passphrase"],
+        }
+
     conn = Connection(
         host=config["host"],
         user=config["user"],
         port=config["port"],
-        connect_kwargs={
-            # "key_filename": [pub_temp_file.name, priv_temp_file.name],
-            "passphrase": config["passphrase"],
-        },
+        connect_kwargs=connect_kwargs,
         config=Config(overrides={"sudo": {"password": config["pw"]}}),
     )
+
     logger.info("SSH connection open.")
-    return conn
+
+    # optionally return tmpdir to keep it alive
+    return conn, tmpdir
 
 
-def close_connection(conn):
+def close_connection(conn, tmp_dir=None):
     conn.close()
+    if tmp_dir is not None:
+        tmp_dir.cleanup()
+        logger.info(f"Temporary directory {tmp_dir.name} deleted.")
     logger.info("SSH connection closed and tmp dir deleted.")
 
 
-def exec_command(conn, cmd, sudo=False):
+def exec_command(conn, cmd, sudo=False, pty=False):
     print(f"Execute CMD: {cmd}")
     res = None
     if sudo:
         try:
-            res = conn.sudo(cmd, hide="stderr").stdout.strip()
+            res = conn.sudo(cmd, hide="stderr", pty=pty).stdout.strip()
         except Exception as e:
             print(e)
     else:

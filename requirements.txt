@@ -22,3 +22,5 @@ langchain
 langchain-openai
 
 feast[redis]
+
+dacite  # loading and saving of nested dataclasses
