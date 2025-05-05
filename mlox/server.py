@@ -413,33 +413,82 @@ class Ubuntu(AbstractServer):
 
     def disable_password_authentication(self):
         with self.get_server_connection() as conn:
+            # 1. uncomment if comment out
             fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
-                "#PasswordAuthentication yes",
-                "PasswordAuthentication no",
+                "#PasswordAuthentication",
+                "PasswordAuthentication",
+                sudo=True,
+            )
+            fs_find_and_replace(
+                conn,
+                "/etc/ssh/sshd_config",
+                "#PermitRootLogin",
+                "PermitRootLogin",
+                sudo=True,
+            )
+            fs_find_and_replace(
+                conn,
+                "/etc/ssh/sshd_config",
+                "#PubkeyAuthentication",
+                "PubkeyAuthentication",
+                sudo=True,
             )
 
+            # 2. Disable includes
+            fs_find_and_replace(
+                conn, "/etc/ssh/sshd_config", "Include", "#Include", sudo=True
+            )
+
+            # 2. change to desired value
+            fs_find_and_replace(
+                conn, "/etc/ssh/sshd_config", "UsePAM yes", "UsePAM no", sudo=True
+            )
+            fs_find_and_replace(
+                conn,
+                "/etc/ssh/sshd_config",
+                "PasswordAuthentication yes",
+                "PasswordAuthentication no",
+                sudo=True,
+            )
+            fs_find_and_replace(
+                conn,
+                "/etc/ssh/sshd_config",
+                "KeyboardInteractiveAuthentication yes",
+                "KeyboardInteractiveAuthentication no",
+                sudo=True,
+            )
+            fs_find_and_replace(
+                conn,
+                "/etc/ssh/sshd_config",
+                "PubkeyAuthentication no",
+                "PubkeyAuthentication yes",
+                sudo=True,
+            )
             fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "X11Forwarding yes",
                 "X11Forwarding no",
+                sudo=True,
             )
-
             fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "AllowTcpForwarding yes",
                 "AllowTcpForwarding no",
+                sudo=True,
             )
-            # fs_find_and_replace(
-            #     conn,
-            #     "/etc/ssh/sshd_config",
-            #     "PermitRootLogin yes",
-            #     "PermitRootLogin no",
-            # )
-            exec_command(conn, "systemctl restart ssh")
+            fs_find_and_replace(
+                conn,
+                "/etc/ssh/sshd_config",
+                "PermitRootLogin yes",
+                "PermitRootLogin no",
+                sudo=True,
+            )
+            exec_command(conn, "systemctl restart ssh", sudo=True)
+            exec_command(conn, "systemctl reload ssh", sudo=True)
 
 
 @dataclass
@@ -484,7 +533,10 @@ if __name__ == "__main__":
 
     server = load_dataclass_from_json("/test_server.json")
 
-    server.install_docker()
+    server.update()
+    # server.disable_password_authentication()
+    # server.install_docker()
+
     # server.install_kubernetes()
     # server.test_connection()
     # with server.get_server_connection() as conn:

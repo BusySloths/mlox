@@ -179,9 +179,11 @@ def fs_create_empty_file(conn, fname):
     exec_command(conn, f"echo -n >| {fname}")
 
 
-def fs_find_and_replace(conn, fname, old, new, separator="!"):
+def fs_find_and_replace(conn, fname, old, new, separator="!", sudo=False):
     exec_command(
-        conn, f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}"
+        conn,
+        f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}",
+        sudo=sudo,
     )
 
 

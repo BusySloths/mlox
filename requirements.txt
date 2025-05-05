@@ -1,5 +1,6 @@
 fabric
 pyyaml
+cryptography
 oauth2client
 google-cloud-secret-manager
 streamlit
