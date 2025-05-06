@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.configs import AbstractService, tls_setup
+from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
     fs_copy,
     fs_create_dir,

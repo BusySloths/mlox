@@ -145,7 +145,8 @@ feature_store.yaml
 *.pem
 *.crt
 keyfile.json
-test_server.json
+test_server*.json
+infrastructure.json
 
 # mounts
 services/monitor/grafana/

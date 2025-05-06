@@ -6,7 +6,7 @@ import yaml
 from dataclasses import dataclass, field
 from typing import Dict, Type, List, Any, Optional
 
-from mlox.configs import AbstractService
+from mlox.service import AbstractService
 from mlox.utils import load_dataclass_from_json
 from mlox.server import AbstractServer, save_dataclass_to_json
 

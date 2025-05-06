@@ -8,33 +8,7 @@ from io import BytesIO
 from typing import Dict, Tuple
 from fabric import Connection, Config  # type: ignore
 
-from mlox.integrations.gcp.secret_manager import read_secret_as_yaml
-
 logger = logging.getLogger(__name__)
-
-
-def get_config(ip: str | None = None, sudo_pw: str | None = None) -> Dict:
-    config = read_secret_as_yaml("FLOW_CONTABO_CREDENTIALS")
-    config["private_key"] = str(config["private_key"]).replace("\n ", "\n")
-    print(config)
-
-    print(list(config.keys()))
-    config["host"] = os.environ["DEFAULT_SERVER"] if ip is None else ip
-    config["sudo_pass"] = (
-        os.environ.get("SYS_USER_PW", "") if sudo_pw is None else sudo_pw
-    )
-    print(config)
-    return config
-
-
-def open_ssh_connection(ip: str, user: str, pw: str, port: str):
-    conn = Connection(
-        host=ip,
-        user=user,
-        port=port,
-        connect_kwargs={"password": pw},
-    )
-    return conn
 
 
 def open_connection(
@@ -193,40 +167,3 @@ def fs_read_file(conn, file_path, encoding="utf-8", format="yaml"):
     if format == "yaml":
         return yaml.safe_load(io_obj.getvalue())
     return io_obj.getvalue().decode(encoding)
-
-
-def test_mini_bash():
-    conn = open_connection(get_config())
-    my_input = ""
-    while my_input != "quit":
-        my_input = input("remote> ")
-        if my_input == "quit":
-            break
-        if my_input.startswith("sudo "):
-            print(exec_command(conn, my_input[5:]))
-        else:
-            print(exec_command(conn, my_input))
-    close_connection(conn)
-
-
-def test_remote():
-    conn = open_connection(get_config())
-    print(sys_disk_free(conn))
-    print(sys_user_id(conn))
-    print(sys_add_user(conn, "another_user"))
-    print(sys_list_user(conn))
-    close_connection(conn)
-
-
-if __name__ == "__main__":
-    # test_mini_bash()
-    conn = open_connection(get_config())
-
-    print(sys_user_id(conn))
-    print(sys_disk_free(conn))
-    # command = "touch my_env_test | echo 'user_id=1234\nABC=123' > my_env_test"
-    # conn.run(command, hide=True).stdout.strip()
-
-    docker_list_container(conn)
-
-    close_connection(conn)

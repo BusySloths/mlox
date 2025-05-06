@@ -1,119 +1,27 @@
 import logging
-import importlib
-import string
-import secrets
-import json
 import tempfile
 
-
-from dataclasses import dataclass, field, asdict, is_dataclass
+from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import Dict, Optional, List, Tuple, Type, TypeVar, cast, Any
+from typing import Dict, Optional, List, Tuple
 from fabric import Connection  # type: ignore
 
-from mlox.utils import load_dataclass_from_json, save_dataclass_to_json, execute_command
+from mlox.utils import generate_password, execute_command
 from mlox.remote import (
-    get_config,
     open_connection,
     close_connection,
     exec_command,
-    fs_copy,
     fs_read_file,
-    fs_create_dir,
     fs_find_and_replace,
-    fs_create_empty_file,
     fs_append_line,
-    sys_user_id,
     sys_add_user,
-    docker_up,
-    docker_down,
-    open_ssh_connection,
 )
-
-T = TypeVar("T")
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
-
-def tls_setup(conn, ip, path) -> None:
-    # copy files to target
-    fs_create_dir(conn, path)
-    fs_copy(conn, "./stacks/mlox/openssl-san.cnf", f"{path}/openssl-san.cnf")
-    fs_find_and_replace(conn, f"{path}/openssl-san.cnf", "<MY_IP>", f"{ip}")
-    # certificates
-    exec_command(conn, f"cd {path}; openssl genrsa -out key.pem 2048")
-    exec_command(
-        conn,
-        f"cd {path}; openssl req -new -key key.pem -out server.csr -config openssl-san.cnf",
-    )
-    exec_command(
-        conn,
-        f"cd {path}; openssl x509 -req -in server.csr -signkey key.pem -out cert.pem -days 365 -extensions req_ext -extfile openssl-san.cnf",
-    )
-    exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/key.pem")
-
-
-def generate_password(length: int = 10, with_punctuation: bool = False) -> str:
-    """
-    Generate a random password with at least 3 digits, 1 uppercase letter, and 1 lowercase letter.
-    :param length: Length of the password
-    :param with_punctuation: Include punctuation characters in the password
-    :return: Generated password
-    """
-    if length < 5:
-        raise ValueError("Password length must be at least 5 characters.")
-    alphabet = string.ascii_letters + string.digits
-    if with_punctuation:
-        alphabet = alphabet + string.punctuation
-    while True:
-        password = "".join(secrets.choice(alphabet) for i in range(length))
-        if (
-            any(c.islower() for c in password)
-            and any(c.isupper() for c in password)
-            and sum(c.isdigit() for c in password) >= 3
-        ):
-            break
-    return password
-
-
-@dataclass
-class AbstractService(ABC):
-    target_path: str
-    target_docker_script: str = field(default="docker-compose.yaml", init=False)
-    target_docker_env: str = field(default="service.env", init=False)
-
-    is_running: bool = field(default=False, init=False)
-    is_installed: bool = field(default=False, init=False)
-
-    service_url: str = field(default="", init=False)
-
-    @abstractmethod
-    def setup(self, conn) -> None:
-        pass
-
-    def teardown(self, conn) -> None:
-        pass
-
-    def spin_up(self, conn) -> bool:
-        docker_up(
-            conn,
-            f"{self.target_path}/{self.target_docker_script}",
-            f"{self.target_path}/{self.target_docker_env}",
-        )
-        self.is_running = True
-        return True
-
-    def spin_down(self, conn) -> bool:
-        docker_down(conn, f"{self.target_path}/{self.target_docker_script}")
-        self.is_running = False
-        return True
-
-    @abstractmethod
-    def check(self) -> Dict:
-        pass
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -176,12 +84,6 @@ class AbstractServer(ABC):
 
     mlox_user: MloxUser | None = field(default=None, init=False)
     remote_user: RemoteUser | None = field(default=None, init=False)
-
-    services: List[AbstractService] = field(default_factory=list, init=False)
-    setup_complete: bool = field(default=False, init=False)
-
-    def add_service(self, service: AbstractService) -> None:
-        self.services.append(service)
 
     def get_server_connection(self, force_root: bool = False) -> ServerConnection:
         # 3 ways to connect:
@@ -264,7 +166,7 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
-    def get_server_info(self) -> Tuple[int, float, float]:
+    def get_server_info(self) -> Dict[str, str | int | float]:
         pass
 
 
@@ -335,7 +237,7 @@ class Ubuntu(AbstractServer):
             exec_command(conn, "kubectl get nodes", sudo=True)
             exec_command(conn, "kubectl version", sudo=True)
 
-    def get_server_info(self) -> Tuple[int, float, float]:
+    def get_server_info(self) -> Dict[str, str | int | float]:
         cmd = """
                 cpu_count=$(lscpu | grep "^CPU(s):" | awk '{print $2}')
                 ram_gb=$(free -m | grep Mem | awk '{printf "%.0f", $2/1024}')
@@ -343,12 +245,27 @@ class Ubuntu(AbstractServer):
                 echo "$cpu_count,$ram_gb,$storage_gb" 
             """
 
-        info = None
+        system_info = None
+        hardware_info = None
         with self.get_server_connection() as conn:
-            info = exec_command(conn, cmd, sudo=True)
-        print(str(info).split(","))
-        info = list(map(float, str(info).split(",")))
-        return int(info[0]), float(info[1]), float(info[2])
+            hardware_info = exec_command(conn, cmd, sudo=True)
+            system_info = sys_get_distro_info(conn)
+
+        hardware_info = list(map(float, str(hardware_info).split(",")))
+        info: Dict[str, str | int | float] = dict()
+
+        info = dict(
+            {
+                "cpu_count": float(hardware_info[0]),
+                "ram_gb": float(hardware_info[1]),
+                "storage_gb": float(hardware_info[2]),
+            }
+        )
+        if system_info is not None:
+            info.update(system_info)
+
+        print(f"VPS information: {info}")
+        return info
 
     def setup_users(self) -> None:
         remote_user, mlox_user = self.get_user_templates()
@@ -404,7 +321,7 @@ class Ubuntu(AbstractServer):
 
         self.remote_user = remote_user
         if not self.test_connection():
-            print(f"Uh oh, something went while setting up the SSH connection.")
+            print("Uh oh, something went while setting up the SSH connection.")
             # self.mlox_user = None
         else:
             print(
@@ -502,11 +419,10 @@ class ConfigurableServer(AbstractServer):
         pass
 
     def generate_ssh_keys(self) -> None:
-        conn = open_ssh_connection(self.ip, self.root, self.root_pw, self.port)
-        for cmd in self.script_generate_ssh_keys:
-            execute_command(conn, cmd)
+        with self.get_server_connection() as conn:
+            for cmd in self.script_generate_ssh_keys:
+                execute_command(conn, cmd)
         print("Done updating")
-        close_connection(conn)
 
     def update(self) -> None:
         # with self.get_server_connection() as conn:
@@ -514,26 +430,90 @@ class ConfigurableServer(AbstractServer):
         #         exec_command(conn, cmd, sudo=True)
         #     print("Done updating")
 
-        conn = open_ssh_connection(self.ip, self.root, self.root_pw, self.port)
-        for cmd in self.script_test:
-            execute_command(conn, cmd)
+        with self.get_server_connection() as conn:
+            for cmd in self.script_test:
+                execute_command(conn, cmd)
         print("Done updating")
-        close_connection(conn)
 
     def install_packages(self) -> None:
         pass
 
-    def get_server_info(self) -> Tuple[int, float, float]:
-        return 0, 0, 0
+    def get_server_info(self) -> Dict[str, str | int | float]:
+        return dict()
+
+
+def sys_get_distro_info(conn) -> Optional[Dict[str, str]]:
+    """
+    Attempts to get the Linux distribution name and version.
+
+    Tries reading /etc/os-release first, then falls back to lsb_release.
+
+    Returns:
+        A dictionary containing info like 'name', 'version', 'id', 'pretty_name'
+        or None if information couldn't be retrieved reliably.
+    """
+    info = {}
+    try:
+        # Try /etc/os-release first using fs_read_file
+        content = fs_read_file(conn, "/etc/os-release", format="string")
+        # Parse the key="value" or key=value format
+        for line in content.strip().split("\n"):
+            if "=" in line:
+                key, value = line.split("=", 1)
+                key = key.strip().lower()  # Use lower-case keys
+                # Remove surrounding quotes if present
+                value = value.strip().strip('"')
+                info[key] = value
+        # Add a 'version' key, preferring 'version_id' if available
+        if "version_id" in info:
+            info["version"] = info["version_id"]
+        elif "version" in info:
+            # Keep existing 'version' if 'version_id' is not present
+            pass
+        # If we got at least a name or pretty_name, return it
+        if "name" in info or "pretty_name" in info:
+            logger.info(f"Distro info from /etc/os-release: {info}")
+            return info
+    except Exception as e:
+        logger.warning(f"Could not read /etc/os-release: {e}. Trying lsb_release.")
+        info = {}  # Reset info if os-release failed or was insufficient
+
+    # Fallback to lsb_release if /etc/os-release didn't work
+    try:
+        # Use lsb_release -a and parse common fields
+        lsb_output = exec_command(conn, "lsb_release -a", sudo=False, pty=False)
+        if lsb_output:
+            for line in lsb_output.strip().split("\n"):
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    key = (
+                        key.strip().lower().replace(" ", "_")
+                    )  # e.g., 'distributor id' -> 'distributor_id'
+                    value = value.strip()
+                    if key == "distributor_id":
+                        info["id"] = value
+                        info["name"] = value  # Use id as name
+                    if key == "release":
+                        info["version"] = value
+                    if key == "description":
+                        info["pretty_name"] = value
+                    if key == "codename":
+                        info["codename"] = value
+            if "name" in info and "version" in info:
+                logger.info(f"Distro info from lsb_release: {info}")
+                return info
+    except Exception as e:
+        logger.error(f"Could not get distro info using lsb_release: {e}")
+
+    logger.error("Unable to determine Linux distribution info.")
+    return None
 
 
 if __name__ == "__main__":
-    # print(generate_password(20))
+    print(generate_password(20))
     # print(generate_password(5, with_punctuation=False))
 
-    server = load_dataclass_from_json("/test_server.json")
-
-    server.update()
+    # print(server.get_server_info())
     # server.disable_password_authentication()
     # server.install_docker()
 
