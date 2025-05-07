@@ -15,6 +15,7 @@ from mlox.remote import (
     fs_find_and_replace,
     fs_append_line,
     sys_add_user,
+    sys_user_id,
 )
 
 # Configure logging (optional, but recommended)
@@ -318,6 +319,9 @@ class Ubuntu(AbstractServer):
                 f"{mlox_user.home}/.ssh/authorized_keys",
                 remote_user.ssh_pub_key,
             )
+
+            # 7. get user system id
+            self.mlox_user.uid = sys_user_id(conn)
 
         self.remote_user = remote_user
         if not self.test_connection():

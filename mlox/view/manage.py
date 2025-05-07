@@ -30,6 +30,8 @@ st.write(
     "To add a server, click the button below. To manage a server, select it from the list."
 )
 
+st.markdown("### Available Server")
+
 
 with st.popover("Add Server", use_container_width=False):
     st.text_input(
@@ -59,29 +61,30 @@ with st.popover("Add Server", use_container_width=False):
         placeholder="Enter the server SSH port",
         help="The SSH port for the server.",
     )
-    st.divider()
-    st.write("The following fields are optional and can be edited later.")
-    st.text_input(
-        "Name",
-        placeholder="Give it a name",
-        help="The name of the server you want to add.",
-    )
-    st.text_input(
-        "Description",
-        placeholder="Enter the server description",
-        help="A brief description of the server.",
-    )
-    st.multiselect(
-        "Server Tags",
-        options=["prod", "dev"],
-        placeholder="Enter the server tags (comma-separated)",
-        help="Tags to categorize the server.",
-        accept_new_options=True,
-        max_selections=5,
-    )
+    # st.divider()
+    # st.write("The following fields are optional and can be edited later.")
+    # st.text_input(
+    #     "Name",
+    #     placeholder="Give it a name",
+    #     help="The name of the server you want to add.",
+    # )
+    # st.text_input(
+    #     "Description",
+    #     placeholder="Enter the server description",
+    #     help="A brief description of the server.",
+    # )
+    # st.multiselect(
+    #     "Server Tags",
+    #     options=["prod", "dev"],
+    #     placeholder="Enter the server tags (comma-separated)",
+    #     help="Tags to categorize the server.",
+    #     accept_new_options=True,
+    #     max_selections=5,
+    # )
 
 
 infra = load_infrastructure()
+
 srv = []
 for bundle in infra.bundles:
     info = bundle.server.get_server_info()
@@ -89,12 +92,13 @@ for bundle in infra.bundles:
         {
             "ip": bundle.server.ip,
             "name": bundle.name,
-            "descr": bundle.descr,
+            "backend": [bundle.backend],
             "tags": bundle.tags,
-            "services": bundle.services,
+            "services": [s.name for s in bundle.services],
             "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
         }
     )
+
 select_server = st.dataframe(
     srv,
     use_container_width=True,
@@ -107,6 +111,21 @@ select_server = st.dataframe(
 if len(select_server["selection"].get("rows", [])) == 1:
     selected_server = srv[select_server["selection"]["rows"][0]]["ip"]
     server_management(infra, selected_server)
+
+st.markdown("### Docker Servers")
+st.info("You currently have no docker servers.")
+
+st.markdown("### Kubernetes Cluster")
+st.info("You currently have no kubernetes cluster.")
+
+
+if st.button("Save Infrastructure"):
+    with st.spinner("Saving infrastructure..."):
+        try:
+            infra.save("./infrastructure_v2.json", os.environ["MLOX_CONFIG_PASSWORD"])
+            st.success("Infrastructure saved successfully.")
+        except Exception as e:
+            st.error(f"Error saving infrastructure: {e}")
 
 # if len(select_server["selection"].get("rows", [])) == 1:
 #     selected_server = srv[select_server["selection"]["rows"][0]]["ip"]

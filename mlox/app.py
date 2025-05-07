@@ -64,13 +64,22 @@ def monitor():
     """)
 
 
-def settings():
+def secrets():
     st.markdown("""
     # Outputs
     This is the collections of all the outputs of your MLOps stack to be used in your applications.:
     - Keys and secrets
     - Configurations
     """)
+
+    ip = "<IP_ADDRESS>"
+    st.selectbox(
+        "Choose Secret Manager Backend",
+        [
+            "Local (not recommended)",
+            f"OpenBAO on {ip}",
+        ],
+    )
 
 
 def welcome():
@@ -147,7 +156,7 @@ pages_logged_in = {
             icon=":material/database:",
         ),
         st.Page(
-            settings,
+            secrets,
             title="Secret Management",
             icon=":material/key:",
         ),

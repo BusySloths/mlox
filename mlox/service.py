@@ -28,6 +28,7 @@ def tls_setup(conn, ip, path) -> None:
 
 @dataclass
 class AbstractService(ABC):
+    name: str
     target_path: str
     target_docker_script: str = field(default="docker-compose.yaml", init=False)
     target_docker_env: str = field(default="service.env", init=False)
