@@ -13,6 +13,7 @@ mlflow[extras]
 mlserver
 # pyenv  VIA BREW/BASH 
 pycryptodome
+# jose # JWT
 
 sqlmodel
 

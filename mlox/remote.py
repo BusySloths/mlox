@@ -3,6 +3,7 @@ import re
 import yaml
 import logging
 import tempfile
+import secrets
 
 from io import BytesIO
 from typing import Dict, Tuple
@@ -161,9 +162,78 @@ def fs_find_and_replace(conn, fname, old, new, separator="!", sudo=False):
     )
 
 
+def fs_write_file(
+    conn,
+    file_path: str,
+    content: str | bytes,
+    sudo: bool = False,
+    encoding: str = "utf-8",
+):
+    """
+    Writes content to a file on the remote server.
+
+    Args:
+        conn: Fabric connection object.
+        file_path: Absolute path to the remote file.
+        content: String or bytes content to write to the file.
+        sudo: If True, perform write operations with sudo.
+        encoding: Encoding for the content if it's a string.
+    """
+    if isinstance(content, str):
+        content_bytes = content.encode(encoding)
+    elif isinstance(content, bytes):
+        content_bytes = content
+    else:
+        raise TypeError("Content must be str or bytes")
+
+    file_like_object = BytesIO(content_bytes)
+
+    if not sudo:
+        conn.put(file_like_object, remote=file_path)
+        logger.info(f"Wrote content to {file_path} as user {conn.user}")
+    else:
+        # Put to a temporary location first, then sudo mv
+        random_suffix = secrets.token_hex(8)
+        remote_tmp_path = os.path.join("/tmp", f"mlox_tmp_{random_suffix}")
+
+        try:
+            conn.put(file_like_object, remote=remote_tmp_path)
+            logger.info(f"Uploaded content to temporary remote path: {remote_tmp_path}")
+
+            # Move the file to its final destination using sudo
+            exec_command(conn, f"mv {remote_tmp_path} {file_path}", sudo=True)
+            logger.info(
+                f"Moved temporary file from {remote_tmp_path} to {file_path} using sudo."
+            )
+        except Exception as e:
+            logger.error(f"Error writing file {file_path} with sudo: {e}")
+            if conn.is_connected:  # Check if connection is still alive for cleanup
+                exec_command(
+                    conn, f"rm -f {remote_tmp_path}", sudo=True, pty=False
+                )  # Attempt to clean up
+            raise
+
+
 def fs_read_file(conn, file_path, encoding="utf-8", format="yaml"):
     io_obj = BytesIO()
     conn.get(file_path, io_obj)
     if format == "yaml":
         return yaml.safe_load(io_obj.getvalue())
     return io_obj.getvalue().decode(encoding)
+
+
+def fs_list_files(conn, path: str, sudo: bool = False) -> list[str]:
+    """
+    Lists files and directories in a given path on the remote server.
+
+    Args:
+        conn: Fabric connection object.
+        path: Absolute path to the directory on the remote server.
+        sudo: If True, execute the list command with sudo.
+
+    Returns:
+        A list of filenames and directory names.
+    """
+    command = f"ls -A1 {path}"  # -A for almost all, -1 for one per line
+    output = exec_command(conn, command, sudo=sudo, pty=False)
+    return output.splitlines() if output else []

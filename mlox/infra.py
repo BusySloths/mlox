@@ -1,12 +1,16 @@
-import os
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, List, Tuple, Literal
+from typing import Optional, List, Literal
 
 from mlox.server import AbstractServer
 from mlox.service import AbstractService
-from mlox.utils import load_dataclass_from_json, save_dataclass_to_json
+from mlox.utils import (
+    dataclass_to_dict,
+    dict_to_dataclass,
+    save_to_json,
+    load_from_json,
+)
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -46,15 +50,16 @@ class Infrastructure:
         return None
 
     def load_server_config(self, filepath: str, password: str) -> Bundle:
-        server = load_dataclass_from_json(filepath, password)
+        server_dict = load_from_json(filepath, password)
+        server = dict_to_dataclass(server_dict, [AbstractServer])
         self.bundles.append(Bundle(name=server.ip, server=server))
         return self.bundles[-1]
 
     def save(self, filepath: str, password: str) -> None:
-        save_dataclass_to_json(self, filepath, password, encrypt=True)
+        infra_dict = dataclass_to_dict(self)
+        save_to_json(infra_dict, filepath, password, encrypt=True)
 
     @classmethod
     def load(cls, filepath: str, password: str) -> "Infrastructure":
-        return load_dataclass_from_json(
-            filepath, password, encrypted=True, hooks=[AbstractServer, AbstractService]
-        )
+        infra_dict = load_from_json(filepath, password, encrypted=True)
+        return dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])

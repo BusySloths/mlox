@@ -1,6 +1,6 @@
 import streamlit as st
 
-from mlox.configs import Milvus, get_server_connections, update_service
+from mlox.configs_old import Milvus, get_server_connections, update_service
 from mlox.remote import fs_read_file
 
 

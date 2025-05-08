@@ -1,6 +1,6 @@
 import streamlit as st
 
-from mlox.configs import Feast, get_server_connections, update_service
+from mlox.configs_old import Feast, get_server_connections, update_service
 from mlox.remote import fs_read_file
 
 

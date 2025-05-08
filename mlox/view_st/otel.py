@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 
-from mlox.configs import OTel, get_server_connections, update_service
+from mlox.configs_old import OTel, get_server_connections, update_service
 from mlox.remote import fs_read_file
 
 

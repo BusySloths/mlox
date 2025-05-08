@@ -1,6 +1,6 @@
 import streamlit as st
 
-from mlox.configs import (
+from mlox.configs_old import (
     OpenWebUI,
     LiteLLM,
     get_server_connections,

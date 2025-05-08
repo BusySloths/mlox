@@ -1,12 +1,14 @@
 import logging
 import tempfile
+import importlib
+import logging
 
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
 from typing import Dict, Optional, List, Tuple
 from fabric import Connection  # type: ignore
 
-from mlox.utils import generate_password, execute_command
+from mlox.utils import generate_password
 from mlox.remote import (
     open_connection,
     close_connection,
@@ -513,15 +515,23 @@ def sys_get_distro_info(conn) -> Optional[Dict[str, str]]:
     return None
 
 
-if __name__ == "__main__":
-    print(generate_password(20))
-    # print(generate_password(5, with_punctuation=False))
-
-    # print(server.get_server_info())
-    # server.disable_password_authentication()
-    # server.install_docker()
-
-    # server.install_kubernetes()
-    # server.test_connection()
-    # with server.get_server_connection() as conn:
-    #     exec_command(conn, "ls -la", sudo=True)
+def execute_command(conn, cmd: List | str):
+    if isinstance(cmd, str):
+        # Type 1: single CMD executed as sudo
+        exec_command(conn, cmd, sudo=True)
+    if isinstance(cmd, list):
+        if isinstance(cmd[0], bool):
+            # Type 2: [Sudo True/False, CMD, Descr]
+            exec_command(conn, cmd[1], sudo=cmd[0])
+        else:
+            # Type 3: Function call with arguments
+            func_name = cmd[0]
+            module_name = "mlox.remote"
+            module = importlib.import_module(module_name)
+            func = getattr(module, func_name)
+            args = cmd[1:]
+            print(f"Execute CMD: {func_name} with args: {args}")
+            if args:
+                func(conn, *args)
+            else:
+                func(conn)

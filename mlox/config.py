@@ -4,11 +4,10 @@ import os
 import yaml
 
 from dataclasses import dataclass, field
-from typing import Dict, Type, List, Any, Optional
+from typing import Dict, List, Any, Optional
 
 from mlox.service import AbstractService
-from mlox.utils import load_dataclass_from_json
-from mlox.server import AbstractServer, save_dataclass_to_json
+from mlox.server import AbstractServer
 
 
 @dataclass
@@ -342,7 +341,7 @@ if __name__ == "__main__":
 
             print("\nTEST CONNECTION:")
             server.test_connection()
-            save_dataclass_to_json(server, "./test_server.json")
+            # save_dataclass_to_json(server, "./test_server.json")
 
             # print("\nINSTALL KUBERNETES:")
             # server.install_kubernetes()

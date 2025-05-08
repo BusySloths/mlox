@@ -1,6 +1,4 @@
-import os
 import logging
-import tempfile
 
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
@@ -8,7 +6,6 @@ from typing import Dict, Type, List, Tuple
 from fabric import Connection  # type: ignore
 
 from mlox.remote import (
-    get_config,
     open_connection,
     close_connection,
     exec_command,

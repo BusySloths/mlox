@@ -1,21 +1,18 @@
-import importlib
-import json
-import logging
 import os
-import string
-import secrets
-
+import json
+import dacite
 import base64
+import string
+import logging
+import secrets
+import importlib
+
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-import dacite  # Changed import style
-from abc import ABC
 from dataclasses import is_dataclass, fields  # Added fields import
-from typing import List, Any, Dict, TypeVar
-
-from mlox.remote import exec_command
+from typing import List, Any, Dict
 
 
 def _get_encryption_key(password: str) -> bytes:
@@ -59,28 +56,6 @@ def encrypt_existing_json_file(path: str, password: str) -> None:
         raise  # Re-raise the exception after logging
 
 
-def execute_command(conn, cmd: List | str):
-    if isinstance(cmd, str):
-        # Type 1: single CMD executed as sudo
-        exec_command(conn, cmd, sudo=True)
-    if isinstance(cmd, list):
-        if isinstance(cmd[0], bool):
-            # Type 2: [Sudo True/False, CMD, Descr]
-            exec_command(conn, cmd[1], sudo=cmd[0])
-        else:
-            # Type 3: Function call with arguments
-            func_name = cmd[0]
-            module_name = "mlox.remote"
-            module = importlib.import_module(module_name)
-            func = getattr(module, func_name)
-            args = cmd[1:]
-            print(f"Execute CMD: {func_name} with args: {args}")
-            if args:
-                func(conn, *args)
-            else:
-                func(conn)
-
-
 def _custom_asdict_recursive(obj: Any) -> Any:
     """Recursively converts dataclass instances to dicts, adding class metadata."""
     if is_dataclass(obj):
@@ -102,15 +77,31 @@ def _custom_asdict_recursive(obj: Any) -> Any:
         return obj
 
 
-def save_dataclass_to_json(
-    obj: Any, path: str, password: str, encrypt: bool = True
-) -> None:
-    """Saves a dataclass instance to an encrypted JSON file, including recursive class metadata."""
+def dataclass_to_dict(obj: Any) -> Dict:
     if not is_dataclass(obj):
         raise TypeError("Object must be a dataclass instance")
+    return _custom_asdict_recursive(obj)
 
-    data = _custom_asdict_recursive(obj)
-    json_string = json.dumps(data, indent=2)
+
+def encrypt_dict(my_data: Dict, password: str) -> str:
+    """Saves a dictionary to an encrypted JSON file."""
+    json_string = json.dumps(my_data, indent=2)
+    key = _get_encryption_key(password=password)
+    fernet = Fernet(key)
+    return fernet.encrypt(json_string.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_dict(data: str, password: str) -> Dict:
+    # Decrypt the data
+    key = _get_encryption_key(password=password)
+    fernet = Fernet(key)
+    json_string = fernet.decrypt(data).decode("utf-8")
+    return json.loads(json_string)
+
+
+def save_to_json(my_data: Dict, path: str, password: str, encrypt: bool = True) -> None:
+    """Saves a dictionary to an encrypted JSON file."""
+    json_string = json.dumps(my_data, indent=2)
 
     if encrypt:
         # Encrypt the JSON string
@@ -163,19 +154,10 @@ def _load_hook(data_item: Any) -> Any:
     return data_item  # Let dacite handle if not a dict with metadata
 
 
-def load_dataclass_from_json(
-    path: str, password: str, encrypted: bool = True, hooks: List[Any] | None = None
-) -> Any:
-    """
-    Loads a dataclass instance from an encrypted JSON file.
-    Uses metadata (_module_name_, _class_name_) stored recursively in the JSON
-    to determine the concrete classes to instantiate.
-    """
-
+def load_from_json(path: str, password: str, encrypted: bool = True) -> Any:
     print(os.getcwd() + path)
     with open(os.getcwd() + path, "rb") as f:
         encrypted_data = f.read()
-
     if encrypted:
         # Decrypt the data
         key = _get_encryption_key(password=password)
@@ -185,11 +167,16 @@ def load_dataclass_from_json(
         data = json.loads(json_string)
     else:
         data = json.loads(encrypted_data)
+    return data
 
+
+def dict_to_dataclass(data: Dict, hooks: List[Any] | None = None) -> Any:
     module_name = data.pop("_module_name_", None)
     class_name = data.pop("_class_name_", None)
     if not module_name or not class_name:
-        raise ValueError(f"Missing class metadata in top level of {path}")
+        raise ValueError(
+            "Data does not contain module and class names for deserialization."
+        )
 
     try:
         module = importlib.import_module(module_name)
@@ -204,12 +191,10 @@ def load_dataclass_from_json(
 
     except (ImportError, AttributeError, TypeError) as e:
         logging.error(f"Error loading top-level class {module_name}.{class_name}: {e}")
-        raise ValueError(
-            f"Could not load dataclass from {path} due to class resolution error."
-        ) from e
+        raise ValueError("Could not load top-level dataclass") from e
     except Exception as e:  # Catch potential errors from the hook or dacite
-        logging.error(f"Error during dacite processing with hooks for {path}: {e}")
-        raise
+        logging.error(f"Error during dacite processing: {e}")
+        raise ValueError("Error during deserialization") from e
 
 
 def generate_password(length: int = 10, with_punctuation: bool = False) -> str:
@@ -241,7 +226,7 @@ if __name__ == "__main__":
     if not password:
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
     else:
-        server_config_path = "./test_server.json"  # Or wherever your file is
+        server_config_path = "./test_server copy.json"  # Or wherever your file is
         try:
             encrypt_existing_json_file(server_config_path, password=password)
             print(f"File '{server_config_path}' has been encrypted.")

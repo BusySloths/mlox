@@ -1,0 +1,121 @@
+import os
+import json
+import logging
+
+from cryptography.fernet import Fernet
+
+from typing import Any, Dict
+
+from mlox.server import AbstractServer
+from mlox.utils import _get_encryption_key, dict_to_dataclass, load_from_json
+from mlox.remote import (
+    fs_create_dir,
+    fs_touch,
+    fs_read_file,
+    fs_write_file,
+    fs_list_files,
+)
+
+
+class TinySecretManager:
+    """A simple secret manager that encrypts and decrypts secrets saved on a remote machine."""
+
+    path: str
+    master_token: str
+    server: AbstractServer
+    cache: Dict[str, Any]
+
+    def __init__(
+        self, server_config_file: str, secrets_relative_path: str, master_token: str
+    ):
+        self.cache = {}
+        self.master_token = master_token
+
+        server_dict = load_from_json(server_config_file, master_token)
+        server = dict_to_dataclass(server_dict, [AbstractServer])
+
+        if not server:
+            raise ValueError("Server is not set. Cannot initialize TinySecretManager.")
+        self.server = server
+        if not server.mlox_user:
+            raise ValueError(
+                "Server user is not set. Cannot initialize TinySecretManager."
+            )
+        self.path = f"{server.mlox_user.home}/{secrets_relative_path}"
+        with server.get_server_connection() as conn:
+            fs_create_dir(conn, self.path)
+
+    def list_secrets(self) -> Dict[str, Any]:
+        files = []
+        with self.server.get_server_connection() as conn:
+            files = fs_list_files(conn, self.path)
+
+        secrets = {}
+        for file in files:
+            if file.endswith(".json"):
+                name = file[:-5]
+                secrets[name] = self.load_secret(name)
+        return secrets
+
+    def save_secret(self, name: str, my_secret: Dict) -> None:
+        name += ".json"
+        filepath = os.path.join(self.path, name)
+        with self.server.get_server_connection() as conn:
+            fs_touch(conn, filepath)
+
+        """Saves a secret to a file."""
+        json_string = json.dumps(my_secret, indent=2)
+        # Encrypt the JSON string
+        key = _get_encryption_key(password=self.master_token)
+        fernet = Fernet(key)
+        encrypted_data = fernet.encrypt(json_string.encode("utf-8"))
+
+        with self.server.get_server_connection() as conn:
+            fs_write_file(conn, filepath, encrypted_data)
+
+        self.cache[name] = my_secret
+
+    def load_secret(self, name: str) -> Dict | None:
+        if name in self.cache:
+            return self.cache[name]
+        name += ".json"
+        filepath = os.path.join(self.path, name)
+        with self.server.get_server_connection() as conn:
+            try:
+                encrypted_data = fs_read_file(
+                    conn, filepath, encoding="utf-8", format="json"
+                )
+            except BaseException:
+                logging.error(f"Could not find secret '{name}'.")
+                return None
+
+        # Decrypt the data
+        key = _get_encryption_key(password=self.master_token)
+        fernet = Fernet(key)
+        try:
+            json_string = fernet.decrypt(encrypted_data).decode("utf-8")
+        except Exception as e:
+            logging.error(f"Error decrypting secret '{name}': {e}")
+            return None
+        return json.loads(json_string)
+
+
+if __name__ == "__main__":
+    # Make sure your environment variable is set!
+    password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
+    if not password:
+        print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
+        exit(1)
+
+    secret_manager = TinySecretManager("/test_server.json", ".secrets", password)
+    # print(secret_manager.load_secret("TEST_SECRET"))
+    # secret_manager.save_secret(
+    #     "TEST_SECRET",
+    #     {
+    #         "superkey": "supervalue",
+    #         "anotherkey": "anothervalue",
+    #         "listkey": ["item1", "item2"],
+    #     },
+    # )
+    # print(secret_manager.load_secret("TEST_SECRET"))
+    print(secret_manager.list_secrets())
