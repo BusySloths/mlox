@@ -45,16 +45,30 @@ class TinySecretManager:
         with server.get_server_connection() as conn:
             fs_create_dir(conn, self.path)
 
-    def list_secrets(self) -> Dict[str, Any]:
-        files = []
+    def list_secrets(self, keys_only: bool = False) -> Dict[str, Any]:
+        secrets: Dict[str, Any] = {}
         with self.server.get_server_connection() as conn:
             files = fs_list_files(conn, self.path)
-
-        secrets = {}
-        for file in files:
-            if file.endswith(".json"):
-                name = file[:-5]
-                secrets[name] = self.load_secret(name)
+            for file in files:
+                if file.endswith(".json"):
+                    name = file[:-5]
+                    if keys_only:
+                        secrets[name] = None
+                    else:
+                        secret_value = None
+                        try:
+                            file_path = f"{self.path}/{file}"
+                            encrypted_data = fs_read_file(
+                                conn, file_path, encoding="utf-8", format="json"
+                            )
+                            # Decrypt the data
+                            key = _get_encryption_key(password=self.master_token)
+                            fernet = Fernet(key)
+                            json_string = fernet.decrypt(encrypted_data).decode("utf-8")
+                            secret_value = json.loads(json_string)
+                        except BaseException:
+                            continue
+                        secrets[name] = secret_value
         return secrets
 
     def save_secret(self, name: str, my_secret: Dict) -> None:
@@ -80,13 +94,15 @@ class TinySecretManager:
             return self.cache[name]
         name += ".json"
         filepath = os.path.join(self.path, name)
+
+        encrypted_data = None
         with self.server.get_server_connection() as conn:
             try:
                 encrypted_data = fs_read_file(
                     conn, filepath, encoding="utf-8", format="json"
                 )
             except BaseException:
-                logging.error(f"Could not find secret '{name}'.")
+                logging.error(f"Error reading secret '{name}'.")
                 return None
 
         # Decrypt the data
@@ -117,5 +133,5 @@ if __name__ == "__main__":
     #         "listkey": ["item1", "item2"],
     #     },
     # )
-    # print(secret_manager.load_secret("TEST_SECRET"))
+    print(secret_manager.load_secret("TEST_SECRET"))
     print(secret_manager.list_secrets())
