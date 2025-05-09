@@ -80,6 +80,18 @@ def secrets():
             f"OpenBAO on {ip}",
         ],
     )
+    import pandas as pd
+
+    ms = st.session_state.mlox
+    secrets = ms.secrets.list_secrets(keys_only=False)
+    st.write(secrets)
+
+    with st.form("Add Secret"):
+        name = st.text_input("Key")
+        value = st.text_area("Value")
+        if st.form_submit_button("Add Secret"):
+            ms.secrets.save_secret(name, value)
+            st.rerun()
 
 
 def welcome():

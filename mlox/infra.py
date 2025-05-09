@@ -49,11 +49,11 @@ class Infrastructure:
                 return bundle
         return None
 
-    def load_server_config(self, filepath: str, password: str) -> Bundle:
+    @classmethod
+    def load_server_config(cls, filepath: str, password: str) -> Bundle:
         server_dict = load_from_json(filepath, password)
         server = dict_to_dataclass(server_dict, [AbstractServer])
-        self.bundles.append(Bundle(name=server.ip, server=server))
-        return self.bundles[-1]
+        return Bundle(name=server.ip, server=server)
 
     def save(self, filepath: str, password: str) -> None:
         infra_dict = dataclass_to_dict(self)

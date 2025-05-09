@@ -15,11 +15,12 @@ def server_management(infra, selected_server):
     st.write(f"Server: {bundle.server}")
 
 
-@st.cache_data
+# @st.cache_data
 def load_infrastructure():
-    return Infrastructure.load(
-        "/infrastructure.json", os.environ["MLOX_CONFIG_PASSWORD"]
-    )
+    return st.session_state.mlox.infra
+    # return Infrastructure.load(
+    #     "/infrastructure.json", os.environ["MLOX_CONFIG_PASSWORD"]
+    # )
 
 
 st.header("Server Management")
@@ -121,6 +122,8 @@ st.info("You currently have no kubernetes cluster.")
 
 if st.button("Save Infrastructure"):
     with st.spinner("Saving infrastructure..."):
+        st.session_state.mlox.infra = infra
+        st.session_state.mlox.save_infrastructure()
         try:
             infra.save("./infrastructure_v2.json", os.environ["MLOX_CONFIG_PASSWORD"])
             st.success("Infrastructure saved successfully.")

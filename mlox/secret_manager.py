@@ -24,6 +24,7 @@ class TinySecretManager:
     master_token: str
     server: AbstractServer
     cache: Dict[str, Any]
+    _connection_works: bool = False
 
     def __init__(
         self, server_config_file: str, secrets_relative_path: str, master_token: str
@@ -33,7 +34,6 @@ class TinySecretManager:
 
         server_dict = load_from_json(server_config_file, master_token)
         server = dict_to_dataclass(server_dict, [AbstractServer])
-
         if not server:
             raise ValueError("Server is not set. Cannot initialize TinySecretManager.")
         self.server = server
@@ -44,6 +44,11 @@ class TinySecretManager:
         self.path = f"{server.mlox_user.home}/{secrets_relative_path}"
         with server.get_server_connection() as conn:
             fs_create_dir(conn, self.path)
+            if conn.is_connected:
+                self._connection_works = True
+
+    def is_working(self) -> bool:
+        return self._connection_works
 
     def list_secrets(self, keys_only: bool = False) -> Dict[str, Any]:
         secrets: Dict[str, Any] = {}
@@ -71,13 +76,20 @@ class TinySecretManager:
                         secrets[name] = secret_value
         return secrets
 
-    def save_secret(self, name: str, my_secret: Dict) -> None:
+    def save_secret(self, name: str, my_secret: Dict | str) -> None:
         name += ".json"
         filepath = os.path.join(self.path, name)
         with self.server.get_server_connection() as conn:
             fs_touch(conn, filepath)
 
         """Saves a secret to a file."""
+        if isinstance(my_secret, str):
+            # Check if it's already a valid JSON string
+            try:
+                my_secret = json.loads(my_secret)
+            except json.JSONDecodeError:
+                logging.info("Provided string secret is not valid JSON.")
+
         json_string = json.dumps(my_secret, indent=2)
         # Encrypt the JSON string
         key = _get_encryption_key(password=self.master_token)
@@ -89,7 +101,7 @@ class TinySecretManager:
 
         self.cache[name] = my_secret
 
-    def load_secret(self, name: str) -> Dict | None:
+    def load_secret(self, name: str) -> Dict | str | None:
         if name in self.cache:
             return self.cache[name]
         name += ".json"
