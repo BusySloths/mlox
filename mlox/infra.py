@@ -25,7 +25,9 @@ class Bundle:
     server: AbstractServer
     descr: str = field(default="", init=False)
     tags: List[str] = field(default_factory=list, init=False)
-    backend: Literal["docker", "kubernetes"] = field(default="docker")
+    backend: Literal["un-initialized", "docker", "kubernetes"] = field(
+        default="un-initialized"
+    )
     cluster: List[AbstractServer] = field(default_factory=list, init=False)
     services: List[AbstractService] = field(default_factory=list, init=False)
 
@@ -38,6 +40,30 @@ class Bundle:
             if not self.cluster:
                 print("⚠️ Warning: Kubernetes cluster has no worker nodes.")
 
+    def initialize(self) -> None:
+        if self.backend != "un-initialized":
+            logging.error("Can not initialize an already initialized server.")
+            return
+        self.server.update()
+        self.server.install_packages()
+        self.server.update()
+        self.server.setup_users()
+        self.server.install_docker()
+        self.server.install_kubernetes()
+        self.server.update()
+        self.server.disable_password_authentication()
+        self.backend = "docker"
+        self.server.switch_backend(from_backend="kubernetes")
+
+    def switch_backend(self) -> None:
+        if self.backend == "un-initialized":
+            logging.error("Can not switch backend of an un-initialized server.")
+            return
+        new_backend = self.server.switch_backend(from_backend=self.backend)
+        if self.backend == new_backend:
+            logging.error("Could not change backend.")
+        self.backend = new_backend
+
 
 @dataclass
 class Infrastructure:
@@ -48,6 +74,14 @@ class Infrastructure:
             if bundle.server.ip == ip:
                 return bundle
         return None
+
+    def add_server(self, server: AbstractServer) -> Bundle:
+        bundle = Bundle(name=server.ip, server=server)
+        self.bundles.append(bundle)
+        return bundle
+
+    def delete_bundle(self, bundle: Bundle) -> None:
+        self.bundles.remove(bundle)
 
     @classmethod
     def load_server_config(cls, filepath: str, password: str) -> Bundle:

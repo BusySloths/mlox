@@ -5,7 +5,7 @@ import logging
 
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import Dict, Optional, List, Tuple
+from typing import Dict, Optional, List, Tuple, Literal
 from fabric import Connection  # type: ignore
 
 from mlox.utils import generate_password
@@ -64,7 +64,7 @@ class ServerConnection:
 class MloxUser:
     name: str
     pw: str
-    uid: int = field(default=1000, init=False)
+    uid: int | str = field(default=1000, init=False)
     home: str
     ssh_passphrase: str
     ssh_pub_key: str = field(default="", init=False)
@@ -80,10 +80,9 @@ class RemoteUser:
 @dataclass
 class AbstractServer(ABC):
     ip: str
-    port: str = field(default="22", init=False)
-
     root: str
     root_pw: str
+    port: str = field(default="22")
 
     mlox_user: MloxUser | None = field(default=None, init=False)
     remote_user: RemoteUser | None = field(default=None, init=False)
@@ -157,6 +156,12 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
+    def switch_backend(
+        self, from_backend: Literal["docker", "kubernetes"]
+    ) -> Literal["docker", "kubernetes"]:
+        pass
+
+    @abstractmethod
     def install_kubernetes(self) -> None:
         pass
 
@@ -175,6 +180,8 @@ class AbstractServer(ABC):
 
 @dataclass
 class Ubuntu(AbstractServer):
+    _specs: Dict[str, str | int | float] | None = field(default=None, init=False)
+
     def update(self):
         with self.get_server_connection() as conn:
             exec_command(conn, "dpkg --configure -a", sudo=True)
@@ -231,6 +238,20 @@ class Ubuntu(AbstractServer):
             print("Done installing docker")
             exec_command(conn, "docker --version", sudo=True)
 
+    def switch_backend(
+        self, from_backend: Literal["docker", "kubernetes"]
+    ) -> Literal["docker", "kubernetes"]:
+        with self.get_server_connection() as conn:
+            if from_backend == "docker":
+                exec_command(conn, "systemctl stop docker", sudo=True)
+                exec_command(conn, "systemctl start k3s", sudo=True)
+                return "kubernetes"
+            else:
+                exec_command(conn, "systemctl stop k3s", sudo=True)
+                exec_command(conn, "systemctl start docker", sudo=True)
+                return "docker"
+        return from_backend
+
     def install_kubernetes(self):
         with self.get_server_connection() as conn:
             exec_command(
@@ -241,6 +262,9 @@ class Ubuntu(AbstractServer):
             exec_command(conn, "kubectl version", sudo=True)
 
     def get_server_info(self) -> Dict[str, str | int | float]:
+        if self._specs:
+            return self._specs
+
         cmd = """
                 cpu_count=$(lscpu | grep "^CPU(s):" | awk '{print $2}')
                 ram_gb=$(free -m | grep Mem | awk '{printf "%.0f", $2/1024}')
@@ -268,6 +292,7 @@ class Ubuntu(AbstractServer):
             info.update(system_info)
 
         print(f"VPS information: {info}")
+        self._specs = info
         return info
 
     def setup_users(self) -> None:

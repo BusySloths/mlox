@@ -2,6 +2,7 @@ import os
 import streamlit as st
 
 from mlox.infra import Infrastructure
+from mlox.server import Ubuntu
 
 
 @st.dialog("Server Management", width="large")
@@ -23,68 +24,89 @@ def load_infrastructure():
     # )
 
 
-st.header("Server Management")
-st.write(
-    "This is a simple server management interface. You can add servers, manage services, and view server information."
-)
-st.write(
-    "To add a server, click the button below. To manage a server, select it from the list."
-)
-
-st.markdown("### Available Server")
-
-
-with st.popover("Add Server", use_container_width=False):
-    st.text_input(
-        "IP Address",
-        placeholder="Enter the server IP address",
-        help="The IP address of the server you want to add.",
+tab_server, tab_k3s = st.tabs(["Server", "Cluster"])
+with tab_server:
+    st.header("Server Management")
+    st.write(
+        "This is a simple server management interface. You can add servers, manage services, and view server information."
     )
-
-    st.text_input(
-        "Root Account Name",
-        value="root",
-        placeholder="Enter the server root account name",
-        help="Enter the server root account name.",
+    st.write(
+        "To add a server, click the button below. To manage a server, select it from the list."
     )
-    st.text_input(
-        "Root Account Password",
-        placeholder="Enter the server password",
-        help="The password for the server.",
-        type="password",
+with tab_k3s:
+    st.header("Cluster Management")
+    st.write(
+        "This is a simple cluster management interface. You can add clusters, manage services, and view cluster information."
     )
-    st.number_input(
-        "SSH Port",
-        value=22,
-        min_value=1,
-        max_value=65535,
-        step=1,
-        placeholder="Enter the server SSH port",
-        help="The SSH port for the server.",
+    st.write(
+        "To add a cluster, click the button below. To manage a cluster, select it from the list."
     )
-    # st.divider()
-    # st.write("The following fields are optional and can be edited later.")
-    # st.text_input(
-    #     "Name",
-    #     placeholder="Give it a name",
-    #     help="The name of the server you want to add.",
-    # )
-    # st.text_input(
-    #     "Description",
-    #     placeholder="Enter the server description",
-    #     help="A brief description of the server.",
-    # )
-    # st.multiselect(
-    #     "Server Tags",
-    #     options=["prod", "dev"],
-    #     placeholder="Enter the server tags (comma-separated)",
-    #     help="Tags to categorize the server.",
-    #     accept_new_options=True,
-    #     max_selections=5,
-    # )
 
 
 infra = load_infrastructure()
+
+with st.expander("Add Server"):
+    st.write("To add a server, use the form below.")
+    with st.form(key="add_server"):
+        c1, c2 = st.columns([70, 30])
+        ip = c1.text_input(
+            "IP Address",
+            placeholder="Enter the server IP address",
+            help="The IP address of the server you want to add.",
+        )
+        port = c2.number_input(
+            "SSH Port",
+            value=22,
+            min_value=1,
+            max_value=65535,
+            step=1,
+            placeholder="Enter the server SSH port",
+            help="The SSH port for the server.",
+        )
+        c1, c2 = st.columns(2)
+        root = c1.text_input(
+            "Root Account Name",
+            value="root",
+            placeholder="Enter the server root account name",
+            help="Enter the server root account name.",
+        )
+        pw = c2.text_input(
+            "Root Account Password",
+            placeholder="Enter the server password",
+            help="The password for the server.",
+            type="password",
+        )
+        if st.form_submit_button():
+            my_ubuntu = Ubuntu(ip, root, pw, port=str(port))
+            stats = my_ubuntu.get_server_info()
+            # system stats
+            st.write(stats)
+            # TODO check for compatibility (server and hardware)
+            infra.add_server(my_ubuntu)
+            st.info(f"Server added successfully: {ip}")
+
+        # st.divider()
+        # st.write("The following fields are optional and can be edited later.")
+        # st.text_input(
+        #     "Name",
+        #     placeholder="Give it a name",
+        #     help="The name of the server you want to add.",
+        # )
+        # st.text_input(
+        #     "Description",
+        #     placeholder="Enter the server description",
+        #     help="A brief description of the server.",
+        # )
+        # st.multiselect(
+        #     "Server Tags",
+        #     options=["prod", "dev"],
+        #     placeholder="Enter the server tags (comma-separated)",
+        #     help="Tags to categorize the server.",
+        #     accept_new_options=True,
+        #     max_selections=5,
+        # )
+
+st.markdown("### Server List")
 
 srv = []
 for bundle in infra.bundles:
@@ -111,76 +133,43 @@ select_server = st.dataframe(
 
 if len(select_server["selection"].get("rows", [])) == 1:
     selected_server = srv[select_server["selection"]["rows"][0]]["ip"]
-    server_management(infra, selected_server)
+    bundle = infra.get_bundle_by_ip(selected_server)
 
-st.markdown("### Docker Servers")
-st.info("You currently have no docker servers.")
+    # server_management(infra, selected_server)
+    c1, c2, c3 = st.columns([40, 50, 10])
+    name = c1.text_input("Name", value=bundle.name)
+    tags = c2.multiselect(
+        "Tags",
+        options=["prod", "dev"] + bundle.tags,
+        default=bundle.tags,
+        placeholder="Enter the server tags (comma-separated)",
+        help="Tags to categorize the server.",
+        accept_new_options=True,
+        max_selections=10,
+    )
+    if c3.button("Update", type="primary"):
+        bundle.name = name
+        bundle.tags = tags
+        st.rerun()
 
-st.markdown("### Kubernetes Cluster")
-st.info("You currently have no kubernetes cluster.")
+    c1, c2, c3, _ = st.columns([8, 15, 10, 65])
+    if c1.button("Delete"):
+        st.info(f"Server with IP {selected_server} will be deleted.")
+        infra.delete_bundle(bundle)
+        st.rerun()
+    if c2.button("Switch Backend", disabled=bundle.backend == "un-initialized"):
+        st.info(f"Change the backend for server with IP {selected_server}.")
+        bundle.switch_backend()
+        st.rerun()
+    if c3.button("Initialize", disabled=bundle.backend != "un-initialized"):
+        st.info(f"Initialize the server with IP {selected_server}.")
+        with st.spinner("Initializing server...", show_time=True):
+            bundle.initialize()
+        st.rerun()
+
+    st.write(bundle)
 
 
 if st.button("Save Infrastructure"):
     with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.infra = infra
         st.session_state.mlox.save_infrastructure()
-        try:
-            infra.save("./infrastructure_v2.json", os.environ["MLOX_CONFIG_PASSWORD"])
-            st.success("Infrastructure saved successfully.")
-        except Exception as e:
-            st.error(f"Error saving infrastructure: {e}")
-
-# if len(select_server["selection"].get("rows", [])) == 1:
-#     selected_server = srv[select_server["selection"]["rows"][0]]["ip"]
-
-# with st.popover(
-#     "Add Service", use_container_width=False, disabled=selected_server is None
-# ):
-#     if selected_server is not None:
-#         service = st.selectbox("Select service", [configure_and_add_airflow])
-#         service(Infrastructure.get_instance().get_server_dict()[selected_server])
-
-
-# infra = []
-# for server in Infrastructure.get_instance().servers:
-#     if selected_server is not None:
-#         if selected_server != server.ip:
-#             continue
-#     for service in server.services:
-#         infra.append(
-#             {
-#                 "ip": server.ip,
-#                 "service": type(service),
-#                 "is_installed": service.is_installed,
-#                 "is_running": service.is_running,
-#                 "service_url": service.service_url,
-#             }
-#         )
-# select_service = st.dataframe(
-#     infra,
-#     use_container_width=True,
-#     selection_mode="single-row",
-#     hide_index=True,
-#     on_select="rerun",
-# )
-
-# if len(select_service["selection"].get("rows", [])) == 1:
-#     service_ip = infra[select_service["selection"]["rows"][0]]["ip"]
-#     service_type = infra[select_service["selection"]["rows"][0]]["service"]
-#     server = Infrastructure.get_instance().get_server_dict()[service_ip]
-#     service = Infrastructure.get_instance().get_service_by_ip_and_type(
-#         service_ip, service_type
-#     )
-#     if service is not None:
-#         c1, c2, c3 = st.columns(3)
-#         if c1.button("Setup"):
-#             with server.get_server_connection() as conn:
-#                 service.setup(conn)
-#         if c2.button("Start"):
-#             with server.get_server_connection() as conn:
-#                 service.spin_up(conn)
-#         if c3.button("Stop"):
-#             with server.get_server_connection() as conn:
-#                 service.spin_down(conn)
-
-#         st.write(service)
