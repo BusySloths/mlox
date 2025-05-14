@@ -85,26 +85,6 @@ with st.expander("Add Server"):
             infra.add_server(my_ubuntu)
             st.info(f"Server added successfully: {ip}")
 
-        # st.divider()
-        # st.write("The following fields are optional and can be edited later.")
-        # st.text_input(
-        #     "Name",
-        #     placeholder="Give it a name",
-        #     help="The name of the server you want to add.",
-        # )
-        # st.text_input(
-        #     "Description",
-        #     placeholder="Enter the server description",
-        #     help="A brief description of the server.",
-        # )
-        # st.multiselect(
-        #     "Server Tags",
-        #     options=["prod", "dev"],
-        #     placeholder="Enter the server tags (comma-separated)",
-        #     help="Tags to categorize the server.",
-        #     accept_new_options=True,
-        #     max_selections=5,
-        # )
 
 st.markdown("### Server List")
 
@@ -121,6 +101,20 @@ for bundle in infra.bundles:
             "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
         }
     )
+    if bundle.backend == "kubernetes":
+        for node in bundle.cluster:
+            info = node.get_server_info()
+            srv.append(
+                {
+                    "ip": bundle.server.ip,
+                    "name": bundle.name,
+                    "backend": [bundle.backend],
+                    "tags": ["compute-node"] + bundle.tags,
+                    "services": [s.name for s in bundle.services],
+                    "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
+                }
+            )
+
 
 select_server = st.dataframe(
     srv,
