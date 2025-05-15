@@ -83,6 +83,18 @@ class Infrastructure:
     def delete_bundle(self, bundle: Bundle) -> None:
         self.bundles.remove(bundle)
 
+    def list_available_k8s_clients(self, target: Bundle) -> List[Bundle]:
+        return [
+            bundle
+            for bundle in self.bundles
+            if bundle.backend == "kubernetes" and bundle != target
+        ]
+
+    def add_k8s_client(self, target: Bundle, client: Bundle) -> None:
+        # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)
+        target.cluster.append(client.server)
+        self.delete_bundle(client)
+
     @classmethod
     def load_server_config(cls, filepath: str, password: str) -> Bundle:
         server_dict = load_from_json(filepath, password)

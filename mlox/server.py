@@ -1,3 +1,4 @@
+import re
 import logging
 import tempfile
 import importlib
@@ -5,7 +6,7 @@ import logging
 
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import Dict, Optional, List, Tuple, Literal
+from typing import Dict, Optional, List, Tuple, Literal, Any
 from fabric import Connection  # type: ignore
 
 from mlox.utils import generate_password
@@ -17,6 +18,7 @@ from mlox.remote import (
     fs_find_and_replace,
     fs_append_line,
     sys_add_user,
+    # sys_get_distro_info,
     sys_user_id,
 )
 
@@ -156,13 +158,13 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
-    def switch_backend(
-        self, from_backend: Literal["docker", "kubernetes"]
-    ) -> Literal["docker", "kubernetes"]:
+    def install_kubernetes(self) -> None:
         pass
 
     @abstractmethod
-    def install_kubernetes(self) -> None:
+    def switch_backend(
+        self, from_backend: Literal["docker", "kubernetes"]
+    ) -> Literal["docker", "kubernetes"]:
         pass
 
     @abstractmethod
@@ -171,6 +173,10 @@ class AbstractServer(ABC):
 
     @abstractmethod
     def disable_password_authentication(self) -> None:
+        pass
+
+    @abstractmethod
+    def get_backend_info(self) -> Dict[str, Any]:
         pass
 
     @abstractmethod
@@ -260,6 +266,56 @@ class Ubuntu(AbstractServer):
             exec_command(conn, "systemctl status k3s", sudo=True)
             exec_command(conn, "kubectl get nodes", sudo=True)
             exec_command(conn, "kubectl version", sudo=True)
+
+    def get_backend_info(self) -> Dict[str, Any]:
+        """
+        Retrieves information about the Docker and k3s backend services.
+
+        Checks if Docker and k3s services are running and, if k3s is active,
+        lists the status of its nodes.
+
+        Returns:
+            A dictionary containing backend status information.
+        """
+        backend_info: Dict[str, Any] = {}
+        with self.get_server_connection() as conn:
+            # Check Docker status
+            # systemctl is-active returns 0 for active, non-zero otherwise
+            res = exec_command(conn, "systemctl is-active docker", sudo=True, pty=False)
+            if res is None:
+                backend_info["docker.is_running"] = False
+            else:
+                backend_info["docker.is_running"] = True
+
+            # Check k3s status
+            res = exec_command(conn, "systemctl is-active k3s", sudo=True, pty=False)
+            if res is None:
+                backend_info["k3s.is_running"] = False
+            else:
+                backend_info["k3s.is_running"] = True
+            # If k3s is running, get node status
+            try:
+                node_output = exec_command(
+                    conn, "kubectl get nodes -o wide", sudo=True, pty=False
+                )
+                # Parse kubectl get nodes output (simple parsing assuming standard format)
+                nodes = []
+                lines = node_output.strip().split("\n")
+                if len(lines) > 1:  # Skip header line
+                    header_parts = lines[0].split()
+                    print(header_parts)
+                    for line in lines[1:]:
+                        parts = re.split(r"\s{2,}", line)
+                        print(parts)
+                        if len(parts) >= 2:
+                            res = {header_parts[i]: parts[i] for i in range(len(parts))}
+                            nodes.append(res)
+                backend_info["k3s.nodes"] = nodes
+            except Exception as e:
+                logger.warning(f"Could not get k3s node info: {e}")
+                backend_info["k3s.nodes"] = "Error retrieving node info"
+
+        return backend_info
 
     def get_server_info(self) -> Dict[str, str | int | float]:
         if self._specs:

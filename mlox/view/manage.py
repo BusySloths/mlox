@@ -3,7 +3,7 @@ import streamlit as st
 from mlox.server import Ubuntu
 
 
-def tab_server_list():
+def tab_server_mngmt():
     infra = st.session_state.mlox.infra
     # with st.expander("Add Server"):
     st.write("To add a server, use the form below.")
@@ -119,14 +119,11 @@ def tab_server_list():
                 bundle.initialize()
             st.rerun()
 
+        st.write(bundle.server.get_backend_info())
         st.write(bundle)
 
-    if st.button("Save Infrastructure"):
-        with st.spinner("Saving infrastructure..."):
-            st.session_state.mlox.save_infrastructure()
 
-
-def tab_cluster_overview():
+def tab_cluster_mngmt():
     st.header("Cluster Overview")
     infra = st.session_state.mlox.infra
 
@@ -137,11 +134,10 @@ def tab_cluster_overview():
             continue
         cluster.append(
             {
+                "cluster": bundle.name,
                 "controller": bundle.server.ip,
-                "name": bundle.name,
-                "backend": [bundle.backend],
-                "tags": bundle.tags,
                 "nodes": [s.name for s in bundle.cluster],
+                "tags": bundle.tags,
                 "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
             }
         )
@@ -158,6 +154,31 @@ def tab_cluster_overview():
     if len(select_server["selection"].get("rows", [])) == 1:
         selected_server = cluster[select_server["selection"]["rows"][0]]["controller"]
         bundle = infra.get_bundle_by_ip(selected_server)
+
+        c1, c2 = st.columns([75, 25])
+
+        c_1, c0, c1, c2, c3, c4 = st.columns([20, 10, 12, 15, 20, 20])
+        client_bundle = c_1.selectbox(
+            "Add node to cluster",
+            [b for b in infra.list_available_k8s_clients(target=bundle)],
+            label_visibility="collapsed",
+            format_func=lambda x: x.name,
+        )
+        if c0.button("Add", type="primary"):
+            # bundle.cluster.append(client_bundle.server
+            st.info(
+                f"Add node {client_bundle.server.ip} to cluster {bundle.server.ip}."
+            )
+        if c1.button("Drain Node"):
+            st.info("Drain Server.")
+        if c2.button("Remove Node"):
+            st.info("Remove Server from Cluster.")
+        if c3.button("Initialize Cluster"):
+            st.info("Initialize Cluster.")
+        if c4.button("Reset Cluster [Danger]", type="primary"):
+            st.info("Reset Cluster: Tear down all components, reset etcd/state")
+
+        st.write(bundle.server.get_backend_info())
         st.write(bundle)
 
 
@@ -167,10 +188,15 @@ with tab_server:
     st.write(
         "This is a simple server management interface. You can add servers, manage services, and view server information."
     )
-    tab_server_list()
+    tab_server_mngmt()
 with tab_k3s:
     st.header("Cluster Management")
     st.write(
         "This is a simple cluster management interface. You can add clusters, manage services, and view cluster information."
     )
-    tab_cluster_overview()
+    tab_cluster_mngmt()
+
+st.divider()
+if st.button("Save Infrastructure"):
+    with st.spinner("Saving infrastructure..."):
+        st.session_state.mlox.save_infrastructure()
