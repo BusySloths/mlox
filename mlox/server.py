@@ -158,7 +158,13 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
-    def install_kubernetes(self) -> None:
+    def install_kubernetes(
+        self, controller_url: str | None = None, controller_token: str | None = None
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def get_kubernetes_token(self) -> str:
         pass
 
     @abstractmethod
@@ -258,10 +264,30 @@ class Ubuntu(AbstractServer):
                 return "docker"
         return from_backend
 
-    def install_kubernetes(self):
+    def get_kubernetes_token(self) -> str:
+        token = ""
+        with self.get_server_connection() as conn:
+            res = exec_command(
+                conn, f"cat /var/lib/rancher/k3s/server/node-token", sudo=True, pty=True
+            )
+            token = res.split("password: ")[1].strip()
+        return token
+
+    def install_kubernetes(
+        self, controller_url: str | None = None, controller_token: str | None = None
+    ):
+        # Controller URL Template: https://<controller-ip>:6443
+        #
+        agent_str = ""
+        if controller_url and controller_token:
+            agent_str = f"K3S_URL={controller_url} K3S_TOKEN={controller_token} "
+
         with self.get_server_connection() as conn:
             exec_command(
-                conn, "curl -sfL https://get.k3s.io | sh -s -", sudo=True, pty=True
+                conn,
+                f"curl -sfL https://get.k3s.io | {agent_str}sh -s -",
+                sudo=True,
+                pty=True,
             )
             exec_command(conn, "systemctl status k3s", sudo=True)
             exec_command(conn, "kubectl get nodes", sudo=True)

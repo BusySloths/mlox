@@ -136,7 +136,7 @@ def tab_cluster_mngmt():
             {
                 "cluster": bundle.name,
                 "controller": bundle.server.ip,
-                "nodes": [s.name for s in bundle.cluster],
+                "nodes": [s.ip for s in bundle.cluster],
                 "tags": bundle.tags,
                 "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
             }
@@ -169,15 +169,21 @@ def tab_cluster_mngmt():
             st.info(
                 f"Add node {client_bundle.server.ip} to cluster {bundle.server.ip}."
             )
+            infra.add_k8s_client(bundle, client_bundle)
+            st.rerun()
+
         if c1.button("Drain Node"):
             st.info("Drain Server.")
         if c2.button("Remove Node"):
             st.info("Remove Server from Cluster.")
+            infra.remove_k8s_client(bundle, bundle.cluster[0])
+            st.rerun()
         if c3.button("Initialize Cluster"):
             st.info("Initialize Cluster.")
         if c4.button("Reset Cluster [Danger]", type="primary"):
             st.info("Reset Cluster: Tear down all components, reset etcd/state")
 
+        st.write(bundle.server.get_kubernetes_token())
         st.write(bundle.server.get_backend_info())
         st.write(bundle)
 
