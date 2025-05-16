@@ -6,7 +6,17 @@ import logging
 
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import Dict, Optional, List, Tuple, Literal, Any
+from typing import (
+    Dict,
+    Optional,
+    List,
+    Tuple,
+    Literal,
+    Any,
+    Protocol,
+    ContextManager,
+    TYPE_CHECKING,
+)
 from fabric import Connection  # type: ignore
 
 from mlox.utils import generate_password
@@ -21,6 +31,10 @@ from mlox.remote import (
     # sys_get_distro_info,
     sys_user_id,
 )
+
+if TYPE_CHECKING:
+    # Forward declaration for type hinting if ServerConnection is used in Protocol before definition
+    pass
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -154,26 +168,6 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
-    def install_docker(self) -> None:
-        pass
-
-    @abstractmethod
-    def install_kubernetes(
-        self, controller_url: str | None = None, controller_token: str | None = None
-    ) -> None:
-        pass
-
-    @abstractmethod
-    def get_kubernetes_token(self) -> str:
-        pass
-
-    @abstractmethod
-    def switch_backend(
-        self, from_backend: Literal["docker", "kubernetes"]
-    ) -> Literal["docker", "kubernetes"]:
-        pass
-
-    @abstractmethod
     def setup_users(self) -> None:
         pass
 
@@ -182,11 +176,51 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
-    def get_backend_info(self) -> Dict[str, Any]:
+    def get_server_info(self) -> Dict[str, str | int | float]:
+        pass
+
+    # DOCKER
+    @abstractmethod
+    def setup_docker(self) -> None:
         pass
 
     @abstractmethod
-    def get_server_info(self) -> Dict[str, str | int | float]:
+    def teardown_docker(self) -> None:
+        pass
+
+    @abstractmethod
+    def get_docker_status(self) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def start_docker_runtime(self) -> None:
+        pass
+
+    @abstractmethod
+    def stop_docker_runtime(self) -> None:
+        pass
+
+    # KUBERNETES
+    @abstractmethod
+    def setup_kubernetes(
+        self, controller_url: str | None = None, controller_token: str | None = None
+    ):
+        pass
+
+    @abstractmethod
+    def teardown_kubernetes(self) -> None:
+        pass
+
+    @abstractmethod
+    def get_kubernetes_status(self) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def start_kubernetes_runtime(self) -> None:
+        pass
+
+    @abstractmethod
+    def stop_kubernetes_runtime(self) -> None:
         pass
 
 
@@ -209,139 +243,6 @@ class Ubuntu(AbstractServer):
             )  # why does it not find mc??
             exec_command(conn, "apt-get -y install git", sudo=True)
             exec_command(conn, "apt-get -y install zsh", sudo=True)
-
-    def install_docker(self):
-        with self.get_server_connection() as conn:
-            exec_command(conn, "apt-get -y install ca-certificates curl", sudo=True)
-            exec_command(conn, "install -m 0755 -d /etc/apt/keyrings", sudo=True)
-            exec_command(
-                conn,
-                "curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc",
-                sudo=True,
-            )
-            exec_command(conn, "chmod a+r /etc/apt/keyrings/docker.asc", sudo=True)
-
-            # --- Replace the problematic line ---
-            # Old command:
-            # exec_command(
-            #     conn,
-            #     'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list',
-            #     sudo=True,
-            #     pty=False, # pty=True wouldn't help here either
-            # )
-
-            # New command: Use sudo sh -c '...' to run echo and redirection as root
-            repo_line = 'deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable'
-            # Use double quotes inside the single-quoted sh -c command string
-            full_cmd = (
-                f"sh -c 'echo \"{repo_line}\" > /etc/apt/sources.list.d/docker.list'"
-            )
-            exec_command(
-                conn, full_cmd, sudo=True, pty=False
-            )  # pty=False should be fine
-            # --- End of replacement ---
-
-            exec_command(conn, "apt-get update", sudo=True)
-            exec_command(
-                conn,
-                "apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
-                sudo=True,
-            )
-            print("Done installing docker")
-            exec_command(conn, "docker --version", sudo=True)
-
-    def switch_backend(
-        self, from_backend: Literal["docker", "kubernetes"]
-    ) -> Literal["docker", "kubernetes"]:
-        with self.get_server_connection() as conn:
-            if from_backend == "docker":
-                exec_command(conn, "systemctl stop docker", sudo=True)
-                exec_command(conn, "systemctl start k3s", sudo=True)
-                return "kubernetes"
-            else:
-                exec_command(conn, "systemctl stop k3s", sudo=True)
-                exec_command(conn, "systemctl start docker", sudo=True)
-                return "docker"
-        return from_backend
-
-    def get_kubernetes_token(self) -> str:
-        token = ""
-        with self.get_server_connection() as conn:
-            res = exec_command(
-                conn, f"cat /var/lib/rancher/k3s/server/node-token", sudo=True, pty=True
-            )
-            token = res.split("password: ")[1].strip()
-        return token
-
-    def install_kubernetes(
-        self, controller_url: str | None = None, controller_token: str | None = None
-    ):
-        # Controller URL Template: https://<controller-ip>:6443
-        #
-        agent_str = ""
-        if controller_url and controller_token:
-            agent_str = f"K3S_URL={controller_url} K3S_TOKEN={controller_token} "
-
-        with self.get_server_connection() as conn:
-            exec_command(
-                conn,
-                f"curl -sfL https://get.k3s.io | {agent_str}sh -s -",
-                sudo=True,
-                pty=True,
-            )
-            exec_command(conn, "systemctl status k3s", sudo=True)
-            exec_command(conn, "kubectl get nodes", sudo=True)
-            exec_command(conn, "kubectl version", sudo=True)
-
-    def get_backend_info(self) -> Dict[str, Any]:
-        """
-        Retrieves information about the Docker and k3s backend services.
-
-        Checks if Docker and k3s services are running and, if k3s is active,
-        lists the status of its nodes.
-
-        Returns:
-            A dictionary containing backend status information.
-        """
-        backend_info: Dict[str, Any] = {}
-        with self.get_server_connection() as conn:
-            # Check Docker status
-            # systemctl is-active returns 0 for active, non-zero otherwise
-            res = exec_command(conn, "systemctl is-active docker", sudo=True, pty=False)
-            if res is None:
-                backend_info["docker.is_running"] = False
-            else:
-                backend_info["docker.is_running"] = True
-
-            # Check k3s status
-            res = exec_command(conn, "systemctl is-active k3s", sudo=True, pty=False)
-            if res is None:
-                backend_info["k3s.is_running"] = False
-            else:
-                backend_info["k3s.is_running"] = True
-            # If k3s is running, get node status
-            try:
-                node_output = exec_command(
-                    conn, "kubectl get nodes -o wide", sudo=True, pty=False
-                )
-                # Parse kubectl get nodes output (simple parsing assuming standard format)
-                nodes = []
-                lines = node_output.strip().split("\n")
-                if len(lines) > 1:  # Skip header line
-                    header_parts = lines[0].split()
-                    print(header_parts)
-                    for line in lines[1:]:
-                        parts = re.split(r"\s{2,}", line)
-                        print(parts)
-                        if len(parts) >= 2:
-                            res = {header_parts[i]: parts[i] for i in range(len(parts))}
-                            nodes.append(res)
-                backend_info["k3s.nodes"] = nodes
-            except Exception as e:
-                logger.warning(f"Could not get k3s node info: {e}")
-                backend_info["k3s.nodes"] = "Error retrieving node info"
-
-        return backend_info
 
     def get_server_info(self) -> Dict[str, str | int | float]:
         if self._specs:
@@ -519,6 +420,192 @@ class Ubuntu(AbstractServer):
             )
             exec_command(conn, "systemctl restart ssh", sudo=True)
             exec_command(conn, "systemctl reload ssh", sudo=True)
+
+    # DOCKER
+
+    def setup_docker(self) -> None:
+        with self.get_server_connection() as conn:  # MyPy will understand this call
+            exec_command(conn, "apt-get -y install ca-certificates curl", sudo=True)
+            exec_command(conn, "install -m 0755 -d /etc/apt/keyrings", sudo=True)
+            exec_command(
+                conn,
+                "curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc",
+                sudo=True,
+            )
+            exec_command(conn, "chmod a+r /etc/apt/keyrings/docker.asc", sudo=True)
+
+            # Use double quotes inside the single-quoted sh -c command string
+            repo_line = 'deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable'
+            full_cmd = (
+                f"sh -c 'echo \"{repo_line}\" > /etc/apt/sources.list.d/docker.list'"
+            )
+            exec_command(
+                conn, full_cmd, sudo=True, pty=False
+            )  # pty=False should be fine
+            exec_command(conn, "apt-get update", sudo=True)
+            exec_command(
+                conn,
+                "apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+                sudo=True,
+            )
+            print("Done installing docker")
+            exec_command(conn, "docker --version", sudo=True)
+
+    def teardown_docker(self) -> None:
+        """Uninstalls Docker Engine and related packages."""
+        with self.get_server_connection() as conn:
+            logger.info("Stopping and disabling Docker service...")
+            exec_command(conn, "systemctl stop docker", sudo=True, pty=True)
+            exec_command(conn, "systemctl disable docker", sudo=True, pty=True)
+            logger.info("Purging Docker packages...")
+            exec_command(
+                conn,
+                "apt-get purge -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras",
+                sudo=True,
+            )
+            logger.info("Removing Docker directories...")
+            exec_command(conn, "rm -rf /var/lib/docker", sudo=True)
+            exec_command(
+                conn, "rm -rf /var/lib/containerd", sudo=True
+            )  # Also remove containerd data
+            # /etc/docker should be removed by purge, but an extra check doesn't hurt if needed.
+            # exec_command(conn, "rm -rf /etc/docker", sudo=True)
+            logger.info("Docker uninstalled.")
+
+    def get_docker_status(self) -> Dict[str, Any]:
+        info: Dict[str, Any] = {}
+        with self.get_server_connection() as conn:
+            # Check Docker status
+            # systemctl is-active returns 0 for active, non-zero otherwise
+            res = exec_command(conn, "systemctl is-active docker", sudo=True, pty=False)
+            if res is None:
+                info["docker.is_running"] = False
+            else:
+                info["docker.is_running"] = True
+        return info
+
+    def start_docker_runtime(self) -> None:
+        with self.get_server_connection() as conn:
+            exec_command(conn, "systemctl start docker", sudo=True)
+
+    def stop_docker_runtime(self) -> None:
+        with self.get_server_connection() as conn:
+            exec_command(conn, "systemctl stop docker", sudo=True)
+
+    # KUBERNETES
+    def setup_kubernetes(
+        self, controller_url: str | None = None, controller_token: str | None = None
+    ):
+        # Controller URL Template: https://<controller-ip>:6443
+        agent_str = ""
+        if controller_url and controller_token:
+            agent_str = f"K3S_URL={controller_url} K3S_TOKEN={controller_token} "
+
+        with self.get_server_connection() as conn:
+            exec_command(
+                conn,
+                f"curl -sfL https://get.k3s.io | {agent_str}sh -s -",
+                sudo=True,
+                pty=True,
+            )
+            exec_command(conn, "systemctl status k3s", sudo=True)
+            exec_command(conn, "kubectl get nodes", sudo=True)
+            exec_command(conn, "kubectl version", sudo=True)
+
+    def teardown_kubernetes(self) -> None:
+        """Uninstalls k3s using the official uninstall scripts."""
+        uninstalled = False
+        with self.get_server_connection() as conn:
+            # Try server uninstall script first
+            logger.info("Attempting to uninstall k3s server...")
+            try:
+                # Check if server uninstall script exists
+                if conn.run("test -f /usr/local/bin/k3s-uninstall.sh", warn=True).ok:
+                    exec_command(
+                        conn, "/usr/local/bin/k3s-uninstall.sh", sudo=True, pty=True
+                    )
+                    logger.info("k3s server uninstalled successfully.")
+                    uninstalled = True
+                else:
+                    logger.info("/usr/local/bin/k3s-uninstall.sh not found.")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to run k3s-uninstall.sh or script not present: {e}"
+                )
+
+            if not uninstalled:
+                # Try agent uninstall script if server uninstall didn't run or wasn't applicable
+                logger.info("Attempting to uninstall k3s agent...")
+                try:
+                    if conn.run(
+                        "test -f /usr/local/bin/k3s-agent-uninstall.sh", warn=True
+                    ).ok:
+                        exec_command(
+                            conn,
+                            "/usr/local/bin/k3s-agent-uninstall.sh",
+                            sudo=True,
+                            pty=True,
+                        )
+                        logger.info("k3s agent uninstalled successfully.")
+                        uninstalled = True
+                    else:
+                        logger.info("/usr/local/bin/k3s-agent-uninstall.sh not found.")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to run k3s-agent-uninstall.sh or script not present: {e}"
+                    )
+
+            if not uninstalled:
+                logger.warning(
+                    "Neither k3s server nor agent uninstall scripts were found or ran successfully. k3s might still be present."
+                )
+
+    def get_kubernetes_status(self) -> Dict[str, Any]:
+        backend_info: Dict[str, Any] = {}
+        with self.get_server_connection() as conn:
+            # Check k3s status
+            res = exec_command(conn, "systemctl is-active k3s", sudo=True, pty=False)
+            if res is None:
+                backend_info["k3s.is_running"] = False
+            else:
+                backend_info["k3s.is_running"] = True
+            # If k3s is running, get node status
+            try:
+                res = exec_command(
+                    conn,
+                    "cat /var/lib/rancher/k3s/server/node-token",
+                    sudo=True,
+                    pty=True,
+                )
+                backend_info["k3s.token"] = res.split("password: ")[1].strip()
+                node_output = exec_command(
+                    conn, "kubectl get nodes -o wide", sudo=True, pty=False
+                )
+                # Parse kubectl get nodes output (simple parsing assuming standard format)
+                nodes = []
+                lines = node_output.strip().split("\n")
+                if len(lines) > 1:  # Skip header line
+                    header_parts = lines[0].split()
+                    print(header_parts)
+                    for line in lines[1:]:
+                        parts = re.split(r"\s{2,}", line)
+                        print(parts)
+                        if len(parts) >= 2:
+                            res = {header_parts[i]: parts[i] for i in range(len(parts))}
+                            nodes.append(res)
+                backend_info["k3s.nodes"] = nodes
+            except Exception as e:
+                logger.warning(f"Could not get k3s node info: {e}")
+                backend_info["k3s.nodes"] = "Error retrieving node info"
+        return backend_info
+
+    def start_kubernetes_runtime(self) -> None:
+        with self.get_server_connection() as conn:
+            exec_command(conn, "systemctl start k3s", sudo=True)
+
+    def stop_kubernetes_runtime(self) -> None:
+        with self.get_server_connection() as conn:
+            exec_command(conn, "systemctl stop k3s", sudo=True)
 
 
 @dataclass

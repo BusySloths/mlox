@@ -77,33 +77,25 @@ class ServerConfig:
     maintainer: str
     description: str
     links: Dict[str, str]
-    # This type hint correctly defines the desired final structure
-    build: Dict[str, BuildConfig] = field(default_factory=dict)
+    build: BuildConfig
 
     def instantiate(
-        self,
-        build_key: str,
-        params: Dict[str, str],
-        init_params: Dict[str, str] = dict(),
+        self, params: Dict[str, str], init_params: Dict[str, str] = dict()
     ) -> Optional[AbstractServer]:
-        if build_key not in self.build:
-            logging.error(f"Build key '{build_key}' not found in service config.")
-            return None
-        build_config = self.build[build_key]
         try:
             # Use details from the specific BuildConfig object
-            module = importlib.import_module(build_config.module)
-            service_class = getattr(module, build_config.class_name)
+            module = importlib.import_module(self.build.module)
+            service_class = getattr(module, self.build.class_name)
 
             print(service_class)
             if not issubclass(service_class, AbstractServer):
                 logging.error(
-                    f"Class {build_config.class_name} from {build_config.module} is not a subclass of AbstractServer."
+                    f"Class {self.build.class_name} from {self.build.module} is not a subclass of AbstractServer."
                 )
                 return None
 
-            if build_config.params:
-                init_params.update(build_config.params)
+            if self.build.params:
+                init_params.update(self.build.params)
             for key, value in init_params.items():
                 for k in params.keys():
                     if k in value:
@@ -116,13 +108,26 @@ class ServerConfig:
             return service_instance
 
         except (ImportError, AttributeError) as e:
-            logging.error(f"Error instantiating service {build_config.class_name}: {e}")
+            logging.error(f"Error instantiating service {self.build.class_name}: {e}")
+            print(self.build)
             return None
         except TypeError as e:
             logging.error(
-                f"Error calling constructor for {build_config.class_name}: {e}. Check parameters: {init_params}"
+                f"Error calling constructor for {self.build.class_name}: {e}. Check parameters: {init_params}"
             )
             return None
+
+
+def load_all_server_configs(root_dir: str) -> List[ServerConfig]:
+    configs: List[ServerConfig] = []
+    if not os.path.isdir(root_dir):
+        logging.error(f"Configuration directory not found: {root_dir}")
+        return configs
+
+    candidates = os.listdir(root_dir)
+    for candidate in candidates:
+        configs.extend(load_server_configs(root_dir + "/" + candidate))
+    return configs
 
 
 def load_server_configs(config_dir: str) -> List[ServerConfig]:
@@ -152,35 +157,8 @@ def load_server_configs(config_dir: str) -> List[ServerConfig]:
                     )
                     return configs  # Or continue if loading multiple files
 
-                # --- Manual Parsing of the 'build' dictionary ---
                 raw_build_dict = service_data.get("build", {})
-                parsed_build_dict: Dict[str, BuildConfig] = {}
-
-                if isinstance(raw_build_dict, dict):
-                    for build_type, build_config_data in raw_build_dict.items():
-                        if isinstance(build_config_data, dict):
-                            try:
-                                # Create BuildConfig instance from the nested dict
-                                build_config_instance = BuildConfig(**build_config_data)
-                                parsed_build_dict[build_type] = build_config_instance
-                            except TypeError as e:
-                                logging.error(
-                                    f"Error creating BuildConfig for type '{build_type}' in {filepath}: {e}. Data: {build_config_data}"
-                                )
-                        else:
-                            logging.warning(
-                                f"Expected a dictionary for build type '{build_type}' in {filepath}, but got {type(build_config_data)}. Skipping."
-                            )
-                else:
-                    logging.warning(
-                        f"Expected 'build' key to contain a dictionary in {filepath}, but got {type(raw_build_dict)}. Ignoring build section."
-                    )
-
-                # Replace the raw build dictionary with the parsed one
-                service_data["build"] = parsed_build_dict
-                # --- End of Manual Parsing ---
-
-                # Now instantiate ServiceConfig with the processed data
+                service_data["build"] = BuildConfig(**raw_build_dict)
                 configs.append(ServerConfig(**service_data))
 
             except yaml.YAMLError as e:

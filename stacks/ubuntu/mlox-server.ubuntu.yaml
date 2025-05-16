@@ -13,38 +13,10 @@ links:
   documentation: https://ubuntu.com/
   changelog: https://ubuntu.com/
 build:
-  mlox:
-    module: mlox.server
-    class_name: Ubuntu
-  dev:
-    module: mlox.server
-    class_name: ConfigurableServer
-    params:
-      script_test: [
-        "ls -l",
-        ["sys_disk_free"],
-        # ["sys_add_user", "test_user", "test_pw", True, True],
-        # [False, "mkdir -p ~/.ssh; chmod 700 ~/.ssh", "Add SSH directory"],
-        [False, "echo 'Hello, world!' > /home/test_user/hello.txt", "Add hello.txt"],
-        "echo 'Hello, world!'"]
-      script_generate_ssh_keys: [
-        [False, "mkdir -p ~/.ssh; chmod 700 ~/.ssh", "Add SSH directory"],
-        [False, "cd /home/${MLOX_USER}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N ${MLOX_SSH_PW}", "Generate SSH key"],
-        ["fs_append_line", "/home/${MLOX_USER}/.ssh/authorized_keys", "${MLOX_SSH_PUB_KEY}", "Add SSH public key"],
-      ]
-      script_setup: [
-        ["sys_add_user", "${MLOX_USER}", "${MLOX_PW}", True, True],  # add user with sudo privileges
-        [False, "mkdir -p ~/.ssh; chmod 700 ~/.ssh", "Add SSH directory"],
-        [False, "cd /home/${MLOX_USER}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N ${MLOX_SSH_PW}", "Generate SSH key"],
-        ["fs_append_line", "/home/${MLOX_USER}/.ssh/authorized_keys", "${MLOX_SSH_PUB_KEY}", "Add SSH public key"],
-        ["fs_find_and_replace", "/etc/ssh/sshd_config", "#PasswordAuthentication yes", "PasswordAuthentication no"],
-        ["fs_find_and_replace", "/etc/ssh/sshd_config", "X11Forwarding yes", "X11Forwarding no"],
-        ["fs_find_and_replace", "/etc/ssh/sshd_config", "AllowTcpForwarding yes", "AllowTcpForwarding no"],
-        [False, "systemctl restart ssh", "Restart SSH"],
-      ]
-      script_update: [
-        [True, "dpkg --configure -a", "Update packages"],
-        [True, "apt-get update", "Update packages"],
-        [True, "apt-get -y upgrade", "Upgrade packages"],
-      ]
-  ansible:
+  module: mlox.server
+  class_name: Ubuntu
+  params:
+    ip: ${MLOX_IP}
+    port: ${MLOX_PORT}    
+    root: ${MLOX_ROOT}
+    root_pw: ${MLOX_ROOT_PW}    

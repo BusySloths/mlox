@@ -1,8 +1,9 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Tuple, Dict
 
+from mlox.config import ServerConfig, ServiceConfig
 from mlox.server import AbstractServer
 from mlox.service import AbstractService
 from mlox.utils import (
@@ -22,47 +23,27 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Bundle:
     name: str
+    config: ServerConfig
     server: AbstractServer
     descr: str = field(default="", init=False)
     tags: List[str] = field(default_factory=list, init=False)
-    backend: Literal["un-initialized", "docker", "kubernetes"] = field(
-        default="un-initialized"
+    status: Literal[
+        "un-initialized", "no-backend", "docker", "kubernetes", "kubernetes-agent"
+    ] = field(default="un-initialized")
+    services: List[Tuple[ServiceConfig, AbstractService]] = field(
+        default_factory=list, init=False
     )
-    cluster: List[AbstractServer] = field(default_factory=list, init=False)
-    services: List[AbstractService] = field(default_factory=list, init=False)
-
-    def __post_init__(self):
-        if self.backend == "docker" and not self.server:
-            raise ValueError("Docker bundles need a 'server'.")
-        if self.backend == "kubernetes":
-            if not self.server:
-                raise ValueError("Kubernetes bundles need a control plane in 'server'.")
-            if not self.cluster:
-                print("⚠️ Warning: Kubernetes cluster has no worker nodes.")
 
     def initialize(self) -> None:
-        if self.backend != "un-initialized":
+        if self.status != "un-initialized":
             logging.error("Can not initialize an already initialized server.")
             return
         self.server.update()
         self.server.install_packages()
         self.server.update()
         self.server.setup_users()
-        self.server.install_docker()
-        self.server.install_kubernetes()
-        self.server.update()
         self.server.disable_password_authentication()
-        self.backend = "docker"
-        self.server.switch_backend(from_backend="kubernetes")
-
-    def switch_backend(self) -> None:
-        if self.backend == "un-initialized":
-            logging.error("Can not switch backend of an un-initialized server.")
-            return
-        new_backend = self.server.switch_backend(from_backend=self.backend)
-        if self.backend == new_backend:
-            logging.error("Could not change backend.")
-        self.backend = new_backend
+        self.backend = "no-backend"
 
 
 @dataclass
@@ -75,41 +56,40 @@ class Infrastructure:
                 return bundle
         return None
 
-    def add_server(self, server: AbstractServer) -> Bundle:
-        bundle = Bundle(name=server.ip, server=server)
-        self.bundles.append(bundle)
-        return bundle
+    def add_server(self, config: ServerConfig, params: Dict[str, str]) -> Bundle | None:
+        server = config.instantiate(params=params)
+        if server:
+            bundle = Bundle(name=server.ip, config=config, server=server)
+            self.bundles.append(bundle)
+            return bundle
+        else:
+            logging.warning("Could not add server.")
+        return None
 
-    def delete_bundle(self, bundle: Bundle) -> None:
-        self.bundles.remove(bundle)
+    # def delete_bundle(self, bundle: Bundle) -> None:
+    #     self.bundles.remove(bundle)
 
-    def list_available_k8s_clients(self, target: Bundle) -> List[Bundle]:
-        return [
-            bundle
-            for bundle in self.bundles
-            if bundle.backend == "kubernetes" and bundle != target
-        ]
+    # def list_available_k8s_clients(self, target: Bundle) -> List[Bundle]:
+    #     return [
+    #         bundle
+    #         for bundle in self.bundles
+    #         if bundle.backend == "kubernetes" and bundle != target
+    #     ]
 
-    def add_k8s_client(self, controller: Bundle, agent: Bundle) -> None:
-        # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)
-        token = controller.server.get_kubernetes_token()
-        url = f"https://{controller.server.ip}:6443"
-        agent.server.install_kubernetes(controller_url=url, controller_token=token)
-        controller.cluster.append(agent.server)
-        self.delete_bundle(agent)
+    # def add_k8s_client(self, controller: Bundle, agent: Bundle) -> None:
+    #     # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)
+    #     token = controller.server.get_kubernetes_token()
+    #     url = f"https://{controller.server.ip}:6443"
+    #     agent.server.install_kubernetes(controller_url=url, controller_token=token)
+    #     controller.cluster.append(agent.server)
+    #     self.delete_bundle(agent)
 
-    def remove_k8s_client(self, controller: Bundle, agent: AbstractServer) -> Bundle:
-        # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)
-        bundle = Bundle(name=agent.ip, server=agent)
-        self.bundles.append(bundle)
-        controller.cluster.remove(agent)
-        return bundle
-
-    @classmethod
-    def load_server_config(cls, filepath: str, password: str) -> Bundle:
-        server_dict = load_from_json(filepath, password)
-        server = dict_to_dataclass(server_dict, [AbstractServer])
-        return Bundle(name=server.ip, server=server)
+    # def remove_k8s_client(self, controller: Bundle, agent: AbstractServer) -> Bundle:
+    #     # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)
+    #     bundle = Bundle(name=agent.ip, server=agent)
+    #     self.bundles.append(bundle)
+    #     controller.cluster.remove(agent)
+    #     return bundle
 
     def save(self, filepath: str, password: str) -> None:
         infra_dict = dataclass_to_dict(self)
