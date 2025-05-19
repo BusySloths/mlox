@@ -135,7 +135,7 @@ if __name__ == "__main__":
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
         exit(1)
 
-    secret_manager = TinySecretManager("/test_server.json", ".secrets", password)
+    secret_manager = TinySecretManager("/mlox111.key", ".secrets", password)
     # print(secret_manager.load_secret("TEST_SECRET"))
     # secret_manager.save_secret(
     #     "TEST_SECRET",
@@ -145,5 +145,5 @@ if __name__ == "__main__":
     #         "listkey": ["item1", "item2"],
     #     },
     # )
-    print(secret_manager.load_secret("TEST_SECRET"))
+    # print(secret_manager.load_secret("TEST_SECRET"))
     print(secret_manager.list_secrets())

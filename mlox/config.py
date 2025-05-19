@@ -73,7 +73,7 @@ class ServiceConfig:
 @dataclass
 class ServerConfig:
     name: str
-    versions: List[str]
+    versions: List[str | float]
     maintainer: str
     description: str
     links: Dict[str, str]
@@ -283,44 +283,3 @@ def test_service_configs():
 
     else:
         print("No service configurations loaded.")
-
-
-if __name__ == "__main__":
-    server_configs = load_server_configs("./stacks/ubuntu/")
-    for config in server_configs:
-        print(config)
-        # You can now instantiate services based on these configs
-        # For example:
-        init_params = {
-            "ip": os.environ.get("MLOX_SERVER_1_IP", ""),
-            "root_pw": os.environ.get("MLOX_SERVER_1_ROOT_PW", ""),
-            "root": "root",
-        }
-        params = {
-            "${MLOX_USER}": "pups",
-            "${MLOX_PW}": "dkjsajdlkfj",
-            "${MLOX_SSH_PW}": "dkjsajdlkfj",
-            "${MLOX_SSH_PUB_KEY}": "port22",
-        }
-        server = config.instantiate("mlox", params, init_params=init_params)
-        if server:
-            # print("\nUPDATE AND INSTALL:")
-            # server.update()
-            # server.install_packages()
-
-            print("\nSETUP USER:")
-
-            # print(server.get_user_templates())
-            server.setup_users()
-
-            print("\nUSERS:")
-            print(server.remote_user)
-            print(server.mlox_user)
-
-            print("\nTEST CONNECTION:")
-            server.test_connection()
-            # save_dataclass_to_json(server, "./test_server.json")
-
-            # print("\nINSTALL KUBERNETES:")
-            # server.install_kubernetes()
-            # server.install_docker()

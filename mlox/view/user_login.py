@@ -63,6 +63,7 @@ def new_project():
                 ms = MloxSession(username, password)
                 if ms.secrets.is_working():
                     ms.infra.bundles.append(bundle)
+                    bundle.tags.append("mlox-secrets")
                     ms.save_infrastructure()
                     st.session_state["mlox"] = ms
                     st.session_state.is_logged_in = True

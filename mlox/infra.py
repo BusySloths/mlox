@@ -1,7 +1,7 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Literal, Tuple, Dict
+from typing import Optional, List, Literal, Tuple, Dict, Any
 
 from mlox.config import ServerConfig, ServiceConfig
 from mlox.server import AbstractServer
@@ -43,7 +43,31 @@ class Bundle:
         self.server.update()
         self.server.setup_users()
         self.server.disable_password_authentication()
-        self.backend = "no-backend"
+        self.status = "no-backend"
+
+    def set_backend(
+        self,
+        backend: Literal["docker", "kubernetes", "kubernetes-agent"],
+        controller: Any | None = None,
+    ) -> None:
+        if backend == "docker":
+            self.server.setup_docker()
+            self.server.start_docker_runtime()
+        elif backend == "kubernetes":
+            self.server.setup_kubernetes()
+            self.server.start_kubernetes_runtime()
+        elif backend == "kubernetes-agent" and controller:
+            stats = controller.server.get_kubernetes_status()
+            if "k3s.token" not in stats:
+                logging.error(
+                    "Token is missing in controller stats ip: %s", controller.server.ip
+                )
+                return
+            url = f"https://{controller.server.ip}:6443"
+            token = stats["k3s.token"]
+            self.server.setup_kubernetes(controller_url=url, controller_token=token)
+            self.server.start_kubernetes_runtime()
+        self.status = backend
 
 
 @dataclass
@@ -69,12 +93,8 @@ class Infrastructure:
     # def delete_bundle(self, bundle: Bundle) -> None:
     #     self.bundles.remove(bundle)
 
-    # def list_available_k8s_clients(self, target: Bundle) -> List[Bundle]:
-    #     return [
-    #         bundle
-    #         for bundle in self.bundles
-    #         if bundle.backend == "kubernetes" and bundle != target
-    #     ]
+    def list_kubernetes_controller(self) -> List[Bundle]:
+        return [bundle for bundle in self.bundles if bundle.status == "kubernetes"]
 
     # def add_k8s_client(self, controller: Bundle, agent: Bundle) -> None:
     #     # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)

@@ -7,12 +7,14 @@ import logging
 import secrets
 import importlib
 
+
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from dataclasses import is_dataclass, fields  # Added fields import
 from typing import List, Any, Dict
+from functools import partial
 
 
 def _get_encryption_key(password: str) -> bytes:
@@ -140,9 +142,7 @@ def _load_hook(data_item: Any) -> Any:
             return dacite.from_dict(
                 data_class=nested_concrete_cls,
                 data=data_copy,
-                config=dacite.Config(
-                    type_hooks={object: _load_hook}
-                ),  # Pass hook recursively
+                config=dacite.Config(type_hooks={object: _load_hook}),
             )
         except (ImportError, AttributeError, TypeError) as e:
             logging.error(
@@ -151,6 +151,7 @@ def _load_hook(data_item: Any) -> Any:
             raise ValueError(
                 f"Hook: Could not load nested dataclass {module_name}.{class_name}"
             ) from e
+    logging.info(data_item)
     return data_item  # Let dacite handle if not a dict with metadata
 
 
@@ -163,7 +164,6 @@ def load_from_json(path: str, password: str, encrypted: bool = True) -> Any:
         key = _get_encryption_key(password=password)
         fernet = Fernet(key)
         json_string = fernet.decrypt(encrypted_data).decode("utf-8")
-        print(f"Decrypted data: {json_string}")
         data = json.loads(json_string)
     else:
         data = json.loads(encrypted_data)
