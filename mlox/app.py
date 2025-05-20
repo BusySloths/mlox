@@ -64,36 +64,6 @@ def monitor():
     """)
 
 
-def secrets():
-    st.markdown("""
-    # Outputs
-    This is the collections of all the outputs of your MLOps stack to be used in your applications.:
-    - Keys and secrets
-    - Configurations
-    """)
-
-    ip = "<IP_ADDRESS>"
-    st.selectbox(
-        "Choose Secret Manager Backend",
-        [
-            "Local (not recommended)",
-            f"OpenBAO on {ip}",
-        ],
-    )
-    import pandas as pd
-
-    ms = st.session_state.mlox
-    secrets = ms.secrets.list_secrets(keys_only=False)
-    st.write(secrets)
-
-    with st.form("Add Secret"):
-        name = st.text_input("Key")
-        value = st.text_area("Value")
-        if st.form_submit_button("Add Secret"):
-            ms.secrets.save_secret(name, value)
-            st.rerun()
-
-
 def welcome():
     st.image("resources/mlox_logo_wide.png")
     st.markdown("""
@@ -128,56 +98,49 @@ st.logo(
 )
 
 
-pages_admin = [
-    st.Page(
-        "view/admin_user.py", title="User Management", icon=":material/manage_accounts:"
-    ),
-]
-
-
 pages_logged_out = {
-    "": [st.Page(welcome, title="Home", icon=":material/home:")],
-    "Your Account": [
-        st.Page("view/user_login.py", title="Login", icon=":material/login:"),
+    "": [
+        st.Page(welcome, title="Home", icon=":material/home:"),
+        st.Page("view/login.py", title="Login", icon=":material/login:"),
     ],
 }
 
 pages_logged_in = {
-    "": [st.Page(welcome, title="Home", icon=":material/home:")],
-    "Your account": [
-        st.Page("view/user_login.py", title="Logout", icon=":material/logout:"),
-        st.Page(
-            "view/user_profile.py", title="Profile", icon=":material/account_circle:"
-        ),
+    "": [
+        st.Page(welcome, title="Home", icon=":material/home:"),
+        st.Page("view/login.py", title="Logout", icon=":material/logout:"),
     ],
-    "Your Infrastructure": [
-        st.Page(news, title="Security and News", icon=":material/news:"),
-        st.Page(
-            "view/manage.py",
-            title="Infrastructure",
-            icon=":material/network_node:",
-        ),
-        st.Page(
-            services,
-            title="Services",
-            icon=":material/linked_services:",
-        ),
-        st.Page(
-            repos,
-            title="Repositories",
-            icon=":material/database:",
-        ),
-        st.Page(
-            secrets,
-            title="Secret Management",
-            icon=":material/key:",
-        ),
-        st.Page(
-            monitor,
-            title="Monitor",
-            icon=":material/monitor:",
-        ),
-    ],
+}
+
+pages_infrastructure = [
+    st.Page(news, title="Security and News", icon=":material/news:"),
+    st.Page(
+        "view/infrastructure.py",
+        title="Infrastructure",
+        icon=":material/network_node:",
+    ),
+    st.Page(
+        services,
+        title="Services",
+        icon=":material/linked_services:",
+    ),
+    st.Page(
+        repos,
+        title="Repositories",
+        icon=":material/database:",
+    ),
+    st.Page(
+        "view/secret_manager.py",
+        title="Secret Management",
+        icon=":material/key:",
+    ),
+    st.Page(
+        monitor,
+        title="Monitor",
+        icon=":material/monitor:",
+    ),
+]
+pages_docs = {
     "Help and Documentation": [
         st.Page(
             help,
@@ -187,13 +150,13 @@ pages_logged_in = {
     ],
 }
 
-
-if st.session_state.get("is_admin", False):
-    pages_logged_in["Admin"] = pages_admin
-
 pages = pages_logged_out
 if st.session_state.get("is_logged_in", False):
     pages = pages_logged_in
+    prj_name = st.session_state["mlox"].username
+    pages[prj_name] = pages_infrastructure
+    pages.update(pages_docs)
+
 
 pg = st.navigation(pages)
 

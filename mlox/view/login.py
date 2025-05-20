@@ -3,7 +3,7 @@ import streamlit as st
 
 from mlox.session import MloxSession
 from mlox.infra import Infrastructure
-from mlox.utils import dataclass_to_dict, encrypt_dict, save_to_json
+from mlox.utils import dataclass_to_dict, save_to_json
 from mlox.view.utils import form_add_server
 
 

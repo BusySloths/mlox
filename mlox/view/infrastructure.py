@@ -102,84 +102,11 @@ def tab_server_mngmt():
         st.write(bundle)
 
 
-# def tab_cluster_mngmt():
-#     st.header("Cluster Overview")
-#     infra = st.session_state.mlox.infra
-
-#     cluster = []
-#     for bundle in infra.bundles:
-#         info = bundle.server.get_server_info()
-#         if bundle.backend != "kubernetes":
-#             continue
-#         cluster.append(
-#             {
-#                 "cluster": bundle.name,
-#                 "controller": bundle.server.ip,
-#                 "nodes": [s.ip for s in bundle.cluster],
-#                 "tags": bundle.tags,
-#                 "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
-#             }
-#         )
-
-#     select_server = st.dataframe(
-#         cluster,
-#         use_container_width=True,
-#         selection_mode="single-row",
-#         hide_index=True,
-#         on_select="rerun",
-#         key="cluster-select",
-#     )
-
-#     if len(select_server["selection"].get("rows", [])) == 1:
-#         selected_server = cluster[select_server["selection"]["rows"][0]]["controller"]
-#         bundle = infra.get_bundle_by_ip(selected_server)
-
-#         c1, c2 = st.columns([75, 25])
-
-#         c_1, c0, c1, c2, c3, c4 = st.columns([20, 10, 12, 15, 20, 20])
-#         client_bundle = c_1.selectbox(
-#             "Add node to cluster",
-#             [b for b in infra.list_available_k8s_clients(target=bundle)],
-#             label_visibility="collapsed",
-#             format_func=lambda x: x.name,
-#         )
-#         if c0.button("Add", type="primary"):
-#             # bundle.cluster.append(client_bundle.server
-#             st.info(
-#                 f"Add node {client_bundle.server.ip} to cluster {bundle.server.ip}."
-#             )
-#             infra.add_k8s_client(bundle, client_bundle)
-#             st.rerun()
-
-#         if c1.button("Drain Node"):
-#             st.info("Drain Server.")
-#         if c2.button("Remove Node"):
-#             st.info("Remove Server from Cluster.")
-#             infra.remove_k8s_client(bundle, bundle.cluster[0])
-#             st.rerun()
-#         if c3.button("Initialize Cluster"):
-#             st.info("Initialize Cluster.")
-#         if c4.button("Reset Cluster [Danger]", type="primary"):
-#             st.info("Reset Cluster: Tear down all components, reset etcd/state")
-
-#         st.write(bundle.server.get_kubernetes_token())
-#         st.write(bundle.server.get_backend_info())
-#         st.write(bundle)
-
-
-tab_server, tab_k3s = st.tabs(["Server", "Cluster"])
-with tab_server:
-    st.header("Server Management")
-    st.write(
-        "This is a simple server management interface. You can add servers, manage services, and view server information."
-    )
-    tab_server_mngmt()
-with tab_k3s:
-    st.header("Cluster Management")
-    st.write(
-        "This is a simple cluster management interface. You can add clusters, manage services, and view cluster information."
-    )
-    # tab_cluster_mngmt()
+st.header("Server Management")
+st.write(
+    "This is a simple server management interface. You can add servers, manage services, and view server information."
+)
+tab_server_mngmt()
 
 st.divider()
 if st.button("Save Infrastructure"):
