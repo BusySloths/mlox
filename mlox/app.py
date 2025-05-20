@@ -27,12 +27,6 @@ def service_airflow():
     This is where you can manage your Airflow service.""")
 
 
-def repos():
-    st.markdown("""
-    # Repositories
-    This is where you can manage your repositories.""")
-
-
 def monitor():
     st.markdown("""
     # Monitor
@@ -125,7 +119,7 @@ pages_infrastructure = [
         icon=":material/linked_services:",
     ),
     st.Page(
-        repos,
+        "view/repos.py",
         title="Repositories",
         icon=":material/database:",
     ),

@@ -27,6 +27,7 @@ from mlox.remote import (
     fs_read_file,
     fs_find_and_replace,
     fs_append_line,
+    fs_create_dir,
     sys_add_user,
     # sys_get_distro_info,
     sys_user_id,
@@ -177,6 +178,15 @@ class AbstractServer(ABC):
 
     @abstractmethod
     def get_server_info(self) -> Dict[str, str | int | float]:
+        pass
+
+    # GIT
+    @abstractmethod
+    def git_clone(self, repo_url: str, path: str) -> None:
+        pass
+
+    @abstractmethod
+    def git_pull(self, path: str) -> None:
         pass
 
     # DOCKER
@@ -421,8 +431,22 @@ class Ubuntu(AbstractServer):
             exec_command(conn, "systemctl restart ssh", sudo=True)
             exec_command(conn, "systemctl reload ssh", sudo=True)
 
-    # DOCKER
+    # GIT
+    def git_clone(self, repo_url: str, path: str) -> None:
+        with self.get_server_connection() as conn:
+            if self.mlox_user:
+                abs_path = f"{self.mlox_user.home}/{path}"
+                fs_create_dir(conn, abs_path)
+                exec_command(conn, f"cd {path}; git clone {repo_url}", sudo=False)
 
+    def git_pull(self, repo_root_path: str) -> None:
+        # TODO check if the path exists, rn we assume the path is valid
+        with self.get_server_connection() as conn:
+            if self.mlox_user:
+                abs_path = f"{self.mlox_user.home}/{repo_root_path}"
+                exec_command(conn, f"cd {abs_path}; git pull", sudo=False)
+
+    # DOCKER
     def setup_docker(self) -> None:
         with self.get_server_connection() as conn:  # MyPy will understand this call
             exec_command(conn, "apt-get -y install ca-certificates curl", sudo=True)

@@ -1,5 +1,7 @@
 import logging
 
+
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List, Literal, Tuple, Dict, Any
 
@@ -21,6 +23,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class Repo:
+    link: str
+    name: str
+    path: str
+    added_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
+    modified_timestamp: str = field(
+        default_factory=datetime.now().isoformat, init=False
+    )
+
+
+@dataclass
 class Bundle:
     name: str
     config: ServerConfig
@@ -33,6 +46,7 @@ class Bundle:
     services: List[Tuple[ServiceConfig, AbstractService]] = field(
         default_factory=list, init=False
     )
+    repos: List[Repo] = field(default_factory=list, init=False)
 
     def initialize(self) -> None:
         if self.status != "un-initialized":
@@ -79,6 +93,30 @@ class Infrastructure:
             if bundle.server.ip == ip:
                 return bundle
         return None
+
+    def pull_repo(self, ip: str, name: str) -> None:
+        bundle = next((b for b in self.bundles if b.server.ip == ip), None)
+        if not bundle:
+            return
+        repo = next((r for r in bundle.repos if r.name == name), None)
+        if not repo:
+            return
+        repo.modified_timestamp = datetime.now().isoformat()
+        bundle.server.git_pull(repo.path)
+
+    def add_repo(self, ip: str, link: str) -> None:
+        bundle = next(
+            (bundle for bundle in self.bundles if bundle.server.ip == ip), None
+        )
+        if not bundle:
+            return
+
+        REPOS: str = "repos3"
+        name = link.split("/")[-1][:-4]
+        path = f"{REPOS}/{name}"
+        repo = Repo(link=link, name=name, path=path)
+        bundle.server.git_clone(repo.link, REPOS)
+        bundle.repos.append(repo)
 
     def add_server(self, config: ServerConfig, params: Dict[str, str]) -> Bundle | None:
         server = config.instantiate(params=params)
