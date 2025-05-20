@@ -15,12 +15,6 @@ def help():
     """)
 
 
-def services():
-    st.markdown("""
-    # Services
-    This is where you can manage your services.""")
-
-
 def service_airflow():
     st.markdown("""
     # Service Airflow
@@ -114,12 +108,12 @@ pages_infrastructure = [
         icon=":material/network_node:",
     ),
     st.Page(
-        services,
+        "view/services.py",
         title="Services",
         icon=":material/linked_services:",
     ),
     st.Page(
-        "view/repos.py",
+        "view/repositories.py",
         title="Repositories",
         icon=":material/database:",
     ),

@@ -31,4 +31,15 @@ build:
       ui_pw: ${MLOX_PW}
       secret_path: ""
   kubernetes:
+    module: mlox.services.airflow.airflow
+    class_name: AirflowDockerService
+    params:
+      template: docker-compose-airflow-3.0.0.yaml 
+      target_path: /home/${MLOX_USER}/airflow
+      path_output: /home/${MLOX_USER}/airflow/output
+      path_dags: /home/${MLOX_USER}/repos/airflow/dags
+      port: ${MLOX_PORT}
+      ui_user: admin
+      ui_pw: ${MLOX_PW}
+      secret_path: ""
   ansible:

@@ -134,6 +134,11 @@ class Infrastructure:
     def list_kubernetes_controller(self) -> List[Bundle]:
         return [bundle for bundle in self.bundles if bundle.status == "kubernetes"]
 
+    def list_bundles_with_backend(
+        self, backend: Literal["docker", "kubernetes"]
+    ) -> List[Bundle]:
+        return [b for b in self.bundles if b.status == backend]
+
     # def add_k8s_client(self, controller: Bundle, agent: Bundle) -> None:
     #     # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)
     #     token = controller.server.get_kubernetes_token()

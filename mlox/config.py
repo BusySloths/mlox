@@ -130,6 +130,18 @@ def load_all_server_configs(root_dir: str) -> List[ServerConfig]:
     return configs
 
 
+def load_all_service_configs(root_dir: str) -> List[ServiceConfig]:
+    configs: List[ServiceConfig] = []
+    if not os.path.isdir(root_dir):
+        logging.error(f"Configuration directory not found: {root_dir}")
+        return configs
+
+    candidates = os.listdir(root_dir)
+    for candidate in candidates:
+        configs.extend(load_service_configs(root_dir + "/" + candidate))
+    return configs
+
+
 def load_server_configs(config_dir: str) -> List[ServerConfig]:
     """Loads service configurations from YAML files in the given directory."""
     configs: List[ServerConfig] = []
@@ -283,3 +295,9 @@ def test_service_configs():
 
     else:
         print("No service configurations loaded.")
+
+
+if __name__ == "__main__":
+    configs = load_all_service_configs("./stacks/")
+    for c in configs:
+        print(c.name + c.version)
