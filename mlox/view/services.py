@@ -12,31 +12,6 @@ def installed_services():
     This is where you can manage your services.""")
     infra = cast(Infrastructure, st.session_state.mlox.infra)
 
-    # with st.expander("Add Server"):
-    # with st.form("add_service"):
-    configs = load_all_service_configs("./stacks")
-    c1, c2, c3, c4 = st.columns([20, 20, 20, 10])
-    config = c1.selectbox(
-        "Service Configuration",
-        configs,
-        format_func=lambda x: f"{x.name} {x.version}",
-    )
-    select_backend = c2.selectbox(
-        "Backend",
-        list(config.build),
-        format_func=lambda x: f"{x} Backend",
-        key="select_backedn",
-    )
-    bundle = c3.selectbox(
-        "Server",
-        infra.list_bundles_with_backend(backend=select_backend),
-        format_func=lambda x: f"{x.name} {x.server.ip}",
-    )
-    if c4.button("Add Service"):
-        st.info(
-            f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
-        )
-
     st.markdown("### Service List")
 
     services = []
@@ -79,6 +54,7 @@ def available_services():
 
     # with st.expander("Add Server"):
     configs = load_all_service_configs("./stacks")
+
     st.markdown("### Available Services")
 
     services = []
@@ -106,6 +82,23 @@ def available_services():
 
     if len(select["selection"].get("rows", [])) == 1:
         selected = select["selection"]["rows"][0]
+        config = configs[selected]
+        c2, c3, c4, _ = st.columns([25, 25, 15, 35])
+        select_backend = c2.selectbox(
+            "Backend",
+            list(config.build),
+            format_func=lambda x: f"{x} Backend",
+            key="select_backedn",
+        )
+        bundle = c3.selectbox(
+            "Server",
+            infra.list_bundles_with_backend(backend=select_backend),
+            format_func=lambda x: f"{x.name} {x.server.ip}",
+        )
+        if c4.button("Add Service"):
+            st.info(
+                f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
+            )
         st.write(services[selected])
 
 
