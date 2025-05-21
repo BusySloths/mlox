@@ -1,6 +1,7 @@
 name: MLOX
 version: 0.0.1
 maintainer: Your Name
+description_short: Provides additional functionionality for MLOX.
 description: |
   MLOX is a platform that simplifies the deployment and management of machine learning models.
   It provides a user-friendly interface for managing machine learning workflows,

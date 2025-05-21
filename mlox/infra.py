@@ -55,6 +55,7 @@ class Bundle:
         self.server.update()
         self.server.install_packages()
         self.server.update()
+        self.server.add_mlox_user()
         self.server.setup_users()
         self.server.disable_password_authentication()
         self.status = "no-backend"
@@ -81,6 +82,10 @@ class Bundle:
             token = stats["k3s.token"]
             self.server.setup_kubernetes(controller_url=url, controller_token=token)
             self.server.start_kubernetes_runtime()
+            cluster_name = f"k8s-{controller.name}"
+            self.tags.append(cluster_name)
+            if cluster_name not in controller.tags:
+                controller.tags.append(cluster_name)
         self.status = backend
 
 
@@ -120,13 +125,20 @@ class Infrastructure:
 
     def add_server(self, config: ServerConfig, params: Dict[str, str]) -> Bundle | None:
         server = config.instantiate(params=params)
-        if server:
-            bundle = Bundle(name=server.ip, config=config, server=server)
-            self.bundles.append(bundle)
-            return bundle
-        else:
-            logging.warning("Could not add server.")
-        return None
+        if not server:
+            logging.warning("Could not instantiate server.")
+            return None
+        for bundle in self.bundles:
+            if bundle.server.ip == server.ip:
+                logging.warning("Server already exists.")
+                return None
+        if not server.test_connection():
+            logging.warning("Could not connect to server.")
+            return None
+
+        bundle = Bundle(name=server.ip, config=config, server=server)
+        self.bundles.append(bundle)
+        return bundle
 
     # def delete_bundle(self, bundle: Bundle) -> None:
     #     self.bundles.remove(bundle)

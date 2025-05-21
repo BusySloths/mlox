@@ -23,6 +23,7 @@ class ServiceConfig:
     version: str
     maintainer: str
     description: str
+    description_short: str
     links: Dict[str, str]
     requirements: Dict[str, float]
     # This type hint correctly defines the desired final structure

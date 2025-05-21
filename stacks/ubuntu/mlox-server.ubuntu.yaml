@@ -1,5 +1,5 @@
 name: Ubuntu
-versions: [24.04]
+versions: [24.04, 22.04, 20.04]
 maintainer: Your Name
 description: |
   Ubuntu is a popular Linux distribution based on Debian.

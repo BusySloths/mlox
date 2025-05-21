@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 from typing import cast
@@ -48,14 +49,12 @@ def installed_services():
 
 def available_services():
     st.markdown("""
-    # Services
+    ### Services
     This is where you can manage your services.""")
     infra = cast(Infrastructure, st.session_state.mlox.infra)
 
     # with st.expander("Add Server"):
     configs = load_all_service_configs("./stacks")
-
-    st.markdown("### Available Services")
 
     services = []
     for service in configs:
@@ -65,14 +64,38 @@ def available_services():
                 "version": service.version,
                 "maintainer": service.maintainer,
                 "description": service.description,
+                "description_short": service.description_short,
                 "links": [f"{k}: {v}" for k, v in service.links.items()],
                 "requirements": [f"{k}: {v}" for k, v in service.requirements.items()],
-                "Build": [f"{k}" for k, v in service.build.items()],
+                "backend": [f"{k}" for k, v in service.build.items()],
             }
         )
 
+    c1, _, _ = st.columns(3)
+    search_filter = c1.text_input(
+        "Search",
+        value="",
+        key="search_filter",
+        label_visibility="collapsed",
+        placeholder="Search for services...",
+    )
+    if len(search_filter) > 0:
+        services = [s for s in services if search_filter.lower() in s["name"].lower()]
+
+    df = pd.DataFrame(services)
     select = st.dataframe(
-        services,
+        df[
+            [
+                "name",
+                "version",
+                # "maintainer",
+                # "description",
+                # "links",
+                # "requirements",
+                "backend",
+                "description_short",
+            ]
+        ],
         use_container_width=True,
         selection_mode="single-row",
         hide_index=True,

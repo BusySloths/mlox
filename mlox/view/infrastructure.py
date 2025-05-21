@@ -14,8 +14,7 @@ def tab_server_mngmt():
     with st.form(key="add_new_server"):
         ip, port, root, pw, config = form_add_server()
         if st.form_submit_button(label="Add Server"):
-            st.info(f"Server added successfully: {ip}")
-            infra.add_server(
+            bundle = infra.add_server(
                 config,
                 {
                     "${MLOX_IP}": ip,
@@ -24,7 +23,11 @@ def tab_server_mngmt():
                     "${MLOX_ROOT_PW}": pw,
                 },
             )
-            st.rerun()
+            if not bundle:
+                st.error("Uh oh, something went wrong. ")
+            else:
+                st.info(f"Server added successfully: {ip}")
+                st.rerun()
 
     st.markdown("### Server List")
 
@@ -72,34 +75,50 @@ def tab_server_mngmt():
             bundle.tags = tags
             st.rerun()
 
-        c1, c2, c3, c4, c5, c6, _ = st.columns([10, 15, 15, 20, 15, 10, 15])
+        c1, c2, _, c3, c4, c5, c6 = st.columns([10, 10, 15, 15, 15, 20, 15])
         if c1.button("Delete", type="primary"):
             st.info(f"Server with IP {selected_server} will be deleted.")
             infra.delete_bundle(bundle)
             st.rerun()
-        if c2.button("Docker Backend", disabled=bundle.status != "no-backend"):
-            st.info(f"Change the backend for server with IP {selected_server}.")
-            bundle.set_backend("docker")
-            st.rerun()
-        if c3.button("K8S Backend", disabled=bundle.status != "no-backend"):
-            st.info(f"Change the backend for server with IP {selected_server}.")
-            bundle.set_backend("kubernetes")
-            st.rerun()
-        controller = c4.selectbox("K8s controller", infra.list_kubernetes_controller())
-        if c5.button("K8S-Agent Backend", disabled=bundle.status != "no-backend"):
-            st.info(f"Change the backend for server with IP {selected_server}.")
-            st.write(controller)
-            bundle.set_backend("kubernetes-agent", controller=controller)
-            st.rerun()
-        if c6.button("Initialize", disabled=bundle.status != "un-initialized"):
+        if c2.button("Initialize", disabled=bundle.status != "un-initialized"):
             st.info(f"Initialize the server with IP {selected_server}.")
             with st.spinner("Initializing server...", show_time=True):
                 bundle.initialize()
             st.rerun()
+        if c3.button("Setup Docker", disabled=bundle.status != "no-backend"):
+            st.info(f"Change the backend for server with IP {selected_server}.")
+            with st.spinner("Enabling docker backend...", show_time=True):
+                bundle.set_backend("docker")
+            st.rerun()
+        if c4.button("Setup K8S", disabled=bundle.status != "no-backend"):
+            st.info(f"Change the backend for server with IP {selected_server}.")
+            with st.spinner("Enabling k8s backend...", show_time=True):
+                bundle.set_backend("kubernetes")
+            st.rerun()
+        controller = c5.selectbox(
+            "K8s controller",
+            infra.list_kubernetes_controller(),
+            format_func=lambda x: x.name,
+        )
+        if c6.button("Setup K8S-Agent", disabled=bundle.status != "no-backend"):
+            # st.write(controller)
+            with st.spinner(
+                f"setting up k8s-agent backend with controller {controller.name}.",
+                show_time=True,
+            ):
+                bundle.set_backend("kubernetes-agent", controller=controller)
+            st.rerun()
 
-        st.write(bundle.server.get_docker_status())
-        st.write(bundle.server.get_kubernetes_status())
-        st.write(bundle)
+        with st.expander("Terminal"):
+            from mlox.view.terminal import emulate_basic_terminal
+
+            with bundle.server.get_server_connection() as conn:
+                emulate_basic_terminal(conn)
+
+        with st.expander("More info"):
+            st.write(bundle.server.get_docker_status())
+            st.write(bundle.server.get_kubernetes_status())
+            st.write(bundle)
 
 
 st.header("Server Management")

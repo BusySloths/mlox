@@ -42,8 +42,6 @@ def open_connection(
         config=Config(overrides={"sudo": {"password": config["pw"]}}),
     )
 
-    logger.info("SSH connection open.")
-
     # optionally return tmpdir to keep it alive
     return conn, tmpdir
 

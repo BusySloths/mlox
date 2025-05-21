@@ -4,6 +4,7 @@ import tempfile
 import importlib
 import logging
 
+import time  # Added for retry delay
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
 from typing import (
@@ -17,7 +18,14 @@ from typing import (
     ContextManager,
     TYPE_CHECKING,
 )
+
 from fabric import Connection  # type: ignore
+from paramiko.ssh_exception import (
+    SSHException,
+    AuthenticationException,
+    NoValidConnectionsError,
+)
+import socket
 
 from mlox.utils import generate_password
 from mlox.remote import (
@@ -48,19 +56,102 @@ logger = logging.getLogger(__name__)
 class ServerConnection:
     credentials: Dict
     _conn: Connection | None = field(default=None, init=False)
-    _tmp_dir: tempfile.TemporaryDirectory | None = field(default=None, init=False)
+    _tmp_dir: Optional[tempfile.TemporaryDirectory] = field(default=None, init=False)
+    retries: int = field(default=3, kw_only=True)  # Number of connection attempts
+    retry_delay: int = field(
+        default=5, kw_only=True
+    )  # Delay between retries in seconds
 
-    def __init__(self, credentials: Dict):
+    # Allow __init__ to accept credentials only, or also retry parameters
+    def __init__(self, credentials: Dict, retries: int = 3, retry_delay: int = 5):
         self.credentials = credentials
+        self.retries = retries
+        self.retry_delay = retry_delay
 
     def __enter__(self):
-        try:
-            self._conn, self._tmp_dir = open_connection(self.credentials)
-            logging.info(f"Successfully opened connection to {self._conn.host}")
-            return self._conn
-        except Exception as e:
-            logging.error(f"Failed to open connection: {e}")
-            raise  # Re-raise the exception to be handled by the caller
+        current_attempt = 0
+        host = self.credentials.get("host", "N/A")
+
+        # Specific exceptions that are genuinely worth retrying for connection
+        RETRYABLE_EXCEPTIONS_FOR_CONNECTION = (
+            socket.timeout,  # General socket timeout
+            NoValidConnectionsError,  # If all resolved IPs for a host fail connection
+            EOFError,  # Can sometimes be transient network drop
+            # SSHException can be broad; if specific transient SSH errors are known, list them.
+            # Avoid retrying AuthenticationException or issues due to bad host configuration here.
+        )
+
+        while current_attempt <= self.retries:
+            try:
+                # Step 1: Get the Connection object (doesn't connect yet)
+                raw_conn, self_tmp_dir_obj = open_connection(self.credentials)
+                self._tmp_dir = self_tmp_dir_obj  # Store the TemporaryDirectory object
+
+                # Step 2: Explicitly open the connection to trigger actual network attempt
+                logger.debug(f"Attempting to open connection to {host}...")
+                raw_conn.open()
+                logger.debug(
+                    f"Connection opened to {host}. Verifying by running a simple command."
+                )
+
+                # Step 3: (Optional but recommended) Verify with a no-op command
+                # This ensures the connection is truly usable.
+                result = raw_conn.run("true", hide=True, warn=True, pty=False)
+                if not result.ok:
+                    error_message = (
+                        f"Connection to {host} opened, but verification command 'true' failed. "
+                        f"Exit code: {result.return_code}, stderr: {result.stderr.strip()}"
+                    )
+                    logger.error(error_message)
+                    # Treat this as a connection failure for retry purposes
+                    # Using SSHException as a generic wrapper for this verification failure
+                    raise SSHException(error_message)
+
+                self._conn = raw_conn  # Assign to self._conn only after successful open and verification
+
+                logging.info(
+                    f"Successfully opened and verified connection to {host} on attempt {current_attempt + 1}"
+                )
+                return self._conn
+            except (
+                RETRYABLE_EXCEPTIONS_FOR_CONNECTION
+            ) as e:  # Catch only specified retryable exceptions
+                logging.warning(
+                    f"Failed to open connection to {host} (attempt {current_attempt + 1}/{self.retries + 1}): {type(e).__name__} - {e}"
+                )
+                if current_attempt == self.retries:
+                    logging.error(f"Max connection retries reached for {host}.")
+                    raise
+                logging.info(f"Retrying connection in {self.retry_delay} seconds...")
+                if self._tmp_dir:  # Clean up temp dir if connection failed partway
+                    # Pass None for conn as it might be in a bad state or not fully initialized
+                    close_connection(None, self._tmp_dir)
+                    self._tmp_dir = (
+                        None  # Reset tmp_dir to avoid trying to clean it again
+                    )
+                time.sleep(self.retry_delay)
+                current_attempt += 1
+            except (
+                socket.gaierror,
+                AuthenticationException,
+            ) as e:  # Non-retryable errors
+                logging.error(
+                    f"Non-retryable error connecting to {host}: {type(e).__name__} - {e}"
+                )
+                if self._tmp_dir:
+                    close_connection(None, self._tmp_dir)
+                    self._tmp_dir = None
+                raise  # Re-raise immediately, do not retry
+            except (
+                Exception
+            ) as e:  # Catch any other unexpected errors during connection setup
+                logging.error(
+                    f"Unexpected error during connection attempt to {host}: {type(e).__name__} - {e}"
+                )
+                if self._tmp_dir:
+                    close_connection(None, self._tmp_dir)
+                    self._tmp_dir = None
+                raise  # Re-raise immediately
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
@@ -133,28 +224,27 @@ class AbstractServer(ABC):
 
         return ServerConnection(credentials)
 
-    def get_user_templates(self) -> Tuple[RemoteUser, MloxUser]:
+    def get_mlox_user_template(self) -> MloxUser:
         mlox_name_postfix = generate_password(5, with_punctuation=False)
         mlox_pw = generate_password(20)
         mlox_passphrase = generate_password(20)
-        remote_passphrase = generate_password(20)
-
         mlox_user = MloxUser(
             name=f"mlox_{mlox_name_postfix}",
             pw=mlox_pw,
             home=f"/home/mlox_{mlox_name_postfix}",
             ssh_passphrase=mlox_passphrase,
         )
-        remote_user = RemoteUser(ssh_passphrase=remote_passphrase)
-        return remote_user, mlox_user
+        return mlox_user
+
+    def get_remote_user_template(self) -> RemoteUser:
+        remote_passphrase = generate_password(20)
+        return RemoteUser(ssh_passphrase=remote_passphrase)
 
     def test_connection(self) -> bool:
         verified = False
         try:
-            sc = self.get_server_connection()
-            conn, tmpdir = open_connection(sc.credentials)
-            close_connection(conn, tmpdir)
-            verified = True
+            with self.get_server_connection() as conn:
+                verified = True
             print(f"Public key SSH login verified={verified}.")
         except Exception as e:
             print(f"Failed to login via SSH with public key: {e}")
@@ -166,6 +256,10 @@ class AbstractServer(ABC):
 
     @abstractmethod
     def install_packages(self) -> None:
+        pass
+
+    @abstractmethod
+    def add_mlox_user(self) -> None:
         pass
 
     @abstractmethod
@@ -288,8 +382,8 @@ class Ubuntu(AbstractServer):
         self._specs = info
         return info
 
-    def setup_users(self) -> None:
-        remote_user, mlox_user = self.get_user_templates()
+    def add_mlox_user(self) -> None:
+        mlox_user = self.get_mlox_user_template()
         # 1. add mlox user
         with self.get_server_connection() as conn:
             print(
@@ -300,43 +394,55 @@ class Ubuntu(AbstractServer):
             )
         self.mlox_user = mlox_user
 
+    def setup_users(self) -> None:
+        remote_user = self.get_remote_user_template()
+        if self.mlox_user is None:
+            logging.warning(
+                "MLOX user did not exist before calling setup_users. Trying again to add user..."
+            )
+            self.add_mlox_user()
+
+        if not self.mlox_user:
+            logging.error("MLOX user still missing after retries. ")
+            return
+
         # 2. generate ssh keys for mlox and remote user
         with self.get_server_connection() as conn:
             # 1. create .ssh dir
-            print(f"Create .ssh dir for user {mlox_user.name}.")
+            print(f"Create .ssh dir for user {self.mlox_user.name}.")
             command = "mkdir -p ~/.ssh; chmod 700 ~/.ssh"
             exec_command(conn, command)
 
             # 2. generate rsa keys for remote user
             print(f"Generate RSA keys for remote user on server {self.ip}.")
-            command = f"cd {mlox_user.home}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N {remote_user.ssh_passphrase}"
+            command = f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N {remote_user.ssh_passphrase}"
             exec_command(conn, command, sudo=False)
 
             # 3. read pub and private keys and store to remote user
             remote_user.ssh_pub_key = fs_read_file(
-                conn, f"{mlox_user.home}/.ssh/id_rsa.pub", format="string"
+                conn, f"{self.mlox_user.home}/.ssh/id_rsa.pub", format="string"
             ).strip()
             remote_user.ssh_key = fs_read_file(
-                conn, f"{mlox_user.home}/.ssh/id_rsa", format="string"
+                conn, f"{self.mlox_user.home}/.ssh/id_rsa", format="string"
             ).strip()
             print(f"Remote user public key: {remote_user.ssh_pub_key}")
             print(f"Remote user private key: {remote_user.ssh_key}")
             print(f"Remote user passphrase: {remote_user.ssh_passphrase}")
 
             # 4. generate rsa keys for mlox user
-            print(f"Generate RSA keys for {mlox_user.name} on server {self.ip}.")
-            command = f"cd {mlox_user.home}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N {mlox_user.ssh_passphrase}"
+            print(f"Generate RSA keys for {self.mlox_user.name} on server {self.ip}.")
+            command = f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N {self.mlox_user.ssh_passphrase}"
             exec_command(conn, command, sudo=False)
 
             # 5. read pub and private keys and store to mlox user
-            mlox_user.ssh_pub_key = fs_read_file(
-                conn, f"{mlox_user.home}/.ssh/id_rsa.pub", format="string"
+            self.mlox_user.ssh_pub_key = fs_read_file(
+                conn, f"{self.mlox_user.home}/.ssh/id_rsa.pub", format="string"
             ).strip()
 
             # 6. add remote user public key to authorized_keys
             fs_append_line(
                 conn,
-                f"{mlox_user.home}/.ssh/authorized_keys",
+                f"{self.mlox_user.home}/.ssh/authorized_keys",
                 remote_user.ssh_pub_key,
             )
 
@@ -346,7 +452,6 @@ class Ubuntu(AbstractServer):
         self.remote_user = remote_user
         if not self.test_connection():
             print("Uh oh, something went while setting up the SSH connection.")
-            # self.mlox_user = None
         else:
             print(
                 f"User {self.mlox_user.name} created with password {self.mlox_user.pw}."
