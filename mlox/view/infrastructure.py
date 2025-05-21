@@ -40,7 +40,7 @@ def tab_server_mngmt():
                 "name": bundle.name,
                 "status": [bundle.status],
                 "tags": bundle.tags,
-                "services": [s.name for s in bundle.services],
+                "services": [s.service.name for s in bundle.services],
                 "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
             }
         )
@@ -116,6 +116,11 @@ def tab_server_mngmt():
                 emulate_basic_terminal(conn)
 
         with st.expander("More info"):
+            from mlox.remote import exec_command
+
+            with bundle.server.get_server_connection() as conn:
+                st.write(exec_command(conn, "ufw status", sudo=True))
+
             st.write(bundle.server.get_docker_status())
             st.write(bundle.server.get_kubernetes_status())
             st.write(bundle)

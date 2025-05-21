@@ -34,6 +34,21 @@ class Repo:
 
 
 @dataclass
+class StatefulService:
+    service: AbstractService
+    config: ServiceConfig
+    state: Literal[
+        "un-initialized",
+        "setup-complete",
+        "setup-failed",
+        "removed",
+        "running",
+        "stopped",
+        "unknown",
+    ]
+
+
+@dataclass
 class Bundle:
     name: str
     config: ServerConfig
@@ -43,9 +58,7 @@ class Bundle:
     status: Literal[
         "un-initialized", "no-backend", "docker", "kubernetes", "kubernetes-agent"
     ] = field(default="un-initialized")
-    services: List[Tuple[ServiceConfig, AbstractService]] = field(
-        default_factory=list, init=False
-    )
+    services: List[StatefulService] = field(default_factory=list, init=False)
     repos: List[Repo] = field(default_factory=list, init=False)
 
     def initialize(self) -> None:
@@ -98,6 +111,72 @@ class Infrastructure:
             if bundle.server.ip == ip:
                 return bundle
         return None
+
+    def setup_service(
+        self,
+        ip: str,
+        service_name: str,
+        state: Literal["setup", "teardown", "spin_up", "spin_down"],
+    ) -> None:
+        bundle = self.get_bundle_by_ip(ip)
+        if not bundle:
+            logging.warning("Could not find bundle.")
+            return
+
+        stateful_service = None
+        for ss in bundle.services:
+            if ss.service.name == service_name:
+                stateful_service = ss
+                break
+        if not stateful_service:
+            logging.warning("Could not find service.")
+            return
+        with bundle.server.get_server_connection() as conn:
+            if state == "setup":
+                stateful_service.service.setup(conn)
+                stateful_service.service.spin_up(conn)
+                stateful_service.state = "running"
+            elif state == "spin_up":
+                stateful_service.service.spin_up(conn)
+                stateful_service.state = "running"
+            elif state == "spin_down":
+                stateful_service.service.spin_down(conn)
+                stateful_service.state = "stopped"
+            elif state == "teardown":
+                stateful_service.service.spin_down(conn)
+                stateful_service.service.teardown(conn)
+                bundle.services.remove(stateful_service)
+            else:
+                logging.warning("Unknown state.")
+
+    def add_service(
+        self, ip: str, config: ServiceConfig, params: Dict[str, Any]
+    ) -> Bundle | None:
+        bundle = next((b for b in self.bundles if b.server.ip == ip), None)
+        if not bundle:
+            logger.warning("No bundle found for server.")
+            return None
+        if not bundle.server:
+            logger.warning("No server found for bundle.")
+            return None
+        if not bundle.server.mlox_user:
+            logger.warning("No mlox user found for bundle.")
+            return None
+        mlox_params = {
+            "${MLOX_STACKS_PATH}": "./stacks/",
+            "${MLOX_USER}": bundle.server.mlox_user.name,
+            "${MLOX_AUTO_USER}": "service-user",
+            "${MLOX_AUTO_PW}": "service-pw",
+            "${MLOX_AUTO_PORT}": "7654",
+        }
+        params.update(mlox_params)
+        service = config.instantiate(bundle.status, params=params)
+        if not service:
+            logger.warning("Could not instantiate service.")
+            return None
+
+        bundle.services.append(StatefulService(service, config, state="un-initialized"))
+        return bundle
 
     def pull_repo(self, ip: str, name: str) -> None:
         bundle = next((b for b in self.bundles if b.server.ip == ip), None)

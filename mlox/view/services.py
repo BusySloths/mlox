@@ -17,21 +17,23 @@ def installed_services():
 
     services = []
     for bundle in infra.bundles:
-        for service in bundle.services:
+        for stateful_service in bundle.services:
             services.append(
                 {
                     "ip": bundle.server.ip,
-                    "name": service.name,
-                    "version": service.version,
-                    # "status": [bundle.status],
+                    "name": stateful_service.service.name,
+                    "version": stateful_service.config.version,
+                    "link": stateful_service.service.service_url,
+                    "state": stateful_service.state,
                     # "tags": bundle.tags,
                     # "services": [s.name for s in bundle.services],
                     # "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
                 }
             )
 
+    df = pd.DataFrame(services, columns=["ip", "name", "version", "state", "link"])
     select_server = st.dataframe(
-        services,
+        df,
         use_container_width=True,
         selection_mode="single-row",
         hide_index=True,
@@ -40,11 +42,21 @@ def installed_services():
     )
 
     if len(select_server["selection"].get("rows", [])) == 1:
-        selected_server = services[select_server["selection"]["rows"][0]]["ip"]
-        bundle = infra.get_bundle_by_ip(selected_server)
+        idx = select_server["selection"]["rows"][0]
+        ip = services[idx]["ip"]
+        service_name = services[idx]["name"]
 
-        # server_management(infra, selected_server)
-        c1, c2, c3 = st.columns([40, 50, 10])
+        c1, c2, _, c3 = st.columns([20, 20, 40, 20])
+        if c1.button("Setup"):
+            with st.spinner(f"Setting up service {service_name}...", show_time=True):
+                infra.setup_service(ip, service_name, state="setup")
+            st.rerun()
+
+        if c2.button("Delete"):
+            with st.spinner(f"Deleting service {service_name}...", show_time=True):
+                infra.setup_service(ip, service_name, state="teardown")
+            st.rerun()
+        st.write(bundle.services)
 
 
 def available_services():
@@ -122,6 +134,10 @@ def available_services():
             st.info(
                 f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
             )
+            ret = infra.add_service(bundle.server.ip, config, {})
+            if not ret:
+                st.error("Failed to add service")
+
         st.write(services[selected])
 
 

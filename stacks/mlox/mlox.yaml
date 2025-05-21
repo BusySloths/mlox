@@ -20,9 +20,10 @@ requirements:
   disk_gb: 4.0
 build:
   docker: 
-    template: docker-compose-mlox-0.0.1.yaml 
-    module: mlox.services.mlox.airflow
-    class_name: MloxDockerService
-    params:
+    # name: mlox
+    # template: docker-compose-mlox-0.0.1.yaml 
+    # module: mlox.services.mlox.airflow
+    # class_name: MloxDockerService
+    # params:
   kubernetes:
   ansible:

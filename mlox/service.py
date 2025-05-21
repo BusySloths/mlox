@@ -8,6 +8,32 @@ from typing import Dict
 from mlox.remote import exec_command, fs_copy, fs_create_dir, fs_find_and_replace
 
 
+def tls_setup_no_config(conn, ip, path) -> None:
+    # copy files to target
+    fs_create_dir(conn, path)
+
+    # Define the subject for the certificate.
+    # For a basic self-signed cert, CN (Common Name) is usually the hostname or IP.
+    # You can add more fields like /C=US/ST=California/L=City/O=Organization/OU=OrgUnit
+    # Ensure 'ip' is properly escaped if it contains special characters, though unlikely for an IP.
+    subject = f"/CN={ip}"
+
+    # certificates
+    exec_command(conn, f"cd {path}; openssl genrsa -out key.pem 2048")
+    # Generate CSR non-interactively using the -subj argument
+    exec_command(
+        conn,
+        f"cd {path}; openssl req -new -key key.pem -out server.csr -subj '{subject}'",
+    )
+    # Generate self-signed certificate from CSR
+    exec_command(
+        conn,
+        f"cd {path}; openssl x509 -req -in server.csr -signkey key.pem -out cert.pem -days 365",
+    )
+    exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/key.pem")
+    exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/cert.pem")
+
+
 def tls_setup(conn, ip, path) -> None:
     # copy files to target
     fs_create_dir(conn, path)

@@ -24,24 +24,26 @@ build:
     module: mlox.services.airflow.airflow
     class_name: AirflowDockerService
     params:
-      template: docker-compose-airflow-3.0.0.yaml 
+      name: airflow-3.0.0-service
+      template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.0.yaml 
       target_path: /home/${MLOX_USER}/airflow
       path_output: /home/${MLOX_USER}/airflow/output
       path_dags: /home/${MLOX_USER}/repos/airflow/dags
-      port: ${MLOX_PORT}
-      ui_user: admin
-      ui_pw: ${MLOX_PW}
+      port: ${MLOX_AUTO_PORT}
+      ui_user: ${MLOX_AUTO_USER}
+      ui_pw: ${MLOX_AUTO_PW}
       secret_path: ""
   kubernetes:
     module: mlox.services.airflow.airflow
     class_name: AirflowDockerService
     params:
-      template: docker-compose-airflow-3.0.0.yaml 
+      name: airflow-3.0.0-k8s-service
+      template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.0.yaml 
       target_path: /home/${MLOX_USER}/airflow
       path_output: /home/${MLOX_USER}/airflow/output
       path_dags: /home/${MLOX_USER}/repos/airflow/dags
-      port: ${MLOX_PORT}
-      ui_user: admin
-      ui_pw: ${MLOX_PW}
+      port: ${MLOX_AUTO_PORT}
+      ui_user: ${MLOX_AUTO_USER}
+      ui_pw: ${MLOX_AUTO_PW}
       secret_path: ""
   ansible:

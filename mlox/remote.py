@@ -139,6 +139,10 @@ def fs_create_dir(conn, path):
     exec_command(conn, f"mkdir -p {path}")
 
 
+def fs_delete_dir(conn, path):
+    exec_command(conn, f"rm -rf {path}", sudo=True)
+
+
 def fs_touch(conn, fname):
     exec_command(conn, f"touch {fname}")
 

@@ -3,9 +3,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup
+from mlox.service import AbstractService, tls_setup, tls_setup_no_config
 from mlox.remote import (
     fs_copy,
+    fs_delete_dir,
     fs_create_dir,
     fs_create_empty_file,
     fs_append_line,
@@ -36,6 +37,7 @@ class AirflowDockerService(AbstractService):
         fs_create_dir(conn, self.target_path)
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         tls_setup(conn, conn.host, self.target_path)
+        # tls_setup_no_config(conn, conn.host, self.target_path)
         # fs_copy(
         #     conn,
         #     "./services/generate_selfsigned_ssl_certs.sh",
@@ -66,6 +68,10 @@ class AirflowDockerService(AbstractService):
         fs_append_line(conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}")
         fs_append_line(conn, env_path, "_AIRFLOW_LOAD_EXAMPLES=false")
         self.is_installed = True
+        self.service_ports["Airflow Webserver"] = int(self.port)
+
+    def teardown(self, conn):
+        fs_delete_dir(conn, self.target_path)
 
     def check(self) -> Dict:
         return dict()

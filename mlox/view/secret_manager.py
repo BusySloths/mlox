@@ -5,8 +5,7 @@ import streamlit as st
 
 def secrets():
     st.markdown("""
-    # Outputs
-    This is the collections of all the outputs of your MLOps stack to be used in your applications.:
+    # Secret Manager
     - Keys and secrets
     - Configurations
     """)
@@ -16,7 +15,7 @@ def secrets():
     st.selectbox(
         "Choose Secret Manager Backend",
         [
-            "Local (not recommended)",
+            "MLOX Secrets",
             f"OpenBAO on {ip}",
             f"Google Secret Manager for Project {gcp_prj}",
         ],

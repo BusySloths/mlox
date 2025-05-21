@@ -5,6 +5,7 @@ import importlib
 import logging
 
 import time  # Added for retry delay
+import json  # For parsing docker command JSON output
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
 from typing import (
@@ -20,7 +21,7 @@ from typing import (
 )
 
 from fabric import Connection  # type: ignore
-from paramiko.ssh_exception import (
+from paramiko.ssh_exception import (  # type: ignore
     SSHException,
     AuthenticationException,
     NoValidConnectionsError,
@@ -602,16 +603,62 @@ class Ubuntu(AbstractServer):
             logger.info("Docker uninstalled.")
 
     def get_docker_status(self) -> Dict[str, Any]:
-        info: Dict[str, Any] = {}
+        status_info: Dict[str, Any] = {}
         with self.get_server_connection() as conn:
             # Check Docker status
             # systemctl is-active returns 0 for active, non-zero otherwise
-            res = exec_command(conn, "systemctl is-active docker", sudo=True, pty=False)
-            if res is None:
-                info["docker.is_running"] = False
-            else:
-                info["docker.is_running"] = True
-        return info
+            # pty=False is generally better for non-interactive status checks
+            active_result = exec_command(
+                conn, "systemctl is-active docker", sudo=True, pty=False
+            )
+            status_info["docker.is_running"] = active_result == "active"
+
+            enabled_result = exec_command(
+                conn, "systemctl is-enabled docker", sudo=True, pty=False
+            )
+            status_info["docker.is_enabled"] = enabled_result == "enabled"
+
+            if status_info["docker.is_running"]:
+                # Get Docker version
+                try:
+                    version_json_str = exec_command(
+                        conn,
+                        "docker version --format '{{json .}}'",
+                        sudo=True,
+                        pty=False,
+                    )
+                    if version_json_str:
+                        status_info["docker.version"] = json.loads(version_json_str)
+                    else:
+                        status_info["docker.version"] = "Error retrieving version"
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse Docker version JSON: {e}")
+                    status_info["docker.version"] = "Error parsing version JSON"
+                except Exception as e:
+                    logger.error(f"Error getting Docker version: {e}")
+                    status_info["docker.version"] = "Error retrieving version"
+
+                # Get list of all containers (running and stopped)
+                try:
+                    containers_json_str = exec_command(
+                        conn, "docker ps -a --format '{{json .}}'", sudo=True, pty=False
+                    )
+                    if containers_json_str:
+                        # Each line is a JSON object, so we need to parse them individually
+                        containers_list = []
+                        for line in containers_json_str.strip().split("\n"):
+                            if line:  # Ensure line is not empty
+                                containers_list.append(json.loads(line))
+                        status_info["docker.containers"] = containers_list
+                    else:
+                        status_info["docker.containers"] = []  # No containers or error
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse Docker containers JSON: {e}")
+                    status_info["docker.containers"] = "Error parsing containers JSON"
+                except Exception as e:
+                    logger.error(f"Error getting Docker containers: {e}")
+                    status_info["docker.containers"] = "Error retrieving containers"
+        return status_info
 
     def start_docker_runtime(self) -> None:
         with self.get_server_connection() as conn:
