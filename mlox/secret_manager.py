@@ -146,34 +146,4 @@ if __name__ == "__main__":
     #     },
     # )
     infra = secret_manager.load_secret("MLOX_CONFIG_INFRASTRUCTURE")
-    if infra and "bundles" in infra and infra["bundles"]:
-        # Assuming you want the keys from the first bundle's mlox_user
-        # Adjust if you need to select a specific bundle or user
-        first_bundle = infra["bundles"][0]
-        if "server" in first_bundle and "mlox_user" in first_bundle["server"]:
-            mlox_user_data = first_bundle["server"]["remote_user"]
-            pub_key = mlox_user_data.get("ssh_pub_key")
-            priv_key = mlox_user_data.get("ssh_key")
-            passphrase = mlox_user_data.get("ssh_passphrase")
-
-            if pub_key:
-                with open("id_rsa.pub", "w") as f_pub:
-                    f_pub.write(pub_key)
-                print("Public key written to id_rsa.pub")
-
-            if priv_key:
-                with open("id_rsa", "w") as f_priv:
-                    f_priv.write(priv_key)
-                os.chmod("id_rsa", 0o600)  # Set permissions for private key
-                print("Private key written to id_rsa (permissions set to 600)")
-
-            if passphrase:
-                print(f"SSH Key Passphrase: {passphrase}")
-                print(
-                    "You may need to add this key to your ssh-agent: `ssh-add id_rsa`"
-                )
-        else:
-            print("Could not find mlox_user data in the first bundle.")
-    else:
-        print("Could not load infrastructure data or no bundles found.")
-    # print(secret_manager.list_secrets())
+    print(infra)

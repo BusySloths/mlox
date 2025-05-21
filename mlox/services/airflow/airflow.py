@@ -35,6 +35,11 @@ class AirflowDockerService(AbstractService):
     def setup(self, conn) -> None:
         # copy files to target
         fs_create_dir(conn, self.target_path)
+        # Ensure host directories for DAGs and logs/outputs exist and are owned by mlox_user
+        # This is crucial for volume mounts to have correct permissions for AIRFLOW_UID.
+        fs_create_dir(conn, self.path_dags)
+        fs_create_dir(conn, self.path_output)
+
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         tls_setup(conn, conn.host, self.target_path)
         # tls_setup_no_config(conn, conn.host, self.target_path)
