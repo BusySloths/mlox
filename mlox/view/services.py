@@ -52,7 +52,7 @@ def installed_services():
                 infra.setup_service(ip, service_name, state="setup")
             st.rerun()
 
-        if c2.button("Delete"):
+        if c2.button("Teardown"):
             with st.spinner(f"Deleting service {service_name}...", show_time=True):
                 infra.setup_service(ip, service_name, state="teardown")
             st.rerun()

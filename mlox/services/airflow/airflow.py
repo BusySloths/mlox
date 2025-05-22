@@ -11,6 +11,7 @@ from mlox.remote import (
     fs_create_empty_file,
     fs_append_line,
     sys_user_id,
+    docker_down,
 )
 
 # Configure logging (optional, but recommended)
@@ -76,6 +77,9 @@ class AirflowDockerService(AbstractService):
         self.service_ports["Airflow Webserver"] = int(self.port)
 
     def teardown(self, conn):
+        docker_down(
+            conn, f"{self.target_path}/{self.target_docker_script}", remove_volumes=True
+        )
         fs_delete_dir(conn, self.target_path)
 
     def check(self) -> Dict:

@@ -1,5 +1,5 @@
 name: Airflow
-version: 3.0.0
+version: 3.0.1
 maintainer: Your Name
 description_short: Apache Airflow is a workflow orchestrator used to schedule and monitor 
   machine learning pipelines.
@@ -16,34 +16,22 @@ links:
   documentation: https://airflow.apache.org/docs/apache-airflow/stable/index.html
   changelog: https://airflow.apache.org/docs/apache-airflow/stable/changelog.html
 requirements:
-  cpus: 4.0
-  ram_gb: 6.0
-  disk_gb: 10.0
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
 build:
   docker: 
     module: mlox.services.airflow.airflow
     class_name: AirflowDockerService
     params:
-      name: airflow-3.0.0-service
-      template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.0.yaml 
+      name: airflow-3.0.1-service
+      template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.1.yaml 
       target_path: /home/${MLOX_USER}/airflow
       path_output: /home/${MLOX_USER}/airflow/output
-      path_dags: /home/${MLOX_USER}/repos/airflow/dags
+      path_dags: /home/${MLOX_USER}/airflow/dags
       port: ${MLOX_AUTO_PORT}
       ui_user: ${MLOX_AUTO_USER}
       ui_pw: ${MLOX_AUTO_PW}
-      secret_path: ""
+      secret_path: "secret"
   kubernetes:
-    module: mlox.services.airflow.airflow
-    class_name: AirflowDockerService
-    params:
-      name: airflow-3.0.0-k8s-service
-      template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.0.yaml 
-      target_path: /home/${MLOX_USER}/airflow
-      path_output: /home/${MLOX_USER}/airflow/output
-      path_dags: /home/${MLOX_USER}/repos/airflow/dags
-      port: ${MLOX_AUTO_PORT}
-      ui_user: ${MLOX_AUTO_USER}
-      ui_pw: ${MLOX_AUTO_PW}
-      secret_path: ""
   ansible:

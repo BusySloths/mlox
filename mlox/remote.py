@@ -111,9 +111,12 @@ def docker_list_container(conn):
     return dlist
 
 
-def docker_down(conn, config_yaml):
+def docker_down(conn, config_yaml, remove_volumes=False):
+    volumes = "--volumes " if remove_volumes else ""
     return exec_command(
-        conn, f'docker compose -f "{config_yaml}" down --remove-orphans', sudo=True
+        conn,
+        f'docker compose -f "{config_yaml}" down {volumes}--remove-orphans',
+        sudo=True,
     )
 
 
