@@ -56,7 +56,28 @@ def installed_services():
             with st.spinner(f"Deleting service {service_name}...", show_time=True):
                 infra.setup_service(ip, service_name, state="teardown")
             st.rerun()
-        st.write(bundle.services)
+
+        bundle, stateful_service = infra.get_stateful_service(ip, service_name)
+        if "settings" in stateful_service.config.ui:
+            settings_func = stateful_service.config.ui["settings"]
+
+            import importlib
+
+            try:
+                # Split the string into module path and function name
+                module_path, func_name = settings_func.rsplit(".", 1)
+                # Import the module
+                module = importlib.import_module(module_path)
+                # Get the function object
+                callable_settings_func = getattr(module, func_name)
+
+                # Call the function with the required arguments
+                callable_settings_func(infra, bundle, stateful_service.service)
+
+            except (ImportError, AttributeError) as e:
+                st.error(f"Could not load settings UI for this service: {e}")
+            except Exception as e:
+                st.error(f"An error occurred while rendering settings UI: {e}")
 
 
 def available_services():
@@ -79,6 +100,7 @@ def available_services():
                 "description_short": service.description_short,
                 "links": [f"{k}: {v}" for k, v in service.links.items()],
                 "requirements": [f"{k}: {v}" for k, v in service.requirements.items()],
+                "ui": [f"{k}" for k, v in service.ui.items()],
                 "backend": [f"{k}" for k, v in service.build.items()],
             }
         )

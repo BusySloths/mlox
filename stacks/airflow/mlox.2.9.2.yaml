@@ -19,9 +19,11 @@ requirements:
   cpus: 2.5
   ram_gb: 4.0
   disk_gb: 10.0
+ui:
+  settings: mlox.services.airflow.ui.settings
 build:
   docker: 
-    module: mlox.services.airflow.airflow
+    module: mlox.services.airflow.docker
     class_name: AirflowDockerService
     params:
       name: airflow-2.9.2-service

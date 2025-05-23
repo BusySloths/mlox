@@ -178,6 +178,17 @@ class Infrastructure:
         bundle.services.append(StatefulService(service, config, state="un-initialized"))
         return bundle
 
+    def get_stateful_service(
+        self, ip: str, service_name: str
+    ) -> Tuple[Bundle, StatefulService] | None:
+        bundle = self.get_bundle_by_ip(ip)
+        if not bundle:
+            return None
+        for stateful_service in bundle.services:
+            if stateful_service.service.name == service_name:
+                return bundle, stateful_service
+        return None
+
     def pull_repo(self, ip: str, name: str) -> None:
         bundle = next((b for b in self.bundles if b.server.ip == ip), None)
         if not bundle:
@@ -189,15 +200,17 @@ class Infrastructure:
         bundle.server.git_pull(repo.path)
 
     def add_repo(self, ip: str, link: str) -> None:
+        REPOS: str = "repos"
         bundle = next(
             (bundle for bundle in self.bundles if bundle.server.ip == ip), None
         )
         if not bundle:
             return
+        if not bundle.server.mlox_user:
+            return
 
-        REPOS: str = "repos3"
         name = link.split("/")[-1][:-4]
-        path = f"{REPOS}/{name}"
+        path = f"{bundle.server.mlox_user.home}/{REPOS}/{name}"
         repo = Repo(link=link, name=name, path=path)
         bundle.server.git_clone(repo.link, REPOS)
         bundle.repos.append(repo)

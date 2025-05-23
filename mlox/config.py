@@ -27,6 +27,7 @@ class ServiceConfig:
     links: Dict[str, str]
     requirements: Dict[str, float]
     # This type hint correctly defines the desired final structure
+    ui: Dict[str, str] = field(default_factory=dict)
     build: Dict[str, BuildConfig] = field(default_factory=dict)
 
     def instantiate(

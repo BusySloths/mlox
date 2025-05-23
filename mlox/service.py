@@ -1,11 +1,15 @@
-from mlox.remote import docker_down, docker_up
-
-
+from typing import Dict
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict
 
-from mlox.remote import exec_command, fs_copy, fs_create_dir, fs_find_and_replace
+from mlox.remote import (
+    docker_down,
+    docker_up,
+    exec_command,
+    fs_copy,
+    fs_create_dir,
+    fs_find_and_replace,
+)
 
 
 def tls_setup_no_config(conn, ip, path) -> None:
@@ -82,5 +86,5 @@ class AbstractService(ABC):
         return True
 
     @abstractmethod
-    def check(self) -> Dict:
+    def check(self, conn) -> Dict:
         pass

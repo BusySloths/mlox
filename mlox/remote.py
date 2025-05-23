@@ -146,6 +146,26 @@ def fs_delete_dir(conn, path):
     exec_command(conn, f"rm -rf {path}", sudo=True)
 
 
+def fs_create_symlink(conn, target_path, link_path, sudo=False):
+    """
+    Creates a symbolic link on the remote server.
+
+    Args:
+        conn: Fabric connection object.
+        target_path: The path the link should point to.
+        link_path: The path of the symbolic link to create.
+        sudo: If True, execute the command with sudo.
+    """
+    exec_command(conn, f"ln -s {target_path} {link_path}", sudo=sudo)
+
+
+def fs_remove_symlink(conn, link_path, sudo=False):
+    """
+    Removes a symbolic link on the remote server.
+    """
+    exec_command(conn, f"rm {link_path}", sudo=sudo)
+
+
 def fs_touch(conn, fname):
     exec_command(conn, f"touch {fname}")
 

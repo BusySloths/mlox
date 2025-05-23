@@ -3,13 +3,16 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup, tls_setup_no_config
+from mlox.infra import Repo
+from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
     fs_copy,
     fs_delete_dir,
     fs_create_dir,
     fs_create_empty_file,
     fs_append_line,
+    fs_create_symlink,
+    fs_remove_symlink,
     sys_user_id,
     docker_down,
 )
@@ -38,25 +41,11 @@ class AirflowDockerService(AbstractService):
         fs_create_dir(conn, self.target_path)
         # Ensure host directories for DAGs and logs/outputs exist and are owned by mlox_user
         # This is crucial for volume mounts to have correct permissions for AIRFLOW_UID.
-        fs_create_dir(conn, self.path_dags)
-        fs_create_dir(conn, self.path_output)
+        # fs_create_dir(conn, self.path_dags)
+        # fs_create_dir(conn, self.path_output)
 
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         tls_setup(conn, conn.host, self.target_path)
-        # tls_setup_no_config(conn, conn.host, self.target_path)
-        # fs_copy(
-        #     conn,
-        #     "./services/generate_selfsigned_ssl_certs.sh",
-        #     f"{self.target_path}/generate.sh",
-        # )
-        # # setup certificates
-        # fs_find_and_replace(
-        #     conn, f"{self.target_path}/generate.sh", "cert.pem", "airflow.crt"
-        # )
-        # fs_find_and_replace(
-        #     conn, f"{self.target_path}/generate.sh", "key.pem", "airflow.key"
-        # )
-        # exec_command(conn, f"cd {self.target_path}; ./generate.sh")
         # setup environment
         base_url = f"https://{conn.host}:{self.port}/{self.secret_path}"
         self.service_url = base_url
@@ -73,14 +62,22 @@ class AirflowDockerService(AbstractService):
         fs_append_line(conn, env_path, f"_AIRFLOW_OUT_FILE_PATH={self.path_output}")
         fs_append_line(conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}")
         fs_append_line(conn, env_path, "_AIRFLOW_LOAD_EXAMPLES=false")
-        self.is_installed = True
         self.service_ports["Airflow Webserver"] = int(self.port)
 
     def teardown(self, conn):
         docker_down(
-            conn, f"{self.target_path}/{self.target_docker_script}", remove_volumes=True
+            conn,
+            f"{self.target_path}/{self.target_docker_script}",
+            remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
 
-    def check(self) -> Dict:
+    def check(self, conn) -> Dict:
         return dict()
+
+    # specialized methods
+    def add_repo(self, conn, repo: Repo):
+        fs_create_symlink(conn, repo.path, f"{self.path_dags}")
+
+    def remove_repo(self, conn, repo: Repo):
+        fs_remove_symlink(conn, f"{self.path_dags}/{repo.name}")
