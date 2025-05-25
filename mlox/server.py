@@ -37,6 +37,7 @@ from mlox.remote import (
     fs_find_and_replace,
     fs_append_line,
     fs_create_dir,
+    fs_delete_dir,
     sys_add_user,
     # sys_get_distro_info,
     sys_user_id,
@@ -282,6 +283,10 @@ class AbstractServer(ABC):
 
     @abstractmethod
     def git_pull(self, path: str) -> None:
+        pass
+
+    @abstractmethod
+    def git_remove(self, path: str) -> None:
         pass
 
     # DOCKER
@@ -551,6 +556,10 @@ class Ubuntu(AbstractServer):
             if self.mlox_user:
                 abs_path = f"{self.mlox_user.home}/{repo_root_path}"
                 exec_command(conn, f"cd {abs_path}; git pull", sudo=False)
+
+    def git_remove(self, path: str) -> None:
+        with self.get_server_connection() as conn:
+            fs_delete_dir(conn, path)
 
     # DOCKER
     def setup_docker(self) -> None:

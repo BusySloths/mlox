@@ -146,6 +146,19 @@ def fs_delete_dir(conn, path):
     exec_command(conn, f"rm -rf {path}", sudo=True)
 
 
+def fs_copy_dir(conn, src_path: str, dst_path: str, sudo: bool = False):
+    """
+    Copies a directory recursively on the remote server.
+
+    Args:
+        conn: Fabric connection object.
+        src_path: The source directory path on the remote server.
+        dst_path: The destination path on the remote server.
+        sudo: If True, execute the command with sudo.
+    """
+    exec_command(conn, f"cp -r {src_path} {dst_path}", sudo=sudo)
+
+
 def fs_create_symlink(conn, target_path, link_path, sudo=False):
     """
     Creates a symbolic link on the remote server.

@@ -199,8 +199,10 @@ class Infrastructure:
         repo.modified_timestamp = datetime.now().isoformat()
         bundle.server.git_pull(repo.path)
 
-    def add_repo(self, ip: str, link: str) -> None:
-        REPOS: str = "repos"
+    def create_and_add_repo(
+        self, ip: str, link: str, repo_abs_root: str | None = None
+    ) -> None:
+        REPOS: str = "repos" if not repo_abs_root else repo_abs_root
         bundle = next(
             (bundle for bundle in self.bundles if bundle.server.ip == ip), None
         )
@@ -210,10 +212,24 @@ class Infrastructure:
             return
 
         name = link.split("/")[-1][:-4]
-        path = f"{bundle.server.mlox_user.home}/{REPOS}/{name}"
+        if repo_abs_root:
+            path = f"{repo_abs_root}/{name}"
+        else:
+            path = f"{bundle.server.mlox_user.home}/{REPOS}/{name}"
         repo = Repo(link=link, name=name, path=path)
         bundle.server.git_clone(repo.link, REPOS)
         bundle.repos.append(repo)
+
+    def remove_repo(self, ip: str, repo: Repo) -> None:
+        bundle = next(
+            (bundle for bundle in self.bundles if bundle.server.ip == ip), None
+        )
+        if not bundle:
+            return
+        if not bundle.server.mlox_user:
+            return
+        bundle.server.git_remove(repo.path)
+        bundle.repos.remove(repo)
 
     def add_server(self, config: ServerConfig, params: Dict[str, str]) -> Bundle | None:
         server = config.instantiate(params=params)

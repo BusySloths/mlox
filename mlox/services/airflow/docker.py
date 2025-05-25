@@ -1,9 +1,8 @@
 import logging
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict
 
-from mlox.infra import Repo
 from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
     fs_copy,
@@ -11,8 +10,6 @@ from mlox.remote import (
     fs_create_dir,
     fs_create_empty_file,
     fs_append_line,
-    fs_create_symlink,
-    fs_remove_symlink,
     sys_user_id,
     docker_down,
 )
@@ -76,8 +73,3 @@ class AirflowDockerService(AbstractService):
         return dict()
 
     # specialized methods
-    def add_repo(self, conn, repo: Repo):
-        fs_create_symlink(conn, repo.path, f"{self.path_dags}")
-
-    def remove_repo(self, conn, repo: Repo):
-        fs_remove_symlink(conn, f"{self.path_dags}/{repo.name}")

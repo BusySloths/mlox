@@ -2,7 +2,7 @@ import streamlit as st
 
 
 from mlox.services.airflow.docker import AirflowDockerService
-from mlox.infra import Infrastructure, Bundle
+from mlox.infra import Infrastructure, Bundle, Repo
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerService):
@@ -18,11 +18,15 @@ def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerServic
     )
     if c2.button("Add to DAGs"):
         st.info("Adding to DAGs")
-        with bundle.server.get_server_connection() as conn:
-            service.add_repo(conn, repo)
+        if not repo.path.startswith(service.path_dags):
+            infra.create_and_add_repo(bundle.server.ip, repo.link, service.path_dags)
+        else:
+            st.info("Repository already in DAGs")
+
     if c3.button("Remove from DAGs"):
         st.info("Removing from DAGs")
-        with bundle.server.get_server_connection() as conn:
-            service.remove_repo(conn, repo)
-
+        if repo.path.startswith(service.path_dags):
+            infra.remove_repo(bundle.server.ip, repo)
+        else:
+            st.info("Repository not found in DAGs")
     st.write(repo)

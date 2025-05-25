@@ -22,7 +22,7 @@ def repos():
 
         if c3.form_submit_button("Add Git Repository"):
             st.info(f"Adding {link} to {bundle.name}")
-            infra.add_repo(bundle.server.ip, link)
+            infra.create_and_add_repo(bundle.server.ip, link)
             st.rerun()
 
     my_repos = []
@@ -62,6 +62,7 @@ def repos():
 
         if st.button("Delete"):
             st.info(f"Deleting {name} (NOT IMPLEMENTED YET)")
+            # infra.remove_repo(ip, repo)
 
         c1, c2 = st.columns(2)
         pull_method = c1.selectbox(
