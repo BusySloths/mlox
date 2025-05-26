@@ -1,0 +1,32 @@
+name: Opentelemetry Collector
+version: 0.105.0
+maintainer: Your Name
+description_short: OpenTelemetry Collector is a service for collecting and exporting telemetry data.
+description: |
+  OpenTelemetry Collector is an open-source service that collects, processes, and exports telemetry data such as traces, metrics, and logs. It supports various protocols and can be configured to send data to multiple backends. In MLOX, it is used to monitor and trace machine learning workflows, providing insights into performance and reliability.
+  For more information, visit the [OpenTelemetry documentation](https://opentelemetry.io/docs/collector/).
+links:
+  project: https://opentelemetry.io/docs/collector/
+  news: https://opentelemetry.io/docs/collector/
+  security: https://opentelemetry.io/docs/collector/
+  documentation: https://opentelemetry.io/docs/collector/
+  changelog: https://opentelemetry.io/docs/collector/
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
+ui:
+  settings: mlox.services.otel.ui.settings
+build:
+  docker: 
+    module: mlox.services.otel.docker
+    class_name: OtelDockerService
+    params:
+      name: otel-0.105.0-service
+      template: ${MLOX_STACKS_PATH}/opentelemetry/docker-compose-otel-0.105.0.yaml 
+      target_path: /home/${MLOX_USER}/otel
+      config: ${MLOX_STACKS_PATH}/opentelemetry/otel-collector-config-0.105.0.yaml
+      relic_endpoint: https://otlp.nr-data.net:4317
+      relic_key: ${MLOX_RELIC_KEY}
+  kubernetes:
+  ansible:

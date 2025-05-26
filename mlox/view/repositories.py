@@ -34,18 +34,23 @@ def repos():
                     "server": bundle.name,
                     "name": r.name,
                     "link": r.link,
-                    "relative path": r.path,
+                    "path": r.path,
                     "added": datetime.fromisoformat(r.added_timestamp).strftime(
                         "%Y-%m-%d %H:%M:%S"
                     ),
                     "modified": datetime.fromisoformat(r.modified_timestamp).strftime(
                         "%Y-%m-%d %H:%M:%S"
                     ),
+                    "repo": r,
                 }
             )
 
-    selection = st.dataframe(
+    df = pd.DataFrame(
         my_repos,
+        columns=["ip", "server", "name", "link", "path", "added", "modified", "repo"],
+    )
+    selection = st.dataframe(
+        df[["server", "name", "link", "path", "added", "modified"]],
         hide_index=True,
         selection_mode="single-row",
         use_container_width=True,
@@ -55,14 +60,17 @@ def repos():
         idx = selection["selection"]["rows"][0]
         ip = my_repos[idx]["ip"]
         name = my_repos[idx]["name"]
+        repo = my_repos[idx]["repo"]
 
         if st.button("Pull"):
             with st.spinner("Pulling..."):
                 infra.pull_repo(ip, name)
+            st.rerun()
 
         if st.button("Delete"):
-            st.info(f"Deleting {name} (NOT IMPLEMENTED YET)")
-            # infra.remove_repo(ip, repo)
+            with st.spinner(f"Deleting {name}..."):
+                infra.remove_repo(ip, repo)
+            st.rerun()
 
         c1, c2 = st.columns(2)
         pull_method = c1.selectbox(

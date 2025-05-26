@@ -7,6 +7,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter  # type: ignore
 
+from mlox.session import MloxSession
 
 # NOTES:
 # - check the certificate on a remote collector:
@@ -26,15 +27,30 @@ resource = Resource.create(
 # Set the URL of the OpenTelemetry collector
 collector_url = os.environ["TEST_OTEL_URL"]
 
-# Path to the self-signed certificate of the mlflow server
-cert_path = "cert-otel.pem"
 
-# Load the certificate
-with open(cert_path, "rb") as f:
-    trusted_certs = f.read()
+password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
+# Make sure your environment variable is set!
+if not password:
+    print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
+    exit(1)
+session = MloxSession("mlox", password)
+session.load_infrastructure()
+infra = session.infra
+
+trusted_certs = infra.bundles[0].services[2].service.certificate
+print(trusted_certs.encode("utf-8"))
+
+# # Path to the self-signed certificate of the mlflow server
+# cert_path = "cert-otel.pem"
+
+# # Load the certificate
+# with open(cert_path, "rb") as f:
+#     trusted_certs = f.read()
 
 # Create SSL credentials with the self-signed certificate
-ssl_credentials = grpc.ssl_channel_credentials(root_certificates=trusted_certs)
+ssl_credentials = grpc.ssl_channel_credentials(
+    root_certificates=trusted_certs.encode("utf-8")
+)
 
 # Create the OTLP exporter using the gRPC channel with SSL credentials
 otlp_exporter = OTLPSpanExporter(

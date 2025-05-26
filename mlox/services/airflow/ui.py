@@ -9,11 +9,25 @@ def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerServic
     st.header(f"Settings for service {service.name}")
     st.write(f"IP: {bundle.server.ip}")
 
+    # list associated repositories
+    st.markdown("## Associated repositories")
+    for repo in bundle.repos:
+        if repo.path.startswith(service.path_dags):
+            st.markdown(
+                f"- **{repo.name}**: [{repo.link}]({repo.link}) - Path: `{repo.path}`"
+            )
+
+    # add a repository to the DAGs
+    st.markdown(
+        "## Add or remove repositories from DAGs\n"
+        "You can add or remove repositories from the DAGs folder. "
+        "This will allow you to manage your Airflow DAGs more easily."
+    )
     c1, c2, c3 = st.columns([70, 12, 18])
     repo = c1.selectbox(
         "Add repository",
-        bundle.repos,
-        format_func=lambda repo: repo.name,
+        [repo for repo in bundle.repos if not repo.path.startswith(service.path_dags)],
+        format_func=lambda repo: f"{repo.name} [{repo.path}]",
         label_visibility="collapsed",
     )
     if c2.button("Add to DAGs"):
@@ -29,4 +43,4 @@ def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerServic
             infra.remove_repo(bundle.server.ip, repo)
         else:
             st.info("Repository not found in DAGs")
-    st.write(repo)
+    # st.write(repo)

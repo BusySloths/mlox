@@ -28,7 +28,6 @@ class AirflowDockerService(AbstractService):
     ui_pw: str
     port: str
     secret_path: str
-    template: str
 
     def __str__(self):
         return f"AirflowDockerService(path_dags={self.path_dags}, path_output={self.path_output}, ui_user={self.ui_user}, ui_pw={self.ui_pw}, port={self.port}, secret_path={self.secret_path})"
