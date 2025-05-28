@@ -17,6 +17,10 @@ pycryptodome
 
 sqlmodel
 
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+
 grpcio
 pymilvus
 

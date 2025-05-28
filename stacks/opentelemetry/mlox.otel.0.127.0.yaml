@@ -1,5 +1,5 @@
-name: Opentelemetry Collector
-version: 0.105.0
+name: OpenTelemetry Collector
+version: 0.127.0
 maintainer: Your Name
 description_short: OpenTelemetry Collector is a service for collecting and exporting telemetry data.
 description: |
@@ -22,10 +22,10 @@ build:
     module: mlox.services.otel.docker
     class_name: OtelDockerService
     params:
-      name: otel-0.105.0-service
-      template: ${MLOX_STACKS_PATH}/opentelemetry/docker-compose-otel-0.105.0.yaml 
-      target_path: /home/${MLOX_USER}/otel
-      config: ${MLOX_STACKS_PATH}/opentelemetry/otel-collector-config-0.105.0.yaml
+      name: otel-0.127.0-service
+      template: ${MLOX_STACKS_PATH}/opentelemetry/docker-compose-otel-0.127.0.yaml 
+      target_path: /home/${MLOX_USER}/otel-0.127.0
+      config: ${MLOX_STACKS_PATH}/opentelemetry/otel-collector-config-0.127.0.yaml
       relic_endpoint: https://otlp.nr-data.net:4317
       relic_key: ${MLOX_RELIC_KEY}
   kubernetes:

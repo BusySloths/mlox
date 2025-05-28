@@ -25,7 +25,6 @@ resource = Resource.create(
 )
 
 # Set the URL of the OpenTelemetry collector
-collector_url = os.environ["TEST_OTEL_URL"]
 
 
 password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
@@ -37,8 +36,9 @@ session = MloxSession("mlox", password)
 session.load_infrastructure()
 infra = session.infra
 
-trusted_certs = infra.bundles[0].services[2].service.certificate
-print(trusted_certs.encode("utf-8"))
+collector_url = f"{infra.bundles[0].server.ip}:{infra.bundles[0].services[2].service.service_ports['OTLP gRPC receiver']}"
+trusted_certs = infra.bundles[0].services[2].service.certificate.encode("utf-8")
+print(trusted_certs)
 
 # # Path to the self-signed certificate of the mlflow server
 # cert_path = "cert-otel.pem"
@@ -48,9 +48,7 @@ print(trusted_certs.encode("utf-8"))
 #     trusted_certs = f.read()
 
 # Create SSL credentials with the self-signed certificate
-ssl_credentials = grpc.ssl_channel_credentials(
-    root_certificates=trusted_certs.encode("utf-8")
-)
+ssl_credentials = grpc.ssl_channel_credentials(root_certificates=trusted_certs)
 
 # Create the OTLP exporter using the gRPC channel with SSL credentials
 otlp_exporter = OTLPSpanExporter(
@@ -69,3 +67,28 @@ with tracer.start_as_current_span("test-span-2") as span:
     print("Span created")
     span.add_event("event-1")
     print("Event created")
+    with tracer.start_as_current_span("child-test-span-2") as span:
+        print("Child Span created")
+        span.add_event("child-event-2")
+        print("Child Event created")
+
+# os.environ["GRPC_TRACE"] = "all"
+# os.environ["GRPC_VERBOSITY"] = "DEBUG"
+
+# # import time
+
+# # time.sleep(10)  # Allow
+
+# otlp_exporter.shutdown()  # Explicitly shut down the exporter
+# print("Forcing flush of telemetry data...")
+# try:
+#     # provider.force_flush() can take a timeout.
+#     # Increase if necessary, default is 30 seconds (30000 ms).
+#     provider.force_flush(timeout_millis=10000)  # e.g., 10 seconds
+#     print("Flush attempt complete.")
+# except Exception as e:
+#     print(f"Error during force_flush: {e}")
+
+# print("Shutting down TracerProvider...")
+# provider.shutdown()
+# print("TracerProvider shutdown complete.")

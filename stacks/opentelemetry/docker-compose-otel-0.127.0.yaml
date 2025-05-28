@@ -1,0 +1,52 @@
+version: '3.8'
+
+
+services:
+
+  # Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.127.0
+    container_name: otel-collector
+    restart: always
+    environment:
+      - MY_OTEL_RELIC_ENDPOINT=${OTEL_RELIC_ENDPOINT}
+      - MY_OTEL_RELIC_KEY=${OTEL_RELIC_KEY}
+      # - REDIS_PASSWORD=my_redis_password
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./otel-data/telemetry.json:/etc/otelcol/telemetry.json # Mount a local directory to where the file exporter writes
+      - ./cert.pem:/etc/cert.pem
+      - ./key.pem:/etc/key.pem
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "13133:13133"  # health check
+    networks:
+      - otel-network
+
+  # redis:
+  #   image: redis:7.2-bookworm # Using a version similar to the Airflow example
+  #   container_name: otel-redis
+  #   ports:
+  #     - "6379:6379" # Expose Redis port if needed externally, otherwise not strictly necessary for inter-container communication
+  #   # If you need password authentication for Redis:
+  #   # command: redis-server --requirepass your_redis_password
+  #   # environment:
+  #     # - REDIS_PASSWORD=your_redis_password
+  #   volumes:
+  #     - otel-redis-data:/data # For data persistence
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: always
+  #   networks:
+  #     - otel-network
+
+# volumes:
+#   otel-redis-data: # Defines the named volume for Redis persistence
+
+networks:
+  otel-network:

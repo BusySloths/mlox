@@ -1,18 +1,20 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Any
 
 from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
     fs_copy,
     fs_read_file,
+    fs_touch,
     fs_delete_dir,
     fs_create_dir,
     fs_create_empty_file,
     fs_append_line,
     sys_user_id,
     docker_down,
+    exec_command,
 )
 
 # Configure logging (optional, but recommended)
@@ -28,8 +30,22 @@ class OtelDockerService(AbstractService):
     config: str
     certificate: str = field(default="", init=False)
 
+    def get_telemetry_data(self, bundle) -> Any:
+        with bundle.server.get_server_connection() as conn:
+            data = fs_read_file(
+                conn, f"{self.target_path}/otel-data/telemetry.json", format="txt/plain"
+            )
+        return data
+
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
+        fs_create_dir(conn, f"{self.target_path}/otel-data")
+        fs_touch(conn, f"{self.target_path}/otel-data/telemetry.json")
+        exec_command(conn, f"chmod 777 {self.target_path}/otel-data", sudo=True)
+        exec_command(
+            conn, f"chmod 777 {self.target_path}/otel-data/telemetry.json", sudo=True
+        )
+
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         fs_copy(conn, self.config, f"{self.target_path}/otel-collector-config.yaml")
         # fs_copy(
