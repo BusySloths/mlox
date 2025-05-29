@@ -12,7 +12,6 @@ from mlox.remote import (
     fs_create_dir,
     fs_create_empty_file,
     fs_append_line,
-    sys_user_id,
     docker_down,
     exec_command,
 )
@@ -86,6 +85,14 @@ class OtelDockerService(AbstractService):
         self.service_ports["OTLP gRPC receiver"] = 4317
         self.service_ports["OTLP HTTP receiver"] = 4318
         self.service_ports["OTEL health check"] = 13133
+
+    def teardown(self, conn):
+        docker_down(
+            conn,
+            f"{self.target_path}/{self.target_docker_script}",
+            remove_volumes=True,
+        )
+        fs_delete_dir(conn, self.target_path)
 
     def check(self, conn) -> Dict:
         return dict()

@@ -259,21 +259,6 @@ class Infrastructure:
     ) -> List[Bundle]:
         return [b for b in self.bundles if b.status == backend]
 
-    # def add_k8s_client(self, controller: Bundle, agent: Bundle) -> None:
-    #     # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)
-    #     token = controller.server.get_kubernetes_token()
-    #     url = f"https://{controller.server.ip}:6443"
-    #     agent.server.install_kubernetes(controller_url=url, controller_token=token)
-    #     controller.cluster.append(agent.server)
-    #     self.delete_bundle(agent)
-
-    # def remove_k8s_client(self, controller: Bundle, agent: AbstractServer) -> Bundle:
-    #     # TODO first check/validate if possible to combine target and client (ie. check if both are k8s backends, no services, etc)
-    #     bundle = Bundle(name=agent.ip, server=agent)
-    #     self.bundles.append(bundle)
-    #     controller.cluster.remove(agent)
-    #     return bundle
-
     def save(self, filepath: str, password: str) -> None:
         infra_dict = dataclass_to_dict(self)
         save_to_json(infra_dict, filepath, password, encrypt=True)

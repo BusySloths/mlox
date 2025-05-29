@@ -28,9 +28,9 @@ build:
     params:
       name: airflow-2.9.2-service
       template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-2.9.2.yaml 
-      target_path: /home/${MLOX_USER}/airflow
-      path_output: /home/${MLOX_USER}/airflow/output
-      path_dags: /home/${MLOX_USER}/repos/airflow/dags
+      target_path: /home/${MLOX_USER}/airflow-2.9.2
+      path_output: /home/${MLOX_USER}/airflow-2.9.2/output
+      path_dags: /home/${MLOX_USER}/airflow-2.9.2/dags
       port: ${MLOX_AUTO_PORT}
       ui_user: ${MLOX_AUTO_USER}
       ui_pw: ${MLOX_AUTO_PW}

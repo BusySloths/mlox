@@ -15,12 +15,6 @@ def help():
     """)
 
 
-def service_airflow():
-    st.markdown("""
-    # Service Airflow
-    This is where you can manage your Airflow service.""")
-
-
 def monitor():
     st.markdown("""
     # Monitor

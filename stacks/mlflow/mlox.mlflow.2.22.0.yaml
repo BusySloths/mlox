@@ -28,7 +28,7 @@ build:
     params:
       name: mlflow-2.22.0-service
       template: ${MLOX_STACKS_PATH}/mlflow/docker-compose-mlflow-2.22.0.yaml 
-      target_path: /home/${MLOX_USER}/mlflow_2.22.0
+      target_path: /home/${MLOX_USER}/mlflow-2.22.0
       ui_user: ${MLOX_AUTO_USER}
       ui_pw: abcdefghij01
       port: "5432"

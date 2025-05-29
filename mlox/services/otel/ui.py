@@ -50,6 +50,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OtelDockerService):
     st.write(f"Logs: {len(logs)}")
     st.write(f"Metrics: {len(metrics)}")
     st.write(logs[0])
+
     # # Optional: Display as a Pandas DataFrame if the structure is somewhat consistent
     # try:
     #     df = pd.DataFrame(telemetry_data)
