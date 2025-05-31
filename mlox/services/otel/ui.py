@@ -1,6 +1,9 @@
-import streamlit as st
 import json  # For parsing JSON
 import pandas as pd  # Optional: for displaying as a table
+import streamlit as st
+
+from typing import List
+
 
 from mlox.services.otel.docker import OtelDockerService
 from mlox.infra import Infrastructure, Bundle
@@ -58,3 +61,13 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OtelDockerService):
     #     st.dataframe(df)
     # except Exception as e:
     #     st.warning(f"Could not display data as a table: {e}")
+    plot_logs(logs)
+
+
+def plot_logs(logs: List):
+    for log in logs:
+        st.write(
+            log["resourceLogs"][0]["scopeLogs"][0]["logRecords"][0]["body"][
+                "stringValue"
+            ]
+        )

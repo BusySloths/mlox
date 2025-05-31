@@ -1,0 +1,34 @@
+name: MLFlow-MLServer
+version: 2.22.0 
+maintainer: Your Name
+description_short: MLServer is an open-source Python library for building production-ready asynchronous APIs for machine learning models.
+description: |
+    MLServer aims to provide an easy way to start serving your machine learning models through a REST and gRPC interface, 
+    fully compliant with KFServing’s V2 Dataplane spec. MLServer supports multi-model serving, the ability to run inference in parallel for vertical scaling across multiple models through a 
+    sharedpool of inference workers, and more. This service uses MLFlow MLServer integration to deploy single
+    models. The version of this service refers to MLFlow.
+links:
+  project: https://mlserver.readthedocs.io/en/stable/
+  news: https://mlserver.readthedocs.io/en/stable/
+  security: https://mlserver.readthedocs.io/en/stable/
+  documentation: https://mlserver.readthedocs.io/en/stable/index.html
+  changelog: https://mlserver.readthedocs.io/en/stable/changelog.html
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
+ui:
+  settings: mlox.services.mlflow_mlserver.ui.settings
+build:
+  docker: 
+    module: mlox.services.mlflow_mlserver.docker
+    class_name: MLFlowMLServerDockerService
+    params:
+      name: mlflow-mlserver-2.22.0-service
+      template: ${MLOX_STACKS_PATH}/mlflow-mlserver/docker-compose-mlflow-mlserver-2.22.0.yaml 
+      target_path: /home/${MLOX_USER}/mlflow-mlserver-2.22.0
+      ui_user: ${MLOX_AUTO_USER}
+      ui_pw: abcdefghij01
+      port: "5432"
+  kubernetes:
+  ansible:
