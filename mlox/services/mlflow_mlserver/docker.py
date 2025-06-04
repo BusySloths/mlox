@@ -35,12 +35,12 @@ class MLFlowMLServerDockerService(AbstractService):
         fs_copy(conn, self.dockerfile, f"{self.target_path}/dockerfile-mlflow-mlserver")
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
-        fs_append_line(conn, env_path, f"PORT={self.port}")
-        fs_append_line(conn, env_path, f"MLFLOW_MODEL={self.model}")
-        fs_append_line(conn, env_path, f"MLFLOW_TRACKING_URI={self.tracking_uri}")
-        fs_append_line(conn, env_path, f"MLFLOW_TRACKING_USERNAME={self.tracking_user}")
-        fs_append_line(conn, env_path, f"MLFLOW_TRACKING_PASSWORD={self.tracking_pw}")
-        fs_append_line(conn, env_path, f"MLFLOW_TRACKING_INSECURE_TLS=true")
+        fs_append_line(conn, env_path, f"MLSERVER_ENDPOINT_PORT={self.port}")
+        fs_append_line(conn, env_path, f"MLFLOW_REMOTE_MODEL={self.model}")
+        fs_append_line(conn, env_path, f"MLFLOW_REMOTE_URI={self.tracking_uri}")
+        fs_append_line(conn, env_path, f"MLFLOW_REMOTE_USER={self.tracking_user}")
+        fs_append_line(conn, env_path, f"MLFLOW_REMOTE_PW={self.tracking_pw}")
+        fs_append_line(conn, env_path, f"MLFLOW_REMOTE_INSECURE=true")
         self.service_ports["MLServer REST API"] = int(self.port)
         self.service_url = f"https://{conn.host}:{self.port}/"
 

@@ -52,7 +52,7 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
     st.write(model_uri)
 
     params["${MODEL_NAME}"] = model_uri
-    params["${TRACKING_URL}"] = service.service_url
+    params["${TRACKING_URI}"] = service.service_url
     params["${TRACKING_USER}"] = service.ui_user
     params["${TRACKING_PW}"] = service.ui_pw
 

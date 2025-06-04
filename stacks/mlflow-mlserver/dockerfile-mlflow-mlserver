@@ -1,14 +1,46 @@
 FROM python:3.11-slim
 
+# Ensure operations are done as root, making $HOME=/root consistent for PYENV_ROOT
+USER root
+
+# Define PYENV_ROOT and add pyenv's shims and bin directories to the PATH.
+# Shims need to be prioritized for pyenv to function correctly.
+ENV PYENV_ROOT="/root/.pyenv"
+ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+
 ENV PYTHONPATH=.
 
-RUN apt-get -y update; apt-get -y install curl
-RUN apt-get -y install bash
-RUN apt-get -y install git
+# Install prerequisites for pyenv (git and curl) and other utilities.
+# Consolidate into a single RUN layer and clean up apt cache to reduce image size.
+RUN apt-get -y update && apt-get -y install --no-install-recommends \
+    curl \
+    bash \
+    git \
+    # Add build dependencies for pyenv to compile Python
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libncursesw5-dev \
+    libffi-dev \
+    liblzma-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN curl -s -N https://pyenv.run | bash
-RUN pip install mlflow==2.22.0
-RUN pip install 'mlflow[extras]'
+# Install pyenv using the official installer.
+# The -L flag for curl follows redirects.
+# The script installs pyenv into $PYENV_ROOT.
+RUN curl -s -L https://pyenv.run | bash
 
-RUN pip uninstall --yes pydantic
-RUN pip install pydantic==1.10.14
+# Install MLflow and its extras. Using --no-cache-dir to reduce image size.
+RUN pip install --no-cache-dir mlflow==2.22.0
+RUN pip install --no-cache-dir 'mlflow[extras]'
+
+# Explicitly install mlserver and its mlflow plugin to ensure availability
+RUN pip install --no-cache-dir mlserver mlserver-mlflow
+
+# Pin Pydantic version as required
+RUN pip uninstall --yes pydantic && \
+    pip install --no-cache-dir pydantic==1.10.14

@@ -5,7 +5,12 @@ services:
       context: .
       dockerfile: dockerfile-mlflow-mlserver
     restart: always
-    container_name: mlflow_mlserver_${PORT}
+    container_name: mlflow_mlserver_${MLSERVER_ENDPOINT_PORT}
     ports:  # expose for internal
-        - ${PORT}:5002
-    command: mlflow models serve -m models:/${MLFLOW_MODEL} -p 5002 -h 0.0.0.0 -w 2 --enable-mlserver
+        - ${MLSERVER_ENDPOINT_PORT}:5002
+    environment:
+      - MLFLOW_TRACKING_URI=${MLFLOW_REMOTE_URI}
+      - MLFLOW_TRACKING_USERNAME=${MLFLOW_REMOTE_USER}
+      - MLFLOW_TRACKING_PASSWORD=${MLFLOW_REMOTE_PW}
+      - MLFLOW_TRACKING_INSECURE_TLS=${MLFLOW_REMOTE_INSECURE}
+    command: mlflow models serve -m models:/${MLFLOW_REMOTE_MODEL} -p 5002 -h 0.0.0.0 -w 2 --enable-mlserver
