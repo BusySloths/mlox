@@ -4,13 +4,8 @@ services:
     build:
       context: .
       dockerfile: dockerfile-mlflow-mlserver
-    environment:
-      - MLFLOW_TRACKING_URI=https://31.220.83.112:1234
-      - MLFLOW_TRACKING_USERNAME=admin
-      - MLFLOW_TRACKING_PASSWORD=password
-      - MLFLOW_TRACKING_INSECURE_TLS=true
     restart: always
-    container_name: mlflow
+    container_name: mlflow_mlserver_${PORT}
     ports:  # expose for internal
-        - 5002:5002
-    command: mlflow models serve -m models:/Test/2 -p 5002 -h 0.0.0.0 -w 2 --enable-mlserver
+        - ${PORT}:5002
+    command: mlflow models serve -m models:/${MLFLOW_MODEL} -p 5002 -h 0.0.0.0 -w 2 --enable-mlserver

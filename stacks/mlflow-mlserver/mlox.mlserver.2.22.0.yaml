@@ -18,17 +18,21 @@ requirements:
   ram_gb: 4.0
   disk_gb: 1.0
 ui:
+  setup: mlox.services.mlflow_mlserver.ui.setup
   settings: mlox.services.mlflow_mlserver.ui.settings
 build:
   docker: 
     module: mlox.services.mlflow_mlserver.docker
     class_name: MLFlowMLServerDockerService
     params:
-      name: mlflow-mlserver-2.22.0-service
+      name: mlflow-mlserver-2.22.0
       template: ${MLOX_STACKS_PATH}/mlflow-mlserver/docker-compose-mlflow-mlserver-2.22.0.yaml 
-      target_path: /home/${MLOX_USER}/mlflow-mlserver-2.22.0
-      ui_user: ${MLOX_AUTO_USER}
-      ui_pw: abcdefghij01
-      port: "5432"
+      dockerfile: ${MLOX_STACKS_PATH}/mlflow-mlserver/dockerfile-mlflow-mlserver 
+      target_path: /home/${MLOX_USER}/mlflow-mlserver-2.22.0-6432
+      port: "6432"
+      model: ${MODEL_NAME}
+      tracking_uri: ${TRACKING_URI}
+      tracking_user: ${TRACKING_USER}
+      tracking_pw: ${TRACKING_PW}
   kubernetes:
   ansible:

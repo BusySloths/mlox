@@ -15,37 +15,6 @@ def help():
     """)
 
 
-def monitor():
-    st.markdown("""
-    # Monitor
-    This is where you can monitor your infrastructure.
-
-    ## System Health
-    - CPU Usage
-    - Memory Usage
-    - Disk Usage
-    - Network Traffic
-    ## Service Health
-    - Service Status
-    - Error Logs
-    - Performance Metrics
-    ## OTEL Metrics
-    - Service Metrics
-    - Service Traces
-    - Service Logs
-    ## Active Data Surveillance (* later)
-    - Model Performance 
-    - Data Drift
-    ## Performance Metrics (* later)
-    - Service Performance
-    - System Performance
-    ## Alerts and Notifications (* later)
-    - Alert Configuration
-    - Notification Channels
-    - Alert History
-    """)
-
-
 def welcome():
     st.image("resources/mlox_logo_wide.png")
     st.markdown("""
