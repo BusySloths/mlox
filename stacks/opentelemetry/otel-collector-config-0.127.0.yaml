@@ -13,14 +13,10 @@ receivers:
           key_file: /etc/key.pem
 
 exporters:
-  # otlphttp:
-  #   endpoint: ${env:MY_OTEL_RELIC_ENDPOINT}
-  #   headers:
-  #     api-key: ${env:MY_OTEL_RELIC_KEY}
-  # redis:
-  #   endpoint: "redis:6379" # This assumes your Redis service in Docker Compose will be named 'redis'
-    # You can add other options like password, db, tls if needed
-    # e.g., password: ${env:REDIS_PASSWORD}
+  otlphttp:
+    endpoint: ${env:MY_OTEL_RELIC_ENDPOINT}
+    headers:
+      api-key: ${env:MY_OTEL_RELIC_KEY}
   file:
     path: /etc/otelcol/telemetry.json # Path inside the container where data will be written
     rotation:
@@ -31,6 +27,10 @@ exporters:
 
 processors:
   batch:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 65
+    spike_limit_percentage: 20  
 
 # connectors:
 #   spanmetrics:
@@ -53,13 +53,13 @@ service:
   pipelines:
     traces:
       receivers: [otlp]    
-      processors: [batch]
+      processors: [batch, memory_limiter]
       exporters: [debug, file]
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [batch, memory_limiter]
       exporters: [debug, file]
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [batch, memory_limiter]
       exporters: [debug, file]

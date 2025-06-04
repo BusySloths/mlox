@@ -45,9 +45,11 @@ def installed_services():
         idx = select_server["selection"]["rows"][0]
         ip = services[idx]["ip"]
         service_name = services[idx]["name"]
+        bundle, stateful_service = infra.get_stateful_service(ip, service_name)
 
-        c1, c2, _, c3 = st.columns([20, 20, 40, 20])
-        if c1.button("Setup"):
+        state = stateful_service.state
+        c1, c2, _ = st.columns([20, 20, 60])
+        if c1.button("Setup", disabled=state != "un-initialized"):
             with st.spinner(f"Setting up service {service_name}...", show_time=True):
                 infra.setup_service(ip, service_name, state="setup")
             st.rerun()
@@ -57,27 +59,10 @@ def installed_services():
                 infra.setup_service(ip, service_name, state="teardown")
             st.rerun()
 
-        bundle, stateful_service = infra.get_stateful_service(ip, service_name)
-        if "settings" in stateful_service.config.ui:
-            settings_func = stateful_service.config.ui["settings"]
-
-            import importlib
-
-            try:
-                # Split the string into module path and function name
-                module_path, func_name = settings_func.rsplit(".", 1)
-                # Import the module
-                module = importlib.import_module(module_path)
-                # Get the function object
-                callable_settings_func = getattr(module, func_name)
-
-                # Call the function with the required arguments
-                callable_settings_func(infra, bundle, stateful_service.service)
-
-            except (ImportError, AttributeError) as e:
-                st.error(f"Could not load settings UI for this service: {e}")
-            except Exception as e:
-                st.error(f"An error occurred while rendering settings UI: {e}")
+        st.divider()
+        callable_settings_func = stateful_service.config.instantiate_ui("settings")
+        if callable_settings_func and state == "running":
+            callable_settings_func(infra, bundle, stateful_service.service)
 
 
 def available_services():
@@ -152,11 +137,17 @@ def available_services():
             infra.list_bundles_with_backend(backend=select_backend),
             format_func=lambda x: f"{x.name} {x.server.ip}",
         )
-        if c4.button("Add Service"):
+
+        params = {}
+        callable_setup_func = config.instantiate_ui("setup")
+        if callable_setup_func:
+            params = callable_setup_func(infra, bundle)
+
+        if st.button("Add Service"):
             st.info(
                 f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
             )
-            ret = infra.add_service(bundle.server.ip, config, {})
+            ret = infra.add_service(bundle.server.ip, config, params)
             if not ret:
                 st.error("Failed to add service")
 

@@ -11,6 +11,7 @@ from mlox.remote import (
     fs_delete_dir,
     fs_create_dir,
     fs_create_empty_file,
+    fs_find_and_replace,
     fs_append_line,
     docker_down,
     exec_command,
@@ -27,7 +28,7 @@ class OtelDockerService(AbstractService):
     relic_endpoint: str
     relic_key: str
     config: str
-    certificate: str = field(default="", init=False)
+    # certificate: str = field(default="", init=False)
 
     def get_telemetry_data(self, bundle) -> Any:
         with bundle.server.get_server_connection() as conn:
@@ -47,31 +48,15 @@ class OtelDockerService(AbstractService):
 
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         fs_copy(conn, self.config, f"{self.target_path}/otel-collector-config.yaml")
-        # fs_copy(
-        #     conn,
-        #     "./services/monitor/openssl-san.cnf",
-        #     f"{self.target_path}/openssl-san.cnf",
-        # )
-        # fs_find_and_replace(
-        #     conn,
-        #     f"{self.target_path}/openssl-san.cnf",
-        #     "<MY_IP>",
-        #     f"{self.server.ip}",
-        # )
-        # # certificates
-        # exec_command(
-        #     conn,
-        #     f"cd {self.target_path}; openssl genrsa -out key.pem 2048",
-        # )
-        # exec_command(
-        #     conn,
-        #     f"cd {self.target_path}; openssl req -new -key key.pem -out server.csr -config openssl-san.cnf",
-        # )
-        # exec_command(
-        #     conn,
-        #     f"cd {self.target_path}; openssl x509 -req -in server.csr -signkey key.pem -out cert.pem -days 365 -extensions req_ext -extfile openssl-san.cnf",
-        # )
-        # exec_command(conn, f"chmod u=rw,g=rw,o=rw {self.target_path}/key.pem")
+
+        if len(self.relic_key) > 4 and len(self.relic_endpoint) > 4:
+            fs_find_and_replace(
+                conn,
+                f"{self.target_path}/otel-collector-config.yaml",
+                "file]",
+                "file, otlphttp]",
+            )
+
         tls_setup(conn, conn.host, self.target_path)
         self.certificate = fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
@@ -81,7 +66,7 @@ class OtelDockerService(AbstractService):
         fs_create_empty_file(conn, env_path)
         fs_append_line(conn, env_path, f"OTEL_RELIC_KEY={self.relic_key}")
         fs_append_line(conn, env_path, f"OTEL_RELIC_ENDPOINT={self.relic_endpoint}")
-        self.service_url = f"https://{conn.host}:13133/"
+        self.service_url = f"https://{conn.host}:4317"
         self.service_ports["OTLP gRPC receiver"] = 4317
         self.service_ports["OTLP HTTP receiver"] = 4318
         self.service_ports["OTEL health check"] = 13133

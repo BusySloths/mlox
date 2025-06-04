@@ -23,9 +23,15 @@ session = MloxSession("mlox", password)
 session.load_infrastructure()
 infra = session.infra
 
-collector_url = f"{infra.bundles[0].server.ip}:{infra.bundles[0].services[2].service.service_ports['OTLP gRPC receiver']}"
-trusted_certs = infra.bundles[0].services[2].service.certificate.encode("utf-8")
 
+monitors = infra.list_monitors()
+if len(monitors) == 0:
+    print("No monitors found.")
+    exit(1)
+# collector_url = f"{infra.bundles[0].server.ip}:{infra.bundles[0].services[2].service.service_ports['OTLP gRPC receiver']}"
+# trusted_certs = infra.bundles[0].services[2].service.certificate.encode("utf-8")
+collector_url = monitors[0].service.service_url
+trusted_certs = monitors[0].service.certificate.encode("utf-8")
 
 # Define the resource with service name and other attributes
 resource = Resource.create(

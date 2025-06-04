@@ -4,7 +4,7 @@ import os
 import yaml
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Callable
 
 from mlox.service import AbstractService
 from mlox.server import AbstractServer
@@ -27,8 +27,31 @@ class ServiceConfig:
     links: Dict[str, str]
     requirements: Dict[str, float]
     # This type hint correctly defines the desired final structure
+    is_monitor: bool = False
     ui: Dict[str, str] = field(default_factory=dict)
     build: Dict[str, BuildConfig] = field(default_factory=dict)
+
+    def instantiate_ui(self, func_name: str) -> Callable | None:
+        if func_name not in self.ui:
+            # This is normal behavior
+            return None
+        try:
+            # Split the string into module path and function name
+            module_path, func_name = self.ui[func_name].rsplit(".", 1)
+            # Import the module
+            module = importlib.import_module(module_path)
+            # Get the function object
+            callable_settings_func = getattr(module, func_name)
+            return callable_settings_func
+        except (ImportError, AttributeError) as e:
+            logging.error(
+                f"Could not load callable {func_name} for this service {self.name}: {e}"
+            )
+        except Exception as e:
+            logging.error(
+                f"An error occurred while getting the callable {func_name}: {e}"
+            )
+        return None
 
     def instantiate(
         self, build_key: str, params: Dict[str, str]

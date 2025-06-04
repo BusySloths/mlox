@@ -56,7 +56,12 @@ class Bundle:
     descr: str = field(default="", init=False)
     tags: List[str] = field(default_factory=list, init=False)
     status: Literal[
-        "un-initialized", "no-backend", "docker", "kubernetes", "kubernetes-agent"
+        "un-initialized",
+        "no-backend",
+        "docker",
+        "kubernetes",
+        "kubernetes-agent",
+        "unknown",
     ] = field(default="un-initialized")
     services: List[StatefulService] = field(default_factory=list, init=False)
     repos: List[Repo] = field(default_factory=list, init=False)
@@ -105,6 +110,24 @@ class Bundle:
 @dataclass
 class Infrastructure:
     bundles: List[Bundle] = field(default_factory=list, init=False)
+
+    # secret_managers: Dict[str, SecretManager] = field(default_factory=list, init=False)
+    # monitors: Dict[str, AbstractServer] = field(default_factory=list, init=False)
+
+    def list_monitors(self) -> List[StatefulService]:
+        monitors: List[StatefulService] = list()
+        for bundle in self.bundles:
+            for service in bundle.services:
+                if service.config.is_monitor:
+                    monitors.append(service)
+        return monitors
+
+    def get_bundle_by_service(self, service: AbstractService) -> Optional[Bundle]:
+        for bundle in self.bundles:
+            for stateful_service in bundle.services:
+                if stateful_service.service == service:
+                    return bundle
+        return None
 
     def get_bundle_by_ip(self, ip: str) -> Optional[Bundle]:
         for bundle in self.bundles:

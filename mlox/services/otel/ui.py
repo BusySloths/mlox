@@ -2,7 +2,7 @@ import json  # For parsing JSON
 import pandas as pd  # Optional: for displaying as a table
 import streamlit as st
 
-from typing import List
+from typing import List, Dict
 
 
 from mlox.services.otel.docker import OtelDockerService
@@ -21,6 +21,18 @@ def load_jsonl(raw):
     except Exception as e:
         st.error(f"An error occurred while reading the file: {e}")
     return data
+
+
+def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
+    params = dict()
+    c1, c2 = st.columns(2)
+    params["${MLOX_RELIC_KEY}"] = c1.text_input("New Relic OTLP Key", key="relic_key")
+    params["${MLOX_RELIC_ENDPOINT}"] = c2.text_input(
+        "New Relic OTLP Endpoint",
+        value="https://otlp.eu01.nr-data.net:4317",
+        key="relic_endpoint",
+    )
+    return params
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: OtelDockerService):

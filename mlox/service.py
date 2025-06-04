@@ -67,6 +67,8 @@ class AbstractService(ABC):
     service_url: str = field(default="", init=False)
     service_ports: Dict[str, int] = field(default_factory=dict, init=False)
 
+    certificate: str = field(default="", init=False)
+
     @abstractmethod
     def setup(self, conn) -> None:
         pass

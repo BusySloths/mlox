@@ -117,7 +117,7 @@ pages_infrastructure = [
         icon=":material/key:",
     ),
     st.Page(
-        monitor,
+        "view/monitors.py",
         title="Monitor",
         icon=":material/monitor:",
     ),
