@@ -38,8 +38,8 @@ RUN curl -s -L https://pyenv.run | bash
 RUN pip install --no-cache-dir mlflow==2.22.0
 RUN pip install --no-cache-dir 'mlflow[extras]'
 
-# Explicitly install mlserver and its mlflow plugin to ensure availability
-RUN pip install --no-cache-dir mlserver mlserver-mlflow
+# Explicitly install mlserver and mlserver-mlflow versions compatible with Pydantic v1
+RUN pip install --no-cache-dir "mlserver~=1.3.2" "mlserver-mlflow~=1.3.0" # Versions compatible with Pydantic 1.x
 
 # Pin Pydantic version as required
 RUN pip uninstall --yes pydantic && \
