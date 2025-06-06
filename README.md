@@ -4,7 +4,7 @@ MLOps-in-a-Box: A simple and cost-efficient way of running your OSS MLOps stack.
 ### ATTENTION
 
 Do **not** use MLOX yet.
-MLOX is in a very early testing phase and likely to fail out of the box.
+MLOX is in a very early development phase.
 
 ### About
 
@@ -32,21 +32,3 @@ Links:
 3. https://martinfowler.com/articles/cd4ml.html
 
 --------
-
-Templates for building MLOps service infrastructure for on-prem/vps/GCP.
-
-Consists of scripts that handle linux install, setup incl. ssl/tls, docker via a streamlit web ui:
-
-### Currently Supported Software 
-    1. [data ingestion and transformation]Airflow ETL package
-    2. [experiment tracking and model registry] MLFlow
-    3. [model serving]MLServer and MLOX FastAPI
-    4. [monitoring] OpenTelemetry + NewRelic Bindings
-
-    1. Feast Feature Store (remote registry/online/offline stores) 
-    2. Milvus VectorDB
-
-    LLM package:
-    1. Ollama
-    2. LiteLLM 
-    3. Open Web UI (LiteLLM + Ollama Bindings)
