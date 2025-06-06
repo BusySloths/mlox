@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup_no_config
+from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
     fs_copy,
     fs_create_dir,
@@ -33,8 +33,12 @@ class MLFlowMLServerDockerService(AbstractService):
         fs_create_dir(conn, self.target_path)
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         fs_copy(conn, self.dockerfile, f"{self.target_path}/dockerfile-mlflow-mlserver")
+        # fs_copy(conn, self.settings, f"{self.target_path}/settings.json")
+        # tls_setup(conn, conn.host, self.target_path)
+
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
+        fs_append_line(conn, env_path, f"MLSERVER_ENDPOINT_URL={conn.host}")
         fs_append_line(conn, env_path, f"MLSERVER_ENDPOINT_PORT={self.port}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_MODEL={self.model}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_URI={self.tracking_uri}")

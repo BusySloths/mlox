@@ -8,6 +8,8 @@ services:
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      # Constrain Docker provider to only discover services on this stack's specific network
+      - "--providers.docker.network=mlflow_stack_traefik_net"
       - "--entrypoints.https.address=:443"
     ports:
       - ${MLFLOW_PORT:-1234}:443
@@ -15,10 +17,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro      
     networks:
       - traefik-net
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+    # Labels on Traefik itself are usually for exposing the dashboard, not strictly needed for it to function as a proxy.
+    # Removing middleware definitions from Traefik service labels to avoid confusion.
     deploy:
       placement:
         constraints:
@@ -38,18 +38,19 @@ services:
     labels:
       - "traefik.enable=true"
 
+      # Define a unique router for the MLflow UI
       - "traefik.http.routers.mlflow-secure.entrypoints=https"
       - "traefik.http.routers.mlflow-secure.rule=Host(`${MLFLOW_URL:-localhost}`)"
-      - "traefik.http.routers.mlflow-secure.service=mlflow"
+      - "traefik.http.routers.mlflow-secure.service=mlflow-ui-service" # Use a unique Traefik service name
       - "traefik.http.routers.mlflow-secure.tls=true"
+      # If you want an HTTP to HTTPS redirect for MLflow UI, define it here:
+      # - "traefik.http.middlewares.mlflow-https-redirect.redirectscheme.scheme=https"
+      # - "traefik.http.routers.mlflow-http.rule=Host(`${MLFLOW_URL:-localhost}`)"
+      # - "traefik.http.routers.mlflow-http.entrypoints=http" # Assuming you have an 'http' entrypoint
+      # - "traefik.http.routers.mlflow-http.middlewares=mlflow-https-redirect"
 
-      - "traefik.http.services.mlflow.loadbalancer.server.port=5002"
-      - "traefik.http.services.mlflow-secure.loadbalancer.server.port=5002"
-      
-      - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
-      - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
-      
-      - traefik.http.routers.mlflow.middlewares=https-redirect  
+      # Define the Traefik service that the router points to
+      - "traefik.http.services.mlflow-ui-service.loadbalancer.server.port=5002"
     networks:
       - traefik-net
     volumes:
@@ -69,4 +70,5 @@ volumes:
   mlflow-artifacts:
 
 networks:
-  traefik-net:
+  traefik-net:  
+    name: mlflow_stack_traefik_net # Explicit and unique network name for this stack

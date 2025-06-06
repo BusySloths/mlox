@@ -1,16 +1,85 @@
 version: '3.8'
+
 services:
-  mlflow:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik_reverse_proxy_mlserver_${MLSERVER_ENDPOINT_PORT}
+    command:
+      - "--api.insecure=true" # Enables the Traefik dashboard (access at http://localhost:8080)
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false" # Only expose services with 'traefik.enable=true'
+      # Constrain Docker provider to only discover services with a specific label
+      - "--providers.docker.constraints=Label(`traefik.constraint.stack`, `mlserver-${MLSERVER_ENDPOINT_PORT}`)"
+      - "--entrypoints.websecure.address=:443" # Traefik listens on port 443 for HTTPS
+      # For production, you'd configure a certificate resolver like Let's Encrypt:
+      # - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      # - "--certificatesresolvers.myresolver.acme.email=your-email@example.com"
+      # - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "${MLSERVER_ENDPOINT_PORT}:443" # External HTTPS port
+      # - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080" # Traefik dashboard
+    # Labels for Traefik to discover itself are generally not needed unless you're
+    # explicitly defining a router for the Traefik dashboard on the Traefik service itself.
+    # Removing potentially confusing middleware definitions from the Traefik service.
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro" # So Traefik can listen to Docker events
+      # - "./letsencrypt:/letsencrypt" # Uncomment if using Let's Encrypt for certificate storage
+    networks:
+      - mlox_mlserver_dynamic_net # Use a static internal reference name
+    restart: unless-stopped
+
+  mlserver_app: # Renamed from 'mlflow' for clarity
     build:
       context: .
       dockerfile: dockerfile-mlflow-mlserver
     restart: always
     container_name: mlflow_mlserver_${MLSERVER_ENDPOINT_PORT}
-    ports:  # expose for internal
-        - ${MLSERVER_ENDPOINT_PORT}:5002
     environment:
       - MLFLOW_TRACKING_URI=${MLFLOW_REMOTE_URI}
       - MLFLOW_TRACKING_USERNAME=${MLFLOW_REMOTE_USER}
       - MLFLOW_TRACKING_PASSWORD=${MLFLOW_REMOTE_PW}
-      - MLFLOW_TRACKING_INSECURE_TLS=${MLFLOW_REMOTE_INSECURE}
-    command: mlflow models serve -m models:/${MLFLOW_REMOTE_MODEL} -p 5002 -h 0.0.0.0 -w 2 --enable-mlserver
+      - MLFLOW_TRACKING_INSECURE_TLS=${MLFLOW_REMOTE_INSECURE:-true}
+      # MLFLOW_REMOTE_MODEL needs to be defined in your .env or environment
+      - MLFLOW_REMOTE_MODEL=${MLFLOW_REMOTE_MODEL}
+      # MLSERVER_URL for Traefik routing, define in .env or environment
+      - MLSERVER_URL=${MLSERVER_ENDPOINT_URL:-mlserver.localhost}
+    networks:
+      - mlox_mlserver_dynamic_net # Use the same static internal reference name
+    labels:
+      # Add a unique label for Traefik's constraint filter for this stack
+      - "traefik.constraint.stack=mlserver-${MLSERVER_ENDPOINT_PORT}"
+      - "traefik.enable=true"
+      # Define BasicAuth middleware
+      # Replace user:hashed_password with your actual credentials.
+      # Generate with: echo $(htpasswd -nb your_user your_password) | sed -e s/\\$/\\$\\$/g
+      # Example for user 'admin' and password 's3cr3tpAsswOrd':
+      - "traefik.http.middlewares.mlserver-auth.basicauth.users=admin:$$apr1$$vEr/wAAE$$xaB99Pf.qkH3QFrgITm0P/" # admin:s3cr3t      
+
+      # HTTPS Router definition
+      - "traefik.http.routers.mlserver-secure.entrypoints=websecure"
+      - "traefik.http.routers.mlserver-secure.rule=Host(`${MLSERVER_ENDPOINT_URL:-mlserver.localhost}`)"
+      - "traefik.http.routers.mlserver-secure.service=mlserver-service"
+      - "traefik.http.routers.mlserver-secure.middlewares=mlserver-auth" # Apply the auth middleware
+      - "traefik.http.routers.mlserver-secure.tls=true"
+      # If using Let's Encrypt, uncomment and set your resolver name:
+      # - "traefik.http.routers.mlserver-secure.tls.certresolver=myresolver"
+
+      # Service definition for Traefik (how Traefik connects to this app)
+      - "traefik.http.services.mlserver-service.loadbalancer.server.port=5002" # MLflow/MLServer internal HTTP port
+      - "traefik.http.services.mlserver-service.loadbalancer.server.scheme=http" # Backend is HTTP
+    command: >
+      bash -c "
+        echo '--- MLflow Model Server Startup ---'
+        echo \"MLFLOW_TRACKING_URI: $${MLFLOW_TRACKING_URI}\"
+        echo \"MLFLOW_REMOTE_MODEL: $${MLFLOW_REMOTE_MODEL}\"
+        echo \"Serving model on internal port 5002 (HTTP)\"
+        echo \"Traefik will route external HTTPS traffic from Host: $${MLSERVER_URL}\"
+        
+        mlflow models serve -m models:/$${MLFLOW_REMOTE_MODEL} -p 5002 -h 0.0.0.0 -w 2 --enable-mlserver
+      "
+
+networks:
+  mlox_mlserver_dynamic_net: # Static key for Docker Compose's internal reference
+    # The actual Docker network name will be dynamically generated
+    name: mlox-net-mlserver-${MLSERVER_ENDPOINT_PORT}
+    driver: bridge # Explicitly define the driver (bridge is default)
