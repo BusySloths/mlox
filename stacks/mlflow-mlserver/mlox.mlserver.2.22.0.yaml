@@ -17,6 +17,13 @@ requirements:
   cpus: 2.0
   ram_gb: 4.0
   disk_gb: 1.0
+groups:
+  service:
+  model-server:
+  docker:
+ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+  rest: 6432
+  grpc: 6433
 ui:
   setup: mlox.services.mlflow_mlserver.ui.setup
   settings: mlox.services.mlflow_mlserver.ui.settings
@@ -34,5 +41,3 @@ build:
       tracking_uri: ${TRACKING_URI}
       tracking_user: ${TRACKING_USER}
       tracking_pw: ${TRACKING_PW}
-  kubernetes:
-  ansible:

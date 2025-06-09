@@ -28,6 +28,7 @@ class ServiceConfig:
     requirements: Dict[str, float]
     # This type hint correctly defines the desired final structure
     is_monitor: bool = False
+    groups: Dict[str, Any] = field(default_factory=dict)
     ui: Dict[str, str] = field(default_factory=dict)
     build: Dict[str, BuildConfig] = field(default_factory=dict)
 

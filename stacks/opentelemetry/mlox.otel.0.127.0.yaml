@@ -16,6 +16,10 @@ requirements:
   ram_gb: 4.0
   disk_gb: 1.0
 is_monitor: true
+groups:
+  service:
+  monitor: 
+  docker:
 ui:
   setup: mlox.services.otel.ui.setup
   settings: mlox.services.otel.ui.settings
