@@ -27,7 +27,7 @@ class AirflowDockerService(AbstractService):
     ui_user: str
     ui_pw: str
     port: str
-    secret_path: str
+    secret_path: str = ""
 
     def __str__(self):
         return f"AirflowDockerService(path_dags={self.path_dags}, path_output={self.path_output}, ui_user={self.ui_user}, ui_pw={self.ui_pw}, port={self.port}, secret_path={self.secret_path})"
@@ -37,13 +37,17 @@ class AirflowDockerService(AbstractService):
         fs_create_dir(conn, self.target_path)
         # Ensure host directories for DAGs and logs/outputs exist and are owned by mlox_user
         # This is crucial for volume mounts to have correct permissions for AIRFLOW_UID.
-        # fs_create_dir(conn, self.path_dags)
-        # fs_create_dir(conn, self.path_output)
+        fs_create_dir(conn, self.path_dags)
+        fs_create_dir(conn, self.path_output)
+        # fs_create_dir(conn, self.target_path + "/logs")
+        # fs_create_dir(conn, self.target_path + "/plugins")
 
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         tls_setup(conn, conn.host, self.target_path)
         # setup environment
-        base_url = f"https://{conn.host}:{self.port}/{self.secret_path}"
+        base_url = f"https://{conn.host}:{self.port}"
+        if len(self.secret_path) >= 1:
+            base_url = f"https://{conn.host}:{self.port}/{self.secret_path}"
         self.service_url = base_url
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
@@ -70,5 +74,3 @@ class AirflowDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         return dict()
-
-    # specialized methods

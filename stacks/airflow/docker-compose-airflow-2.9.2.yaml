@@ -105,11 +105,6 @@ x-airflow-common:
       condition: service_healthy
 
 services:
-  selenium:
-    image: selenium/standalone-firefox
-    ports:
-      - 4444:4444
-
   postgres:
     image: postgres:13
     environment:
@@ -124,6 +119,8 @@ services:
       retries: 5
       start_period: 5s
     restart: always
+    networks:
+      - airflow-2.9.2-net
 
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
@@ -138,6 +135,8 @@ services:
       retries: 50
       start_period: 30s
     restart: always
+    networks:
+      - airflow-2.9.2-net
 
   airflow-webserver:
     <<: *airflow-common
@@ -155,6 +154,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow-2.9.2-net
 
   airflow-scheduler:
     <<: *airflow-common
@@ -170,6 +171,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow-2.9.2-net
 
   airflow-worker:
     <<: *airflow-common
@@ -193,6 +196,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow-2.9.2-net
 
   airflow-triggerer:
     <<: *airflow-common
@@ -208,6 +213,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow-2.9.2-net
 
   airflow-init:
     <<: *airflow-common
@@ -224,6 +231,7 @@ services:
           echo "For other operating systems you can get rid of the warning with manually created .env file:"
           echo "    See: https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#setting-the-right-airflow-user"
           echo
+          export AIRFLOW_UID=$(id -u)
         fi
         one_meg=1048576
         mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
@@ -258,8 +266,9 @@ services:
           echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
           echo
         fi
-        mkdir -p /sources/logs /sources/dags /sources/plugins
-        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+        mkdir -v -p /opt/airflow/{logs,dags,plugins}
+        chown -R "${AIRFLOW_UID}:0" /opt/airflow/
+        chown -v -R "${AIRFLOW_UID}:0" /opt/airflow/{logs,dags,plugins}
         exec /entrypoint airflow version
     # yamllint enable rule:line-length
     environment:
@@ -270,8 +279,10 @@ services:
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
       _PIP_ADDITIONAL_REQUIREMENTS: ''
     user: "0:0"
-    volumes:
-      - ${AIRFLOW_PROJ_DIR:-.}:/sources
+    # volumes:
+    #   - ${AIRFLOW_PROJ_DIR:-.}:/sources
+    networks:
+      - airflow-2.9.2-net
 
   airflow-cli:
     <<: *airflow-common
@@ -285,6 +296,8 @@ services:
       - bash
       - -c
       - airflow
+    networks:
+      - airflow-2.9.2-net
 
   # You can enable flower by adding "--profile flower" option e.g. docker-compose --profile flower up
   # or by explicitly targeted on the command line e.g. docker-compose up flower.
@@ -307,6 +320,11 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - airflow-2.9.2-net
 
 volumes:
   postgres-db-volume:
+
+networks:
+  airflow-2.9.2-net:

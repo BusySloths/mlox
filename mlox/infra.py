@@ -13,6 +13,9 @@ from mlox.utils import (
     dict_to_dataclass,
     save_to_json,
     load_from_json,
+    auto_map_ports,
+    generate_pw,
+    generate_username,
 )
 
 # Configure logging (optional, but recommended)
@@ -126,44 +129,6 @@ class Infrastructure:
                     services.append(service)
         return services
 
-    def auto_map_ports(
-        self,
-        bundle: Bundle,
-        requested_ports: Dict[str, int],
-        ub: int = 65535,
-        lb: int = 1024,
-    ) -> Dict[str, int]:
-        """
-        Automatically assign ports to services in the bundle based on the provided port mapping.
-        If a service's port is already set, it will not be changed.
-        """
-        used_ports = list()
-        assigned_ports = dict()
-        for ss in bundle.services:
-            used_ports.extend(list(ss.service.service_ports.values()))
-        for port_name, port in requested_ports.items():
-            if port not in used_ports:
-                assigned_ports[port_name] = port
-            else:
-                searching = True
-                start_port = port
-                while searching:
-                    if start_port > ub:
-                        logging.warning(
-                            f"Port {port_name} ({port}) is already in use and no free port could be found."
-                        )
-                        searching = False
-                        break
-                    if start_port not in used_ports:
-                        assigned_ports[port_name] = start_port
-                        searching = False
-                    start_port += 1
-        if not len(assigned_ports) == len(requested_ports):
-            logging.warning(
-                "Not all requested ports could be assigned. Some ports are already in use."
-            )
-        return assigned_ports
-
     def list_monitors(self) -> List[StatefulService]:
         monitors: List[StatefulService] = list()
         for bundle in self.bundles:
@@ -239,13 +204,16 @@ class Infrastructure:
         mlox_params = {
             "${MLOX_STACKS_PATH}": "./stacks/",
             "${MLOX_USER}": bundle.server.mlox_user.name,
-            "${MLOX_AUTO_USER}": "service-user",
-            "${MLOX_AUTO_PW}": "service-pw",
-            "${MLOX_AUTO_PORT}": "7654",
+            "${MLOX_AUTO_USER}": generate_username(),
+            "${MLOX_AUTO_PW}": generate_pw(),
         }
+
         port_prefix = "${MLOX_AUTO_PORT_"
         port_postfix = "}"
-        assigned_ports = self.auto_map_ports(bundle, config.ports)
+        used_ports = list()
+        for ss in bundle.services:
+            used_ports.extend(list(ss.service.service_ports.values()))
+        assigned_ports = auto_map_ports(used_ports, config.ports)
         mlox_params.update(
             {
                 f"{port_prefix}{name.upper()}{port_postfix}": str(port)

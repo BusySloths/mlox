@@ -106,11 +106,6 @@ x-airflow-common:
       condition: service_healthy
 
 services:
-  selenium:
-    image: selenium/standalone-firefox
-    ports:
-      - 4444:4444
-
   postgres:
     image: postgres:13
     environment:

@@ -14,7 +14,6 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from dataclasses import is_dataclass, fields  # Added fields import
 from typing import List, Any, Dict
-from functools import partial
 
 
 def _get_encryption_key(password: str) -> bytes:
@@ -211,6 +210,12 @@ def generate_password(length: int = 10, with_punctuation: bool = False) -> str:
         alphabet = alphabet + string.punctuation
     while True:
         password = "".join(secrets.choice(alphabet) for i in range(length))
+        password = password.replace(" ", "")  # Remove spaces if any
+        password = password.replace("\\", "=")  # Remove escape characters if any
+        password = password.replace('"', "+")  # Remove escape characters if any
+        password = password.replace("'", "-")  # Remove escape characters if any
+        password = password.replace("`", "]")  # Remove escape characters if any
+        password = password.replace("^", "[")  # Remove escape characters if any
         if (
             any(c.islower() for c in password)
             and any(c.isupper() for c in password)
@@ -218,6 +223,51 @@ def generate_password(length: int = 10, with_punctuation: bool = False) -> str:
         ):
             break
     return password
+
+
+def generate_username(user_prefix: str = "mlox") -> str:
+    return f"{user_prefix}_{generate_password(5, with_punctuation=False)}"
+
+
+def generate_pw(len: int = 20) -> str:
+    return generate_password(length=len, with_punctuation=True)
+
+
+def auto_map_ports(
+    used_ports: List[int],
+    requested_ports: Dict[str, int],
+    ub: int = 65535,
+    lb: int = 1024,
+) -> Dict[str, int]:
+    """
+    Automatically assign ports to services in the bundle based on the provided port mapping.
+    If a service's port is already set, it will not be changed.
+    """
+    assigned_ports = dict()
+    for port_name, port in requested_ports.items():
+        if port not in used_ports:
+            assigned_ports[port_name] = port
+            used_ports.append(port)
+        else:
+            searching = True
+            probe = port
+            while searching:
+                if probe > ub:
+                    logging.warning(
+                        f"Port {port_name} ({port}) is already in use and no free port could be found."
+                    )
+                    searching = False
+                    break
+                if probe not in used_ports:
+                    assigned_ports[port_name] = probe
+                    used_ports.append(probe)
+                    searching = False
+                probe += 1
+    if not len(assigned_ports) == len(requested_ports):
+        logging.warning(
+            "Not all requested ports could be assigned. Some ports are already in use."
+        )
+    return assigned_ports
 
 
 if __name__ == "__main__":

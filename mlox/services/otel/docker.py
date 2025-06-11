@@ -28,7 +28,9 @@ class OtelDockerService(AbstractService):
     relic_endpoint: str
     relic_key: str
     config: str
-    # certificate: str = field(default="", init=False)
+    port_grpc: str | int
+    port_http: str | int
+    port_health: str | int
 
     def get_telemetry_data(self, bundle) -> Any:
         with bundle.server.get_server_connection() as conn:
@@ -64,12 +66,15 @@ class OtelDockerService(AbstractService):
         # setup env file
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
+        fs_append_line(conn, env_path, f"OTEL_PORT_GRPC={self.port_grpc}")
+        fs_append_line(conn, env_path, f"OTEL_PORT_HTTP={self.port_http}")
+        fs_append_line(conn, env_path, f"OTEL_PORT_HEALTH={self.port_health}")
         fs_append_line(conn, env_path, f"OTEL_RELIC_KEY={self.relic_key}")
         fs_append_line(conn, env_path, f"OTEL_RELIC_ENDPOINT={self.relic_endpoint}")
-        self.service_url = f"https://{conn.host}:4317"
-        self.service_ports["OTLP gRPC receiver"] = 4317
-        self.service_ports["OTLP HTTP receiver"] = 4318
-        self.service_ports["OTEL health check"] = 13133
+        self.service_url = f"https://{conn.host}:{self.port_grpc}"
+        self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
+        self.service_ports["OTLP HTTP receiver"] = int(self.port_http)
+        self.service_ports["OTEL health check"] = int(self.port_health)
 
     def teardown(self, conn):
         docker_down(

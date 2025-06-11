@@ -2,12 +2,14 @@ import streamlit as st
 
 
 from mlox.services.airflow.docker import AirflowDockerService
-from mlox.infra import Infrastructure, Bundle, Repo
+from mlox.infra import Infrastructure, Bundle
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerService):
     st.header(f"Settings for service {service.name}")
     st.write(f"IP: {bundle.server.ip}")
+    st.write(f"UI User: {service.ui_user}")
+    st.write(f'UI Password: "{service.ui_pw}"')
 
     # list associated repositories
     st.markdown("## Associated repositories")

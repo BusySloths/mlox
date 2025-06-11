@@ -31,6 +31,7 @@ class MLFlowMLServerDockerService(AbstractService):
 
     def __post_init__(self):
         self.name = f"{self.model}@{self.name}"
+        self.target_path = f"{self.target_path}-{self.port}"
 
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)

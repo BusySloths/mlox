@@ -71,4 +71,4 @@ volumes:
 
 networks:
   traefik-net:  
-    name: mlflow_stack_traefik_net # Explicit and unique network name for this stack
+    name: mlflow_2_22_0_stack_traefik_net # Explicit and unique network name for this stack
