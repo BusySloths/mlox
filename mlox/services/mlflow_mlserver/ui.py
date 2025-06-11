@@ -3,7 +3,7 @@ import mlflow  # type: ignore
 import pandas as pd
 import streamlit as st
 
-from typing import Dict
+from typing import Dict, cast
 
 from mlox.services.mlflow.docker import MLFlowDockerService
 from mlox.infra import Infrastructure, Bundle
@@ -23,6 +23,8 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
         mlflows,
         format_func=lambda x: f"{x.name} @ {x.service_url}",
     )
+
+    service = cast(MLFlowDockerService, service)
 
     # mlflow.set_tracking_uri(service.service_url)
     mlflow.set_registry_uri(service.service_url)
