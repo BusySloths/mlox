@@ -111,8 +111,58 @@ class Bundle:
 class Infrastructure:
     bundles: List[Bundle] = field(default_factory=list, init=False)
 
-    # secret_managers: Dict[str, SecretManager] = field(default_factory=list, init=False)
-    # monitors: Dict[str, AbstractServer] = field(default_factory=list, init=False)
+    def filter_by_group(
+        self, group: str, bundle: Bundle | None = None
+    ) -> List[StatefulService]:
+        services: List[StatefulService] = list()
+        if not bundle:
+            for bundle in self.bundles:
+                for service in bundle.services:
+                    if group in list(service.config.groups.keys()):
+                        services.append(service)
+        else:
+            for service in bundle.services:
+                if group in list(service.config.groups.keys()):
+                    services.append(service)
+        return services
+
+    def auto_map_ports(
+        self,
+        bundle: Bundle,
+        requested_ports: Dict[str, int],
+        ub: int = 65535,
+        lb: int = 1024,
+    ) -> Dict[str, int]:
+        """
+        Automatically assign ports to services in the bundle based on the provided port mapping.
+        If a service's port is already set, it will not be changed.
+        """
+        used_ports = list()
+        assigned_ports = dict()
+        for ss in bundle.services:
+            used_ports.extend(list(ss.service.service_ports.values()))
+        for port_name, port in requested_ports.items():
+            if port not in used_ports:
+                assigned_ports[port_name] = port
+            else:
+                searching = True
+                start_port = port
+                while searching:
+                    if start_port > ub:
+                        logging.warning(
+                            f"Port {port_name} ({port}) is already in use and no free port could be found."
+                        )
+                        searching = False
+                        break
+                    if start_port not in used_ports:
+                        assigned_ports[port_name] = start_port
+                        searching = False
+                    start_port += 1
+        if not len(assigned_ports) == len(requested_ports):
+            logging.warning(
+                "Not all requested ports could be assigned. Some ports are already in use."
+            )
+        return assigned_ports
 
     def list_monitors(self) -> List[StatefulService]:
         monitors: List[StatefulService] = list()
@@ -185,6 +235,7 @@ class Infrastructure:
         if not bundle.server.mlox_user:
             logger.warning("No mlox user found for bundle.")
             return None
+
         mlox_params = {
             "${MLOX_STACKS_PATH}": "./stacks/",
             "${MLOX_USER}": bundle.server.mlox_user.name,
@@ -192,10 +243,25 @@ class Infrastructure:
             "${MLOX_AUTO_PW}": "service-pw",
             "${MLOX_AUTO_PORT}": "7654",
         }
+        port_prefix = "${MLOX_AUTO_PORT_"
+        port_postfix = "}"
+        assigned_ports = self.auto_map_ports(bundle, config.ports)
+        mlox_params.update(
+            {
+                f"{port_prefix}{name.upper()}{port_postfix}": str(port)
+                for name, port in assigned_ports.items()
+            }
+        )
+        print(f"MLOX PARAMS: {mlox_params}")
         params.update(mlox_params)
         service = config.instantiate(bundle.status, params=params)
         if not service:
             logger.warning("Could not instantiate service.")
+            return None
+        if service.name in [s.service.name for s in bundle.services]:
+            logger.warning(
+                f"Service {service.name} already exists in bundle {bundle.name}."
+            )
             return None
 
         bundle.services.append(StatefulService(service, config, state="un-initialized"))

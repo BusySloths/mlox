@@ -36,7 +36,7 @@ build:
       template: ${MLOX_STACKS_PATH}/mlflow-mlserver/docker-compose-mlflow-mlserver-2.22.0.yaml 
       dockerfile: ${MLOX_STACKS_PATH}/mlflow-mlserver/dockerfile-mlflow-mlserver 
       target_path: /home/${MLOX_USER}/mlflow-mlserver-2.22.0-6432
-      port: "6432"
+      port: ${MLOX_AUTO_PORT_REST}
       model: ${MODEL_NAME}
       tracking_uri: ${TRACKING_URI}
       tracking_user: ${TRACKING_USER}

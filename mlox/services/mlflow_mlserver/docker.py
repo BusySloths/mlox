@@ -29,6 +29,9 @@ class MLFlowMLServerDockerService(AbstractService):
     tracking_user: str
     tracking_pw: str
 
+    def __post_init__(self):
+        self.name = f"{self.model}@{self.name}"
+
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
