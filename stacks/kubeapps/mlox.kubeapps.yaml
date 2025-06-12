@@ -1,0 +1,34 @@
+name: KubeApps
+version: newest
+maintainer: Your Name
+description_short: KubeApps is a web-based UI for managing Kubernetes applications.
+description: |
+  KubeApps is a web-based UI for managing Kubernetes applications. It provides a user-friendly interface to 
+  deploy, manage, and monitor applications running on Kubernetes clusters. KubeApps simplifies the management 
+  of Helm charts and allows users to easily install, upgrade, and delete applications. In MLOX, it serves as 
+  a convenient tool for users to interact with their Kubernetes deployments and manage applications without 
+  needing to use the command line.
+links:
+  project: https://kubeapps.com/
+  news: https://kubeapps.com/
+  security: https://kubeapps.com/
+  documentation: https://kubeapps.com/
+  changelog: https://kubeapps.com/
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
+groups:
+  service:
+  backend:
+    kubernetes:
+ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+  web_ui: 5432
+ui:
+  settings: mlox.services.kubeapps.ui.settings
+build:
+  class_name: mlox.services.kubeapps.k8s.KubeAppsService
+  params:
+    name: kubeapps
+    template: ${MLOX_STACKS_PATH}/kubeapps/kubeapps.yaml
+    target_path: /home/${MLOX_USER}/kubeapps
