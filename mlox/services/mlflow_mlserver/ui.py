@@ -5,8 +5,9 @@ import streamlit as st
 
 from typing import Dict, cast
 
-from mlox.services.mlflow.docker import MLFlowDockerService
 from mlox.infra import Infrastructure, Bundle
+from mlox.services.mlflow.docker import MLFlowDockerService
+from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
@@ -61,20 +62,29 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
     return params
 
 
-def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService):
+def settings(
+    infra: Infrastructure, bundle: Bundle, service: MLFlowMLServerDockerService
+):
     st.header(f"Settings for service {service.name}")
-    # st.write(f"IP: {bundle.server.ip}")
+    mlflow.set_registry_uri(service.tracking_uri)
 
-    # mlflow.set_tracking_uri(service.service_url)
-    mlflow.set_registry_uri(service.service_url)
+    st.write(f"IP: {bundle.server.ip}")
+    st.write(f"Model: {service.model}")
+    st.write(f"Tracking URI: {service.tracking_uri}")
+    st.write(f"Service URL: {service.service_url}")
+    st.write(f"Tracking User: {service.tracking_user}")
+    st.write(f"Tracking Password: {service.tracking_pw}")
+    st.write(f"User: {service.user}")
+    st.write(f"Password: {service.pw}")
+    st.write(f"Password: {service.hashed_pw}")
 
-    os.environ["MLFLOW_TRACKING_USERNAME"] = service.ui_user
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = service.ui_pw
+    os.environ["MLFLOW_TRACKING_USERNAME"] = service.tracking_user
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = service.tracking_pw
     os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
 
     names = list()
     client = mlflow.tracking.MlflowClient()
-    filter_string = f"name='live1'"
+    filter_string = f"name={service.model.split('/')[0]!r}"
     for rm in client.search_model_versions(filter_string):
         # names.append([rm.name, rm.version, rm.current_stage, rm.source, rm.run_id])
         names.append(

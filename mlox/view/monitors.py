@@ -13,7 +13,7 @@ def monitors():
 
     monitor = st.selectbox(
         "Select Monitor",
-        infra.list_monitors(),
+        infra.filter_by_group("monitor"),
         format_func=lambda x: f"{x.service.name} @ {x.service.service_url}",
     )
 

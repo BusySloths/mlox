@@ -40,3 +40,5 @@ build:
       tracking_uri: ${TRACKING_URI}
       tracking_user: ${TRACKING_USER}
       tracking_pw: ${TRACKING_PW}
+      user: ${MLOX_AUTO_USER}
+      pw: ${MLOX_AUTO_PW}

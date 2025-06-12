@@ -64,7 +64,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OtelDockerService):
     st.write(f"Spans: {len(spans)}")
     st.write(f"Logs: {len(logs)}")
     st.write(f"Metrics: {len(metrics)}")
-    st.write(logs[0])
+    # st.write(logs[0])
 
     # # Optional: Display as a Pandas DataFrame if the structure is somewhat consistent
     # try:

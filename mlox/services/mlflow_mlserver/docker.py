@@ -5,6 +5,7 @@ from typing import Dict
 
 from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
+    exec_command,
     fs_copy,
     fs_create_dir,
     fs_create_empty_file,
@@ -28,6 +29,9 @@ class MLFlowMLServerDockerService(AbstractService):
     tracking_uri: str
     tracking_user: str
     tracking_pw: str
+    user: str = "admin"
+    pw: str = "s3cr3t"
+    hashed_pw: str = field(default="", init=False)
 
     def __post_init__(self):
         self.name = f"{self.model}@{self.name}"
@@ -40,8 +44,19 @@ class MLFlowMLServerDockerService(AbstractService):
         # fs_copy(conn, self.settings, f"{self.target_path}/settings.json")
         # tls_setup(conn, conn.host, self.target_path)
 
+        # Generate with: echo $(htpasswd -nb your_user your_password) | sed -e s/\\$/\\$\\$/g
+        # Format: admin:$$apr1$$vEr/wAAE$$xaB99Pf.qkH3QFrgITm0P/
+        self.hashed_pw = exec_command(
+            conn,
+            f"echo $(htpasswd -nb {self.user} {self.pw}) | sed -e s/\\$/\\$\\$/g",
+            sudo=True,
+        ).strip()
+
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
+        fs_append_line(
+            conn, env_path, f"TRAEFIK_USER_AND_PW={self.user}:{self.hashed_pw}"
+        )
         fs_append_line(conn, env_path, f"MLSERVER_ENDPOINT_URL={conn.host}")
         fs_append_line(conn, env_path, f"MLSERVER_ENDPOINT_PORT={self.port}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_MODEL={self.model}")
