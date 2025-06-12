@@ -1,11 +1,11 @@
 import logging
 
-from dataclasses import dataclass, field
 from typing import Dict
+from passlib.hash import apr_md5_crypt  # type: ignore
+from dataclasses import dataclass, field
 
-from mlox.service import AbstractService, tls_setup
+from mlox.service import AbstractService
 from mlox.remote import (
-    exec_command,
     fs_copy,
     fs_create_dir,
     fs_create_empty_file,
@@ -37,6 +37,13 @@ class MLFlowMLServerDockerService(AbstractService):
         self.name = f"{self.model}@{self.name}"
         self.target_path = f"{self.target_path}-{self.port}"
 
+    def _generate_htpasswd_entry(self) -> None:
+        """Generates an APR1-MD5 htpasswd entry, escaped for Traefik."""
+        # Generate APR1-MD5 hash
+        apr1_hash = apr_md5_crypt.hash(self.pw)
+        # Escape '$' for Traefik: "$apr1$..." becomes "$$apr1$$..."
+        self.hashed_pw = apr1_hash.replace("$", "$$")
+
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
@@ -46,11 +53,7 @@ class MLFlowMLServerDockerService(AbstractService):
 
         # Generate with: echo $(htpasswd -nb your_user your_password) | sed -e s/\\$/\\$\\$/g
         # Format: admin:$$apr1$$vEr/wAAE$$xaB99Pf.qkH3QFrgITm0P/
-        self.hashed_pw = exec_command(
-            conn,
-            f"echo $(htpasswd -nb {self.user} {self.pw}) | sed -e s/\\$/\\$\\$/g",
-            sudo=True,
-        ).strip()
+        self._generate_htpasswd_entry()
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
@@ -65,7 +68,7 @@ class MLFlowMLServerDockerService(AbstractService):
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_PW={self.tracking_pw}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_INSECURE=true")
         self.service_ports["MLServer REST API"] = int(self.port)
-        self.service_url = f"https://{conn.host}:{self.port}/"
+        self.service_url = f"https://{conn.host}:{self.port}"
 
     def teardown(self, conn):
         docker_down(

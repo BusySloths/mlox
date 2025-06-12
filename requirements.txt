@@ -1,13 +1,17 @@
 fabric
 pyyaml
-cryptography
 oauth2client
 google-cloud-secret-manager
 streamlit
-streamlit-navigation-bar
+# streamlit-navigation-bar
 pandas
 numpy
 psutil  # used for system metrics logging in mlflow
+
+cryptography
+bcrypt
+passlib
+
 mlflow
 mlflow[extras]
 mlserver

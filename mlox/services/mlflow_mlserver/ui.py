@@ -76,7 +76,19 @@ def settings(
     st.write(f"Tracking Password: {service.tracking_pw}")
     st.write(f"User: {service.user}")
     st.write(f"Password: {service.pw}")
-    st.write(f"Password: {service.hashed_pw}")
+    print(f"Password: {service.pw}")
+    st.write(f"Hashed Password: '{service.hashed_pw.replace('$', '\$')}'")
+
+    url = service.service_url
+    if url.endswith("/"):
+        url = url[:-1]
+    example_curl = f"""
+curl -k -u '{service.user}:{service.pw}' \\
+{url}/invocations \\
+-H 'Content-Type: application/json' \\
+-d '{{"instances": [[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.1]]}}'
+    """  # .replace("\\", "  \n").strip()
+    st.write(f"Example cURL command to invoke the model:\n```bash\n{example_curl}\n```")
 
     os.environ["MLFLOW_TRACKING_USERNAME"] = service.tracking_user
     os.environ["MLFLOW_TRACKING_PASSWORD"] = service.tracking_pw
