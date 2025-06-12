@@ -23,19 +23,18 @@ groups:
   service:
   model-registry:
   experiment-tracking:
-  docker:
+  backend:
+    docker:
 ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
   web_ui: 5432
 ui:
   settings: mlox.services.mlflow.ui.settings
 build:
-  docker: 
-    module: mlox.services.mlflow.docker
-    class_name: MLFlowDockerService
-    params:
-      name: mlflow-2.22.0
-      template: ${MLOX_STACKS_PATH}/mlflow/docker-compose-mlflow-2.22.0.yaml 
-      target_path: /home/${MLOX_USER}/mlflow-2.22.0
-      ui_user: ${MLOX_AUTO_USER}
-      ui_pw: ${MLOX_AUTO_PW}
-      port: ${MLOX_AUTO_PORT_WEB_UI}
+  class_name: mlox.services.mlflow.docker.MLFlowDockerService
+  params:
+    name: mlflow-2.22.0
+    template: ${MLOX_STACKS_PATH}/mlflow/docker-compose-mlflow-2.22.0.yaml 
+    target_path: /home/${MLOX_USER}/mlflow-2.22.0
+    ui_user: ${MLOX_AUTO_USER}
+    ui_pw: ${MLOX_AUTO_PW}
+    port: ${MLOX_AUTO_PORT_WEB_UI}

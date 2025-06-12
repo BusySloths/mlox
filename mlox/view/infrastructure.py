@@ -75,10 +75,10 @@ def tab_server_mngmt():
             bundle.tags = tags
             st.rerun()
 
-        c1, c2, _, c3, c4, c5, c6 = st.columns([10, 10, 15, 15, 15, 20, 15])
-        if c1.button("Delete", type="primary"):
-            st.info(f"Server with IP {selected_server} will be deleted.")
-            infra.delete_bundle(bundle)
+        c1, c2, _, c3, c4, c5, c6 = st.columns([15, 10, 10, 15, 15, 20, 15])
+        if c1.button("Clear Backend", type="primary"):
+            st.info(f"Backend for server with IP {selected_server} will be cleared.")
+            infra.clear_backend(selected_server)
             st.rerun()
         if c2.button("Initialize", disabled=bundle.status != "un-initialized"):
             st.info(f"Initialize the server with IP {selected_server}.")

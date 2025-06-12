@@ -86,7 +86,9 @@ def available_services():
                 "links": [f"{k}: {v}" for k, v in service.links.items()],
                 "requirements": [f"{k}: {v}" for k, v in service.requirements.items()],
                 "ui": [f"{k}" for k, v in service.ui.items()],
-                "backend": [f"{k}" for k, v in service.build.items()],
+                "backend": [
+                    f"{k}" for k, v in service.groups.get("backend", {}).items()
+                ],
             }
         )
 
@@ -125,12 +127,11 @@ def available_services():
     if len(select["selection"].get("rows", [])) == 1:
         selected = select["selection"]["rows"][0]
         config = configs[selected]
+        supported_backends = list(config.groups.get("backend", {}).keys())
         c2, c3, c4, _ = st.columns([25, 25, 15, 35])
+
         select_backend = c2.selectbox(
-            "Backend",
-            list(config.build),
-            format_func=lambda x: f"{x} Backend",
-            key="select_backedn",
+            "Backend", supported_backends, key="select_backend"
         )
         bundle = c3.selectbox(
             "Server",

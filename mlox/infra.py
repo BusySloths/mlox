@@ -129,14 +129,6 @@ class Infrastructure:
                     services.append(service)
         return services
 
-    def list_monitors(self) -> List[StatefulService]:
-        monitors: List[StatefulService] = list()
-        for bundle in self.bundles:
-            for service in bundle.services:
-                if service.config.is_monitor:
-                    monitors.append(service)
-        return monitors
-
     def get_bundle_by_service(self, service: AbstractService) -> Optional[Bundle]:
         for bundle in self.bundles:
             for stateful_service in bundle.services:
@@ -222,7 +214,7 @@ class Infrastructure:
         )
         print(f"MLOX PARAMS: {mlox_params}")
         params.update(mlox_params)
-        service = config.instantiate(bundle.status, params=params)
+        service = config.instantiate_build(params=params)
         if not service:
             logger.warning("Could not instantiate service.")
             return None
@@ -305,8 +297,23 @@ class Infrastructure:
         self.bundles.append(bundle)
         return bundle
 
-    # def delete_bundle(self, bundle: Bundle) -> None:
-    #     self.bundles.remove(bundle)
+    def clear_backend(self, ip: str) -> None:
+        bundle = self.get_bundle_by_ip(ip)
+        if not bundle:
+            logging.warning("Could not find bundle with IP %s", ip)
+            return
+        if bundle.status == "docker":
+            bundle.server.stop_docker_runtime()
+            bundle.server.teardown_docker()
+            bundle.status = "no-backend"
+        elif bundle.status == "kubernetes":
+            bundle.server.stop_kubernetes_runtime()
+            bundle.server.teardown_kubernetes()
+            bundle.status = "no-backend"
+        elif bundle.status == "kubernetes-agent":
+            bundle.server.stop_kubernetes_runtime()
+            bundle.server.teardown_kubernetes()
+            bundle.status = "no-backend"
 
     def list_kubernetes_controller(self) -> List[Bundle]:
         return [bundle for bundle in self.bundles if bundle.status == "kubernetes"]

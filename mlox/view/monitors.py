@@ -17,10 +17,11 @@ def monitors():
         format_func=lambda x: f"{x.service.name} @ {x.service.service_url}",
     )
 
-    bundle = infra.get_bundle_by_service(monitor.service)
-    callable_settings = monitor.config.instantiate_ui("settings")
-    if callable_settings and bundle:
-        callable_settings(infra, bundle, monitor.service)
+    if monitor:
+        bundle = infra.get_bundle_by_service(monitor.service)
+        callable_settings = monitor.config.instantiate_ui("settings")
+        if callable_settings and bundle:
+            callable_settings(infra, bundle, monitor.service)
 
 
 monitors()

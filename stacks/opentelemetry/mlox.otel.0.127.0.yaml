@@ -15,11 +15,11 @@ requirements:
   cpus: 2.0
   ram_gb: 4.0
   disk_gb: 1.0
-is_monitor: true
 groups:
   service:
   monitor: 
-  docker:
+  backend:
+    docker:
 ports:
   grpc: 4317
   http: 4318
@@ -28,16 +28,14 @@ ui:
   setup: mlox.services.otel.ui.setup
   settings: mlox.services.otel.ui.settings
 build:
-  docker: 
-    module: mlox.services.otel.docker
-    class_name: OtelDockerService
-    params:
-      name: otel-0.127.0
-      template: ${MLOX_STACKS_PATH}/opentelemetry/docker-compose-otel-0.127.0.yaml 
-      target_path: /home/${MLOX_USER}/otel-0.127.0
-      config: ${MLOX_STACKS_PATH}/opentelemetry/otel-collector-config-0.127.0.yaml
-      relic_endpoint: ${MLOX_RELIC_ENDPOINT}
-      relic_key: ${MLOX_RELIC_KEY}
-      port_grpc: ${MLOX_AUTO_PORT_GRPC}
-      port_http: ${MLOX_AUTO_PORT_HTTP}
-      port_health: ${MLOX_AUTO_PORT_HEALTH}
+  class_name: mlox.services.otel.docker.OtelDockerService
+  params:
+    name: otel-0.127.0
+    template: ${MLOX_STACKS_PATH}/opentelemetry/docker-compose-otel-0.127.0.yaml 
+    target_path: /home/${MLOX_USER}/otel-0.127.0
+    config: ${MLOX_STACKS_PATH}/opentelemetry/otel-collector-config-0.127.0.yaml
+    relic_endpoint: ${MLOX_RELIC_ENDPOINT}
+    relic_key: ${MLOX_RELIC_KEY}
+    port_grpc: ${MLOX_AUTO_PORT_GRPC}
+    port_http: ${MLOX_AUTO_PORT_HTTP}
+    port_health: ${MLOX_AUTO_PORT_HEALTH}

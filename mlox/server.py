@@ -697,6 +697,21 @@ class Ubuntu(AbstractServer):
             exec_command(conn, "kubectl get nodes", sudo=True)
             exec_command(conn, "kubectl version", sudo=True)
 
+            # Install Helm CLI
+            logger.info("Installing Helm CLI...")
+            exec_command(
+                conn,
+                "curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3",
+                sudo=False,
+            )
+            exec_command(conn, "chmod 700 get_helm.sh", sudo=False)
+            # The get_helm.sh script typically installs to /usr/local/bin/helm, which might require sudo.
+            exec_command(conn, "./get_helm.sh", sudo=True)
+            exec_command(
+                conn, "helm version", sudo=True
+            )  # Verify helm installation, using sudo to match kubectl checks
+            logger.info("Helm CLI installed successfully.")
+
     def teardown_kubernetes(self) -> None:
         """Uninstalls k3s using the official uninstall scripts."""
         uninstalled = False
