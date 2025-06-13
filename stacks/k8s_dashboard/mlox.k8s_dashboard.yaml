@@ -1,0 +1,33 @@
+name: Kubernetes Dashboard
+version: newest
+maintainer: Your Name
+description_short: Kubernetes Dashboard is a web-based UI for managing Kubernetes clusters.
+description: |
+  Kubernetes Dashboard is a web-based UI for managing Kubernetes clusters. It provides a user-friendly interface to 
+  deploy, manage, and monitor applications running on Kubernetes clusters. Kubernetes Dashboard simplifies the management 
+  of Kubernetes resources and allows users to easily view and control their cluster's state. In MLOX, it serves as 
+  a convenient tool for users to interact with their Kubernetes deployments and manage resources without needing to use the command line.
+links:
+  project: https://kubeapps.com/
+  news: https://kubeapps.com/
+  security: https://kubeapps.com/
+  documentation: https://kubeapps.com/
+  changelog: https://kubeapps.com/
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
+groups:
+  service:
+  backend:
+    kubernetes:
+ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+  web_ui: 5432
+ui:
+  settings: mlox.services.k8s_dashboard.ui.settings
+build:
+  class_name: mlox.services.k8s_dashboard.k8s.K8sDashboardService
+  params:
+    name: k8s-dashboard
+    template: ${MLOX_STACKS_PATH}/k8s_dashboard/k8s_dashboard.yaml
+    target_path: /home/${MLOX_USER}/k8s_dashboard
