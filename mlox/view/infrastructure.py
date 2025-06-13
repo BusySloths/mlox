@@ -109,11 +109,22 @@ def tab_server_mngmt():
                 bundle.set_backend("kubernetes-agent", controller=controller)
             st.rerun()
 
-        with st.expander("Terminal"):
-            from mlox.view.terminal import emulate_basic_terminal
+        with st.expander("Debug Access"):
+            if st.button("Enable User/Password Access"):
+                bundle.server.enable_password_authentication()
+                st.info(
+                    f"User/Password access enabled for {bundle.server.ip}. User/PW: {bundle.server.mlox_user.name}/{bundle.server.mlox_user.pw}"
+                )
 
-            with bundle.server.get_server_connection() as conn:
-                emulate_basic_terminal(conn)
+            if st.button("Disable User/Password Access"):
+                bundle.server.disable_password_authentication()
+                st.info(f"User/Password access disabled for {bundle.server.ip}")
+
+        # with st.expander("Terminal"):
+        #     from mlox.view.terminal import emulate_basic_terminal
+
+        #     with bundle.server.get_server_connection() as conn:
+        #         emulate_basic_terminal(conn)
 
         with st.expander("More info"):
             from mlox.remote import exec_command

@@ -29,5 +29,5 @@ build:
   class_name: mlox.services.k8s_dashboard.k8s.K8sDashboardService
   params:
     name: k8s-dashboard
-    template: ${MLOX_STACKS_PATH}/k8s_dashboard/k8s_dashboard.yaml
+    template: ${MLOX_STACKS_PATH}/k8s_dashboard/service-account.yaml
     target_path: /home/${MLOX_USER}/k8s_dashboard

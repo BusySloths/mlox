@@ -8,3 +8,5 @@ from mlox.infra import Infrastructure, Bundle
 def settings(infra: Infrastructure, bundle: Bundle, service: K8sDashboardService):
     st.header(f"Settings for service {service.name}")
     st.write(f"IP: {bundle.server.ip}")
+
+    st.write(f"Login Token: `{service.get_login_token(bundle)}`")

@@ -269,6 +269,10 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
+    def enable_password_authentication(self) -> None:
+        pass
+
+    @abstractmethod
     def disable_password_authentication(self) -> None:
         pass
 
@@ -537,6 +541,25 @@ class Ubuntu(AbstractServer):
                 "/etc/ssh/sshd_config",
                 "PermitRootLogin yes",
                 "PermitRootLogin no",
+                sudo=True,
+            )
+            exec_command(conn, "systemctl restart ssh", sudo=True)
+            exec_command(conn, "systemctl reload ssh", sudo=True)
+
+    def enable_password_authentication(self):
+        with self.get_server_connection() as conn:
+            fs_find_and_replace(
+                conn,
+                "/etc/ssh/sshd_config",
+                "#PasswordAuthentication",
+                "PasswordAuthentication",
+                sudo=True,
+            )
+            fs_find_and_replace(
+                conn,
+                "/etc/ssh/sshd_config",
+                "PasswordAuthentication no",
+                "PasswordAuthentication yes",
                 sudo=True,
             )
             exec_command(conn, "systemctl restart ssh", sudo=True)
