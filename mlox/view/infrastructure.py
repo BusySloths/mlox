@@ -41,6 +41,7 @@ def tab_server_mngmt():
                 "status": [bundle.status],
                 "tags": bundle.tags,
                 "services": [s.service.name for s in bundle.services],
+                "hostname": info["host"],
                 "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
             }
         )

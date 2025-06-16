@@ -89,10 +89,11 @@ def available_services():
                 "backend": [
                     f"{k}" for k, v in service.groups.get("backend", {}).items()
                 ],
+                "config": service,
             }
         )
 
-    c1, _, _ = st.columns(3)
+    c1, c2, _ = st.columns(3)
     search_filter = c1.text_input(
         "Search",
         value="",
@@ -102,6 +103,21 @@ def available_services():
     )
     if len(search_filter) > 0:
         services = [s for s in services if search_filter.lower() in s["name"].lower()]
+
+    option_map = {0: "Docker only", 1: "Kubernetes only"}
+    selection = c2.pills(
+        "Backend Filter",
+        options=option_map.keys(),
+        format_func=lambda option: option_map[option],
+        selection_mode="single",
+        default=0,
+        label_visibility="collapsed",
+    )
+    if selection is not None:
+        if selection == 0:
+            services = [s for s in services if "docker" in s["backend"]]
+        elif selection == 1:
+            services = [s for s in services if "kubernetes" in s["backend"]]
 
     df = pd.DataFrame(services)
     select = st.dataframe(
@@ -126,7 +142,8 @@ def available_services():
 
     if len(select["selection"].get("rows", [])) == 1:
         selected = select["selection"]["rows"][0]
-        config = configs[selected]
+
+        config = services[selected]["config"]
         supported_backends = list(config.groups.get("backend", {}).keys())
         c2, c3, c4, _ = st.columns([25, 25, 15, 35])
 

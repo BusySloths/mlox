@@ -11,6 +11,9 @@ def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService
     st.header(f"Settings for service {service.name}")
     # st.write(f"IP: {bundle.server.ip}")
 
+    st.write(f"UI User: {service.ui_user}")
+    st.write(f'UI Password: "{service.ui_pw}"')
+
     # mlflow.set_tracking_uri(service.service_url)
     mlflow.set_registry_uri(service.service_url)
 

@@ -369,11 +369,18 @@ class Ubuntu(AbstractServer):
                 echo "$cpu_count,$ram_gb,$storage_gb" 
             """
 
+        host_info = ""
         system_info = None
         hardware_info = None
         with self.get_server_connection() as conn:
             hardware_info = exec_command(conn, cmd, sudo=True)
             system_info = sys_get_distro_info(conn)
+            host_info = exec_command(conn, f"host {conn.host}", sudo=False)
+
+        if len(host_info) > 3 and " " in host_info:
+            host_info = host_info[:-1].split(" ")[-1]
+        else:
+            host_info = "unknown"
 
         hardware_info = list(map(float, str(hardware_info).split(",")))
         info: Dict[str, str | int | float] = dict()
@@ -383,6 +390,7 @@ class Ubuntu(AbstractServer):
                 "cpu_count": float(hardware_info[0]),
                 "ram_gb": float(hardware_info[1]),
                 "storage_gb": float(hardware_info[2]),
+                "host": host_info,
             }
         )
         if system_info is not None:

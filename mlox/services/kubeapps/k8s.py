@@ -7,128 +7,116 @@ from mlox.service import AbstractService
 from mlox.remote import exec_command, fs_create_dir, fs_delete_dir
 
 logger = logging.getLogger(__name__)
-KUBEAPPS_CHART_VERSION = "18.0.1"
 
 
 @dataclass
 class KubeAppsService(AbstractService):
     namespace: str = "kubeapps"
+    kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
     release_name: str = "kubeapps"
-    http_port: int = 80
-    service_url: str = field(default="", init=False)
-    access_token: str = field(default="", init=False)
-    service_ports: Dict[str, int] = field(default_factory=dict, init=False)
+    chart_repo: str = "bitnami"
+    chart_name: str = "bitnami/kubeapps"
+    chart_repo_url: str = "https://charts.bitnami.com/bitnami"
+    node_port: int = 30080
 
     def setup(self, conn) -> None:
-        logger.info("🔧 Installing KubeApps (LoadBalancer only)")
+        logger.info("🔧 Installing KubeApps")
 
+        # ensure target path exists
         fs_create_dir(conn, self.target_path)
+
+        # add & update Helm repo
         exec_command(
-            conn, "helm repo add bitnami https://charts.bitnami.com/bitnami", sudo=True
+            conn, f"helm repo add {self.chart_repo} {self.chart_repo_url}", sudo=True
         )
         exec_command(conn, "helm repo update", sudo=True)
 
-        helm_install_cmd = (
-            f"KUBECONFIG=/etc/rancher/k3s/k3s.yaml "
-            f"helm upgrade --install {self.release_name} bitnami/kubeapps "
-            # f"--version {KUBEAPPS_CHART_VERSION} "
-            f"--namespace {self.namespace} "
-            f"--create-namespace "
-            f"--set frontend.service.type=LoadBalancer "
-            f"--set frontend.service.port={self.http_port} "
-            f"--set postgresql.enabled=true "
-            f"--set kubeappsapis.serviceAccount.create=true "
-            f"--set rbac.create=true "
-            f"--set ingress.enabled=true "
-            f"--set ingress.hostname=kubeapps.local "
-            f"--set ingress.tls=true "
-            f"--set ingress.selfSigned=true "
-            f"--set postgresql.enabled=true "
-            f"--set kubeappsapis.serviceAccount.create=true "
-            f"--set rbac.create=true "
-            f"--wait --timeout 10m"
+        exec_command(
+            conn,
+            f"helm install kubeapps bitnami/kubeapps -n kubeapps \
+                --set frontend.service.type=LoadBalancer",
+            sudo=True,
         )
-        # exec_command(conn, helm_install_cmd, sudo=True)
+
+        # # install or upgrade KubeApps with NodePort
         # exec_command(
         #     conn,
-        #     f"kubectl wait ns {self.namespace} --for=condition=Active --timeout=60s",
+        #     f"helm upgrade --install {self.release_name} {self.chart_name} "
+        #     f"--kubeconfig {self.kubeconfig} "
+        #     f"--namespace {self.namespace} --create-namespace "
+        #     f"--set frontend.service.type=NodePort "
+        #     f"--set frontend.service.nodePort={self.node_port}",
         #     sudo=True,
         # )
 
+        # expose via NodePort and record URL
+        node_ip, service_port = self.expose_kubeapps_nodeport(conn)
+        self.service_ports["KubeApps"] = service_port
+        self.service_url = f"http://{node_ip}:{service_port}"
+
+    def expose_kubeapps_nodeport(
+        self,
+        conn,
+        namespace: str | None = None,
+        svc_name: str | None = None,
+        port: int | None = None,
+        node_port: int | None = None,
+    ):
+        """
+        Patches the KubeApps Service to NodePort and returns (node_ip, node_port).
+        """
+        namespace = namespace or self.namespace
+        svc_name = svc_name or self.release_name
+        port = port or 80
+        node_port = node_port or self.node_port
+
+        patch = (
+            f"kubectl -n {namespace} patch svc {svc_name} "
+            f'-p \'{{"spec":{{"type":"NodePort","ports":[{{'
+            f'"port":{port},"targetPort":{port},"nodePort":{node_port}'
+            f"}}]}}}}'"
+        )
+        exec_command(conn, patch, sudo=True)
+
+        node_ip = conn.host
+        logger.info(f"KubeApps exposed at http://{node_ip}:{node_port}")
+        return node_ip, node_port
+
+    def teardown(self, conn) -> None:
+        logger.info("🗑️ Uninstalling KubeApps")
+
+        # uninstall Helm release
         exec_command(
             conn,
-            f"KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm repo add bitnami-aks https://marketplace.azurecr.io/helm/v1/repo ",
+            f"helm uninstall {self.release_name} --namespace {self.namespace} || true",
             sudo=True,
         )
+        # remove namespace
         exec_command(
             conn,
-            f"KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create namespace kubeapps ",
+            f"kubectl delete namespace {self.namespace} --ignore-not-found",
             sudo=True,
         )
-        exec_command(
-            conn,
-            f"KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm install my-kubeapps bitnami-aks/kubeapps --version 10.3.5 ",
-            sudo=True,
-        )
+        # clean up files
+        fs_delete_dir(conn, self.target_path)
 
-        # Get LoadBalancer IP or hostname
-        # logger.info("🌐 Waiting for LoadBalancer IP...")
-        # lb_ip_or_hostname = ""
-        # for i in range(30):
-        #     for field in ["ip", "hostname"]:
-        #         cmd = (
-        #             f"kubectl get svc -n {self.namespace} {self.release_name}-kubeapps "
-        #             f"-o jsonpath='{{.status.loadBalancer.ingress[0].{field}}}'"
-        #         )
-        #         result = exec_command(conn, cmd, sudo=True, pty=False).strip()
-        #         if result and result != "<none>":
-        #             lb_ip_or_hostname = result
-        #             break
-        #     if lb_ip_or_hostname:
-        #         break
-        #     logger.info(f"⌛ Waiting... attempt {i + 1}/30")
-        #     time.sleep(10)
-
-        # if lb_ip_or_hostname:
-        #     self.service_url = f"http://{lb_ip_or_hostname}"
-        #     self.service_ports["KubeApps UI (LoadBalancer)"] = self.http_port
-        #     logger.info(f"✅ KubeApps available at: {self.service_url}")
-        # else:
-        #     logger.warning("⚠️ Could not determine LoadBalancer IP.")
-
-        # Get access token
-        sa = "kubeapps-internal-kubeappsapis"
-        token_cmd = f"kubectl create token {sa} -n {self.namespace} --duration 8760h"
-        try:
-            token = exec_command(conn, token_cmd, sudo=True, pty=False).strip()
-            self.access_token = token
-            logger.info("🔑 KubeApps access token retrieved successfully.")
-        except Exception as e:
-            logger.warning(f"Failed to retrieve token: {e}")
+        logger.info("✅ KubeApps uninstall complete")
 
     def spin_up(self, conn) -> bool:
-        logger.info("🔄 no spinning up...")
+        logger.info("🔄 no spinning up…")
         return True
 
     def spin_down(self, conn) -> bool:
-        logger.info("🔄 no spinning down...")
+        logger.info("🔄 no spinning down…")
         return True
 
-    def teardown(self, conn):
-        logger.info(f"🗑 Uninstalling KubeApps '{self.release_name}'")
-        exec_command(
+    def check(self, conn) -> Dict:
+        """
+        Returns the Helm status of the KubeApps release.
+        """
+        status = exec_command(
             conn,
-            f"helm uninstall {self.release_name} -n {self.namespace} --wait --timeout 5m",
+            f"helm status {self.release_name} --namespace {self.namespace}",
             sudo=True,
         )
-        fs_delete_dir(conn, self.target_path)
-
-    def check(self, conn) -> Dict:
-        status = {
-            "release": self.release_name,
-            "namespace": self.namespace,
-            "url": self.service_url,
-            "ports": self.service_ports,
-            "access_token": self.access_token,
-        }
-        return status
+        return {"status": status}

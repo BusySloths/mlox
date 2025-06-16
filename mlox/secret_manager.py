@@ -4,6 +4,7 @@ import logging
 
 from cryptography.fernet import Fernet
 
+from abc import ABC, abstractmethod
 from typing import Any, Dict
 
 from mlox.server import AbstractServer
@@ -15,6 +16,30 @@ from mlox.remote import (
     fs_write_file,
     fs_list_files,
 )
+
+
+class AbstractSecretManager(ABC):
+    """A simple interface for secret managers."""
+
+    @abstractmethod
+    def is_working(self) -> bool:
+        """Check if the secret manager is working."""
+        pass
+
+    @abstractmethod
+    def list_secrets(self, keys_only: bool = False) -> Dict[str, Any]:
+        """List all secrets stored in the secret manager."""
+        pass
+
+    @abstractmethod
+    def save_secret(self, name: str, my_secret: Dict | str) -> None:
+        """Save a secret to the secret manager."""
+        pass
+
+    @abstractmethod
+    def load_secret(self, name: str) -> Dict | str | None:
+        """Load a secret from the secret manager."""
+        pass
 
 
 class TinySecretManager:
