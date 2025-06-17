@@ -6,6 +6,7 @@ from cryptography.fernet import Fernet
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict
+from dataclasses import dataclass
 
 from mlox.server import AbstractServer
 from mlox.utils import _get_encryption_key, dict_to_dataclass, load_from_json
@@ -18,6 +19,7 @@ from mlox.remote import (
 )
 
 
+@dataclass
 class AbstractSecretManager(ABC):
     """A simple interface for secret managers."""
 
@@ -42,7 +44,8 @@ class AbstractSecretManager(ABC):
         pass
 
 
-class TinySecretManager:
+@dataclass
+class TinySecretManager(AbstractSecretManager):
     """A simple secret manager that encrypts and decrypts secrets saved on a remote machine."""
 
     path: str
@@ -52,12 +55,22 @@ class TinySecretManager:
     _connection_works: bool = False
 
     def __init__(
-        self, server_config_file: str, secrets_relative_path: str, master_token: str
+        self,
+        server_config_file: str,
+        secrets_relative_path: str,
+        master_token: str,
+        server_dict: Dict[str, Any] | None = None,
     ):
         self.cache = {}
         self.master_token = master_token
 
-        server_dict = load_from_json(server_config_file, master_token)
+        if not server_dict:
+            server_dict = load_from_json(server_config_file, master_token)
+
+        if not server_dict:
+            raise ValueError(
+                "Server configuration is missing or invalid. Cannot initialize TinySecretManager."
+            )
         server = dict_to_dataclass(server_dict, [AbstractServer])
         if not server:
             raise ValueError("Server is not set. Cannot initialize TinySecretManager.")

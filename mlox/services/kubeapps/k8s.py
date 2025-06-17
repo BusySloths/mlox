@@ -1,5 +1,6 @@
 import time
 import logging
+import json  # Added for parsing JSON output
 from dataclasses import dataclass, field
 from typing import Dict
 
@@ -33,10 +34,14 @@ class KubeAppsService(AbstractService):
 
         exec_command(
             conn,
-            f"helm install kubeapps bitnami/kubeapps -n kubeapps \
-                --set frontend.service.type=LoadBalancer",
+            # f"helm install kubeapps bitnami/kubeapps -n kubeapps"
+            f"helm upgrade --install {self.release_name} {self.chart_name} "
+            f"--kubeconfig {self.kubeconfig} "
+            f"--namespace {self.namespace} --create-namespace "
+            f"--set frontend.service.type=LoadBalancer ",
             sudo=True,
         )
+        # TODO: can produce an error if the release already existed and is in the process of being terminated.
 
         # # install or upgrade KubeApps with NodePort
         # exec_command(
@@ -50,7 +55,9 @@ class KubeAppsService(AbstractService):
         # )
 
         # expose via NodePort and record URL
-        node_ip, service_port = self.expose_kubeapps_nodeport(conn)
+        # node_ip, service_port = self.expose_kubeapps_nodeport(conn)
+        node_ip = conn.host
+        service_port = self.node_port
         self.service_ports["KubeApps"] = service_port
         self.service_url = f"http://{node_ip}:{service_port}"
 
@@ -88,13 +95,13 @@ class KubeAppsService(AbstractService):
         # uninstall Helm release
         exec_command(
             conn,
-            f"helm uninstall {self.release_name} --namespace {self.namespace} || true",
+            f"helm uninstall {self.release_name} --namespace {self.namespace} --kubeconfig {self.kubeconfig} || true",
             sudo=True,
         )
         # remove namespace
         exec_command(
             conn,
-            f"kubectl delete namespace {self.namespace} --ignore-not-found",
+            f"kubectl delete namespace {self.namespace} --ignore-not-found --now=true --wait=false",
             sudo=True,
         )
         # clean up files
@@ -112,11 +119,97 @@ class KubeAppsService(AbstractService):
 
     def check(self, conn) -> Dict:
         """
-        Returns the Helm status of the KubeApps release.
+        Checks the status of the KubeApps service, including whether it's terminating.
         """
-        status = exec_command(
-            conn,
-            f"helm status {self.release_name} --namespace {self.namespace}",
-            sudo=True,
-        )
-        return {"status": status}
+        helm_error = None
+        release_definitely_gone_from_helm = False
+
+        # 1. Check Helm release status
+        helm_status_cmd = f"helm status {self.release_name} --kubeconfig {self.kubeconfig} --namespace {self.namespace} -o json"
+        helm_result = exec_command(conn, helm_status_cmd, sudo=True)
+
+        if helm_result.ok:
+            try:
+                status_json = json.loads(helm_result.stdout.strip())
+                release_state = (
+                    status_json.get("info", {}).get("status", "unknown").lower()
+                )
+
+                if release_state == "deployed":
+                    return {"status": "running", "details": "Helm release is deployed."}
+                elif release_state in ["uninstalling", "pending-delete"]:
+                    return {
+                        "status": "terminating",
+                        "details": f"Helm release status: {release_state}.",
+                    }
+                elif release_state == "uninstalled":
+                    release_definitely_gone_from_helm = True
+                else:  # e.g., failed, pending-install, pending-upgrade
+                    return {
+                        "status": "error",
+                        "details": f"Helm release status: {release_state}.",
+                    }
+            except json.JSONDecodeError:
+                helm_error = "Failed to parse helm status JSON."
+                # Proceed to namespace check as Helm status is unreliable
+        else:
+            if "release: not found" in helm_result.stderr.lower():
+                release_definitely_gone_from_helm = True
+            else:
+                helm_error = (
+                    helm_result.stderr.strip()
+                    if helm_result.stderr
+                    else f"Helm command failed with code {helm_result.return_code}"
+                )
+                # If Helm command failed for other reasons, it's an error, but we can still check namespace as a fallback.
+
+        # 2. If Helm release is gone or status was inconclusive, check namespace
+        if release_definitely_gone_from_helm or (not helm_result.ok and not helm_error):
+            ns_status_cmd = f"kubectl get namespace {self.namespace} -o jsonpath='{{.status.phase}}'"
+            ns_result = conn.sudo(ns_status_cmd, warn=True, hide=True)
+
+            if ns_result.ok:
+                namespace_phase = ns_result.stdout.strip()
+                if namespace_phase == "Terminating":
+                    return {
+                        "status": "terminating",
+                        "details": "Namespace is terminating.",
+                    }
+                elif namespace_phase == "Active":
+                    if release_definitely_gone_from_helm:
+                        return {
+                            "status": "torn_down",
+                            "details": "Helm release uninstalled, namespace is active.",
+                        }
+                    else:  # Helm status was inconclusive, but namespace is active
+                        return {
+                            "status": "unknown",
+                            "details": f"Namespace is Active. Helm status inconclusive: {helm_error or 'Not found'}",
+                        }
+            else:
+                if "notfound" in (ns_result.stderr or "").lower().replace(
+                    " ", ""
+                ):  # Check for "namespaces ... not found"
+                    return {
+                        "status": "torn_down",
+                        "details": "Helm release and namespace not found.",
+                    }
+                else:
+                    ns_error_details = (
+                        ns_result.stderr.strip()
+                        if ns_result.stderr
+                        else f"kubectl command failed with code {ns_result.return_code}"
+                    )
+                    return {
+                        "status": "error",
+                        "details": f"Failed to get namespace status: {ns_error_details}. Helm status: {helm_error or 'Release not found or uninstalled'}",
+                    }
+
+        # If helm status failed for a reason other than "not found" and we couldn't determine from namespace
+        if helm_error:
+            return {
+                "status": "error",
+                "details": f"Helm error: {helm_error}. Namespace status not definitively checked or also problematic.",
+            }
+
+        return {"status": "unknown", "details": "Could not determine KubeApps status."}

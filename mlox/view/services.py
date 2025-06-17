@@ -86,6 +86,7 @@ def available_services():
                 "links": [f"{k}: {v}" for k, v in service.links.items()],
                 "requirements": [f"{k}: {v}" for k, v in service.requirements.items()],
                 "ui": [f"{k}" for k, v in service.ui.items()],
+                "groups": [f"{k}" for k, v in service.groups.items() if k != "backend"],
                 "backend": [
                     f"{k}" for k, v in service.groups.get("backend", {}).items()
                 ],
@@ -130,6 +131,7 @@ def available_services():
                 # "links",
                 # "requirements",
                 "backend",
+                "groups",
                 "description_short",
             ]
         ],
