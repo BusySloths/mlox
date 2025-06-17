@@ -1,6 +1,12 @@
 # mlox
 MLOps-in-a-Box: A simple and cost-efficient way of running your OSS MLOps stack.
 
+
+[![Maintainability](https://qlty.sh/badges/f6765ee4-a13b-4106-8ba2-236cfa251443/maintainability.svg)](https://qlty.sh/gh/nicococo/projects/mlox)
+
+[![Code Coverage](https://qlty.sh/badges/f6765ee4-a13b-4106-8ba2-236cfa251443/test_coverage.svg)](https://qlty.sh/gh/nicococo/projects/mlox)
+
+
 ### ATTENTION
 
 Do **not** use MLOX yet.
