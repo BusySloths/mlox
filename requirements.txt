@@ -13,24 +13,24 @@ bcrypt
 passlib
 
 mlflow
-mlflow[extras]
+# mlflow[extras]
 mlserver
 # pyenv  VIA BREW/BASH 
 pycryptodome
 # jose # JWT
 
-sqlmodel
+# sqlmodel
 
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp
 
 grpcio
-pymilvus
+# pymilvus
 
-langchain
-langchain-openai
+# langchain
+# langchain-openai
 
-feast[redis]
+# feast[redis]
 
 dacite  # loading and saving of nested dataclasses
