@@ -1,0 +1,17 @@
+name: Code Coverage Report
+
+on:
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  build:  
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      # access through passphrase protected ssh key
+      - name: Code Coverage Report
+        uses: qltysh/qlty-action/coverage@v1
+        with:
+            token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
+            files: reports/lcov.info
