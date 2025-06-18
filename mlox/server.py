@@ -246,7 +246,8 @@ class AbstractServer(ABC):
         verified = False
         try:
             with self.get_server_connection() as conn:
-                verified = True
+                if conn.is_connected:
+                    verified = True
             print(f"Public key SSH login verified={verified}.")
         except Exception as e:
             print(f"Failed to login via SSH with public key: {e}")

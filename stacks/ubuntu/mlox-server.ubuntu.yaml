@@ -13,8 +13,7 @@ links:
   documentation: https://ubuntu.com/
   changelog: https://ubuntu.com/
 build:
-  module: mlox.server
-  class_name: Ubuntu
+  class_name: mlox.server.Ubuntu
   params:
     ip: ${MLOX_IP}
     port: ${MLOX_PORT}    

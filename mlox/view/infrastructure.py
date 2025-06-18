@@ -6,6 +6,18 @@ from mlox.infra import Infrastructure
 from mlox.view.utils import form_add_server
 
 
+@st.fragment(run_every="30s")
+def auto_function(server):
+    # This will update every 10 seconds!
+    from datetime import datetime
+
+    is_running = server.test_connection()
+    st.write(
+        f"Server {server.ip} is {'running :material/check: :material/cancel:' if is_running else 'not running'}. "
+    )
+    # st.write(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+
 def tab_server_mngmt():
     infra = cast(Infrastructure, st.session_state.mlox.infra)
 
@@ -58,6 +70,8 @@ def tab_server_mngmt():
     if len(select_server["selection"].get("rows", [])) == 1:
         selected_server = srv[select_server["selection"]["rows"][0]]["ip"]
         bundle = infra.get_bundle_by_ip(selected_server)
+
+        auto_function(bundle.server)
 
         # server_management(infra, selected_server)
         c1, c2, c3 = st.columns([40, 50, 10])
@@ -127,15 +141,15 @@ def tab_server_mngmt():
         #     with bundle.server.get_server_connection() as conn:
         #         emulate_basic_terminal(conn)
 
-        with st.expander("More info"):
-            from mlox.remote import exec_command
+        # with st.expander("More info"):
+        #     from mlox.remote import exec_command
 
-            with bundle.server.get_server_connection() as conn:
-                st.write(exec_command(conn, "ufw status", sudo=True))
+        #     with bundle.server.get_server_connection() as conn:
+        #         st.write(exec_command(conn, "ufw status", sudo=True))
 
-            st.write(bundle.server.get_docker_status())
-            st.write(bundle.server.get_kubernetes_status())
-            st.write(bundle)
+        #     st.write(bundle.server.get_docker_status())
+        #     st.write(bundle.server.get_kubernetes_status())
+        #     st.write(bundle)
 
 
 st.header("Server Management")

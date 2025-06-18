@@ -13,8 +13,7 @@ links:
   documentation: https://ubuntu.com/
   changelog: https://ubuntu.com/
 build:
-  module: mlox.server
-  class_name: ConfigurableServer
+  class_name: mlox.server.ConfigurableServer
   params:
     script_test: [
       "ls -l",
