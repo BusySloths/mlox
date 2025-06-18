@@ -25,6 +25,7 @@ groups:
   backend:
     kubernetes:
     docker:
+    native:
 ui:
   settings: mlox.services.tsm.ui.settings
 build:

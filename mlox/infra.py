@@ -64,6 +64,7 @@ class Bundle:
         "docker",
         "kubernetes",
         "kubernetes-agent",
+        "native",
         "unknown",
     ] = field(default="un-initialized")
     services: List[StatefulService] = field(default_factory=list, init=False)
@@ -83,7 +84,7 @@ class Bundle:
 
     def set_backend(
         self,
-        backend: Literal["docker", "kubernetes", "kubernetes-agent"],
+        backend: Literal["docker", "kubernetes", "kubernetes-agent", "native"],
         controller: Any | None = None,
     ) -> None:
         if backend == "docker":
