@@ -1,0 +1,60 @@
+version: '3.8'
+services:
+  influxdb:
+    container_name: influxdbv2
+    image: influxdb:1.11.8
+    ports:
+      - ${INFLUXDB_PORT}:8086
+    environment:
+      # - DOCKER_INFLUXDB_INIT_MODE=setup
+      # - DOCKER_INFLUXDB_INIT_USERNAME=$INFLUXDB_ADMIN_USERNAME
+      # - DOCKER_INFLUXDB_INIT_PASSWORD=$INFLUXDB_ADMIN_PASSWORD
+      # - DOCKER_INFLUXDB_INIT_ORG=$INFLUXDB_ORG
+      # - DOCKER_INFLUXDB_INIT_BUCKET=$INFLUXDB_BUCKETNAME
+      # - INFLUXDB_HTTP_HTTPS_ENABLED=true
+      # - INFLUXD_TSL_CERT=/etc/ssl/cert.pem
+      # - INFLUXD_TSL_KEY=/etc/ssl/key.pem
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME_FILE: /run/secrets/influxdb2-admin-username
+      DOCKER_INFLUXDB_INIT_PASSWORD_FILE: /run/secrets/influxdb2-admin-password
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN_FILE: /run/secrets/influxdb2-admin-token
+      DOCKER_INFLUXDB_INIT_ORG: docs
+      DOCKER_INFLUXDB_INIT_BUCKET: home
+      # INFLUXDB_HTTP_HTTPS_ENABLED: true
+      # INFLUXDB_TLS_CERT: /etc/ssl/influxdb-selfsigned.crt
+      # INFLUXDB_TLS_KEY: /etc/ssl/influxdb-selfsigned.key
+      # -----
+      INFLUXDB_HTTP_HTTPS_ENABLED: true
+      INFLUXDB_HTTP_HTTPS_CERTIFICATE: /etc/ssl/influxdb.pem
+      INFLUXDB_HTTP_HTTPS_PRIVATE_KEY: /etc/ssl/influxdb.pem
+      INFLUXDB_HTTP_HTTPS_CLIENT_AUTHENTICATION_ENABLED: false      
+    secrets:
+      - influxdb2-admin-username
+      - influxdb2-admin-password
+      - influxdb2-admin-token
+    volumes:
+#      - $DOCKERDIR/influxdbv2/influxdb:/var/lib/influxdb
+      # - $DOCKERDIR/influx/data:/var/lib/influxdb2
+      # - $DOCKERDIR/influx/config:/etc/influxdb2
+      # - cert.pem:/etc/ssl/cert.pem
+      - type: volume
+        source: influxdb2-data
+        target: /var/lib/influxdb2
+      - type: volume
+        source: influxdb2-config
+        target: /etc/influxdb2
+      - ./cert.pem:/etc/ssl/influxdb-selfsigned.crt
+      - ./key.pem:/etc/ssl/influxdb-selfsigned.key
+      - ./influxdb.pem:/etc/ssl/influxdb.pem
+
+secrets:
+  influxdb2-admin-username:
+    file: ./.env.influxdb2-admin-username
+  influxdb2-admin-password:
+    file: ./.env.influxdb2-admin-password
+  influxdb2-admin-token:
+    file: ./.env.influxdb2-admin-token
+
+volumes:
+  influxdb2-data:
+  influxdb2-config:

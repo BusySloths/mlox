@@ -120,7 +120,7 @@ def save_to_json(my_data: Dict, path: str, password: str, encrypt: bool = True) 
 
 def _load_hook(data_item: Any) -> Any:
     """Dacite type hook to handle nested dataclasses with metadata."""
-    print(f"====>> Loading data: {data_item}")
+    # print(f"====>> Loading data: {data_item}")
     if (
         isinstance(data_item, dict)
         and "_module_name_" in data_item
