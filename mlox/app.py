@@ -34,6 +34,12 @@ def welcome():
     Explore the different sections of the application in the menu on the left.
     If you are not already logged in, you can do so under "Your Account".
     """)
+    st.session_state["sidebar_menu"] = st.checkbox(
+        "Sidebar Menu",
+        value=True,
+        key="my_sidebar_menu",
+        help="Toggle the sidebar menu visibility.",
+    )
 
 
 st.set_page_config(
@@ -109,6 +115,9 @@ if st.session_state.get("is_logged_in", False):
     pages.update(pages_docs)
 
 
-pg = st.navigation(pages)
+if st.session_state.get("sidebar_menu", True):
+    pg = st.navigation(pages, position="sidebar")
+else:
+    pg = st.navigation(pages, position="top")
 
 pg.run()
