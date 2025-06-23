@@ -56,27 +56,42 @@ def new_project():
                     "Something went wrong. Check server credentials and try again."
                 )
             else:
-                with st.spinner("Initializing server, writing keyfile, etc..."):
-                    bundle.server.setup()
-                    server_dict = dataclass_to_dict(bundle.server)
-                    save_to_json(server_dict, f"./{username}.key", password, True)
+                ms = None
+                with st.spinner(
+                    "Initializing server, writing keyfile, etc...", show_time=True
+                ):
+                    try:
+                        bundle.server.setup()
+                    except Exception as e:
+                        if not (bundle.server.mlox_user and bundle.server.remote_user):
+                            st.error(f"Server setup failed: {e}")
+                            return
+                    try:
+                        server_dict = dataclass_to_dict(bundle.server)
+                        save_to_json(server_dict, f"./{username}.key", password, True)
+                    except Exception as e:
+                        st.error(f"Generating key file failed: {e}")
+                        return
+                    ms = MloxSession(
+                        username, password
+                    )  # creates empty infrastructure instance
+                    if ms.secrets.is_working():
+                        try:
+                            ms.infra = infra
+                            config = load_config("./stacks", "/tsm", "mlox.tsm.yaml")
+                            bundle = ms.infra.add_service(bundle.server.ip, config, {})
+                            bundle.services[0].pw = password
+                            bundle.tags.append("mlox-secrets")
+                            ms.save_infrastructure()
+                            st.session_state["mlox"] = ms
+                            st.session_state.is_logged_in = True
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Infrastructure setup failed: {e}")
+                            print(e)
 
-            ms = None
-            try:
-                ms = MloxSession(username, password)
-                if ms.secrets.is_working():
-                    ms.infra = infra
-                    config = load_config("./stacks", "/tsm", "mlox.tsm.yaml")
-                    ms.infra.add_service(bundle.server.ip, config, {})
-                    ms.infra.get_service(TSMService.__class__.__name__).pw = password
-                    print(ms.infra.get_service(TSMService.__class__.__name__).pw)
-                    bundle.tags.append("mlox-secrets")
-                    ms.save_infrastructure()
-                    st.session_state["mlox"] = ms
-                    st.session_state.is_logged_in = True
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Login failed: {e}")
+                    else:
+                        st.error("Secret manager setup failed.")
 
 
 if not st.session_state.get("is_logged_in", False):

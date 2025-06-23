@@ -24,9 +24,9 @@ class MloxSession:
 
     def load_infrastructure(self) -> None:
         infra_dict = self.secrets.load_secret("MLOX_CONFIG_INFRASTRUCTURE")
-        print(infra_dict)
         if not infra_dict:
-            raise ValueError("No infrastructure data found in secrets.")
+            self.infra = Infrastructure()
+            return
         if not isinstance(infra_dict, dict):
             raise ValueError("Infrastructure data is not in the expected format.")
         self.infra = Infrastructure.from_dict(infra_dict)

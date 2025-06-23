@@ -10,19 +10,19 @@ if __name__ == "__main__":
     if not password:
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
     else:
-        # session = MloxSession("mlox333", password)
-        # session.load_infrastructure()
+        session = MloxSession("mlox", password)
+        session.load_infrastructure()
 
         # print(session.infra)
 
         # session.save_infrastructure()
-        server = Infrastructure.load("/mlox333.key", password)
+        # server = Infrastructure.load("/mlox333.key", password)
         # infra = Infrastructure()
         # infra.bundles.append(Bundle(name="test", server=server))
 
-        tsm = TinySecretManager("/mlox333.key", ".secrets", password)
-        print(tsm.list_secrets())
-        tsm.save_secret("INFRA", dataclass_to_dict(server))
+        # tsm = TinySecretManager("/mlox333.key", ".secrets", password)
+        # print(tsm.list_secrets())
+        # tsm.save_secret("INFRA", dataclass_to_dict(server))
 
         # print(f"Loaded server config: {bundle}")
         # infra.save("infrastructure.json", password)

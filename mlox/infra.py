@@ -47,7 +47,7 @@ class Bundle:
 @dataclass
 class Infrastructure:
     bundles: List[Bundle] = field(default_factory=list, init=False)
-    configs: Dict[type, ServiceConfig] = field(default_factory=dict, init=False)
+    configs: Dict[str, ServiceConfig] = field(default_factory=dict, init=False)
 
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
@@ -56,11 +56,11 @@ class Infrastructure:
         if not bundle:
             for bundle in self.bundles:
                 for s in bundle.services:
-                    if group in list(self.configs[type(s)].groups.keys()):
+                    if group in list(self.configs[str(type(s))].groups.keys()):
                         services.append(s)
         else:
             for s in bundle.services:
-                if group in list(self.configs[type(s)].groups.keys()):
+                if group in list(self.configs[str(type(s))].groups.keys()):
                     services.append(s)
         return services
 
@@ -149,7 +149,7 @@ class Infrastructure:
             logger.warning(f"Service {service.name} already exists in bundle {bundle}.")
             return None
 
-        self.configs[type(service)] = config
+        self.configs[str(type(service))] = config
         # choose unique name
         service.name = service.__class__.__name__
         service_names = self.list_service_names()
@@ -227,7 +227,7 @@ class Infrastructure:
             logging.warning("Could not connect to server.")
             return None
 
-        self.configs[type(server)] = config
+        self.configs[str(type(server))] = config
         bundle = Bundle(name=server.ip, server=server)
         self.bundles.append(bundle)
         return bundle
