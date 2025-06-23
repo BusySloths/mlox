@@ -4,7 +4,7 @@ import os
 import yaml
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Callable
+from typing import Dict, List, Any, Literal, Callable
 
 from mlox.service import AbstractService
 from mlox.server import AbstractServer
@@ -19,17 +19,18 @@ class BuildConfig:
 @dataclass
 class ServiceConfig:
     name: str
-    version: str
+    version: str | float | int
     maintainer: str
     description: str
     description_short: str
     links: Dict[str, str]
-    requirements: Dict[str, float]
     build: BuildConfig
-    # This type hint correctly defines the desired final structure
-    ports: Dict[str, int] = field(default_factory=dict)
     groups: Dict[str, Any] = field(default_factory=dict)
     ui: Dict[str, str] = field(default_factory=dict)
+    requirements: Dict[str, float] = field(default_factory=dict)
+    ports: Dict[str, int] = field(default_factory=dict)
+    variants: List[str | float] = field(default_factory=list)
+    path: str = field(default="", init=False)
 
     def instantiate_ui(self, func_name: str) -> Callable | None:
         if func_name not in self.ui:
@@ -38,33 +39,42 @@ class ServiceConfig:
         try:
             # Split the string into module path and function name
             module_path, func_name = self.ui[func_name].rsplit(".", 1)
-            # Import the module
             module = importlib.import_module(module_path)
-            # Get the function object
             callable_settings_func = getattr(module, func_name)
             return callable_settings_func
         except (ImportError, AttributeError) as e:
-            logging.error(
-                f"Could not load callable {func_name} for this service {self.name}: {e}"
-            )
+            logging.error(f"Could not load callable {func_name} for {self.name}: {e}")
         except Exception as e:
             logging.error(
                 f"An error occurred while getting the callable {func_name}: {e}"
             )
         return None
 
-    def instantiate_build(self, params: Dict[str, str]) -> AbstractService | None:
+    def instantiate_server(self, params: Dict[str, str]) -> AbstractServer | None:
+        res = self.instantiate_build(params)
+        if res and isinstance(res, AbstractServer):
+            return res
+        return None
+
+    def instantiate_service(self, params: Dict[str, str]) -> AbstractService | None:
+        res = self.instantiate_build(params)
+        if res and isinstance(res, AbstractService):
+            return res
+        return None
+
+    def instantiate_build(
+        self, params: Dict[str, str]
+    ) -> AbstractServer | AbstractService | None:
         try:
             # Split the string into module path and function name
             module_path, class_name = self.build.class_name.rsplit(".", 1)
-
-            # Use details from the specific BuildConfig object
             module = importlib.import_module(module_path)
             service_class = getattr(module, class_name)
-
-            if not issubclass(service_class, AbstractService):
+            if not issubclass(service_class, AbstractService) and not issubclass(
+                service_class, AbstractServer
+            ):
                 logging.error(
-                    f"Class {class_name} from {module_path} is not a subclass of AbstractService."
+                    f"Class {class_name} from {module_path} is not a subclass of AbstractService/AbstractServer."
                 )
                 return None
 
@@ -90,173 +100,94 @@ class ServiceConfig:
             return None
 
 
-@dataclass
-class ServerConfig:
-    name: str
-    versions: List[str | float]
-    maintainer: str
-    description: str
-    links: Dict[str, str]
-    build: BuildConfig
+def load_all_server_configs(root_dir: str) -> List[ServiceConfig]:
+    return load_all_service_configs(root_dir, prefix="mlox-server")
 
-    def instantiate(
-        self, params: Dict[str, str], init_params: Dict[str, str] = dict()
-    ) -> Optional[AbstractServer]:
+
+def load_all_service_configs(
+    root_dir: str, prefix: Literal["mlox", "mlox-server"] = "mlox"
+) -> List[ServiceConfig]:
+    configs: List[ServiceConfig] = []
+    if not os.path.isdir(root_dir):
+        logging.error(f"Configuration directory not found: {root_dir}")
+        return configs
+
+    candidates = os.listdir(root_dir)
+    for candidate in candidates:
+        configs.extend(load_service_configs(root_dir, candidate, prefix=prefix))
+    return configs
+
+
+def load_service_configs(
+    root_dir: str, service_dir: str, prefix: Literal["mlox", "mlox-server"]
+) -> List[ServiceConfig]:
+    """Loads service configurations from YAML files in the given directory."""
+    config_dir = f"{root_dir}/{service_dir}"
+    configs: List[ServiceConfig] = []
+    if not os.path.isdir(config_dir):
+        logging.error(f"Configuration directory not found: {config_dir}")
+        return configs
+
+    # Look for mlox-config.yaml specifically within the provided directory
+    candidates = os.listdir(config_dir)
+    for candidate in candidates:
+        filepath = f"{config_dir}/{candidate}"
+        if not (
+            os.path.isfile(filepath)
+            and candidate.startswith(prefix + ".")
+            and candidate.endswith(".yaml")
+        ):
+            continue
+        logging.info(f"Loading service config from: {filepath}")
+        config = load_config(root_dir, service_dir, candidate)
+        if config:
+            configs.append(config)
+    return configs
+
+
+def load_config(
+    root_dir: str, service_dir: str, candidate: str
+) -> ServiceConfig | None:
+    filepath = f"{root_dir}/{service_dir}/{candidate}"
+    with open(filepath, "r") as f:
         try:
-            # Split the string into module path and function name
-            module_path, class_name = self.build.class_name.rsplit(".", 1)
-
-            # Use details from the specific BuildConfig object
-            module = importlib.import_module(module_path)
-            service_class = getattr(module, class_name)
-
-            print(service_class)
-            if not issubclass(service_class, AbstractServer):
+            service_data = yaml.safe_load(f)
+            if not isinstance(service_data, dict):
                 logging.error(
-                    f"Class {class_name} from {module_path} is not a subclass of AbstractServer."
+                    f"Invalid format in {filepath}. Expected a dictionary at the top level."
                 )
                 return None
 
-            if self.build.params:
-                init_params.update(self.build.params)
-            for key, value in init_params.items():
-                for k in params.keys():
-                    if k in value:
-                        init_params[key] = value.replace(k, params[k])
+            # --- Manual Parsing of the 'build' dictionary ---
+            raw_build_dict = service_data.get("build", {})
+            service_data["build"] = BuildConfig(**raw_build_dict)
+            service_config_instance = ServiceConfig(**service_data)
+            service_config_instance.path = f"{service_dir}/{candidate}"
+            return service_config_instance
 
-            # Pass the server instance and combined parameters
-            service_instance = service_class(
-                **init_params
-            )  # Assuming service class __init__ takes only its specific params
-            return service_instance
-
-        except (ImportError, AttributeError) as e:
-            logging.error(f"Error instantiating service {self.build.class_name}: {e}")
-            print(self.build)
-            return None
+        except yaml.YAMLError as e:
+            logging.error(f"Error parsing YAML file {filepath}: {e}")
         except TypeError as e:
             logging.error(
-                f"Error calling constructor for {self.build.class_name}: {e}. Check parameters: {init_params}"
+                f"Error initializing ServiceConfig from {filepath}: {e}. Check if all required fields are present and correctly structured in the YAML. Data: {service_data}"
             )
-            return None
-
-
-def load_all_server_configs(root_dir: str) -> List[ServerConfig]:
-    configs: List[ServerConfig] = []
-    if not os.path.isdir(root_dir):
-        logging.error(f"Configuration directory not found: {root_dir}")
-        return configs
-
-    candidates = os.listdir(root_dir)
-    for candidate in candidates:
-        configs.extend(load_server_configs(root_dir + "/" + candidate))
-    return configs
-
-
-def load_all_service_configs(root_dir: str) -> List[ServiceConfig]:
-    configs: List[ServiceConfig] = []
-    if not os.path.isdir(root_dir):
-        logging.error(f"Configuration directory not found: {root_dir}")
-        return configs
-
-    candidates = os.listdir(root_dir)
-    for candidate in candidates:
-        configs.extend(load_service_configs(root_dir + "/" + candidate))
-    return configs
-
-
-def load_server_configs(config_dir: str) -> List[ServerConfig]:
-    """Loads service configurations from YAML files in the given directory."""
-    configs: List[ServerConfig] = []
-    if not os.path.isdir(config_dir):
-        logging.error(f"Configuration directory not found: {config_dir}")
-        return configs
-
-    # Look for mlox-config.yaml specifically within the provided directory
-    candidates = os.listdir(config_dir)
-    for candidate in candidates:
-        filepath = f"{config_dir}/{candidate}"
-        if not (
-            os.path.isfile(filepath)
-            and candidate.startswith("mlox-server.")
-            and candidate.endswith(".yaml")
-        ):
-            continue
-        logging.info(f"Loading service config from: {filepath}")
-        with open(filepath, "r") as f:
-            try:
-                service_data = yaml.safe_load(f)
-                if not isinstance(service_data, dict):
-                    logging.error(
-                        f"Invalid format in {filepath}. Expected a dictionary at the top level."
-                    )
-                    return configs  # Or continue if loading multiple files
-
-                raw_build_dict = service_data.get("build", {})
-                service_data["build"] = BuildConfig(**raw_build_dict)
-                configs.append(ServerConfig(**service_data))
-
-            except yaml.YAMLError as e:
-                logging.error(f"Error parsing YAML file {filepath}: {e}")
-            except TypeError as e:
-                logging.error(
-                    f"Error initializing ServiceConfig from {filepath}: {e}. Check if all required fields are present and correctly structured in the YAML. Data: {service_data}"
-                )
-            except Exception as e:  # Catch other potential errors
-                logging.error(
-                    f"An unexpected error occurred while processing {filepath}: {e}"
-                )
-
-    return configs
-
-
-def load_service_configs(config_dir: str) -> List[ServiceConfig]:
-    """Loads service configurations from YAML files in the given directory."""
-    configs: List[ServiceConfig] = []
-    if not os.path.isdir(config_dir):
-        logging.error(f"Configuration directory not found: {config_dir}")
-        return configs
-
-    # Look for mlox-config.yaml specifically within the provided directory
-    candidates = os.listdir(config_dir)
-    for candidate in candidates:
-        filepath = f"{config_dir}/{candidate}"
-        if not (
-            os.path.isfile(filepath)
-            and candidate.startswith("mlox.")
-            and candidate.endswith(".yaml")
-        ):
-            continue
-        logging.info(f"Loading service config from: {filepath}")
-        with open(filepath, "r") as f:
-            try:
-                service_data = yaml.safe_load(f)
-                if not isinstance(service_data, dict):
-                    logging.error(
-                        f"Invalid format in {filepath}. Expected a dictionary at the top level."
-                    )
-                    return configs  # Or continue if loading multiple files
-
-                # --- Manual Parsing of the 'build' dictionary ---
-                raw_build_dict = service_data.get("build", {})
-                service_data["build"] = BuildConfig(**raw_build_dict)
-                configs.append(ServiceConfig(**service_data))
-
-            except yaml.YAMLError as e:
-                logging.error(f"Error parsing YAML file {filepath}: {e}")
-            except TypeError as e:
-                logging.error(
-                    f"Error initializing ServiceConfig from {filepath}: {e}. Check if all required fields are present and correctly structured in the YAML. Data: {service_data}"
-                )
-            except Exception as e:  # Catch other potential errors
-                logging.error(
-                    f"An unexpected error occurred while processing {filepath}: {e}"
-                )
-
-    return configs
+        except Exception as e:  # Catch other potential errors
+            logging.error(
+                f"An unexpected error occurred while processing {filepath}: {e}"
+            )
+    return None
 
 
 if __name__ == "__main__":
-    configs = load_all_service_configs("./stacks/")
+    configs = load_all_service_configs("./stacks")
+    # configs = load_all_server_configs("./stacks")
     for c in configs:
-        print(c.name + c.version)
+        print(
+            c.name
+            + " "
+            + str(c.version)
+            + " "
+            + str(list(c.groups.get("backend", {}).keys()))
+            + " "
+            + c.path
+        )

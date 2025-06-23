@@ -173,7 +173,7 @@ if __name__ == "__main__":
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
         exit(1)
 
-    secret_manager = TinySecretManager("/mlox.key", ".secrets", password)
+    secret_manager = TinySecretManager("/mlox333.key", ".secrets", password)
     # print(secret_manager.load_secret("TEST_SECRET"))
     # secret_manager.save_secret(
     #     "TEST_SECRET",

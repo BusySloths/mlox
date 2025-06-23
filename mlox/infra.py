@@ -1,11 +1,10 @@
 import logging
 
-
 from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List, Literal, Tuple, Dict, Any
 
-from mlox.config import ServerConfig, ServiceConfig
+from mlox.config import ServiceConfig
 from mlox.server import AbstractServer
 from mlox.service import AbstractService
 from mlox.utils import (
@@ -37,103 +36,38 @@ class Repo:
 
 
 @dataclass
-class StatefulService:
-    service: AbstractService
-    config: ServiceConfig
-    state: Literal[
-        "un-initialized",
-        "setup-complete",
-        "setup-failed",
-        "removed",
-        "running",
-        "stopped",
-        "unknown",
-    ]
-
-
-@dataclass
 class Bundle:
     name: str
-    config: ServerConfig
     server: AbstractServer
     descr: str = field(default="", init=False)
     tags: List[str] = field(default_factory=list, init=False)
-    status: Literal[
-        "un-initialized",
-        "no-backend",
-        "docker",
-        "kubernetes",
-        "kubernetes-agent",
-        "native",
-        "unknown",
-    ] = field(default="un-initialized")
-    services: List[StatefulService] = field(default_factory=list, init=False)
-    repos: List[Repo] = field(default_factory=list, init=False)
-
-    def initialize(self) -> None:
-        if self.status != "un-initialized":
-            logging.error("Can not initialize an already initialized server.")
-            return
-        self.server.update()
-        self.server.install_packages()
-        self.server.update()
-        self.server.add_mlox_user()
-        self.server.setup_users()
-        self.server.disable_password_authentication()
-        self.status = "no-backend"
-
-    def set_backend(
-        self,
-        backend: Literal["docker", "kubernetes", "kubernetes-agent", "native"],
-        controller: Any | None = None,
-    ) -> None:
-        if backend == "docker":
-            self.server.setup_docker()
-            self.server.start_docker_runtime()
-        elif backend == "kubernetes":
-            self.server.setup_kubernetes()
-            self.server.start_kubernetes_runtime()
-        elif backend == "kubernetes-agent" and controller:
-            stats = controller.server.get_kubernetes_status()
-            if "k3s.token" not in stats:
-                logging.error(
-                    "Token is missing in controller stats ip: %s", controller.server.ip
-                )
-                return
-            url = f"https://{controller.server.ip}:6443"
-            token = stats["k3s.token"]
-            self.server.setup_kubernetes(controller_url=url, controller_token=token)
-            self.server.start_kubernetes_runtime()
-            cluster_name = f"k8s-{controller.name}"
-            self.tags.append(cluster_name)
-            if cluster_name not in controller.tags:
-                controller.tags.append(cluster_name)
-        self.status = backend
+    services: List[AbstractService] = field(default_factory=list, init=False)
 
 
 @dataclass
 class Infrastructure:
     bundles: List[Bundle] = field(default_factory=list, init=False)
+    configs: Dict[type, ServiceConfig] = field(default_factory=dict, init=False)
 
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
-    ) -> List[StatefulService]:
-        services: List[StatefulService] = list()
+    ) -> List[AbstractService]:
+        services: List[AbstractService] = list()
         if not bundle:
             for bundle in self.bundles:
-                for service in bundle.services:
-                    if group in list(service.config.groups.keys()):
-                        services.append(service)
+                for s in bundle.services:
+                    if group in list(self.configs[type(s)].groups.keys()):
+                        services.append(s)
         else:
-            for service in bundle.services:
-                if group in list(service.config.groups.keys()):
-                    services.append(service)
+            for s in bundle.services:
+                if group in list(self.configs[type(s)].groups.keys()):
+                    services.append(s)
         return services
 
     def get_bundle_by_service(self, service: AbstractService) -> Optional[Bundle]:
         for bundle in self.bundles:
-            for stateful_service in bundle.services:
-                if stateful_service.service == service:
+            for s in bundle.services:
+                if s == service:
                     return bundle
         return None
 
@@ -147,43 +81,35 @@ class Infrastructure:
         self,
         ip: str,
         service_name: str,
-        state: Literal["setup", "teardown", "spin_up", "spin_down"],
+        state: Literal["setup", "teardown"],
     ) -> None:
         bundle = self.get_bundle_by_ip(ip)
         if not bundle:
             logging.warning("Could not find bundle.")
             return
 
-        stateful_service = None
-        for ss in bundle.services:
-            if ss.service.name == service_name:
-                stateful_service = ss
+        service = None
+        for s in bundle.services:
+            if s.name == service_name:
+                service = s
                 break
-        if not stateful_service:
+        if not service:
             logging.warning("Could not find service.")
             return
         with bundle.server.get_server_connection() as conn:
             if state == "setup":
-                stateful_service.service.setup(conn)
-                stateful_service.service.spin_up(conn)
-                stateful_service.state = "running"
-            elif state == "spin_up":
-                stateful_service.service.spin_up(conn)
-                stateful_service.state = "running"
-            elif state == "spin_down":
-                stateful_service.service.spin_down(conn)
-                stateful_service.state = "stopped"
+                service.setup(conn)
+                service.spin_up(conn)
             elif state == "teardown":
-                stateful_service.service.spin_down(conn)
-                stateful_service.service.teardown(conn)
-                bundle.services.remove(stateful_service)
+                service.spin_down(conn)
+                service.teardown(conn)
             else:
                 logging.warning("Unknown state.")
 
     def add_service(
         self, ip: str, config: ServiceConfig, params: Dict[str, Any]
     ) -> Bundle | None:
-        bundle = next((b for b in self.bundles if b.server.ip == ip), None)
+        bundle = next((v for v in self.bundles if v.server.ip == ip), None)
         if not bundle:
             logger.warning("No bundle found for server.")
             return None
@@ -204,8 +130,8 @@ class Infrastructure:
         port_prefix = "${MLOX_AUTO_PORT_"
         port_postfix = "}"
         used_ports = list()
-        for ss in bundle.services:
-            used_ports.extend(list(ss.service.service_ports.values()))
+        for s in bundle.services:
+            used_ports.extend(list(s.service_ports.values()))
         assigned_ports = auto_map_ports(used_ports, config.ports)
         mlox_params.update(
             {
@@ -215,74 +141,81 @@ class Infrastructure:
         )
         print(f"MLOX PARAMS: {mlox_params}")
         params.update(mlox_params)
-        service = config.instantiate_build(params=params)
+        service = config.instantiate_service(params=params)
         if not service:
             logger.warning("Could not instantiate service.")
             return None
-        if service.name in [s.service.name for s in bundle.services]:
-            logger.warning(
-                f"Service {service.name} already exists in bundle {bundle.name}."
-            )
+        if service.name in [s.name for s in bundle.services]:
+            logger.warning(f"Service {service.name} already exists in bundle {bundle}.")
             return None
 
-        bundle.services.append(StatefulService(service, config, state="un-initialized"))
+        self.configs[type(service)] = config
+        # choose unique name
+        service.name = service.__class__.__name__
+        service_names = self.list_service_names()
+        cntr = 0
+        while service in service_names:
+            service.name = service.name + "_" + str(cntr)
+            cntr += 1
+        bundle.services.append(service)
         return bundle
 
-    def get_stateful_service(
-        self, ip: str, service_name: str
-    ) -> Tuple[Bundle, StatefulService] | None:
-        bundle = self.get_bundle_by_ip(ip)
-        if not bundle:
-            return None
-        for stateful_service in bundle.services:
-            if stateful_service.service.name == service_name:
-                return bundle, stateful_service
+    def list_service_names(self) -> List[str]:
+        return [s.name for bundle in self.bundles for s in bundle.services]
+
+    def get_service(self, service_name: str) -> AbstractService | None:
+        for bundle in self.bundles:
+            for s in bundle.services:
+                if s.name == service_name:
+                    return s
         return None
 
-    def pull_repo(self, ip: str, name: str) -> None:
-        bundle = next((b for b in self.bundles if b.server.ip == ip), None)
-        if not bundle:
-            return
-        repo = next((r for r in bundle.repos if r.name == name), None)
-        if not repo:
-            return
-        repo.modified_timestamp = datetime.now().isoformat()
-        bundle.server.git_pull(repo.path)
+    # def pull_repo(self, ip: str, name: str) -> None:
+    #     bundle = next((b for b in self.bundles if b.server.ip == ip), None)
+    #     if not bundle:
+    #         return
+    #     repo = next((r for r in bundle.repos if r.name == name), None)
+    #     if not repo:
+    #         return
+    #     repo.modified_timestamp = datetime.now().isoformat()
+    #     bundle.server.git_pull(repo.path)
 
-    def create_and_add_repo(
-        self, ip: str, link: str, repo_abs_root: str | None = None
-    ) -> None:
-        REPOS: str = "repos" if not repo_abs_root else repo_abs_root
-        bundle = next(
-            (bundle for bundle in self.bundles if bundle.server.ip == ip), None
-        )
-        if not bundle:
-            return
-        if not bundle.server.mlox_user:
-            return
+    # def create_and_add_repo(
+    #     self, ip: str, link: str, repo_abs_root: str | None = None
+    # ) -> None:
+    #     REPOS: str = "repos" if not repo_abs_root else repo_abs_root
+    #     bundle = next(
+    #         (bundle for bundle in self.bundles if bundle.server.ip == ip), None
+    #     )
+    #     if not bundle:
+    #         return
+    #     if not bundle.server.mlox_user:
+    #         return
 
-        name = link.split("/")[-1][:-4]
-        if repo_abs_root:
-            path = f"{repo_abs_root}/{name}"
-        else:
-            path = f"{bundle.server.mlox_user.home}/{REPOS}/{name}"
-        repo = Repo(link=link, name=name, path=path)
-        bundle.server.git_clone(repo.link, REPOS)
-        bundle.repos.append(repo)
+    #     name = link.split("/")[-1][:-4]
+    #     if repo_abs_root:
+    #         path = f"{repo_abs_root}/{name}"
+    #     else:
+    #         path = f"{bundle.server.mlox_user.home}/{REPOS}/{name}"
+    #     repo = Repo(link=link, name=name, path=path)
+    #     bundle.server.git_clone(repo.link, REPOS)
+    #     bundle.repos.append(repo)
 
-    def remove_repo(self, ip: str, repo: Repo) -> None:
-        bundle = next(
-            (bundle for bundle in self.bundles if bundle.server.ip == ip), None
-        )
-        if not bundle:
-            return
-        if not bundle.server.mlox_user:
-            return
-        bundle.server.git_remove(repo.path)
-        bundle.repos.remove(repo)
+    # def remove_repo(self, ip: str, repo: Repo) -> None:
+    #     bundle = next(
+    #         (bundle for bundle in self.bundles if bundle.server.ip == ip), None
+    #     )
+    #     if not bundle:
+    #         return
+    #     if not bundle.server.mlox_user:
+    #         return
+    #     bundle.server.git_remove(repo.path)
+    #     bundle.repos.remove(repo)
 
-    def add_server(self, config: ServerConfig, params: Dict[str, str]) -> Bundle | None:
-        server = config.instantiate(params=params)
+    def add_server(
+        self, config: ServiceConfig, params: Dict[str, str]
+    ) -> Bundle | None:
+        server = config.instantiate_server(params=params)
         if not server:
             logging.warning("Could not instantiate server.")
             return None
@@ -294,7 +227,8 @@ class Infrastructure:
             logging.warning("Could not connect to server.")
             return None
 
-        bundle = Bundle(name=server.ip, config=config, server=server)
+        self.configs[type(server)] = config
+        bundle = Bundle(name=server.ip, server=server)
         self.bundles.append(bundle)
         return bundle
 
@@ -303,30 +237,32 @@ class Infrastructure:
         if not bundle:
             logging.warning("Could not find bundle with IP %s", ip)
             return
-        if bundle.status == "docker":
-            bundle.server.stop_docker_runtime()
-            bundle.server.teardown_docker()
-            bundle.status = "no-backend"
-        elif bundle.status == "kubernetes":
-            bundle.server.stop_kubernetes_runtime()
-            bundle.server.teardown_kubernetes()
-            bundle.status = "no-backend"
-        elif bundle.status == "kubernetes-agent":
-            bundle.server.stop_kubernetes_runtime()
-            bundle.server.teardown_kubernetes()
-            bundle.status = "no-backend"
+        bundle.server.stop_backend_runtime()
+        bundle.server.teardown_backend()
 
     def list_kubernetes_controller(self) -> List[Bundle]:
-        return [bundle for bundle in self.bundles if bundle.status == "kubernetes"]
+        return [
+            bundle for bundle in self.bundles if "kubernetes" in bundle.server.backend
+        ]
 
     def list_bundles_with_backend(
         self, backend: Literal["docker", "kubernetes"]
     ) -> List[Bundle]:
-        return [b for b in self.bundles if b.status == backend]
+        return [b for b in self.bundles if backend in b.server.backend]
 
-    def save(self, filepath: str, password: str) -> None:
+    # def save(self, filepath: str, password: str) -> None:
+    #     infra_dict = dataclass_to_dict(self)
+    #     save_to_json(infra_dict, filepath, password, encrypt=True)
+
+    def to_dict(self) -> Dict:
         infra_dict = dataclass_to_dict(self)
-        save_to_json(infra_dict, filepath, password, encrypt=True)
+        # _ = infra_dict.pop("configs", None)
+        return infra_dict
+
+    @classmethod
+    def from_dict(cls, infra_dict: Dict) -> "Infrastructure":
+        infra = dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])
+        return infra
 
     @classmethod
     def load(cls, filepath: str, password: str) -> "Infrastructure":

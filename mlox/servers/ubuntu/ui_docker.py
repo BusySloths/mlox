@@ -1,6 +1,9 @@
 import streamlit as st
 
-from mlox.config import load_all_server_configs
+from typing import Dict
+
+from mlox.infra import Infrastructure, Bundle
+from mlox.servers.ubuntu.docker import UbuntuDockerServer
 
 
 def form_add_server():
@@ -31,13 +34,21 @@ def form_add_server():
         help="The password for the server.",
         type="password",
     )
-    help_text = "Please select the configuration that matches your VPS system."
-    configs = load_all_server_configs("./stacks")
-    config = st.selectbox(
-        "System Configuration",
-        configs,
-        format_func=lambda x: f"{x.name} {x.versions}",
-        help=help_text,
-    )
-    # st.write(config)
-    return ip, port, root, pw, config
+    return ip, port, root, pw
+
+
+def setup(infra: Infrastructure) -> Dict:
+    params = dict()
+
+    ip, port, root, pw = form_add_server()
+
+    params["${MLOX_IP}"] = ip
+    params["${MLOX_PORT}"] = str(port)
+    params["${MLOX_ROOT}"] = root
+    params["${MLOX_ROOT_PW}"] = pw
+
+    return params
+
+
+def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuDockerServer):
+    st.header(f"Settings for server {server.ip}")

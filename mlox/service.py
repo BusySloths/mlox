@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Literal
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -64,8 +64,12 @@ class AbstractService(ABC):
     target_docker_script: str = field(default="docker-compose.yaml", init=False)
     target_docker_env: str = field(default="service.env", init=False)
 
-    service_url: str = field(default="", init=False)
+    service_urls: Dict[str, str] = field(default_factory=dict, init=False)
     service_ports: Dict[str, int] = field(default_factory=dict, init=False)
+
+    state: Literal["un-initialized", "running", "stopped", "unknown"] = field(
+        default="un-initialized", init=False
+    )
 
     certificate: str = field(default="", init=False)
 
@@ -73,7 +77,12 @@ class AbstractService(ABC):
     def setup(self, conn) -> None:
         pass
 
+    @abstractmethod
     def teardown(self, conn) -> None:
+        pass
+
+    @abstractmethod
+    def check(self, conn) -> Dict:
         pass
 
     def spin_up(self, conn) -> bool:
@@ -87,7 +96,3 @@ class AbstractService(ABC):
     def spin_down(self, conn) -> bool:
         docker_down(conn, f"{self.target_path}/{self.target_docker_script}")
         return True
-
-    @abstractmethod
-    def check(self, conn) -> Dict:
-        pass

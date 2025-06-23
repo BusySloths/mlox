@@ -1,0 +1,32 @@
+name: Ubuntu (Kubernetes, K3S)
+version: 24.04
+variants: [24.04, 22.04, 20.04]
+maintainer: Your Name
+description_short: Ubuntu with Kubernetes-K3S backend.
+description: |
+  Ubuntu is a popular Linux distribution based on Debian.
+  It is known for its ease of use, stability, and strong community support.
+  This YAML file defines the configuration for the base Ubuntu stack which is necessary for the
+  installation and management of MLOX stacks.
+links:
+  project: https://ubuntu.com/
+  news: https://ubuntu.com/
+  security: https://ubuntu.com/
+  documentation: https://ubuntu.com/
+  changelog: https://ubuntu.com/
+groups:
+  git:
+  server:
+  backend:
+    kubernetes:
+      k3s:
+ui:
+  setup: mlox.servers.ubuntu.ui_docker.setup
+  settings: mlox.servers.ubuntu.ui_docker.settings
+build:
+  class_name: mlox.servers.ubuntu.docker.UbuntuK3sServer
+  params:
+    ip: ${MLOX_IP}
+    port: ${MLOX_PORT}    
+    root: ${MLOX_ROOT}
+    root_pw: ${MLOX_ROOT_PW}    

@@ -31,6 +31,7 @@ class OtelDockerService(AbstractService):
     port_grpc: str | int
     port_http: str | int
     port_health: str | int
+    service_url: str = field(init=False, default="")
 
     def get_telemetry_data(self, bundle) -> Any:
         with bundle.server.get_server_connection() as conn:
@@ -75,6 +76,13 @@ class OtelDockerService(AbstractService):
         self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
         self.service_ports["OTLP HTTP receiver"] = int(self.port_http)
         self.service_ports["OTEL health check"] = int(self.port_health)
+        self.service_urls["OTLP gRPC receiver"] = (
+            f"https://{conn.host}:{self.port_grpc}"
+        )
+        self.service_urls["OTLP HTTP receiver"] = (
+            f"https://{conn.host}:{self.port_http}"
+        )
+        self.service_urls["OTLP health"] = f"https://{conn.host}:{self.port_health}"
 
     def teardown(self, conn):
         docker_down(

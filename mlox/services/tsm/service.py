@@ -3,19 +3,11 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.utils import dataclass_to_dict, save_to_json
 from mlox.infra import Bundle
+from mlox.utils import dataclass_to_dict
 from mlox.secret_manager import TinySecretManager
-from mlox.service import AbstractService, tls_setup
-from mlox.remote import (
-    fs_copy,
-    fs_delete_dir,
-    fs_create_dir,
-    fs_create_empty_file,
-    fs_append_line,
-    sys_user_id,
-    docker_down,
-)
+from mlox.service import AbstractService
+from mlox.remote import fs_delete_dir
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -33,7 +25,7 @@ class TSMService(AbstractService):
         return TinySecretManager("", self.target_path, self.pw, server_dict=server_dict)
 
     def setup(self, conn) -> None:
-        self.service_url = "None"
+        self.service_urls = dict()
         self.service_ports = dict()
 
     def teardown(self, conn):

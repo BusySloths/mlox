@@ -25,6 +25,7 @@ class MLFlowDockerService(AbstractService):
     ui_user: str
     ui_pw: str
     port: str | int
+    service_url: str = field(init=False, default="")
 
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
@@ -45,6 +46,7 @@ class MLFlowDockerService(AbstractService):
         fs_append_line(conn, ini_path, f"admin_username = {self.ui_user}")
         fs_append_line(conn, ini_path, f"admin_password = {self.ui_pw}")
         self.service_ports["MLFlow Webserver"] = int(self.port)
+        self.service_urls["MLFlow UI"] = f"https://{conn.host}:{self.port}"
         self.service_url = f"https://{conn.host}:{self.port}"
 
     def teardown(self, conn):
