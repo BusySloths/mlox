@@ -286,6 +286,14 @@ class AbstractServer(ABC):
     def get_server_info(self) -> Dict[str, str | int | float]:
         pass
 
+    @abstractmethod
+    def enable_debug_access(self) -> None:
+        pass
+
+    @abstractmethod
+    def disable_debug_access(self) -> None:
+        pass
+
     # Backend
     @abstractmethod
     def setup_backend(self) -> None:

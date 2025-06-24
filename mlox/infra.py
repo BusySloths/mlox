@@ -103,6 +103,7 @@ class Infrastructure:
             elif state == "teardown":
                 service.spin_down(conn)
                 service.teardown(conn)
+                bundle.services.remove(service)
             else:
                 logging.warning("Unknown state.")
 
@@ -169,6 +170,9 @@ class Infrastructure:
                 if s.name == service_name:
                     return s
         return None
+
+    def get_service_config(self, service: AbstractServer) -> ServiceConfig | None:
+        return self.configs.get(str(type(service)), None)
 
     # def pull_repo(self, ip: str, name: str) -> None:
     #     bundle = next((b for b in self.bundles if b.server.ip == ip), None)

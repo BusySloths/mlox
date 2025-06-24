@@ -48,6 +48,12 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         # self.enable_password_authentication()
         self.state = "no-backend"
 
+    def enable_debug_access(self) -> None:
+        self.enable_password_authentication()
+
+    def disable_debug_access(self) -> None:
+        self.disable_password_authentication()
+
     def update(self):
         with self.get_server_connection() as conn:
             exec_command(conn, "dpkg --configure -a", sudo=True)

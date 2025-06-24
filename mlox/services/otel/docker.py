@@ -83,6 +83,7 @@ class OtelDockerService(AbstractService):
             f"https://{conn.host}:{self.port_http}"
         )
         self.service_urls["OTLP health"] = f"https://{conn.host}:{self.port_health}"
+        self.state = "running"
 
     def teardown(self, conn):
         docker_down(
@@ -91,6 +92,7 @@ class OtelDockerService(AbstractService):
             remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
+        self.state = "un-initialized"
 
     def check(self, conn) -> Dict:
         return dict()

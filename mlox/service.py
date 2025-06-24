@@ -91,8 +91,10 @@ class AbstractService(ABC):
             f"{self.target_path}/{self.target_docker_script}",
             f"{self.target_path}/{self.target_docker_env}",
         )
+        self.state = "running"
         return True
 
     def spin_down(self, conn) -> bool:
         docker_down(conn, f"{self.target_path}/{self.target_docker_script}")
+        self.state = "stopped"
         return True

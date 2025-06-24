@@ -27,9 +27,11 @@ class TSMService(AbstractService):
     def setup(self, conn) -> None:
         self.service_urls = dict()
         self.service_ports = dict()
+        self.state = "running"
 
     def teardown(self, conn):
         fs_delete_dir(conn, self.target_path)
+        self.state = "un-initialized"
 
     def spin_up(self, conn):
         return None

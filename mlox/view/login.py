@@ -81,7 +81,7 @@ def new_project():
                             config = load_config("./stacks", "/tsm", "mlox.tsm.yaml")
                             bundle = ms.infra.add_service(bundle.server.ip, config, {})
                             bundle.services[0].pw = password
-                            bundle.tags.append("mlox-secrets")
+                            bundle.tags.append("mlox.secrets")
                             ms.save_infrastructure()
                             st.session_state["mlox"] = ms
                             st.session_state.is_logged_in = True
