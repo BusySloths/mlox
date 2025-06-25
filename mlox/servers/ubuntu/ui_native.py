@@ -1,6 +1,10 @@
 import streamlit as st
 
-from mlox.config import load_all_server_configs
+from typing import Dict
+
+from mlox.config import ServiceConfig
+from mlox.infra import Infrastructure, Bundle
+from mlox.servers.ubuntu.native import UbuntuNativeServer
 
 
 def form_add_server():
@@ -31,13 +35,23 @@ def form_add_server():
         help="The password for the server.",
         type="password",
     )
-    help_text = "Please select the configuration that matches your VPS system."
-    configs = load_all_server_configs("./stacks")
-    config = st.selectbox(
-        "System Configuration",
-        configs,
-        format_func=lambda x: f"{x.name} {x.versions}",
-        help=help_text,
-    )
-    # st.write(config)
-    return ip, port, root, pw, config
+    return ip, port, root, pw
+
+
+def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
+    st.markdown(config.description)
+
+    params = dict()
+
+    ip, port, root, pw = form_add_server()
+
+    params["${MLOX_IP}"] = ip
+    params["${MLOX_PORT}"] = str(port)
+    params["${MLOX_ROOT}"] = root
+    params["${MLOX_ROOT_PW}"] = pw
+
+    return params
+
+
+def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuNativeServer):
+    st.header(f"Settings for server {server.ip}")

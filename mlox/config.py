@@ -29,26 +29,25 @@ class ServiceConfig:
     ui: Dict[str, str] = field(default_factory=dict)
     requirements: Dict[str, float] = field(default_factory=dict)
     ports: Dict[str, int] = field(default_factory=dict)
-    variants: List[str | float] = field(default_factory=list)
     path: str = field(default="", init=False)
 
     def instantiate_ui(self, func_name: str) -> Callable | None:
         if func_name not in self.ui:
             # This is normal behavior
             return None
+        callable_settings_func = None
         try:
             # Split the string into module path and function name
             module_path, func_name = self.ui[func_name].rsplit(".", 1)
             module = importlib.import_module(module_path)
             callable_settings_func = getattr(module, func_name)
-            return callable_settings_func
         except (ImportError, AttributeError) as e:
             logging.error(f"Could not load callable {func_name} for {self.name}: {e}")
         except Exception as e:
             logging.error(
-                f"An error occurred while getting the callable {func_name}: {e}"
+                f"An error occurred while getting the callable {func_name} for {self.name}: {e}"
             )
-        return None
+        return callable_settings_func
 
     def instantiate_server(self, params: Dict[str, str]) -> AbstractServer | None:
         res = self.instantiate_build(params)
@@ -138,7 +137,7 @@ def load_service_configs(
             and candidate.endswith(".yaml")
         ):
             continue
-        logging.info(f"Loading service config from: {filepath}")
+        logging.debug(f"Loading service config from: {filepath}")
         config = load_config(root_dir, service_dir, candidate)
         if config:
             configs.append(config)

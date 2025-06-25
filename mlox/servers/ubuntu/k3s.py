@@ -16,20 +16,25 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class UbuntuK3sServer(UbuntuDockerServer):
-    controller_url: str | None = field(
-        default=None, metadata={"help": "Optional URL of the k3s controller node"}
+    controller_url: str = field(
+        default="", metadata={"help": "Optional URL of the k3s controller node"}
     )
-    controller_token: str | None = field(
-        default=None, metadata={"help": "Optional token for the k3s controller node"}
+    controller_token: str = field(
+        default="", metadata={"help": "Optional token for the k3s controller node"}
     )
 
     def __post_init__(self):
-        self.backend = ["kubernetes", "k3s"]
+        if len(self.controller_url) > 6 and len(self.controller_token) > 6:
+            self.backend = ["kubernetes-agent", "k3s-agent"]
+        else:
+            self.backend = ["kubernetes", "k3s"]
 
     def setup_backend(self):
+        self.state = "starting"
+
         # Controller URL Template: https://<controller-ip>:6443
         agent_str = ""
-        if self.controller_url and self.controller_token:
+        if len(self.controller_url) > 6 and len(self.controller_token) > 6:
             agent_str = (
                 f"K3S_URL={self.controller_url} K3S_TOKEN={self.controller_token} "
             )
@@ -59,8 +64,10 @@ class UbuntuK3sServer(UbuntuDockerServer):
                 conn, "helm version", sudo=True
             )  # Verify helm installation, using sudo to match kubectl checks
             logger.info("Helm CLI installed successfully.")
+            self.state = "running"
 
     def teardown_backend(self) -> None:
+        self.state = "shutdown"
         """Uninstalls k3s using the official uninstall scripts."""
         uninstalled = False
         with self.get_server_connection() as conn:
@@ -107,6 +114,7 @@ class UbuntuK3sServer(UbuntuDockerServer):
                 logger.warning(
                     "Neither k3s server nor agent uninstall scripts were found or ran successfully. k3s might still be present."
                 )
+            self.state = "no-backend"
 
     def get_backend_status(self) -> Dict[str, Any]:
         backend_info: Dict[str, Any] = {}
@@ -117,6 +125,14 @@ class UbuntuK3sServer(UbuntuDockerServer):
                 backend_info["k3s.is_running"] = False
             else:
                 backend_info["k3s.is_running"] = True
+            # Check k3s-agent status
+            res = exec_command(
+                conn, "systemctl is-active k3s-agent", sudo=True, pty=False
+            )
+            if res is None:
+                backend_info["k3s-agent.is_running"] = False
+            else:
+                backend_info["k3s-agent.is_running"] = True
             # If k3s is running, get node status
             try:
                 res = exec_command(

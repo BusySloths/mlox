@@ -210,9 +210,9 @@ class AbstractServer(ABC):
     remote_user: RemoteUser | None = field(default=None, init=False)
 
     backend: List[str] = field(default_factory=list, init=False)
-    state: Literal["un-initialized", "no-backend", "running", "unknown"] = (
-        "un-initialized"
-    )
+    state: Literal[
+        "un-initialized", "no-backend", "starting", "running", "shutdown", "unknown"
+    ] = "un-initialized"
 
     def get_server_connection(self, force_root: bool = False) -> ServerConnection:
         # 3 ways to connect:

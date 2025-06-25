@@ -48,7 +48,7 @@ def new_project():
         infra = Infrastructure()
         setup_func = config.instantiate_ui("setup")
         if setup_func:
-            params = setup_func(infra)
+            params = setup_func(infra, config)
         if st.form_submit_button("Submit", type="primary"):
             bundle = infra.add_server(config, params)
             if not bundle:

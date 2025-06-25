@@ -33,17 +33,18 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         if self.state != "un-initialized":
             logging.error("Can not initialize an already initialized server.")
             return
+        self.state = "starting"
         self.update()
         self.install_packages()
         self.update()
         self.add_mlox_user()
         self.setup_users()
         self.disable_password_authentication()
-        self.state = "no-backend"
         self.setup_backend()
         self.state = "running"
 
     def teardown(self):
+        self.state = "shutdown"
         self.teardown_backend()
         # self.enable_password_authentication()
         self.state = "no-backend"
@@ -286,12 +287,11 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             exec_command(conn, "systemctl reload ssh", sudo=True)
 
     # GIT
-    def git_clone(self, repo_url: str, path: str) -> None:
+    def git_clone(self, repo_url: str, abs_path: str) -> None:
         with self.get_server_connection() as conn:
             if self.mlox_user:
-                abs_path = f"{self.mlox_user.home}/{path}"
                 fs_create_dir(conn, abs_path)
-                exec_command(conn, f"cd {path}; git clone {repo_url}", sudo=False)
+                exec_command(conn, f"cd {abs_path}; git clone {repo_url}", sudo=False)
 
     def git_pull(self, abs_path: str) -> None:
         # TODO check if the path exists, rn we assume the path is valid
@@ -300,16 +300,18 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 # abs_path = f"{self.mlox_user.home}/{repo_root_path}"
                 exec_command(conn, f"cd {abs_path}; git pull", sudo=False)
 
-    def git_remove(self, path: str) -> None:
+    def git_remove(self, abs_path: str) -> None:
         with self.get_server_connection() as conn:
-            fs_delete_dir(conn, path)
+            fs_delete_dir(conn, abs_path)
 
     # NATIVE BACKEND
     def setup_backend(self) -> None:
         logger.info("Native backend setup done.")
+        self.state = "running"
 
     def teardown_backend(self) -> None:
         logger.info("Native backend taerdown done.")
+        self.state = "no-backend"
 
     def get_backend_status(self) -> Dict[str, Any]:
         status_info: Dict[str, Any] = {}

@@ -1,0 +1,32 @@
+name: Github Repository
+version: newest
+maintainer: Your Name
+description_short: Clone and pull Github Repositories on your servers. 
+description: |
+  Clone and pull Github Repositories on your servers. Make your repositories accessible for installed services.
+links:
+  project: https://github.com/nicococo/mlox/
+  news: https://kubeapps.com/
+  security: https://kubeapps.com/
+  documentation: https://kubeapps.com/
+  changelog: https://kubeapps.com/
+requirements:
+  cpus: 1.0
+  ram_gb: 1.0
+  disk_gb: 1.0
+groups:
+  git:
+  backend:
+    kubernetes:
+    docker:
+    native:
+ui:
+  setup: mlox.services.github.ui.setup
+  settings: mlox.services.github.ui.settings
+build:
+  class_name: mlox.services.github.service.GithubRepoService
+  params:
+    name: Github:${GITHUB_LINK}
+    template: ${MLOX_STACKS_PATH}/tsm/mlox.github.yaml
+    target_path: /home/${MLOX_USER}/repos
+    link: ${GITHUB_LINK}

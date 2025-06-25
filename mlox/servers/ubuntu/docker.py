@@ -20,6 +20,7 @@ class UbuntuDockerServer(UbuntuNativeServer):
         self.backend = ["docker"]
 
     def setup_backend(self) -> None:
+        self.state = "starting"
         with self.get_server_connection() as conn:  # MyPy will understand this call
             exec_command(conn, "apt-get -y install ca-certificates curl", sudo=True)
             exec_command(conn, "install -m 0755 -d /etc/apt/keyrings", sudo=True)
@@ -46,9 +47,11 @@ class UbuntuDockerServer(UbuntuNativeServer):
             )
             print("Done installing docker")
             exec_command(conn, "docker --version", sudo=True)
+            self.state = "running"
 
     def teardown_backend(self) -> None:
         """Uninstalls Docker Engine and related packages."""
+        self.state = "shutdown"
         with self.get_server_connection() as conn:
             logger.info("Stopping and disabling Docker service...")
             exec_command(conn, "systemctl stop docker", sudo=True, pty=True)
@@ -67,6 +70,7 @@ class UbuntuDockerServer(UbuntuNativeServer):
             # /etc/docker should be removed by purge, but an extra check doesn't hurt if needed.
             # exec_command(conn, "rm -rf /etc/docker", sudo=True)
             logger.info("Docker uninstalled.")
+            self.state = "no-backend"
 
     def get_backend_status(self) -> Dict[str, Any]:
         status_info: Dict[str, Any] = {}

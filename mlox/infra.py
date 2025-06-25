@@ -77,6 +77,13 @@ class Infrastructure:
                 return bundle
         return None
 
+    def remove_bundle(self, bundle: Bundle) -> None:
+        try:
+            self.bundles.remove(bundle)
+        except ValueError:
+            logging.warning(f"Could not find bundle {bundle.server.ip}")
+        return None
+
     def setup_service(
         self,
         ip: str,
@@ -236,17 +243,12 @@ class Infrastructure:
         self.bundles.append(bundle)
         return bundle
 
-    def clear_backend(self, ip: str) -> None:
-        bundle = self.get_bundle_by_ip(ip)
-        if not bundle:
-            logging.warning("Could not find bundle with IP %s", ip)
-            return
-        bundle.server.stop_backend_runtime()
-        bundle.server.teardown_backend()
-
     def list_kubernetes_controller(self) -> List[Bundle]:
         return [
-            bundle for bundle in self.bundles if "kubernetes" in bundle.server.backend
+            bundle
+            for bundle in self.bundles
+            if "kubernetes" in bundle.server.backend
+            and bundle.server.state == "running"
         ]
 
     def list_bundles_with_backend(
