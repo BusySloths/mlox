@@ -289,16 +289,13 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     # GIT
     def git_clone(self, repo_url: str, abs_path: str) -> None:
         with self.get_server_connection() as conn:
-            if self.mlox_user:
-                fs_create_dir(conn, abs_path)
-                exec_command(conn, f"cd {abs_path}; git clone {repo_url}", sudo=False)
+            fs_create_dir(conn, abs_path)
+            exec_command(conn, f"cd {abs_path}; git clone {repo_url}", sudo=False)
 
     def git_pull(self, abs_path: str) -> None:
         # TODO check if the path exists, rn we assume the path is valid
         with self.get_server_connection() as conn:
-            if self.mlox_user:
-                # abs_path = f"{self.mlox_user.home}/{repo_root_path}"
-                exec_command(conn, f"cd {abs_path}; git pull", sudo=False)
+            exec_command(conn, f"cd {abs_path}; git pull", sudo=False)
 
     def git_remove(self, abs_path: str) -> None:
         with self.get_server_connection() as conn:

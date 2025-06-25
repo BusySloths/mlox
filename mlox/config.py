@@ -83,7 +83,7 @@ class ServiceConfig:
             for key, value in init_params.items():
                 for k in params.keys():
                     if k in value:
-                        init_params[key] = value.replace(k, params[k])
+                        init_params[key] = init_params[key].replace(k, params[k])
 
             # Pass the server instance and combined parameters
             service_instance = service_class(**init_params)

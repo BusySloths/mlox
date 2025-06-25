@@ -3,10 +3,14 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.infra import Bundle
 from mlox.utils import dataclass_to_dict
-from mlox.secret_manager import TinySecretManager
+from mlox.secret_manager import (
+    TinySecretManager,
+    AbstractSecretManager,
+    AbstractSecretManagerService,
+)
 from mlox.service import AbstractService
+from mlox.server import AbstractServer
 from mlox.remote import fs_delete_dir
 
 # Configure logging (optional, but recommended)
@@ -16,13 +20,19 @@ logging.basicConfig(
 
 
 @dataclass
-class TSMService(AbstractService):
+class TSMService(AbstractService, AbstractSecretManagerService):
     pw: str
 
-    def get_secret_manager(self, bundle: Bundle) -> TinySecretManager:
+    def __post_init__(self):
+        self.state = "running"
+
+    def get_secret_manager(self, server: AbstractServer) -> AbstractSecretManager:
         """Get the TinySecretManager instance for this service."""
-        server_dict = dataclass_to_dict(bundle.server)
-        return TinySecretManager("", self.target_path, self.pw, server_dict=server_dict)
+        server_dict = dataclass_to_dict(server)
+        if server.mlox_user is None:
+            raise ValueError("Server user is not set.")
+        relative_path = self.target_path.removeprefix(server.mlox_user.home)
+        return TinySecretManager("", relative_path, self.pw, server_dict=server_dict)
 
     def setup(self, conn) -> None:
         self.service_urls = dict()

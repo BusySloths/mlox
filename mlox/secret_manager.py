@@ -45,6 +45,13 @@ class AbstractSecretManager(ABC):
 
 
 @dataclass
+class AbstractSecretManagerService(ABC):
+    @abstractmethod
+    def get_secret_manager(self, server: AbstractServer) -> AbstractSecretManager:
+        pass
+
+
+@dataclass
 class TinySecretManager(AbstractSecretManager):
     """A simple secret manager that encrypts and decrypts secrets saved on a remote machine."""
 

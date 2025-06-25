@@ -14,5 +14,7 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
 
 def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuDockerServer):
     st.header(f"Settings for server {server.ip}")
-    st.write(f"ssh {server.mlox_user.name}@{server.ip}")
-    st.write(server.mlox_user.pw)
+
+    if server.mlox_user:
+        st.write(f"ssh {server.mlox_user.name}@{server.ip}")
+        st.write(server.mlox_user.pw)

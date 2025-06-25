@@ -147,7 +147,7 @@ class Infrastructure:
                 for name, port in assigned_ports.items()
             }
         )
-        print(f"MLOX PARAMS: {mlox_params}")
+        # print(f"MLOX PARAMS: {mlox_params}")
         params.update(mlox_params)
         service = config.instantiate_service(params=params)
         if not service:
@@ -159,7 +159,7 @@ class Infrastructure:
 
         self.configs[str(type(service))] = config
         # choose unique name
-        service.name = service.__class__.__name__
+        # service.name = service.__class__.__name__
         service_names = self.list_service_names()
         cntr = 0
         while service in service_names:

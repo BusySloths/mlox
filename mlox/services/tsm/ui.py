@@ -10,7 +10,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: TSMService):
     st.write(f"IP: {bundle.server.ip}")
     st.write(f'Password: "{service.pw}"')
 
-    tsm = service.get_secret_manager(bundle)
+    tsm = service.get_secret_manager(bundle.server)
     st.write(tsm.list_secrets())
 
     secret_name = st.text_input("Secret Name", key="secret_name")

@@ -26,7 +26,7 @@ ui:
 build:
   class_name: mlox.services.github.service.GithubRepoService
   params:
-    name: Github:${GITHUB_LINK}
+    name: Github:${GITHUB_LINK}@${SERVER_NAME}
     template: ${MLOX_STACKS_PATH}/tsm/mlox.github.yaml
     target_path: /home/${MLOX_USER}/repos
     link: ${GITHUB_LINK}

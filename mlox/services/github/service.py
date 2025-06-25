@@ -24,6 +24,9 @@ class GithubRepoService(AbstractService):
         default_factory=datetime.now().isoformat, init=False
     )
 
+    def __post_init__(self):
+        self.repo_name = self.link.split("/")[-1][:-4]
+
     def setup(self, conn) -> None:
         self.service_urls = dict()
         self.service_ports = dict()
@@ -50,7 +53,6 @@ class GithubRepoService(AbstractService):
     def create_and_add_repo(self, bundle: Bundle) -> None:
         if isinstance(bundle.server, AbstractGitServer):
             server = cast(AbstractGitServer, bundle.server)
-            self.repo_name = self.link.split("/")[-1][:-4]
             server.git_clone(self.link, self.target_path)
         else:
             logging.warning("Server is not a git server.")
