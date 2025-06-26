@@ -45,6 +45,13 @@ class AbstractSecretManager(ABC):
 
 
 @dataclass
+class AbstractSecretManagerService(ABC):
+    @abstractmethod
+    def get_secret_manager(self, server: AbstractServer) -> AbstractSecretManager:
+        pass
+
+
+@dataclass
 class TinySecretManager(AbstractSecretManager):
     """A simple secret manager that encrypts and decrypts secrets saved on a remote machine."""
 
@@ -173,7 +180,7 @@ if __name__ == "__main__":
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
         exit(1)
 
-    secret_manager = TinySecretManager("/mlox.key", ".secrets", password)
+    secret_manager = TinySecretManager("/mlox333.key", ".secrets", password)
     # print(secret_manager.load_secret("TEST_SECRET"))
     # secret_manager.save_secret(
     #     "TEST_SECRET",

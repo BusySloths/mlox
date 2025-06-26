@@ -14,7 +14,7 @@ from mlox.config import (
     load_all_server_configs,
 )
 from mlox.service import AbstractService
-from mlox.server import AbstractServer
+from mlox.servers import AbstractServer
 from mlox.infra import Infrastructure, Bundle  # For dummy UI functions
 
 # Assuming dummy_conftest.py contains DummyService, DummyServer, dummy_settings_func, dummy_setup_func

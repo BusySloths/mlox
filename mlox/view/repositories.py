@@ -7,6 +7,11 @@ from typing import cast
 from mlox.session import MloxSession
 
 
+def save_infra():
+    with st.spinner("Saving infrastructure..."):
+        st.session_state.mlox.save_infrastructure()
+
+
 def repos():
     st.markdown("""
     # Repositories
@@ -15,35 +20,37 @@ def repos():
     ms = cast(MloxSession, st.session_state.mlox)
     infra = ms.infra
     bundles = infra.bundles
-    with st.form("Add Repo"):
-        c1, c2, c3 = st.columns([40, 40, 20])
-        link = c1.text_input("GitHub Link")
-        bundle = c2.selectbox("Bundle", bundles, format_func=lambda b: b.name)
+    # with st.form("Add Repo"):
+    #     c1, c2, c3 = st.columns([40, 40, 20])
+    #     link = c1.text_input("GitHub Link")
+    #     bundle = c2.selectbox("Bundle", bundles, format_func=lambda b: b.name)
 
-        if c3.form_submit_button("Add Git Repository"):
-            st.info(f"Adding {link} to {bundle.name}")
-            infra.create_and_add_repo(bundle.server.ip, link)
-            st.rerun()
+    #     if c3.form_submit_button("Add Git Repository"):
+    #         st.info(f"Adding {link} to {bundle.name}")
+    #         infra.create_and_add_repo(bundle.server.ip, link)
+    #         st.rerun()
 
     my_repos = []
-    for bundle in bundles:
-        for r in bundle.repos:
-            my_repos.append(
-                {
-                    "ip": bundle.server.ip,
-                    "server": bundle.name,
-                    "name": r.name,
-                    "link": r.link,
-                    "path": r.path,
-                    "added": datetime.fromisoformat(r.added_timestamp).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    "modified": datetime.fromisoformat(r.modified_timestamp).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    "repo": r,
-                }
-            )
+    for r in infra.filter_by_group("git"):
+        bundle = infra.get_bundle_by_service(r)
+        if not bundle:
+            continue
+        my_repos.append(
+            {
+                "ip": bundle.server.ip,
+                "server": bundle.name,
+                "name": r.name,
+                "link": r.link,
+                "path": r.target_path,
+                "added": datetime.fromisoformat(r.created_timestamp).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "modified": datetime.fromisoformat(r.modified_timestamp).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "repo": r,
+            }
+        )
 
     df = pd.DataFrame(
         my_repos,
@@ -62,26 +69,17 @@ def repos():
         name = my_repos[idx]["name"]
         repo = my_repos[idx]["repo"]
 
-        if st.button("Pull"):
-            with st.spinner("Pulling..."):
-                infra.pull_repo(ip, name)
-            st.rerun()
+        config = infra.get_service_config(repo)
+
+        callable_settings_func = config.instantiate_ui("settings")
+        if callable_settings_func and repo.state == "running":
+            callable_settings_func(infra, bundle, repo)
 
         if st.button("Delete"):
             with st.spinner(f"Deleting {name}..."):
-                infra.remove_repo(ip, repo)
+                infra.teardown_service(repo)
+            save_infra()
             st.rerun()
-
-        c1, c2 = st.columns(2)
-        pull_method = c1.selectbox(
-            "Pull Method", ["Manual", "Scheduled", "Triggered"], disabled=True
-        )
-        if c2.button("Set Pull Method"):
-            st.info(f"Setting pull method to {pull_method} (NOT IMPLEMENTED YET)")
 
 
 repos()
-st.divider()
-if st.button("Save Infrastructure"):
-    with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()

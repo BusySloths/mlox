@@ -59,7 +59,7 @@ class KubeAppsService(AbstractService):
         node_ip = conn.host
         service_port = self.node_port
         self.service_ports["KubeApps"] = service_port
-        self.service_url = f"http://{node_ip}:{service_port}"
+        self.service_urls["KubeApps"] = f"http://{node_ip}:{service_port}"
 
     def expose_kubeapps_nodeport(
         self,

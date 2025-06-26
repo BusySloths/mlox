@@ -46,7 +46,7 @@ class K8sDashboardService(AbstractService):
         #     sudo=True,
         # )
         self.service_ports["Kubernetes Dashboard"] = service_port
-        self.service_url = f"https://{node_ip}:{service_port}"
+        self.service_urls["Kubernetes Dashboard"] = f"https://{node_ip}:{service_port}"
 
     def expose_dashboard_nodeport(
         self,

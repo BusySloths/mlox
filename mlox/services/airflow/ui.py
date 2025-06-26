@@ -13,10 +13,10 @@ def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerServic
 
     # list associated repositories
     st.markdown("## Associated repositories")
-    for repo in bundle.repos:
-        if repo.path.startswith(service.path_dags):
+    for repo in infra.filter_by_group("git"):
+        if repo.target_path.startswith(service.path_dags):
             st.markdown(
-                f"- **{repo.name}**: [{repo.link}]({repo.link}) - Path: `{repo.path}`"
+                f"- **{repo.name}**: [{repo.link}]({repo.link}) - Path: `{repo.target_path}`"
             )
 
     # add a repository to the DAGs
@@ -28,10 +28,15 @@ def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerServic
     c1, c2, c3 = st.columns([70, 12, 18])
     repo = c1.selectbox(
         "Add repository",
-        [repo for repo in bundle.repos if not repo.path.startswith(service.path_dags)],
-        format_func=lambda repo: f"{repo.name} [{repo.path}]",
+        [
+            repo
+            for repo in infra.filter_by_group("git")
+            if not repo.target_path.startswith(service.path_dags)
+        ],
+        format_func=lambda repo: f"{repo.name} [{repo.target_path}]",
         label_visibility="collapsed",
     )
+
     if c2.button("Add to DAGs"):
         st.info("Adding to DAGs")
         if not repo.path.startswith(service.path_dags):

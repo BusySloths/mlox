@@ -32,6 +32,7 @@ class MLFlowMLServerDockerService(AbstractService):
     user: str = "admin"
     pw: str = "s3cr3t"
     hashed_pw: str = field(default="", init=False)
+    service_url: str = field(init=False, default="")
 
     def __post_init__(self):
         self.name = f"{self.model}@{self.name}"
@@ -68,6 +69,7 @@ class MLFlowMLServerDockerService(AbstractService):
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_PW={self.tracking_pw}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_INSECURE=true")
         self.service_ports["MLServer REST API"] = int(self.port)
+        self.service_urls["MLServer REST API"] = f"https://{conn.host}:{self.port}"
         self.service_url = f"https://{conn.host}:{self.port}"
 
     def teardown(self, conn):

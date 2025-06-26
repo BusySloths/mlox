@@ -2,6 +2,11 @@ import pandas as pd
 
 import streamlit as st
 
+from typing import cast
+
+from mlox.infra import Infrastructure
+from mlox.secret_manager import AbstractSecretManagerService
+
 
 def secrets():
     st.markdown("""
@@ -10,24 +15,28 @@ def secrets():
     - Configurations
     """)
 
-    ip = "<IP_ADDRESS>"
-    gcp_prj = "<GCP_PROJECT_ID>"
-    st.selectbox(
+    infra = cast(Infrastructure, st.session_state.mlox.infra)
+
+    secret_manager_service = st.selectbox(
         "Choose Secret Manager Backend",
-        [
-            "MLOX Secrets",
-            f"OpenBAO on {ip}",
-            f"Google Secret Manager for Project {gcp_prj}",
-        ],
+        infra.filter_by_group("secret-manager"),
+        format_func=lambda x: f"{x.name}",
     )
 
-    ms = st.session_state.mlox
-    secrets = ms.secrets.list_secrets(keys_only=False)
+    bundle = infra.get_bundle_by_service(secret_manager_service)
+    if not bundle:
+        st.error("Could not find server for secret manager.")
+        return
+
+    secret_manager = secret_manager_service.get_secret_manager(bundle.server)
+    # secret_manager = st.session_state.mlox.secrets
+
+    secrets = secret_manager.list_secrets(keys_only=False)
     with st.form("Add Secret"):
         name = st.text_input("Key")
         value = st.text_area("Value")
         if st.form_submit_button("Add Secret"):
-            ms.secrets.save_secret(name, value)
+            secret_manager.save_secret(name, value)
             st.rerun()
 
     df = pd.DataFrame(

@@ -48,7 +48,6 @@ class AirflowDockerService(AbstractService):
         base_url = f"https://{conn.host}:{self.port}"
         if len(self.secret_path) >= 1:
             base_url = f"https://{conn.host}:{self.port}/{self.secret_path}"
-        self.service_url = base_url
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
         fs_append_line(conn, env_path, "_AIRFLOW_SSL_CERT_NAME=cert.pem")
@@ -62,6 +61,7 @@ class AirflowDockerService(AbstractService):
         fs_append_line(conn, env_path, f"_AIRFLOW_OUT_FILE_PATH={self.path_output}")
         fs_append_line(conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}")
         fs_append_line(conn, env_path, "_AIRFLOW_LOAD_EXAMPLES=false")
+        self.service_urls["Airflow UI"] = base_url
         self.service_ports["Airflow Webserver"] = int(self.port)
 
     def teardown(self, conn):

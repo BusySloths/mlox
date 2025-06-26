@@ -1,9 +1,26 @@
+import pandas as pd
 import streamlit as st
 
-from typing import cast
+from typing import cast, List, Dict, Any
 
 from mlox.infra import Infrastructure
-from mlox.view.utils import form_add_server
+from mlox.config import load_all_server_configs
+
+
+def save_infra():
+    with st.spinner("Saving infrastructure..."):
+        st.session_state.mlox.save_infrastructure()
+
+
+def format_groups(groups: Dict[str, Any]) -> List[str]:
+    group_list: List[str] = list()
+
+    for k, v in groups.items():
+        if isinstance(v, Dict):
+            group_list.extend([f"{k}:{e}" for e in format_groups(v)])
+        else:
+            group_list.append(f"{k}:{v}" if v else k)
+    return group_list
 
 
 @st.fragment(run_every="30s")
@@ -18,41 +35,34 @@ def auto_function(server):
     # st.write(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 
-def tab_server_mngmt():
+def server_management():
     infra = cast(Infrastructure, st.session_state.mlox.infra)
-
-    # with st.expander("Add Server"):
-    st.write("To add a server, use the form below.")
-    with st.form(key="add_new_server"):
-        ip, port, root, pw, config = form_add_server()
-        if st.form_submit_button(label="Add Server"):
-            bundle = infra.add_server(
-                config,
-                {
-                    "${MLOX_IP}": ip,
-                    "${MLOX_PORT}": str(port),
-                    "${MLOX_ROOT}": root,
-                    "${MLOX_ROOT_PW}": pw,
-                },
-            )
-            if not bundle:
-                st.error("Uh oh, something went wrong. ")
-            else:
-                st.info(f"Server added successfully: {ip}")
-                st.rerun()
-
     st.markdown("### Server List")
 
     srv = []
     for bundle in infra.bundles:
-        info = bundle.server.get_server_info()
+        success = False
+        info = {
+            "host": "Unknown",
+            "cpu_count": 0,
+            "ram_gb": 0,
+            "storage_gb": 0,
+            "pretty_name": "Unknown",
+        }
+        try:
+            info = bundle.server.get_server_info()
+            success = True
+        except Exception as e:
+            print(f"Could not get server info: {e}")
+
         srv.append(
             {
                 "ip": bundle.server.ip,
                 "name": bundle.name,
-                "status": [bundle.status],
+                "backend": bundle.server.backend,
+                "status": [bundle.server.state if success else "error"],
                 "tags": bundle.tags,
-                "services": [s.service.name for s in bundle.services],
+                "services": [s.name for s in bundle.services],
                 "hostname": info["host"],
                 "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
             }
@@ -71,10 +81,10 @@ def tab_server_mngmt():
         selected_server = srv[select_server["selection"]["rows"][0]]["ip"]
         bundle = infra.get_bundle_by_ip(selected_server)
 
-        auto_function(bundle.server)
+        # auto_function(bundle.server)
 
         # server_management(infra, selected_server)
-        c1, c2, c3 = st.columns([40, 50, 10])
+        c1, c2, c3 = st.columns([30, 55, 15])
         name = c1.text_input("Name", value=bundle.name)
         tags = c2.multiselect(
             "Tags",
@@ -85,55 +95,52 @@ def tab_server_mngmt():
             accept_new_options=True,
             max_selections=10,
         )
-        if c3.button("Update", type="primary"):
+        if c3.button("Update", type="primary", help="Update", icon=":material/update:"):
             bundle.name = name
             bundle.tags = tags
+            save_infra()
             st.rerun()
 
-        c1, c2, _, c3, c4, c5, c6 = st.columns([15, 10, 10, 15, 15, 20, 15])
-        if c1.button("Clear Backend", type="primary"):
-            st.info(f"Backend for server with IP {selected_server} will be cleared.")
-            infra.clear_backend(selected_server)
+        c1, c2, c3, _, c4, c5, c6 = st.columns([10, 15, 10, 15, 15, 10, 25])
+        if c2.button("Delete", type="primary"):
+            st.info(f"Backend for server with IP {selected_server} will be deleted.")
+            infra.remove_bundle(bundle)
+            save_infra()
             st.rerun()
-        if c2.button("Initialize", disabled=bundle.status != "un-initialized"):
+        # if c2.button("Clear Backend", disabled=bundle.server.state != "running"):
+        #     st.info(f"Backend for server with IP {selected_server} will be cleared.")
+        #     bundle.server.teardown_backend()
+        #     save_infra()
+        #     st.rerun()
+        if c1.button("Setup", disabled=not bundle.server.state == "un-initialized"):
             st.info(f"Initialize the server with IP {selected_server}.")
             with st.spinner("Initializing server...", show_time=True):
-                bundle.initialize()
+                bundle.server.setup()
+            save_infra()
             st.rerun()
-        if c3.button("Setup Docker", disabled=bundle.status != "no-backend"):
-            st.info(f"Change the backend for server with IP {selected_server}.")
-            with st.spinner("Enabling docker backend...", show_time=True):
-                bundle.set_backend("docker")
-            st.rerun()
-        if c4.button("Setup K8S", disabled=bundle.status != "no-backend"):
-            st.info(f"Change the backend for server with IP {selected_server}.")
-            with st.spinner("Enabling k8s backend...", show_time=True):
-                bundle.set_backend("kubernetes")
-            st.rerun()
-        controller = c5.selectbox(
-            "K8s controller",
-            infra.list_kubernetes_controller(),
-            format_func=lambda x: x.name,
-        )
-        if c6.button("Setup K8S-Agent", disabled=bundle.status != "no-backend"):
-            # st.write(controller)
-            with st.spinner(
-                f"setting up k8s-agent backend with controller {controller.name}.",
-                show_time=True,
-            ):
-                bundle.set_backend("kubernetes-agent", controller=controller)
+        current_access = "mlox.debug" in bundle.tags
+        if (
+            c6.toggle(":material/bug_report: Enable debug access", current_access)
+            != current_access
+        ):
+            if current_access:
+                # remove access
+                st.info("Remove debug access")
+                bundle.tags.remove("mlox.debug")
+                bundle.server.disable_debug_access()
+            else:
+                # enable access
+                st.info("Enable debug access")
+                bundle.tags.append("mlox.debug")
+                bundle.server.enable_debug_access()
+            save_infra()
             st.rerun()
 
-        with st.expander("Debug Access"):
-            if st.button("Enable User/Password Access"):
-                bundle.server.enable_password_authentication()
-                st.info(
-                    f"User/Password access enabled for {bundle.server.ip}. User/PW: {bundle.server.mlox_user.name}/{bundle.server.mlox_user.pw}"
-                )
-
-            if st.button("Disable User/Password Access"):
-                bundle.server.disable_password_authentication()
-                st.info(f"User/Password access disabled for {bundle.server.ip}")
+        config = infra.get_service_config(bundle.server)
+        if config:
+            callable_settings_func = config.instantiate_ui("settings")
+            if callable_settings_func:
+                callable_settings_func(infra, bundle, bundle.server)
 
         # with st.expander("Terminal"):
         #     from mlox.view.terminal import emulate_basic_terminal
@@ -141,24 +148,127 @@ def tab_server_mngmt():
         #     with bundle.server.get_server_connection() as conn:
         #         emulate_basic_terminal(conn)
 
-        # with st.expander("More info"):
-        #     from mlox.remote import exec_command
+        with st.expander("More info"):
+            #     from mlox.remote import exec_command
 
-        #     with bundle.server.get_server_connection() as conn:
-        #         st.write(exec_command(conn, "ufw status", sudo=True))
+            #     with bundle.server.get_server_connection() as conn:
+            #         st.write(exec_command(conn, "ufw status", sudo=True))
 
-        #     st.write(bundle.server.get_docker_status())
+            st.write(bundle.server.get_backend_status())
         #     st.write(bundle.server.get_kubernetes_status())
         #     st.write(bundle)
 
 
-st.header("Server Management")
-st.write(
-    "This is a simple server management interface. You can add servers, manage services, and view server information."
-)
-tab_server_mngmt()
+def available_server_templates():
+    st.markdown("""
+    ### Available Server Templates
+    This is where you can manage your server.""")
+    infra = cast(Infrastructure, st.session_state.mlox.infra)
 
-st.divider()
-if st.button("Save Infrastructure"):
-    with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()
+    # with st.expander("Add Server"):
+    configs = load_all_server_configs("./stacks")
+
+    server = []
+    for service in configs:
+        server.append(
+            {
+                "name": service.name,
+                "version": service.version,
+                "maintainer": service.maintainer,
+                "description": service.description,
+                "description_short": service.description_short,
+                "links": [f"{k}: {v}" for k, v in service.links.items()],
+                "requirements": [f"{k}: {v}" for k, v in service.requirements.items()],
+                "ui": [f"{k}" for k, v in service.ui.items()],
+                # "groups": [f"{k}" for k, v in service.groups.items() if k != "backend"],
+                "groups": format_groups(service.groups),
+                "backend": [
+                    f"{k}" for k, v in service.groups.get("backend", {}).items()
+                ],
+                "config": service,
+            }
+        )
+
+    c1, c2, _ = st.columns(3)
+    search_filter = c1.text_input(
+        "Search",
+        value="",
+        key="search_filter",
+        label_visibility="collapsed",
+        placeholder="Search for services...",
+    )
+    if len(search_filter) > 0:
+        server = [s for s in server if search_filter.lower() in s["name"].lower()]
+
+    option_map = {0: "Docker only", 1: "Kubernetes only"}
+    selection = c2.pills(
+        "Backend Filter",
+        options=option_map.keys(),
+        format_func=lambda option: option_map[option],
+        selection_mode="single",
+        default=None,
+        label_visibility="collapsed",
+    )
+    if selection is not None:
+        if selection == 0:
+            server = [s for s in server if "docker" in s["backend"]]
+        elif selection == 1:
+            server = [s for s in server if "kubernetes" in s["backend"]]
+
+    df = pd.DataFrame(server)
+    select = st.dataframe(
+        df[
+            [
+                "name",
+                "version",
+                # "maintainer",
+                # "description",
+                # "links",
+                # "requirements",
+                "backend",
+                "groups",
+                "description_short",
+            ]
+        ],
+        use_container_width=True,
+        selection_mode="single-row",
+        hide_index=True,
+        on_select="rerun",
+        key="avail-server-select",
+    )
+
+    if len(select["selection"].get("rows", [])) == 1:
+        selected = select["selection"]["rows"][0]
+
+        config = server[selected]["config"]
+        c2, c3, c4, _ = st.columns([25, 25, 15, 35])
+
+        with st.form("Add Server"):
+            params = {}
+            callable_setup_func = config.instantiate_ui("setup")
+            if callable_setup_func:
+                params = callable_setup_func(infra, config)
+
+            # if st.button("Add Server", type="primary"):
+            if st.form_submit_button(
+                "Add Server", type="primary", icon=":material/computer:"
+            ):
+                st.info(f"Adding server {config.name} {config.version}.")
+                ret = infra.add_server(config, params)
+                if not ret:
+                    st.error("Failed to add server")
+                save_infra()
+
+        st.write(server[selected])
+
+
+tab_avail, tab_installed = st.tabs(["Templates", "Server Management"])
+with tab_avail:
+    available_server_templates()
+
+with tab_installed:
+    st.header("Server Management")
+    st.write(
+        "This is a simple server management interface. You can add servers, manage services, and view server information."
+    )
+    server_management()

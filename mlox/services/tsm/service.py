@@ -3,19 +3,15 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.utils import dataclass_to_dict, save_to_json
-from mlox.infra import Bundle
-from mlox.secret_manager import TinySecretManager
-from mlox.service import AbstractService, tls_setup
-from mlox.remote import (
-    fs_copy,
-    fs_delete_dir,
-    fs_create_dir,
-    fs_create_empty_file,
-    fs_append_line,
-    sys_user_id,
-    docker_down,
+from mlox.utils import dataclass_to_dict
+from mlox.secret_manager import (
+    TinySecretManager,
+    AbstractSecretManager,
+    AbstractSecretManagerService,
 )
+from mlox.service import AbstractService
+from mlox.server import AbstractServer
+from mlox.remote import fs_delete_dir
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -24,20 +20,28 @@ logging.basicConfig(
 
 
 @dataclass
-class TSMService(AbstractService):
+class TSMService(AbstractService, AbstractSecretManagerService):
     pw: str
 
-    def get_secret_manager(self, bundle: Bundle) -> TinySecretManager:
+    def __post_init__(self):
+        self.state = "running"
+
+    def get_secret_manager(self, server: AbstractServer) -> AbstractSecretManager:
         """Get the TinySecretManager instance for this service."""
-        server_dict = dataclass_to_dict(bundle.server)
-        return TinySecretManager("", self.target_path, self.pw, server_dict=server_dict)
+        server_dict = dataclass_to_dict(server)
+        if server.mlox_user is None:
+            raise ValueError("Server user is not set.")
+        relative_path = self.target_path.removeprefix(server.mlox_user.home)
+        return TinySecretManager("", relative_path, self.pw, server_dict=server_dict)
 
     def setup(self, conn) -> None:
-        self.service_url = "None"
+        self.service_urls = dict()
         self.service_ports = dict()
+        self.state = "running"
 
     def teardown(self, conn):
         fs_delete_dir(conn, self.target_path)
+        self.state = "un-initialized"
 
     def spin_up(self, conn):
         return None

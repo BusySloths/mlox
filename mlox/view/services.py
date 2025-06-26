@@ -7,6 +7,11 @@ from mlox.infra import Infrastructure
 from mlox.config import load_all_service_configs
 
 
+def save_infra():
+    with st.spinner("Saving infrastructure..."):
+        st.session_state.mlox.save_infrastructure()
+
+
 def installed_services():
     st.markdown("""
     # Services
@@ -17,21 +22,21 @@ def installed_services():
 
     services = []
     for bundle in infra.bundles:
-        for stateful_service in bundle.services:
+        for s in bundle.services:
             services.append(
                 {
                     "ip": bundle.server.ip,
-                    "name": stateful_service.service.name,
-                    "version": stateful_service.config.version,
-                    "link": stateful_service.service.service_url,
-                    "state": stateful_service.state,
+                    "name": s.name,
+                    "version": infra.get_service_config(s).version,
+                    "links": [f"{k}:{v}" for k, v in s.service_urls.items()],
+                    "state": s.state,
                     # "tags": bundle.tags,
                     # "services": [s.name for s in bundle.services],
                     # "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
                 }
             )
 
-    df = pd.DataFrame(services, columns=["ip", "name", "version", "state", "link"])
+    df = pd.DataFrame(services, columns=["ip", "name", "version", "state", "links"])
     select_server = st.dataframe(
         df,
         use_container_width=True,
@@ -45,24 +50,40 @@ def installed_services():
         idx = select_server["selection"]["rows"][0]
         ip = services[idx]["ip"]
         service_name = services[idx]["name"]
-        bundle, stateful_service = infra.get_stateful_service(ip, service_name)
+        service = infra.get_service(service_name)
+        bundle = infra.get_bundle_by_ip(ip)
+        config = infra.get_service_config(service)
 
-        state = stateful_service.state
-        c1, c2, _ = st.columns([20, 20, 60])
+        state = service.state
+        c1, c2, _, c3, c4 = st.columns([20, 20, 15, 30, 15])
         if c1.button("Setup", disabled=state != "un-initialized"):
             with st.spinner(f"Setting up service {service_name}...", show_time=True):
-                infra.setup_service(ip, service_name, state="setup")
+                infra.setup_service(service)
+            save_infra()
             st.rerun()
 
         if c2.button("Teardown"):
             with st.spinner(f"Deleting service {service_name}...", show_time=True):
-                infra.setup_service(ip, service_name, state="teardown")
+                infra.teardown_service(service)
+            save_infra()
             st.rerun()
+        new_service_name = c3.text_input("Unqiue service name", service_name)
+        if (
+            c4.button("Update", icon=":material/update:")
+            and new_service_name != service_name
+        ):
+            if new_service_name in infra.list_service_names():
+                st.error("Service name must be unqiue.")
+            else:
+                service.name = new_service_name
+                save_infra()
+                st.rerun()
 
-        st.divider()
-        callable_settings_func = stateful_service.config.instantiate_ui("settings")
+        # st.divider()
+        callable_settings_func = config.instantiate_ui("settings")
         if callable_settings_func and state == "running":
-            callable_settings_func(infra, bundle, stateful_service.service)
+            callable_settings_func(infra, bundle, service)
+            # save_infra()
 
 
 def available_services():
@@ -111,7 +132,7 @@ def available_services():
         options=option_map.keys(),
         format_func=lambda option: option_map[option],
         selection_mode="single",
-        default=0,
+        default=None,
         label_visibility="collapsed",
     )
     if selection is not None:
@@ -163,13 +184,14 @@ def available_services():
         if callable_setup_func:
             params = callable_setup_func(infra, bundle)
 
-        if st.button("Add Service"):
+        if st.button("Add Service", type="primary"):
             st.info(
                 f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
             )
             ret = infra.add_service(bundle.server.ip, config, params)
             if not ret:
                 st.error("Failed to add service")
+            save_infra()
 
         st.write(services[selected])
 
@@ -181,7 +203,7 @@ with tab_avail:
 with tab_installed:
     installed_services()
 
-st.divider()
-if st.button("Save Infrastructure"):
-    with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()
+# st.divider()
+# if st.button("Save Infrastructure"):
+#     save_infra()
+#

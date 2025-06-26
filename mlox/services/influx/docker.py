@@ -53,8 +53,8 @@ class InfluxDockerService(AbstractService):
             f"cat {self.target_path}/cert.pem {self.target_path}/key.pem > {self.target_path}/influxdb.pem",
         )
 
-        self.service_ports["Influx Webserver"] = int(self.port)
-        self.service_url = f"https://{conn.host}:{self.port}"
+        self.service_ports["InfluxDB"] = int(self.port)
+        self.service_urls["InfluxDB"] = f"https://{conn.host}:{self.port}"
 
     def teardown(self, conn):
         docker_down(

@@ -45,7 +45,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OtelDockerService):
 
     if not telemetry_data:
         st.info("No telemetry data loaded or file was empty/corrupt.")
-        st.stop()
+        return
 
     st.subheader("Raw Telemetry Data (JSONL)")
     # Display each JSON object
