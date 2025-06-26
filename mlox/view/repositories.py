@@ -15,35 +15,37 @@ def repos():
     ms = cast(MloxSession, st.session_state.mlox)
     infra = ms.infra
     bundles = infra.bundles
-    with st.form("Add Repo"):
-        c1, c2, c3 = st.columns([40, 40, 20])
-        link = c1.text_input("GitHub Link")
-        bundle = c2.selectbox("Bundle", bundles, format_func=lambda b: b.name)
+    # with st.form("Add Repo"):
+    #     c1, c2, c3 = st.columns([40, 40, 20])
+    #     link = c1.text_input("GitHub Link")
+    #     bundle = c2.selectbox("Bundle", bundles, format_func=lambda b: b.name)
 
-        if c3.form_submit_button("Add Git Repository"):
-            st.info(f"Adding {link} to {bundle.name}")
-            infra.create_and_add_repo(bundle.server.ip, link)
-            st.rerun()
+    #     if c3.form_submit_button("Add Git Repository"):
+    #         st.info(f"Adding {link} to {bundle.name}")
+    #         infra.create_and_add_repo(bundle.server.ip, link)
+    #         st.rerun()
 
     my_repos = []
-    for bundle in bundles:
-        for r in bundle.repos:
-            my_repos.append(
-                {
-                    "ip": bundle.server.ip,
-                    "server": bundle.name,
-                    "name": r.name,
-                    "link": r.link,
-                    "path": r.path,
-                    "added": datetime.fromisoformat(r.added_timestamp).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    "modified": datetime.fromisoformat(r.modified_timestamp).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    "repo": r,
-                }
-            )
+    for r in infra.filter_by_group("git"):
+        bundle = infra.get_bundle_by_service(r)
+        if not bundle:
+            continue
+        my_repos.append(
+            {
+                "ip": bundle.server.ip,
+                "server": bundle.name,
+                "name": r.name,
+                "link": r.link,
+                # "path": r.path,
+                "added": datetime.fromisoformat(r.created_timestamp).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "modified": datetime.fromisoformat(r.modified_timestamp).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "repo": r,
+            }
+        )
 
     df = pd.DataFrame(
         my_repos,
