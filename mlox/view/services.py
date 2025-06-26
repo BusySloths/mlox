@@ -58,13 +58,13 @@ def installed_services():
         c1, c2, _, c3, c4 = st.columns([20, 20, 15, 30, 15])
         if c1.button("Setup", disabled=state != "un-initialized"):
             with st.spinner(f"Setting up service {service_name}...", show_time=True):
-                infra.setup_service(ip, service_name, state="setup")
+                infra.setup_service(service)
             save_infra()
             st.rerun()
 
         if c2.button("Teardown"):
             with st.spinner(f"Deleting service {service_name}...", show_time=True):
-                infra.setup_service(ip, service_name, state="teardown")
+                infra.teardown_service(service)
             save_infra()
             st.rerun()
         new_service_name = c3.text_input("Unqiue service name", service_name)
@@ -132,7 +132,7 @@ def available_services():
         options=option_map.keys(),
         format_func=lambda option: option_map[option],
         selection_mode="single",
-        default=0,
+        default=None,
         label_visibility="collapsed",
     )
     if selection is not None:

@@ -15,8 +15,6 @@ def secrets():
     - Configurations
     """)
 
-    ip = "<IP_ADDRESS>"
-    gcp_prj = "<GCP_PROJECT_ID>"
     infra = cast(Infrastructure, st.session_state.mlox.infra)
 
     secret_manager_service = st.selectbox(
@@ -24,11 +22,6 @@ def secrets():
         infra.filter_by_group("secret-manager"),
         format_func=lambda x: f"{x.name}",
     )
-
-    # if not isinstance(secret_manager_service, AbstractSecretManagerService):
-    #     st.error("Invalid secret manager service")
-    #     st.write(secret_manager_service)
-    #     return
 
     bundle = infra.get_bundle_by_service(secret_manager_service)
     if not bundle:

@@ -7,6 +7,11 @@ from typing import cast
 from mlox.session import MloxSession
 
 
+def save_infra():
+    with st.spinner("Saving infrastructure..."):
+        st.session_state.mlox.save_infrastructure()
+
+
 def repos():
     st.markdown("""
     # Repositories
@@ -36,7 +41,7 @@ def repos():
                 "server": bundle.name,
                 "name": r.name,
                 "link": r.link,
-                # "path": r.path,
+                "path": r.target_path,
                 "added": datetime.fromisoformat(r.created_timestamp).strftime(
                     "%Y-%m-%d %H:%M:%S"
                 ),
@@ -64,26 +69,17 @@ def repos():
         name = my_repos[idx]["name"]
         repo = my_repos[idx]["repo"]
 
-        if st.button("Pull"):
-            with st.spinner("Pulling..."):
-                infra.pull_repo(ip, name)
-            st.rerun()
+        config = infra.get_service_config(repo)
+
+        callable_settings_func = config.instantiate_ui("settings")
+        if callable_settings_func and repo.state == "running":
+            callable_settings_func(infra, bundle, repo)
 
         if st.button("Delete"):
             with st.spinner(f"Deleting {name}..."):
-                infra.remove_repo(ip, repo)
+                infra.teardown_service(repo)
+            save_infra()
             st.rerun()
-
-        c1, c2 = st.columns(2)
-        pull_method = c1.selectbox(
-            "Pull Method", ["Manual", "Scheduled", "Triggered"], disabled=True
-        )
-        if c2.button("Set Pull Method"):
-            st.info(f"Setting pull method to {pull_method} (NOT IMPLEMENTED YET)")
 
 
 repos()
-st.divider()
-if st.button("Save Infrastructure"):
-    with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()

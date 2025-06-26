@@ -84,35 +84,24 @@ class Infrastructure:
             logging.warning(f"Could not find bundle {bundle.server.ip}")
         return None
 
-    def setup_service(
-        self,
-        ip: str,
-        service_name: str,
-        state: Literal["setup", "teardown"],
-    ) -> None:
-        bundle = self.get_bundle_by_ip(ip)
+    def setup_service(self, service: AbstractService) -> None:
+        bundle = self.get_bundle_by_service(service)
         if not bundle:
             logging.warning("Could not find bundle.")
             return
+        with bundle.server.get_server_connection() as conn:
+            service.setup(conn)
+            service.spin_up(conn)
 
-        service = None
-        for s in bundle.services:
-            if s.name == service_name:
-                service = s
-                break
-        if not service:
-            logging.warning("Could not find service.")
+    def teardown_service(self, service: AbstractService) -> None:
+        bundle = self.get_bundle_by_service(service)
+        if not bundle:
+            logging.warning("Could not find bundle.")
             return
         with bundle.server.get_server_connection() as conn:
-            if state == "setup":
-                service.setup(conn)
-                service.spin_up(conn)
-            elif state == "teardown":
-                service.spin_down(conn)
-                service.teardown(conn)
-                bundle.services.remove(service)
-            else:
-                logging.warning("Unknown state.")
+            service.spin_down(conn)
+            service.teardown(conn)
+        bundle.services.remove(service)
 
     def add_service(
         self, ip: str, config: ServiceConfig, params: Dict[str, Any]
