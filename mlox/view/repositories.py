@@ -12,7 +12,7 @@ def save_infra():
         st.session_state.mlox.save_infrastructure()
 
 
-def repos():
+def manage_repositories():
     st.markdown("""
     # Repositories
     This is where you can manage your repositories.""")
@@ -31,7 +31,7 @@ def repos():
     #         st.rerun()
 
     my_repos = []
-    for r in infra.filter_by_group("git"):
+    for r in infra.filter_by_group("repository"):
         bundle = infra.get_bundle_by_service(r)
         if not bundle:
             continue
@@ -82,4 +82,4 @@ def repos():
             st.rerun()
 
 
-repos()
+manage_repositories()

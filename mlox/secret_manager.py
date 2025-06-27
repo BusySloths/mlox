@@ -91,11 +91,17 @@ class TinySecretManager(AbstractSecretManager):
             fs_create_dir(conn, self.path)
             if conn.is_connected:
                 self._connection_works = True
+        list_secrets = self.list_secrets(keys_only=False, use_cache=False)
+        self.cache.update(list_secrets)
 
     def is_working(self) -> bool:
         return self._connection_works
 
-    def list_secrets(self, keys_only: bool = False) -> Dict[str, Any]:
+    def list_secrets(
+        self, keys_only: bool = False, use_cache: bool = True
+    ) -> Dict[str, Any]:
+        if use_cache:
+            return self.cache
         secrets: Dict[str, Any] = {}
         with self.server.get_server_connection() as conn:
             files = fs_list_files(conn, self.path)

@@ -36,7 +36,7 @@ def installed_services():
                 }
             )
 
-    df = pd.DataFrame(services, columns=["ip", "name", "version", "state", "links"])
+    df = pd.DataFrame(services, columns=["name", "ip", "version", "state", "links"])
     select_server = st.dataframe(
         df,
         use_container_width=True,
@@ -168,42 +168,41 @@ def available_services():
 
         config = services[selected]["config"]
         supported_backends = list(config.groups.get("backend", {}).keys())
-        c2, c3, c4, _ = st.columns([25, 25, 15, 35])
 
-        select_backend = c2.selectbox(
-            "Backend", supported_backends, key="select_backend"
-        )
-        bundle = c3.selectbox(
-            "Server",
-            infra.list_bundles_with_backend(backend=select_backend),
-            format_func=lambda x: f"{x.name} {x.server.ip}",
-        )
+        with st.form("Add Service"):
+            st.markdown(f"### Adding service {config.name} {config.version}.")
+            st.markdown(config.description)
 
-        params = {}
-        callable_setup_func = config.instantiate_ui("setup")
-        if callable_setup_func:
-            params = callable_setup_func(infra, bundle)
-
-        if st.button("Add Service", type="primary"):
-            st.info(
-                f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
+            c2, c3, c4, _ = st.columns([25, 25, 15, 35])
+            select_backend = c2.selectbox(
+                "Backend", supported_backends, key="select_backend"
             )
-            ret = infra.add_service(bundle.server.ip, config, params)
-            if not ret:
-                st.error("Failed to add service")
-            save_infra()
+            bundle = c3.selectbox(
+                "Server",
+                infra.list_bundles_with_backend(backend=select_backend),
+                format_func=lambda x: f"{x.name} {x.server.ip}",
+            )
+
+            params = {}
+            callable_setup_func = config.instantiate_ui("setup")
+            if callable_setup_func:
+                params = callable_setup_func(infra, bundle)
+
+            if st.form_submit_button("Add Service", type="primary"):
+                st.info(
+                    f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
+                )
+                ret = infra.add_service(bundle.server.ip, config, params)
+                if not ret:
+                    st.error("Failed to add service")
+                save_infra()
 
         st.write(services[selected])
 
 
-tab_avail, tab_installed = st.tabs(["Available", "Installed"])
+tab_avail, tab_installed = st.tabs(["Templates", "Installed"])
 with tab_avail:
     available_services()
 
 with tab_installed:
     installed_services()
-
-# st.divider()
-# if st.button("Save Infrastructure"):
-#     save_infra()
-#

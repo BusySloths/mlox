@@ -44,14 +44,16 @@ class GithubRepoService(AbstractService):
 
     def pull_repo(self, bundle: Bundle) -> None:
         self.modified_timestamp = datetime.now().isoformat()
-        if isinstance(bundle.server, AbstractGitServer):
+        # if isinstance(bundle.server, AbstractGitServer):
+        if hasattr(bundle.server, "git_pull"):
             server = cast(AbstractGitServer, bundle.server)
             server.git_pull(self.target_path + "/" + self.repo_name)
         else:
             logging.warning("Server is not a git server.")
 
     def create_and_add_repo(self, bundle: Bundle) -> None:
-        if isinstance(bundle.server, AbstractGitServer):
+        # if isinstance(bundle.server, AbstractGitServer):
+        if hasattr(bundle.server, "git_clone"):
             server = cast(AbstractGitServer, bundle.server)
             server.git_clone(self.link, self.target_path)
         else:

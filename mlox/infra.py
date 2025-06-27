@@ -104,7 +104,11 @@ class Infrastructure:
         bundle.services.remove(service)
 
     def add_service(
-        self, ip: str, config: ServiceConfig, params: Dict[str, Any]
+        self,
+        ip: str,
+        config: ServiceConfig,
+        params: Dict[str, Any],
+        service: AbstractService | None = None,
     ) -> Bundle | None:
         bundle = next((v for v in self.bundles if v.server.ip == ip), None)
         if not bundle:
@@ -117,34 +121,34 @@ class Infrastructure:
             logger.warning("No mlox user found for bundle.")
             return None
 
-        mlox_params = {
-            "${MLOX_STACKS_PATH}": "./stacks/",
-            "${MLOX_USER}": bundle.server.mlox_user.name,
-            "${MLOX_AUTO_USER}": generate_username(),
-            "${MLOX_AUTO_PW}": generate_pw(),
-        }
-
-        port_prefix = "${MLOX_AUTO_PORT_"
-        port_postfix = "}"
-        used_ports = list()
-        for s in bundle.services:
-            used_ports.extend(list(s.service_ports.values()))
-        assigned_ports = auto_map_ports(used_ports, config.ports)
-        mlox_params.update(
-            {
-                f"{port_prefix}{name.upper()}{port_postfix}": str(port)
-                for name, port in assigned_ports.items()
-            }
-        )
-        # print(f"MLOX PARAMS: {mlox_params}")
-        params.update(mlox_params)
-        service = config.instantiate_service(params=params)
         if not service:
-            logger.warning("Could not instantiate service.")
-            return None
-        if service.name in [s.name for s in bundle.services]:
-            logger.warning(f"Service {service.name} already exists in bundle {bundle}.")
-            return None
+            mlox_params = {
+                "${MLOX_STACKS_PATH}": "./stacks/",
+                "${MLOX_USER}": bundle.server.mlox_user.name,
+                "${MLOX_AUTO_USER}": generate_username(),
+                "${MLOX_AUTO_PW}": generate_pw(),
+                "${MLOX_AUTO_API_KEY}": generate_pw(),
+            }
+
+            port_prefix = "${MLOX_AUTO_PORT_"
+            port_postfix = "}"
+            used_ports = list()
+            for s in bundle.services:
+                used_ports.extend(list(s.service_ports.values()))
+            assigned_ports = auto_map_ports(used_ports, config.ports)
+            mlox_params.update(
+                {
+                    f"{port_prefix}{name.upper()}{port_postfix}": str(port)
+                    for name, port in assigned_ports.items()
+                }
+            )
+            # print(f"MLOX PARAMS: {mlox_params}")
+            params.update(mlox_params)
+            _service = config.instantiate_service(params=params)
+            if not _service:
+                logger.warning("Could not instantiate service.")
+                return None
+            service = _service
 
         self.configs[str(type(service))] = config
         # choose unique name

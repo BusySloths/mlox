@@ -1,5 +1,5 @@
 name: Github Repository
-version: newest
+version: 0.1-beta
 maintainer: Your Name
 description_short: Clone and pull Github Repositories on your servers. 
 description: |
@@ -16,6 +16,7 @@ requirements:
   disk_gb: 1.0
 groups:
   git:
+  repository:
   backend:
     kubernetes:
     docker:

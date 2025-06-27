@@ -11,15 +11,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: TSMService):
     st.write(f'Password: "{service.pw}"')
 
     tsm = service.get_secret_manager(bundle.server)
-    # st.write(tsm.list_secrets())
-
-    # secret_name = st.text_input("Secret Name", key="secret_name")
-    # secret_value = st.text_input("Secret Value", key="secret_value")
-    # if st.button("Save Secret"):
-    #     tsm.save_secret(secret_name, secret_value)
-    #     st.rerun()
-
-    secrets = tsm.list_secrets(keys_only=False)
+    secrets = tsm.list_secrets(keys_only=True)
     with st.form("Add Secret"):
         name = st.text_input("Key")
         value = st.text_area("Value")
@@ -28,7 +20,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: TSMService):
             st.rerun()
 
     df = pd.DataFrame(
-        [[k, str(v)] for k, v in secrets.items()], columns=["Key", "Value"]
+        [[k, "****"] for k, v in secrets.items()], columns=["Key", "Value"]
     )
     selection = st.dataframe(
         df,
@@ -40,4 +32,4 @@ def settings(infra: Infrastructure, bundle: Bundle, service: TSMService):
     if len(selection["selection"]["rows"]) > 0:
         idx = selection["selection"]["rows"][0]
         key = df.iloc[idx]["Key"]
-        st.write(secrets[key])
+        st.write(tsm.load_secret(key))

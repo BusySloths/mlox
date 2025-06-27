@@ -1,5 +1,5 @@
 name: TinySecretManager (TSM)
-version: newest
+version: "0.1-beta"
 maintainer: Your Name
 description_short: TinySecretManager is a lightweight, file-based secret management service.
 description: |

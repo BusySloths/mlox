@@ -1,5 +1,9 @@
 import streamlit as st
 
+from typing import cast
+
+from mlox.infra import Infrastructure
+
 
 def news():
     st.markdown("""
@@ -81,22 +85,37 @@ pages_infrastructure = [
         title="Services",
         icon=":material/linked_services:",
     ),
-    st.Page(
-        "view/repositories.py",
-        title="Repositories",
-        icon=":material/database:",
-    ),
-    st.Page(
-        "view/secret_manager.py",
-        title="Secret Management",
-        icon=":material/key:",
-    ),
-    st.Page(
-        "view/monitors.py",
-        title="Monitor",
-        icon=":material/monitor:",
-    ),
 ]
+
+if st.session_state.get("mlox", None):
+    infra = cast(Infrastructure, st.session_state.mlox.infra)
+
+    if len(infra.filter_by_group("repository")) > 0:
+        pages_infrastructure.append(
+            st.Page(
+                "view/repositories.py",
+                title="Repositories",
+                icon=":material/database:",
+            )
+        )
+
+    pages_infrastructure.append(
+        st.Page(
+            "view/secret_manager.py",
+            title="Secret Management",
+            icon=":material/key:",
+        )
+    )
+
+    if len(infra.filter_by_group("monitor")) > 0:
+        pages_infrastructure.append(
+            st.Page(
+                "view/monitors.py",
+                title="Monitor",
+                icon=":material/monitor:",
+            )
+        )
+
 pages_docs = {
     "Help and Documentation": [
         st.Page(
