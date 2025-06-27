@@ -18,3 +18,5 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
 def settings(infra: Infrastructure, bundle: Bundle, service: LiteLLMDockerService):
     st.header(f"Settings for service {service.name}")
     st.write(f"IP: {bundle.server.ip}")
+
+    st.write(f'User and Password: "{service.ui_user}:{service.ui_pw}"')

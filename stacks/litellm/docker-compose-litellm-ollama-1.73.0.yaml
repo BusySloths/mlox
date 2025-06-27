@@ -3,6 +3,8 @@ version: '3.8'
 services:
   postgres:
     image: postgres:13
+    expose:
+      - 5432
     environment:
       POSTGRES_USER: test
       POSTGRES_PASSWORD: test
@@ -10,7 +12,7 @@ services:
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
+      test: ["CMD", "pg_isready", "-U", "test"]
       interval: 10s
       retries: 5
       start_period: 5s
@@ -30,13 +32,13 @@ services:
       timeout: 30s
       retries: 50
       start_period: 30s
-    restart: always
     command:
       - sh
       - -c # this is to evaluate the $REDIS_PASSWORD from the env
       - redis-server --appendonly yes --requirepass $$REDIS_PASSWORD ## $$ because of docker-compose
     environment:
       REDIS_PASSWORD: SDsdgFsfm4lmf43lfnm34lkf
+    restart: always
     networks:
       - litellm
 
@@ -44,7 +46,7 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:v1.73.0-stable
     ports:
-      - "4000:4000" # Map the container port to the host, change the host port if necessary
+      - "${MY_LITELLM_PORT:-}:4000" # Map the container port to the host, change the host port if necessary
     environment:
       - DATABASE_URL=postgresql://test:test@postgres:5432/test
       - LITELLM_MASTER_KEY=${MY_LITELLM_MASTER_KEY:-}
@@ -54,17 +56,20 @@ services:
       - SSL_CERTFILE_PATH=/app/ssl.crt
       - UI_USERNAME=${MY_LITELLM_USERNAME:-}   # username to sign in on UI
       - UI_PASSWORD=${MY_LITELLM_PASSWORD:-}        # password to sign in on UI      
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=SDsdgFsfm4lmf43lfnm34lkf
+      # - REDIS_HOST=redis
+      # - REDIS_PORT=6379
+      # - REDIS_PASSWORD=SDsdgFsfm4lmf43lfnm34lkf
     volumes:
       - ./litellm-config.yaml:/app/config.yaml # Mount the local configuration file
       - ./cert.pem:/app/ssl.crt 
       - ./key.pem:/app/ssl.key
     # You can change the port or number of workers as per your requirements or pass any new supported CLI augument. Make sure the port passed here matches with the container port defined above in `ports` value
-    command: [ "--config", "/app/config.yaml", "--port", "${MY_LITELLM_PORT:-}", "--num_workers", "8" ]
+    command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8" ]
     networks:
       - litellm
+    depends_on:
+      - redis
+      - postgres
 
   ollama:
     image: ollama/ollama:0.9.4-rc0

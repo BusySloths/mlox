@@ -18,6 +18,6 @@ model_list:
       model: ollama/deepseek-r1:1.5b
       api_base: http://ollama:11434
 router_settings:
-  redis_host: http://redis
-  redis_password: 
+  redis_host: redis
+  redis_password: SDsdgFsfm4lmf43lfnm34lkf
   redis_port: 6379

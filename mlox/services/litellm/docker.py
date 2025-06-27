@@ -25,6 +25,8 @@ logging.basicConfig(
 
 @dataclass
 class LiteLLMDockerService(AbstractService):
+    ollama_script: str
+    litellm_config: str
     ui_user: str
     ui_pw: str
     ui_port: str | int
@@ -36,16 +38,8 @@ class LiteLLMDockerService(AbstractService):
         # copy files to target
         fs_create_dir(conn, self.target_path)
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
-        fs_copy(
-            conn,
-            "./services/llm/entrypoint.sh",
-            f"{self.target_path}/entrypoint.sh",
-        )
-        fs_copy(
-            conn,
-            "./services/llm/litellm-config.yaml",
-            f"{self.target_path}/litellm-config.yaml",
-        )
+        fs_copy(conn, self.ollama_script, f"{self.target_path}/entrypoint.sh")
+        fs_copy(conn, self.litellm_config, f"{self.target_path}/litellm-config.yaml")
         tls_setup(conn, conn.host, self.target_path)
         base_url = f"https://{conn.host}:{self.ui_port}/ui"
         env_path = f"{self.target_path}/{self.target_docker_env}"
