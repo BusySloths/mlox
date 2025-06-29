@@ -52,8 +52,9 @@ class LiteLLMDockerService(AbstractService):
         fs_append_line(conn, env_path, f"MY_LITELLM_PASSWORD={self.ui_pw}")
         self.service_urls["LiteLLM UI"] = base_url
         self.service_urls["LiteLLM Service"] = (
-            f"https://{conn.host}:{self.service_port}/ui"
+            f"https://{conn.host}:{self.service_port}"
         )
+
         self.service_ports["LiteLLM UI"] = int(self.ui_port)
         self.service_ports["LiteLLM Service"] = int(self.service_port)
         self.state = "running"
