@@ -1,0 +1,42 @@
+name: Postgres
+version: 16-bullseye
+maintainer: Your Name
+description_short: Postgres is a powerful, open-source object-relational database system.
+description: |
+  PostgresSQL is a powerful, open-source object-relational database system known for its 
+  reliability, feature robustness, and performance. It supports both SQL (relational) and 
+  JSON (non-relational) querying. In MLOX, PostgreSQL can be used as a backend database for 
+  various services, including MLFlow, Airflow, and custom applications, providing a reliable 
+  and scalable data storage solution for machine learning metadata, experiment results, and 
+  operational data.
+links:
+  project: https://www.postgresql.org/
+  news: https://www.postgresql.org/
+  security: https://www.postgresql.org/
+  documentation: https://www.postgresql.org/
+  changelog: https://www.postgresql.org/
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 10.0
+groups:
+  service:
+  database: 
+    relational:
+  backend:
+    docker:
+ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+  service: 5432
+ui:
+  setup: mlox.services.postgres.ui.setup
+  settings: mlox.services.postgres.ui.settings
+build:
+  class_name: mlox.services.postgres.docker.PostgresDockerService
+  params:
+    name: postgres-16-bullseye
+    template: ${MLOX_STACKS_PATH}/postgres/docker-compose-postgres-16.yaml 
+    target_path: /home/${MLOX_USER}/postgres-16-bullseye
+    user: ${MLOX_AUTO_USER}
+    pw: ${MLOX_AUTO_PW}
+    db: ${POSTGRES_DB}
+    port: ${MLOX_AUTO_PORT_SERVICE}

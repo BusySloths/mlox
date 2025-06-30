@@ -21,6 +21,7 @@ groups:
   service:
   database: 
     time-series:
+    nosql:
   backend:
     docker:
 ports:  # These are 'preferred' ports, they can and possibly will be changed by automation

@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+
+  redis:
+    image: redis:bookworm
+    ports:
+      - "${MY_REDIS_PORT:-}:6379" 
+    command:
+      - sh
+      - -c # this is to evaluate the $REDIS_PASSWORD from the env
+      - redis-server --appendonly yes --requirepass $$REDIS_PASSWORD --tls-port 6379 --port 0 --tls-cert-file /tls/redis.crt --tls-key-file /tls/redis.key --tls-ca-cert-file /tls/ca.crt --tls-auth-clients no
+    environment:
+      - REDIS_PASSWORD=${MY_REDIS_PW:-}
+      - REDIS_TLS_CERT_FILE=/tls/redis.crt
+      - REDIS_TLS_KEY_FILE=/tls/redis.key
+      - REDIS_TLS_CA_FILE=/tls/ca.crt
+      - REDIS_TLS_ENABLED=yes
+      - REDIS_TLS_PORT=6379      
+    restart: always
+    volumes:
+      - redis_data:/bitnami/redis/data
+      - ./cert.pem:/tls/redis.crt
+      - ./key.pem:/tls/redis.key
+      - ./cert.pem:/tls/ca.crt
+    networks:
+      - redis_net
+
+volumes:
+  redis_data:
+
+networks:
+  redis_net:
+    name: redis-network

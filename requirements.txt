@@ -19,8 +19,13 @@ mlserver
 pycryptodome
 # jose # JWT
 
-# sqlmodel
+# for postgres service
+# psycopg2-binary  # use conda for extra libs
 
+redis
+
+
+# sqlmodel
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp

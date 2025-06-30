@@ -1,0 +1,40 @@
+name: Redis
+version: 8-bookworm
+maintainer: Your Name
+description_short: Redis is an open-source, in-memory data structure store.
+description: |
+  Redis an open-source, in-memory data structure store, used as a database, 
+  cache, and message broker. It supports various data structures such as strings, 
+  hashes, lists, sets, sorted sets with range queries, bitmaps, hyperloglogs, and 
+  geospatial indexes with radius queries. In MLOX, Redis can be used for caching, 
+  session management, real-time analytics, and as a message queue for distributed 
+  machine learning tasks, enhancing the performance and scalability of your applications.
+links:
+  project: https://redis.io/
+  news: https://redis.io/
+  security: https://redis.io/
+  documentation: https://redis.io/
+  changelog: https://redis.io/
+requirements:
+  cpus: 2.0
+  ram_gb: 2.0
+  disk_gb: 1.0
+groups:
+  service:
+  database: 
+    in-memory:
+    nosql:
+  backend:
+    docker:
+ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+  service: 6379
+ui:
+  settings: mlox.services.redis.ui.settings
+build:
+  class_name: mlox.services.redis.docker.RedisDockerService
+  params:
+    name: redis-8-bookworm
+    template: ${MLOX_STACKS_PATH}/redis/docker-compose-redis-8-bookworm.yaml 
+    target_path: /home/${MLOX_USER}/redis-8-bookworm
+    pw: ${MLOX_AUTO_PW}
+    port: ${MLOX_AUTO_PORT_SERVICE}
