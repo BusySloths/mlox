@@ -30,6 +30,8 @@ opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp
 
+streamlit-vis-timeline
+
 grpcio
 # pymilvus
 

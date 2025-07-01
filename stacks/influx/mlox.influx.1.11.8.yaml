@@ -1,3 +1,4 @@
+id: influx-1.11.8-docker
 name: InfluxDB
 version: 1.11.8
 maintainer: Your Name

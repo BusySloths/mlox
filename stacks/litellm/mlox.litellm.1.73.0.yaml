@@ -1,3 +1,4 @@
+id: litellm-ollama-1.73.0-docker
 name: LiteLLM + Ollama
 version: 1.73.0 (stable)
 maintainer: Your Name

@@ -1,3 +1,4 @@
+id: otel-0.127.0-docker
 name: OpenTelemetry Collector
 version: 0.127.0
 maintainer: Your Name

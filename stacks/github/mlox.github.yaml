@@ -1,3 +1,4 @@
+id: github-repo-0.1-beta-docker
 name: Github Repository
 version: 0.1-beta
 maintainer: Your Name
@@ -15,6 +16,8 @@ requirements:
   ram_gb: 1.0
   disk_gb: 1.0
 groups:
+  service:
+  resource:
   git:
   repository:
   backend:

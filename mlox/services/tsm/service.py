@@ -1,6 +1,6 @@
 import logging
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict
 
 from mlox.utils import dataclass_to_dict
@@ -22,6 +22,7 @@ logging.basicConfig(
 @dataclass
 class TSMService(AbstractService, AbstractSecretManagerService):
     pw: str
+    secrets_abs_path: str | None = field(default=None, init=False)
 
     def __post_init__(self):
         self.state = "running"
@@ -29,6 +30,16 @@ class TSMService(AbstractService, AbstractSecretManagerService):
     def get_secret_manager(self, server: AbstractServer) -> AbstractSecretManager:
         """Get the TinySecretManager instance for this service."""
         server_dict = dataclass_to_dict(server)
+
+        if self.secrets_abs_path is not None:
+            return TinySecretManager(
+                "",
+                "",
+                self.pw,
+                server_dict=server_dict,
+                secrets_abs_path=self.secrets_abs_path,
+            )
+
         if server.mlox_user is None:
             raise ValueError("Server user is not set.")
         relative_path = self.target_path.removeprefix(server.mlox_user.home)

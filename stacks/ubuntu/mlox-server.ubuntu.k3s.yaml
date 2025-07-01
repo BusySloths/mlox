@@ -1,3 +1,4 @@
+id: ubuntu-k3s-24.04-server
 name: Ubuntu (Kubernetes, K3S)
 version: 24.04
 maintainer: Your Name

@@ -1,5 +1,6 @@
+id: mlflow-2.22.0-docker
 name: MLFlow
-version: 2.22.0 (stable)
+version: "2.22.0"
 maintainer: Your Name
 description_short: MLFlow is an open-source platform for managing the machine learning lifecycle, 
   including experimentation, reproducibility, and deployment.

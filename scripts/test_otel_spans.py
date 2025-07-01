@@ -1,5 +1,6 @@
 import os
 import grpc  # type: ignore
+import time
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -33,7 +34,6 @@ if not password:
     print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
     exit(1)
 session = MloxSession("mlox", password)
-session.load_infrastructure()
 infra = session.infra
 
 monitors = infra.filter_by_group("monitor")
@@ -42,8 +42,8 @@ if len(monitors) == 0:
     exit()
 # collector_url = f"{infra.bundles[0].server.ip}:{infra.bundles[0].services[2].service.service_ports['OTLP gRPC receiver']}"
 # trusted_certs = infra.bundles[0].services[2].service.certificate.encode("utf-8")
-collector_url = monitors[0].service.service_url
-trusted_certs = monitors[0].service.certificate.encode("utf-8")
+collector_url = monitors[0].service_url
+trusted_certs = monitors[0].certificate.encode("utf-8")
 
 # # Path to the self-signed certificate of the mlflow server
 # cert_path = "cert-otel.pem"
@@ -70,12 +70,16 @@ trace.set_tracer_provider(provider)
 tracer = trace.get_tracer(__name__)
 with tracer.start_as_current_span("test-span-2") as span:
     print("Span created")
+    time.sleep(1)
     span.add_event("event-1")
+    time.sleep(2)
     print("Event created")
     with tracer.start_as_current_span("child-test-span-2") as span:
         print("Child Span created")
+        time.sleep(1.5)
         span.add_event("child-event-2")
         print("Child Event created")
+        time.sleep(2.5)
 
 # os.environ["GRPC_TRACE"] = "all"
 # os.environ["GRPC_VERBOSITY"] = "DEBUG"

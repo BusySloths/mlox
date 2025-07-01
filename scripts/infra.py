@@ -11,7 +11,6 @@ if __name__ == "__main__":
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
     else:
         session = MloxSession("mlox", password)
-        session.load_infrastructure()
 
         # print(session.infra)
 

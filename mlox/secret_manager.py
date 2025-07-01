@@ -67,6 +67,7 @@ class TinySecretManager(AbstractSecretManager):
         secrets_relative_path: str,
         master_token: str,
         server_dict: Dict[str, Any] | None = None,
+        secrets_abs_path: str | None = None,
     ):
         self.cache = {}
         self.master_token = master_token
@@ -86,7 +87,10 @@ class TinySecretManager(AbstractSecretManager):
             raise ValueError(
                 "Server user is not set. Cannot initialize TinySecretManager."
             )
-        self.path = f"{server.mlox_user.home}/{secrets_relative_path}"
+        if secrets_abs_path:
+            self.path = secrets_abs_path
+        else:
+            self.path = f"{server.mlox_user.home}/{secrets_relative_path}"
         with server.get_server_connection() as conn:
             fs_create_dir(conn, self.path)
             if conn.is_connected:

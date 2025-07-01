@@ -1,3 +1,4 @@
+id: airflow-3.0.1-docker
 name: Airflow
 version: 3.0.1
 maintainer: Your Name

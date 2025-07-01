@@ -204,6 +204,7 @@ class AbstractServer(ABC):
     ip: str
     root: str
     root_pw: str
+    service_config_id: str
     port: str = field(default="22")
 
     mlox_user: MloxUser | None = field(default=None, init=False)

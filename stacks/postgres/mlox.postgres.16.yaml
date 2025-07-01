@@ -1,3 +1,4 @@
+id: postgres-16-bullseye-docker
 name: Postgres
 version: 16-bullseye
 maintainer: Your Name

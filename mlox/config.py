@@ -9,6 +9,8 @@ from typing import Dict, List, Any, Literal, Callable
 from mlox.service import AbstractService
 from mlox.server import AbstractServer
 
+CONFIG_ROOT_DIR = "./stacks"
+
 
 @dataclass
 class BuildConfig:
@@ -18,6 +20,7 @@ class BuildConfig:
 
 @dataclass
 class ServiceConfig:
+    id: str
     name: str
     version: str | float | int
     maintainer: str
@@ -77,7 +80,7 @@ class ServiceConfig:
                 )
                 return None
 
-            init_params = dict()
+            init_params = {"service_config_id": self.id}
             if self.build.params:
                 init_params.update(self.build.params)
             for key, value in init_params.items():
@@ -115,6 +118,18 @@ def load_all_service_configs(
     for candidate in candidates:
         configs.extend(load_service_configs(root_dir, candidate, prefix=prefix))
     return configs
+
+
+def load_service_config_by_id(root_dir: str, service_id: str) -> ServiceConfig | None:
+    # for service configs
+    for config in load_all_service_configs(root_dir, prefix="mlox"):
+        if config.id == service_id:
+            return config
+    # for all server configs
+    for config in load_all_service_configs(root_dir, prefix="mlox-server"):
+        if config.id == service_id:
+            return config
+    return None
 
 
 def load_service_configs(
@@ -178,7 +193,7 @@ def load_config(
 
 
 if __name__ == "__main__":
-    configs = load_all_service_configs("./stacks")
+    configs = load_all_service_configs(CONFIG_ROOT_DIR)
     # configs = load_all_server_configs("./stacks")
     for c in configs:
         print(

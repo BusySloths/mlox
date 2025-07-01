@@ -175,12 +175,15 @@ def available_services():
 
             c2, c3, c4, _ = st.columns([25, 25, 15, 35])
             select_backend = c2.selectbox(
-                "Backend", supported_backends, key="select_backend"
+                "Backend",
+                supported_backends,
+                key="select_backend",
+                disabled=len(supported_backends) <= 1,
             )
             bundle = c3.selectbox(
                 "Server",
                 infra.list_bundles_with_backend(backend=select_backend),
-                format_func=lambda x: f"{x.name} {x.server.ip}",
+                format_func=lambda x: f"{x.name}",
             )
 
             params = {}

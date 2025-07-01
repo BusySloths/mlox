@@ -1,3 +1,4 @@
+id: redis-8-bookworm-docker
 name: Redis
 version: 8-bookworm
 maintainer: Your Name

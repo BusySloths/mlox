@@ -2,16 +2,19 @@ import logging
 
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Optional, List, Literal, Tuple, Dict, Any
+from typing import Optional, List, Literal, Dict, Any
 
-from mlox.config import ServiceConfig
+from mlox.config import (
+    ServiceConfig,
+    load_service_config_by_id,
+    load_all_service_configs,
+    CONFIG_ROOT_DIR,
+)
 from mlox.server import AbstractServer
 from mlox.service import AbstractService
 from mlox.utils import (
     dataclass_to_dict,
     dict_to_dataclass,
-    save_to_json,
-    load_from_json,
     auto_map_ports,
     generate_pw,
     generate_username,
@@ -56,11 +59,11 @@ class Infrastructure:
         if not bundle:
             for bundle in self.bundles:
                 for s in bundle.services:
-                    if group in list(self.configs[str(type(s))].groups.keys()):
+                    if group in list(self.configs[s.service_config_id].groups.keys()):
                         services.append(s)
         else:
             for s in bundle.services:
-                if group in list(self.configs[str(type(s))].groups.keys()):
+                if group in list(self.configs[s.service_config_id].groups.keys()):
                     services.append(s)
         return services
 
@@ -172,49 +175,20 @@ class Infrastructure:
         return None
 
     def get_service_config(self, service: AbstractServer) -> ServiceConfig | None:
-        return self.configs.get(str(type(service)), None)
-
-    # def pull_repo(self, ip: str, name: str) -> None:
-    #     bundle = next((b for b in self.bundles if b.server.ip == ip), None)
-    #     if not bundle:
-    #         return
-    #     repo = next((r for r in bundle.repos if r.name == name), None)
-    #     if not repo:
-    #         return
-    #     repo.modified_timestamp = datetime.now().isoformat()
-    #     bundle.server.git_pull(repo.path)
-
-    # def create_and_add_repo(
-    #     self, ip: str, link: str, repo_abs_root: str | None = None
-    # ) -> None:
-    #     REPOS: str = "repos" if not repo_abs_root else repo_abs_root
-    #     bundle = next(
-    #         (bundle for bundle in self.bundles if bundle.server.ip == ip), None
-    #     )
-    #     if not bundle:
-    #         return
-    #     if not bundle.server.mlox_user:
-    #         return
-
-    #     name = link.split("/")[-1][:-4]
-    #     if repo_abs_root:
-    #         path = f"{repo_abs_root}/{name}"
-    #     else:
-    #         path = f"{bundle.server.mlox_user.home}/{REPOS}/{name}"
-    #     repo = Repo(link=link, name=name, path=path)
-    #     bundle.server.git_clone(repo.link, REPOS)
-    #     bundle.repos.append(repo)
-
-    # def remove_repo(self, ip: str, repo: Repo) -> None:
-    #     bundle = next(
-    #         (bundle for bundle in self.bundles if bundle.server.ip == ip), None
-    #     )
-    #     if not bundle:
-    #         return
-    #     if not bundle.server.mlox_user:
-    #         return
-    #     bundle.server.git_remove(repo.path)
-    #     bundle.repos.remove(repo)
+        if service.service_config_id in self.configs:
+            return self.configs[service.service_config_id]
+        else:
+            config = load_service_config_by_id(
+                CONFIG_ROOT_DIR, service.service_config_id
+            )
+            if config:
+                self.configs[service.service_config_id] = config
+                return config
+            else:
+                logger.error(
+                    f"Could not find service config for {service.service_config_id}"
+                )
+        return None
 
     def add_server(
         self, config: ServiceConfig, params: Dict[str, str]
@@ -249,21 +223,17 @@ class Infrastructure:
     ) -> List[Bundle]:
         return [b for b in self.bundles if backend in b.server.backend]
 
-    # def save(self, filepath: str, password: str) -> None:
-    #     infra_dict = dataclass_to_dict(self)
-    #     save_to_json(infra_dict, filepath, password, encrypt=True)
-
     def to_dict(self) -> Dict:
         infra_dict = dataclass_to_dict(self)
-        # _ = infra_dict.pop("configs", None)
+        _ = infra_dict.pop("configs", None)
         return infra_dict
 
     @classmethod
     def from_dict(cls, infra_dict: Dict) -> "Infrastructure":
         infra = dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])
+        # load all configs
+        configs = load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox")
+        configs.extend(load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox-server"))
+        for config in configs:
+            infra.configs[config.id] = config
         return infra
-
-    @classmethod
-    def load(cls, filepath: str, password: str) -> "Infrastructure":
-        infra_dict = load_from_json(filepath, password, encrypted=True)
-        return dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])
