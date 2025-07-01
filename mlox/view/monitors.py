@@ -53,11 +53,11 @@ def manage_monitors():
         if callable_settings_func and monitor.state == "running":
             callable_settings_func(infra, bundle, monitor)
 
-        if st.button("Delete"):
-            with st.spinner(f"Deleting {name}..."):
-                infra.teardown_service(monitor)
-            save_infra()
-            st.rerun()
+        # if st.button("Delete"):
+        #     with st.spinner(f"Deleting {name}..."):
+        #         infra.teardown_service(monitor)
+        #     save_infra()
+        #     st.rerun()
 
 
 manage_monitors()

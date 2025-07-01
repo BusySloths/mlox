@@ -75,11 +75,11 @@ def manage_repositories():
         if callable_settings_func and repo.state == "running":
             callable_settings_func(infra, bundle, repo)
 
-        if st.button("Delete"):
-            with st.spinner(f"Deleting {name}..."):
-                infra.teardown_service(repo)
-            save_infra()
-            st.rerun()
+        # if st.button("Delete"):
+        #     with st.spinner(f"Deleting {name}..."):
+        #         infra.teardown_service(repo)
+        #     save_infra()
+        #     st.rerun()
 
 
 manage_repositories()

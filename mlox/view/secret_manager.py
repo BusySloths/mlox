@@ -55,11 +55,11 @@ def secrets():
         bundle = secret_manager_service_list[idx]["bundle"]
         secret_manager_service = secret_manager_service_list[idx]["service"]
 
-        if st.button("Delete"):
-            with st.spinner(f"Deleting {name}..."):
-                infra.teardown_service(secret_manager_service)
-            save_infra()
-            st.rerun()
+        # if st.button("Delete"):
+        #     with st.spinner(f"Deleting {name}..."):
+        #         infra.teardown_service(secret_manager_service)
+        #     save_infra()
+        #     st.rerun()
 
         config = infra.get_service_config(secret_manager_service)
         callable_settings_func = config.instantiate_ui("settings")

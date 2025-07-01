@@ -145,17 +145,17 @@ def plot_timeline(spans, logs, metrics, st_key: str | None = None):
         # {"id": 0, "content": "Project", "nestedGroups": [1, 2, 3]},
         {"id": 1, "content": "Logs"},
         # {"id": 2, "content": "WBS ", "nestedGroups": [3]},
-        # {"id": 2, "content": "Traces", "height": "200px"},
         {"id": 2, "content": "Traces"},
+        # {"id": 2, "content": "Traces"},
         # {"id": 2, "content": "WP"},
-        # {"id": 3, "content": "Metrics", "height": "200px"},
         {"id": 3, "content": "Metrics"},
+        # {"id": 3, "content": "Metrics"},
     ]
     selection = st_timeline(
         items,
         groups=groups,
         options={"editable": False, "selectable": True, "stack": True},
-        height="500px",
+        height="300px",
         key=f"{st_key}_timeline",
     )
     if selection:
