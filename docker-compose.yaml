@@ -1,0 +1,30 @@
+services:
+
+  server1:
+    build:
+      context: .
+      dockerfile: Dockerfile-ubuntu
+    container_name: mlox-server1
+    restart: always
+    networks:
+      - mlox_net
+
+
+  mlox:  
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    container_name: mlox-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - MLOX_CONFIG_USER=mlox-user
+      - MLOX_CONFIG_PASSWORD=mlox-secret-passphrase
+    networks:
+      - mlox_net
+
+networks:
+  mlox_net: 
+    name: mlox-network
+    driver: bridge 

@@ -10,7 +10,9 @@ from mlox.utils import dataclass_to_dict, save_to_json
 
 def login():
     with st.form("login"):
-        username = st.text_input("Username", value="mlox")
+        username = st.text_input(
+            "Username", value=os.environ.get("MLOX_CONFIG_USER", "mlox")
+        )
         password = st.text_input(
             "Password",
             value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),

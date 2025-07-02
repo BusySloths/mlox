@@ -133,7 +133,7 @@ dmypy.json
 
 .apps
 .airflow
-.streamlit
+.streamlit/secrets.toml
 .tmp
 .grav
 .vscode

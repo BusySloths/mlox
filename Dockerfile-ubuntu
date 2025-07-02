@@ -1,0 +1,26 @@
+FROM ubuntu:24.04
+
+# Combine RUN instructions and clean up apt cache to optimize layers
+RUN apt-get update && apt-get install -y openssh-server && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir /var/run/sshd
+
+RUN echo 'root:pwd' | chpasswd
+
+# More robustly ensure password-based root login is enabled.
+# First, remove any existing directives to avoid conflicts.
+RUN sed -i -e '/^#?PermitRootLogin/d' -e '/^#?PasswordAuthentication/d' /etc/ssh/sshd_config
+# Then, append the required directives.
+RUN echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+# Comment out Include directives to prevent them from overriding our settings
+RUN sed -i 's/^Include/#Include/g' /etc/ssh/sshd_config
+
+# SSH login fix. Otherwise user is kicked off after login
+RUN sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
+
+# Expose the SSH port
+EXPOSE 22
+
+# Start the SSH daemon in the foreground when the container starts
+CMD ["/usr/sbin/sshd", "-D"]

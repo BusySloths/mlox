@@ -82,7 +82,7 @@ class OtelDockerService(AbstractService):
         self.service_urls["OTLP HTTP receiver"] = (
             f"https://{conn.host}:{self.port_http}"
         )
-        self.service_urls["OTLP health"] = f"https://{conn.host}:{self.port_health}"
+        self.service_urls["OTLP health"] = f"https://{conn.host}:{self.port_health}/health/status"
         self.state = "running"
 
     def teardown(self, conn):
