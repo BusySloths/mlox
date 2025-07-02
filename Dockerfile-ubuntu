@@ -7,6 +7,10 @@ RUN mkdir /var/run/sshd
 
 RUN echo 'root:pwd' | chpasswd
 
+# Make it a standard system
+RUN echo "Y" | unminimize
+RUN apt-get install sudo
+
 # More robustly ensure password-based root login is enabled.
 # First, remove any existing directives to avoid conflicts.
 RUN sed -i -e '/^#?PermitRootLogin/d' -e '/^#?PasswordAuthentication/d' /etc/ssh/sshd_config

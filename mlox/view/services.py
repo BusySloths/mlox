@@ -177,9 +177,12 @@ def available_services():
             select_backend = c2.selectbox(
                 "Backend",
                 supported_backends,
-                key="select_backend",
                 disabled=len(supported_backends) <= 1,
             )
+
+            st.write(select_backend)
+            st.write(infra.list_bundles_with_backend(backend=select_backend))
+
             bundle = c3.selectbox(
                 "Server",
                 infra.list_bundles_with_backend(backend=select_backend),

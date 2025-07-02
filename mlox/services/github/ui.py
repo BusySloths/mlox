@@ -12,7 +12,6 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any]:
     link = st.text_input("Link", value="")
 
     params["${GITHUB_LINK}"] = link
-    params["${SERVER_NAME}"] = bundle.name
     return params
 
 

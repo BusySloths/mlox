@@ -52,6 +52,9 @@ class Infrastructure:
     bundles: List[Bundle] = field(default_factory=list, init=False)
     configs: Dict[str, ServiceConfig] = field(default_factory=dict, init=False)
 
+    def __post_init__(self):
+        self.populate_configs()
+
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
     ) -> List[AbstractService]:
@@ -231,9 +234,16 @@ class Infrastructure:
     @classmethod
     def from_dict(cls, infra_dict: Dict) -> "Infrastructure":
         infra = dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])
+        infra.populate_configs()
         # load all configs
+        # configs = load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox")
+        # configs.extend(load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox-server"))
+        # for config in configs:
+        #     infra.configs[config.id] = config
+        return infra
+
+    def populate_configs(self) -> None:
         configs = load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox")
         configs.extend(load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox-server"))
         for config in configs:
-            infra.configs[config.id] = config
-        return infra
+            self.configs[config.id] = config

@@ -9,6 +9,14 @@ services:
     networks:
       - mlox_net
 
+  server2:
+    build:
+      context: .
+      dockerfile: Dockerfile-ubuntu
+    container_name: mlox-server2
+    restart: always
+    networks:
+      - mlox_net
 
   mlox:  
     build:

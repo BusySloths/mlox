@@ -70,6 +70,8 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             )  # why does it not find mc??
             exec_command(conn, "apt-get -y install git", sudo=True)
             exec_command(conn, "apt-get -y install zsh", sudo=True)
+            exec_command(conn, "apt-get -y install host", sudo=True)
+            exec_command(conn, "apt-get -y install curl", sudo=True)
 
     def get_server_info(self) -> Dict[str, str | int | float]:
         if self._specs:
