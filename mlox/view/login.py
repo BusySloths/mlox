@@ -40,6 +40,7 @@ def new_project():
             type="password",
         )
         configs = load_all_server_configs("./stacks")
+        # this does not update
         config = st.selectbox(
             "System Configuration",
             configs,
@@ -49,6 +50,7 @@ def new_project():
         params = dict()
         infra = Infrastructure()
         setup_func = config.instantiate_ui("setup")
+
         if setup_func:
             params = setup_func(infra, config)
         if st.form_submit_button("Submit", type="primary"):

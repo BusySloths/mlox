@@ -8,6 +8,14 @@ services:
     restart: always
     networks:
       - mlox_net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 4.1G
+        reservations:
+          cpus: '1.0001'
+          memory: 0.1G
 
   server2:
     build:
@@ -27,6 +35,7 @@ services:
     ports:
       - "8501:8501"
     environment:
+      - MLOX_DEBUG=true
       - MLOX_CONFIG_USER=mlox-user
       - MLOX_CONFIG_PASSWORD=mlox-secret-passphrase
     networks:

@@ -101,6 +101,20 @@ def sys_add_user(
     ret = exec_command(conn, command, sudo=True)
     if sudoer:
         exec_command(conn, f"usermod -aG sudo {user_name}", sudo=True)
+
+        if os.environ.get("MLOX_DEBUG", False):
+            logger.warning(
+                "[DEBUG ENABLED] sudoer group member do not need to pw anymore."
+            )
+            # This is the key part:
+            sudoer_file_content = f"{user_name} ALL=(ALL) NOPASSWD: ALL"
+            sudoer_file_path = f"/etc/sudoers.d/90-mlox-{user_name}"
+            exec_command(
+                conn,
+                f"echo '{sudoer_file_content}' | tee {sudoer_file_path}",
+                sudo=True,
+            )
+            exec_command(conn, f"chmod 440 {sudoer_file_path}", sudo=True)
     return ret
 
 

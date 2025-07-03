@@ -93,7 +93,11 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             host_info = exec_command(conn, f"host {conn.host}", sudo=False)
 
         if len(host_info) > 3 and " " in host_info:
-            host_info = host_info[:-1].split(" ")[-1]
+            if host_info[-1] == ".":
+                host_info = host_info[:-1].split(" ")[-1]
+            else:
+                # if host info returns an ip address there is no punctuation in the end
+                host_info = host_info.split(" ")[-1]
         else:
             host_info = "unknown"
 
@@ -268,6 +272,8 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             )
             exec_command(conn, "systemctl restart ssh", sudo=True)
             exec_command(conn, "systemctl reload ssh", sudo=True)
+            # Instead: Use kill -HUP to reload sshd config. It's portable and works in containers without systemd.
+            # exec_command(conn, "kill -HUP $(pidof sshd)", sudo=True)
 
     def enable_password_authentication(self):
         with self.get_server_connection() as conn:
@@ -287,6 +293,8 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             )
             exec_command(conn, "systemctl restart ssh", sudo=True)
             exec_command(conn, "systemctl reload ssh", sudo=True)
+            # Instead: Use kill -HUP to reload sshd config. It's portable and works in containers without systemd.
+            # exec_command(conn, "kill -HUP $(pidof sshd)", sudo=True)
 
     # GIT
     def git_clone(self, repo_url: str, abs_path: str) -> None:
