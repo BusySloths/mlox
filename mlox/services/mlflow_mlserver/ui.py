@@ -10,14 +10,18 @@ from mlox.services.mlflow.docker import MLFlowDockerService
 from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
 
 
-def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
-    params = dict()
+def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
+    params: Dict = dict()
 
     mlflows = list()
     for bundle in infra.bundles:
-        for statefule_service in bundle.services:
-            if statefule_service.service.name.lower().startswith("mlflow"):
-                mlflows.append(statefule_service.service)
+        for s in bundle.services:
+            if s.name.lower().startswith("mlflow"):
+                mlflows.append(s)
+
+    if len(mlflows) == 0:
+        st.warning("No MLFlow server found. You need to add one first.")
+        return None
 
     service = st.selectbox(
         "MLFlow Registry Server",
@@ -77,7 +81,7 @@ def settings(
     st.write(f"User: {service.user}")
     st.write(f"Password: {service.pw}")
     print(f"Password: {service.pw}")
-    st.write(f"Hashed Password: '{service.hashed_pw.replace('$', '\$')}'")
+    st.write(f"Hashed Password: '{service.hashed_pw.replace('$', '\\$')}'")
 
     url = service.service_url
     if url.endswith("/"):

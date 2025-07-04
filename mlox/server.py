@@ -284,7 +284,7 @@ class AbstractServer(ABC):
         pass
 
     @abstractmethod
-    def get_server_info(self) -> Dict[str, str | int | float]:
+    def get_server_info(self, no_cache: bool = False) -> Dict[str, str | int | float]:
         pass
 
     @abstractmethod

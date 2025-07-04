@@ -125,6 +125,8 @@ class UbuntuK3sServer(UbuntuDockerServer):
                 backend_info["k3s.is_running"] = False
             else:
                 backend_info["k3s.is_running"] = True
+            backend_info["backend.is_running"] = backend_info["k3s.is_running"]
+
             # Check k3s-agent status
             res = exec_command(
                 conn, "systemctl is-active k3s-agent", sudo=True, pty=False

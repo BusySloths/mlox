@@ -17,6 +17,14 @@ def help():
     # Help and Documentation
     Quick access to the documentation and help resources.
     """)
+    ms = st.session_state["mlox"]
+    infra = ms.infra
+    for b in infra.bundles:
+        for s in b.services:
+            config = infra.get_service_config(s)
+            st.markdown(
+                f"__{config.name}__ docs: [{config.links['documentation']}]({config.links['documentation']})"
+            )
 
 
 def welcome():

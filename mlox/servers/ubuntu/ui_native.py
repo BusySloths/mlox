@@ -39,8 +39,6 @@ def form_add_server():
 
 
 def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
-    st.markdown(config.description)
-
     params = dict()
 
     ip, port, root, pw = form_add_server()
@@ -54,4 +52,4 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
 
 
 def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuNativeServer):
-    st.header(f"Settings for server {server.ip}")
+    st.markdown(f"#### {bundle.name}")

@@ -5,6 +5,7 @@ from typing import cast, List, Dict, Any
 
 from mlox.infra import Infrastructure
 from mlox.config import load_all_server_configs
+from mlox.view.utils import plot_config_nicely
 
 
 def save_infra():
@@ -38,6 +39,15 @@ def auto_function(server):
 def server_management():
     infra = cast(Infrastructure, st.session_state.mlox.infra)
     st.markdown("### Server List")
+
+    if len(infra.bundles) > 0:
+        if st.button("Refresh"):
+            for b in infra.bundles:
+                if b.server.test_connection():
+                    b.server.state = "running"
+                else:
+                    b.server.state = "unknown"
+            save_infra()
 
     srv = []
     for bundle in infra.bundles:
@@ -136,17 +146,25 @@ def server_management():
             save_infra()
             st.rerun()
 
-        config = infra.get_service_config(bundle.server)
-        if config:
-            callable_settings_func = config.instantiate_ui("settings")
-            if callable_settings_func:
-                callable_settings_func(infra, bundle, bundle.server)
+        with st.container(border=True):
+            config = infra.get_service_config(bundle.server)
+            if config:
+                plot_config_nicely(
+                    config,
+                    prefix_name=bundle.name + " - ",
+                    additional_badges={
+                        f"service:{s.name}": None for s in bundle.services
+                    },
+                )
+                callable_settings_func = config.instantiate_ui("settings")
+                if callable_settings_func:
+                    callable_settings_func(infra, bundle, bundle.server)
 
-        # with st.expander("Terminal"):
-        #     from mlox.view.terminal import emulate_basic_terminal
+            # with st.expander("Terminal"):
+            #     from mlox.view.terminal import emulate_basic_terminal
 
-        #     with bundle.server.get_server_connection() as conn:
-        #         emulate_basic_terminal(conn)
+            #     with bundle.server.get_server_connection() as conn:
+            #         emulate_basic_terminal(conn)
 
         with st.expander("More info"):
             #     from mlox.remote import exec_command
@@ -243,23 +261,25 @@ def available_server_templates():
         config = server[selected]["config"]
         c2, c3, c4, _ = st.columns([25, 25, 15, 35])
 
-        with st.form("Add Server"):
+        with st.container(border=True):
+            plot_config_nicely(config)
+
             params = {}
             callable_setup_func = config.instantiate_ui("setup")
             if callable_setup_func:
                 params = callable_setup_func(infra, config)
 
-            # if st.button("Add Server", type="primary"):
-            if st.form_submit_button(
-                "Add Server", type="primary", icon=":material/computer:"
-            ):
+            if st.button("Add Server", icon=":material/computer:", type="primary"):
+                # if st.form_submit_button(
+                #     "Add Server", type="primary", icon=":material/computer:"
+                # ):
                 st.info(f"Adding server {config.name} {config.version}.")
                 ret = infra.add_server(config, params)
                 if not ret:
                     st.error("Failed to add server")
                 save_infra()
 
-        st.write(server[selected])
+        # st.write(server[selected])
 
 
 tab_avail, tab_installed = st.tabs(["Templates", "Server Management"])

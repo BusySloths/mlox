@@ -33,33 +33,5 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
     return params
 
 
-# def setup(
-#     self,
-#     controller: Any | None = None,
-# ) -> None:
-#     if backend == "docker":
-#         self.server.setup_docker()
-#         self.server.start_docker_runtime()
-#     elif backend == "kubernetes":
-#         self.server.setup_kubernetes()
-#         self.server.start_kubernetes_runtime()
-#     elif backend == "kubernetes-agent" and controller:
-#         stats = controller.server.get_kubernetes_status()
-#         if "k3s.token" not in stats:
-#             logging.error(
-#                 "Token is missing in controller stats ip: %s", controller.server.ip
-#             )
-#             return
-#         url = f"https://{controller.server.ip}:6443"
-#         token = stats["k3s.token"]
-#         self.server.setup_kubernetes(controller_url=url, controller_token=token)
-#         self.server.start_kubernetes_runtime()
-#         cluster_name = f"k8s-{controller.name}"
-#         self.tags.append(cluster_name)
-#         if cluster_name not in controller.tags:
-#             controller.tags.append(cluster_name)
-#     self.status = backend
-
-
 def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuK3sServer):
-    st.header(f"Settings for server {server.ip}")
+    st.markdown(f"#### {bundle.name}")

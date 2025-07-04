@@ -73,8 +73,8 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             exec_command(conn, "apt-get -y install host", sudo=True)
             exec_command(conn, "apt-get -y install curl", sudo=True)
 
-    def get_server_info(self) -> Dict[str, str | int | float]:
-        if self._specs:
+    def get_server_info(self, no_cache: bool = False) -> Dict[str, str | int | float]:
+        if self._specs and not no_cache:
             return self._specs
 
         cmd = """
@@ -322,6 +322,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
 
     def get_backend_status(self) -> Dict[str, Any]:
         status_info: Dict[str, Any] = {}
+        status_info["backend.is_running"] = True
         return status_info
 
     def start_backend_runtime(self) -> None:

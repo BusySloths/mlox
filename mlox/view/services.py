@@ -5,6 +5,7 @@ from typing import cast
 
 from mlox.infra import Infrastructure
 from mlox.config import load_all_service_configs
+from mlox.view.utils import plot_config_nicely
 
 
 def save_infra():
@@ -107,7 +108,11 @@ def available_services():
                 "links": [f"{k}: {v}" for k, v in service.links.items()],
                 "requirements": [f"{k}: {v}" for k, v in service.requirements.items()],
                 "ui": [f"{k}" for k, v in service.ui.items()],
-                "groups": [f"{k}" for k, v in service.groups.items() if k != "backend"],
+                "groups": [
+                    f"{k}"
+                    for k, v in service.groups.items()
+                    if k != "backend" and k != "service"
+                ],
                 "backend": [
                     f"{k}" for k, v in service.groups.get("backend", {}).items()
                 ],
@@ -169,9 +174,9 @@ def available_services():
         config = services[selected]["config"]
         supported_backends = list(config.groups.get("backend", {}).keys())
 
-        with st.form("Add Service"):
-            st.markdown(f"### Adding service {config.name} {config.version}.")
-            st.markdown(config.description)
+        # with st.form("Add Service"):
+        with st.container(border=True):
+            plot_config_nicely(config)
 
             c2, c3, c4, _ = st.columns([25, 25, 15, 35])
             select_backend = c2.selectbox(
@@ -179,9 +184,6 @@ def available_services():
                 supported_backends,
                 disabled=len(supported_backends) <= 1,
             )
-
-            st.write(select_backend)
-            st.write(infra.list_bundles_with_backend(backend=select_backend))
 
             bundle = c3.selectbox(
                 "Server",
@@ -194,7 +196,8 @@ def available_services():
             if callable_setup_func:
                 params = callable_setup_func(infra, bundle)
 
-            if st.form_submit_button("Add Service", type="primary"):
+            # if st.form_submit_button("Add Service", type="primary"):
+            if st.button("Add Service", type="primary", disabled=params is None):
                 st.info(
                     f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
                 )
@@ -203,7 +206,7 @@ def available_services():
                     st.error("Failed to add service")
                 save_infra()
 
-        st.write(services[selected])
+        # st.write(services[selected])
 
 
 tab_avail, tab_installed = st.tabs(["Templates", "Installed"])

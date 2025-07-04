@@ -81,6 +81,7 @@ class UbuntuDockerServer(UbuntuNativeServer):
             active_result = exec_command(
                 conn, "systemctl is-active docker", sudo=True, pty=False
             )
+            status_info["backend.is_running"] = active_result == "active"
             status_info["docker.is_running"] = active_result == "active"
 
             enabled_result = exec_command(

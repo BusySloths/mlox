@@ -1,11 +1,11 @@
 import os
 import streamlit as st
 
-from mlox.services.tsm.service import TSMService
 from mlox.session import MloxSession
 from mlox.config import load_all_server_configs, load_config
 from mlox.infra import Infrastructure
 from mlox.utils import dataclass_to_dict, save_to_json
+from mlox.view.utils import plot_config_nicely
 
 
 def login():
@@ -32,16 +32,16 @@ def login():
 
 
 def new_project():
-    with st.form("new_project"):
-        username = st.text_input("Username", value="mlox")
-        password = st.text_input(
+    with st.container(border=True):
+        c1, c2, c3 = st.columns(3)
+        username = c1.text_input("Username", value="mlox")
+        password = c2.text_input(
             "Password",
             value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),
             type="password",
         )
         configs = load_all_server_configs("./stacks")
-        # this does not update
-        config = st.selectbox(
+        config = c3.selectbox(
             "System Configuration",
             configs,
             format_func=lambda x: f"{x.name} {x.version} - {x.description_short}",
@@ -50,10 +50,10 @@ def new_project():
         params = dict()
         infra = Infrastructure()
         setup_func = config.instantiate_ui("setup")
-
+        plot_config_nicely(config)
         if setup_func:
             params = setup_func(infra, config)
-        if st.form_submit_button("Submit", type="primary"):
+        if st.button("Submit", icon=":material/computer:", type="primary"):
             bundle = infra.add_server(config, params)
             if not bundle:
                 st.error(
@@ -86,6 +86,7 @@ def new_project():
                             bundle = ms.infra.add_service(bundle.server.ip, config, {})
                             bundle.services[0].pw = password
                             bundle.tags.append("mlox.secrets")
+                            bundle.tags.append("mlox.primary")
                             ms.save_infrastructure()
                             st.session_state["mlox"] = ms
                             st.session_state.is_logged_in = True
