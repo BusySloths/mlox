@@ -1,6 +1,5 @@
-import time
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict
 
 from mlox.service import AbstractService, tls_setup
@@ -47,6 +46,7 @@ class K8sDashboardService(AbstractService):
         # )
         self.service_ports["Kubernetes Dashboard"] = service_port
         self.service_urls["Kubernetes Dashboard"] = f"https://{node_ip}:{service_port}"
+        self.state = "running"
 
     def expose_dashboard_nodeport(
         self,
@@ -185,6 +185,7 @@ rules:
 
         fs_delete_dir(conn, self.target_path)
         logger.info("✅ K8s Dashboard uninstall complete")
+        self.state = "un-initialized"
 
     def check(self, conn) -> Dict:
         return dict()

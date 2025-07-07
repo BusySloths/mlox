@@ -22,21 +22,17 @@ def _plot_config_nicely_helper(d: Dict, prefix: str = "") -> List[str]:
 
 
 def plot_config_nicely(
-    config: ServiceConfig, additional_badges: Dict | None = None, prefix_name: str = ""
+    config: ServiceConfig,
+    additional_badges: Dict | None = None,
+    prefix_name: str = "",
+    icon: str = ":material/star:",
 ) -> None:
     st.markdown(f"#### {prefix_name}{config.name}")
     badges = ""
-    colors = [
-        "blue",
-        "green",
-        "orange",
-        "red",
-        "gray",
-        "violet",
-    ]
+    colors = ["blue", "green", "orange", "red", "gray", "violet"]
     badge_list = _plot_config_nicely_helper(config.groups)
     for text in badge_list:
-        badges += f":{colors[hash(text) % len(colors)]}-badge[:material/star: {text}] "
+        badges += f":{colors[hash(text) % len(colors)]}-badge[{icon} {text}] "
     st.markdown(badges)
 
     if additional_badges:
@@ -44,7 +40,7 @@ def plot_config_nicely(
         badge_list = _plot_config_nicely_helper(additional_badges)
         for text in badge_list:
             badges += (
-                f":{colors[hash(text) % len(colors)]}-badge[:material/star: {text}] "
+                f":{colors[hash(text) % len(colors)]}-badge[:material/cloud: {text}] "
             )
         st.markdown(badges)
     st.markdown(config.description)

@@ -1,6 +1,6 @@
 id: k8s-dashboard-newest-k3s
 name: Kubernetes Dashboard
-version: newest
+version: 2.7.0
 maintainer: Your Name
 description_short: Kubernetes Dashboard is a web-based UI for managing Kubernetes clusters.
 description: |
@@ -31,4 +31,4 @@ build:
   params:
     name: k8s-dashboard
     template: ${MLOX_STACKS_PATH}/k8s_dashboard/service-account.yaml
-    target_path: /home/${MLOX_USER}/k8s_dashboard
+    target_path: /home/${MLOX_USER}/k8s_dashboard-2.7.0

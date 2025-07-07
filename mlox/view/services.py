@@ -15,11 +15,8 @@ def save_infra():
 
 def installed_services():
     st.markdown("""
-    # Services
     This is where you can manage your services.""")
     infra = cast(Infrastructure, st.session_state.mlox.infra)
-
-    st.markdown("### Service List")
 
     services = []
     for bundle in infra.bundles:
@@ -56,7 +53,7 @@ def installed_services():
         config = infra.get_service_config(service)
 
         state = service.state
-        c1, c2, _, c3, c4 = st.columns([20, 20, 15, 30, 15])
+        c1, c2, _, c3, c4 = st.columns([10, 15, 30, 30, 15])
         if c1.button("Setup", disabled=state != "un-initialized"):
             with st.spinner(f"Setting up service {service_name}...", show_time=True):
                 infra.setup_service(service)
@@ -68,7 +65,9 @@ def installed_services():
                 infra.teardown_service(service)
             save_infra()
             st.rerun()
-        new_service_name = c3.text_input("Unqiue service name", service_name)
+        new_service_name = c3.text_input("Unique service name", service_name)
+        # Add vertical space to align the button with the text input field.
+        c4.write('<div style="height: 28px;"></div>', unsafe_allow_html=True)
         if (
             c4.button("Update", icon=":material/update:")
             and new_service_name != service_name
@@ -80,17 +79,19 @@ def installed_services():
                 save_infra()
                 st.rerun()
 
-        # st.divider()
-        callable_settings_func = config.instantiate_ui("settings")
-        if callable_settings_func and state == "running":
-            callable_settings_func(infra, bundle, service)
-            # save_infra()
+        with st.container(border=True):
+            plot_config_nicely(config)
+
+            # st.divider()
+            callable_settings_func = config.instantiate_ui("settings")
+            if callable_settings_func and state == "running":
+                callable_settings_func(infra, bundle, service)
+                # save_infra()
 
 
 def available_services():
     st.markdown("""
-    ### Services
-    This is where you can manage your services.""")
+    Add services to your infrastructure.""")
     infra = cast(Infrastructure, st.session_state.mlox.infra)
 
     # with st.expander("Add Server"):

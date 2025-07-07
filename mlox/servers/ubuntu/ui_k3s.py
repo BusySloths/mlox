@@ -35,3 +35,6 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
 
 def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuK3sServer):
     st.markdown(f"#### {bundle.name}")
+    if server.mlox_user:
+        st.write(f"Account Name: {server.mlox_user.name}")
+        st.write(f"Account Password: {server.mlox_user.pw}")

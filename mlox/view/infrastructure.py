@@ -105,6 +105,8 @@ def server_management():
             accept_new_options=True,
             max_selections=10,
         )
+        c3.write('<div style="height: 28px;"></div>', unsafe_allow_html=True)
+
         if c3.button("Update", type="primary", help="Update", icon=":material/update:"):
             bundle.name = name
             bundle.tags = tags
