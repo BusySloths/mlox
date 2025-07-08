@@ -27,6 +27,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     _specs: Dict[str, str | int | float] | None = field(default=None, init=False)
 
     def __post_init__(self):
+        super().__post_init__()
         self.backend = ["native"]
 
     def setup(self):

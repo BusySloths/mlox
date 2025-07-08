@@ -80,6 +80,17 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OtelDockerService):
         # except Exception as e:
         #     st.warning(f"Could not display data as a table: {e}")
         plot_logs(logs)
+        df = metrics_to_table(metrics)
+        names = st.multiselect(
+            "Select Metrics to display", df["name"].unique(), default=[]
+        )
+        if names:
+            df = df[df["name"].isin(names)]
+        else:
+            st.warning(
+                "No metrics selected. Please select at least one metric to display."
+            )
+        st.dataframe(df, use_container_width=True)
 
     with tab_timeline:
         plot_timeline(spans, logs, metrics)
@@ -92,6 +103,70 @@ def plot_logs(logs: List):
                 "stringValue"
             ]
         )
+
+
+def metrics_to_table(metrics: List) -> pd.DataFrame:
+    """Flattens OTel metrics into a readable Pandas DataFrame."""
+    flat_data = []
+    for metric_blob in metrics:
+        for resource_metric in metric_blob.get("resourceMetrics", []):
+            for scope_metric in resource_metric.get("scopeMetrics", []):
+                for metric in scope_metric.get("metrics", []):
+                    metric_name = metric.get("name")
+                    metric_desc = metric.get("description", "")
+                    metric_unit = metric.get("unit", "")
+                    metric_type = "unknown"
+                    data_points = []
+
+                    if "sum" in metric:
+                        metric_type = "sum"
+                        data_points = metric["sum"].get("dataPoints", [])
+                    elif "gauge" in metric:
+                        metric_type = "gauge"
+                        data_points = metric["gauge"].get("dataPoints", [])
+                    elif "histogram" in metric:
+                        metric_type = "histogram"
+                        data_points = metric["histogram"].get("dataPoints", [])
+
+                    for dp in data_points:
+                        # Extract value
+                        value = dp.get("asInt", dp.get("asDouble"))
+                        if metric_type == "histogram":
+                            value = (
+                                f"count: {dp.get('count')}, sum: {dp.get('sum', 'N/A')}"
+                            )
+
+                        # Extract timestamp
+                        ts_nano = dp.get("timeUnixNano")
+                        timestamp = (
+                            datetime.fromtimestamp(int(ts_nano) / 1e9)
+                            if ts_nano
+                            else None
+                        )
+
+                        # Extract attributes
+                        attributes = {}
+                        for attr in dp.get("attributes", []):
+                            key = attr.get("key")
+                            val_dict = attr.get("value", {})
+                            val = next(iter(val_dict.values()), None)
+                            if key:
+                                attributes[key] = val
+
+                        flat_data.append(
+                            {
+                                "timestamp": timestamp,
+                                "name": metric_name,
+                                "type": metric_type,
+                                "value": value,
+                                "unit": metric_unit,
+                                "attributes": json.dumps(attributes)
+                                if attributes
+                                else "",
+                                "description": metric_desc,
+                            }
+                        )
+    return pd.DataFrame(flat_data)
 
 
 def plot_timeline(spans, logs, metrics, st_key: str | None = None):

@@ -12,6 +12,16 @@ receivers:
           cert_file: /etc/cert.pem
           key_file: /etc/key.pem
 
+  hostmetrics:
+    collection_interval: 60s
+    scrapers:
+      cpu:
+      memory:
+      load:
+      disk:
+      filesystem:
+      network:
+
 exporters:
   otlphttp:
     endpoint: ${env:MY_OTEL_RELIC_ENDPOINT}
@@ -56,7 +66,7 @@ service:
       processors: [batch, memory_limiter]
       exporters: [debug, file]
     metrics:
-      receivers: [otlp]
+      receivers: [otlp, hostmetrics]
       processors: [batch, memory_limiter]
       exporters: [debug, file]
     logs:

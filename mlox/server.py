@@ -1,24 +1,12 @@
-import re
+import time  # Added for retry delay
 import logging
 import tempfile
 import importlib
-import logging
 
-import time  # Added for retry delay
-import json  # For parsing docker command JSON output
+from datetime import datetime
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import (
-    Dict,
-    Optional,
-    List,
-    Tuple,
-    Literal,
-    Any,
-    Protocol,
-    ContextManager,
-    TYPE_CHECKING,
-)
+from typing import Dict, Optional, List, Literal, Any
 
 from fabric import Connection  # type: ignore
 from paramiko.ssh_exception import (  # type: ignore
@@ -29,19 +17,7 @@ from paramiko.ssh_exception import (  # type: ignore
 import socket
 
 from mlox.utils import generate_password
-from mlox.remote import (
-    open_connection,
-    close_connection,
-    exec_command,
-    fs_read_file,
-    fs_find_and_replace,
-    fs_append_line,
-    fs_create_dir,
-    fs_delete_dir,
-    sys_add_user,
-    # sys_get_distro_info,
-    sys_user_id,
-)
+from mlox.remote import open_connection, close_connection, exec_command, fs_read_file
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -214,6 +190,11 @@ class AbstractServer(ABC):
     state: Literal[
         "un-initialized", "no-backend", "starting", "running", "shutdown", "unknown"
     ] = "un-initialized"
+    discovered: str | None = field(default=None, init=False)
+
+    def __post_init__(self):
+        if not self.discovered:
+            self.discovered = datetime.now().isoformat()
 
     def get_server_connection(self, force_root: bool = False) -> ServerConnection:
         # 3 ways to connect:

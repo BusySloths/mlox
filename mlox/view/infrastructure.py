@@ -72,6 +72,7 @@ def server_management():
                 "backend": bundle.server.backend,
                 "status": [bundle.server.state if success else "error"],
                 "tags": bundle.tags,
+                "discovered": bundle.server.discovered,
                 "services": [s.name for s in bundle.services],
                 "hostname": info["host"],
                 "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
@@ -284,7 +285,9 @@ def available_server_templates():
         # st.write(server[selected])
 
 
-tab_avail, tab_installed = st.tabs(["Templates", "Server Management"])
+# tab_avail, tab_installed = st.tabs(["Templates", "Server Management"])
+tab_installed, tab_avail = st.tabs(["Server Management", "Templates"])
+
 with tab_avail:
     available_server_templates()
 

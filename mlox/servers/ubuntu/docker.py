@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class UbuntuDockerServer(UbuntuNativeServer):
     def __post_init__(self):
+        super().__post_init__()
         self.backend = ["docker"]
 
     def setup_backend(self) -> None:

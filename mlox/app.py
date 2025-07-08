@@ -70,14 +70,14 @@ st.logo(
 pages_logged_out = {
     "": [
         st.Page(welcome, title="Home", icon=":material/home:"),
-        st.Page("view/login.py", title="Login", icon=":material/login:"),
+        st.Page("view/login.py", title="Open Project", icon=":material/login:"),
     ],
 }
 
 pages_logged_in = {
     "": [
         st.Page(welcome, title="Home", icon=":material/home:"),
-        st.Page("view/login.py", title="Logout", icon=":material/logout:"),
+        st.Page("view/login.py", title="Close Project", icon=":material/logout:"),
     ],
 }
 

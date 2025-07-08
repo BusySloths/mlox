@@ -21,6 +21,7 @@ requirements:
   disk_gb: 1.0
 groups:
   service:
+  app-management:
   backend:
     kubernetes:
 ports:  # These are 'preferred' ports, they can and possibly will be changed by automation

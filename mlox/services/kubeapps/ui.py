@@ -9,6 +9,6 @@ def settings(infra: Infrastructure, bundle: Bundle, service: KubeAppsService):
     st.header(f"Settings for service {service.name}")
     st.write(f"IP: {bundle.server.ip}")
 
-    with bundle.server.get_server_connection() as conn:
-        res = service.check(conn)
-        st.write(res)
+    # with bundle.server.get_server_connection() as conn:
+    #     res = service.check(conn)
+    #     st.write(res)

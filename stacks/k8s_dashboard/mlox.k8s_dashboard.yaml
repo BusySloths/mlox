@@ -1,6 +1,6 @@
 id: k8s-dashboard-newest-k3s
 name: Kubernetes Dashboard
-version: 2.7.0
+version: "2.7.0"
 maintainer: Your Name
 description_short: Kubernetes Dashboard is a web-based UI for managing Kubernetes clusters.
 description: |
@@ -20,6 +20,7 @@ requirements:
   disk_gb: 1.0
 groups:
   service:
+  dashboard:
   backend:
     kubernetes:
 ports:  # These are 'preferred' ports, they can and possibly will be changed by automation

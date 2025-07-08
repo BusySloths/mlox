@@ -161,7 +161,7 @@ class Infrastructure:
         # service.name = service.__class__.__name__
         service_names = self.list_service_names()
         cntr = 0
-        while service in service_names:
+        while service.name in service_names:
             service.name = service.name + "_" + str(cntr)
             cntr += 1
         bundle.services.append(service)
@@ -211,6 +211,7 @@ class Infrastructure:
         self.configs[str(type(server))] = config
         bundle = Bundle(name=server.ip, server=server)
         self.bundles.append(bundle)
+        bundle.server.discovered = datetime.now().isoformat()
         return bundle
 
     def list_kubernetes_controller(self) -> List[Bundle]:

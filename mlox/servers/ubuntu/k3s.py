@@ -24,6 +24,7 @@ class UbuntuK3sServer(UbuntuDockerServer):
     )
 
     def __post_init__(self):
+        super().__post_init__()
         if len(self.controller_url) > 6 and len(self.controller_token) > 6:
             self.backend = ["kubernetes-agent", "k3s-agent"]
         else:

@@ -1,6 +1,6 @@
 id: mlflow-mlserver-2.22.0-docker
 name: MLFlow-MLServer
-version: 2.22.0 
+version: "2.22.0"
 maintainer: Your Name
 description_short: MLServer is an open-source Python library for building production-ready asynchronous APIs for machine learning models.
 description: |

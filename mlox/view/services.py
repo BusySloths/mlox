@@ -34,6 +34,12 @@ def installed_services():
                 }
             )
 
+    if len(services) == 0:
+        st.info(
+            "No services installed yet. Please add a service from the templates tab."
+        )
+        return
+
     df = pd.DataFrame(services, columns=["name", "ip", "version", "state", "links"])
     select_server = st.dataframe(
         df,
@@ -210,7 +216,8 @@ def available_services():
         # st.write(services[selected])
 
 
-tab_avail, tab_installed = st.tabs(["Templates", "Installed"])
+# tab_avail, tab_installed = st.tabs(["Templates", "Installed"])
+tab_installed, tab_avail = st.tabs(["Installed", "Templates"])
 with tab_avail:
     available_services()
 

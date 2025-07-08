@@ -12,8 +12,9 @@ services:
       - MY_OTEL_RELIC_KEY=${OTEL_RELIC_KEY}
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
+      - ./otel-data:/etc/otelcol  # fix path to where the file exporter writes
+      # - ./otel-data/telemetry.json:/etc/otelcol/telemetry.json # Mount a local directory to where the file exporter writes
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-      - ./otel-data/telemetry.json:/etc/otelcol/telemetry.json # Mount a local directory to where the file exporter writes
       - ./cert.pem:/etc/cert.pem
       - ./key.pem:/etc/key.pem
     ports:
