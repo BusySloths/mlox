@@ -13,6 +13,12 @@ def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService
 
     st.write(f"UI User: {service.ui_user}")
     st.write(f'UI Password: "{service.ui_pw}"')
+    st.link_button(
+        "Open MLflow UI",
+        url=service.service_url,
+        icon=":material/open_in_new:",
+        help="Open the MLflow UI in a new tab",
+    )
 
     # mlflow.set_tracking_uri(service.service_url)
     mlflow.set_registry_uri(service.service_url)

@@ -40,7 +40,7 @@ class KubeAppsService(AbstractService):
                 logger.info(
                     f"Namespace {self.namespace} already exists, skipping creation."
                 )
-                self.namespace = name + f"_{attempts}"
+                self.namespace = name + f"-{attempts}"
                 attempts += 1
                 exists = True
 
