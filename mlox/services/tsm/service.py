@@ -10,8 +10,8 @@ from mlox.secret_manager import (
     AbstractSecretManagerService,
 )
 from mlox.service import AbstractService
-from mlox.server import AbstractServer
 from mlox.remote import fs_delete_dir
+from mlox.infra import Infrastructure, Bundle
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -22,13 +22,22 @@ logging.basicConfig(
 @dataclass
 class TSMService(AbstractService, AbstractSecretManagerService):
     pw: str
+    server_uuid: str | None = field(default=None, init=False)
     secrets_abs_path: str | None = field(default=None, init=False)
 
     def __post_init__(self):
         self.state = "running"
 
-    def get_secret_manager(self, server: AbstractServer) -> AbstractSecretManager:
+    def get_secret_manager(self, infra: Infrastructure) -> AbstractSecretManager:
         """Get the TinySecretManager instance for this service."""
+        if self.server_uuid is None:
+            self.server_uuid = infra.bundles[0].server.uuid
+
+        server = infra.get_server_by_uuid(self.server_uuid)
+        if server is None:
+            raise ValueError(
+                f"Server with UUID {self.server_uuid} not found in infrastructure."
+            )
         server_dict = dataclass_to_dict(server)
 
         if self.secrets_abs_path is not None:

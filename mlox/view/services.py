@@ -28,6 +28,7 @@ def installed_services():
                     "version": infra.get_service_config(s).version,
                     "links": [f"{k}:{v}" for k, v in s.service_urls.items()],
                     "state": s.state,
+                    "uuid": s.uuid,
                     # "tags": bundle.tags,
                     # "services": [s.name for s in bundle.services],
                     # "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
@@ -40,7 +41,9 @@ def installed_services():
         )
         return
 
-    df = pd.DataFrame(services, columns=["name", "ip", "version", "state", "links"])
+    df = pd.DataFrame(
+        services, columns=["name", "ip", "version", "state", "links", "uuid"]
+    )
     select_server = st.dataframe(
         df,
         use_container_width=True,

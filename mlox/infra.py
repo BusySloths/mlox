@@ -29,10 +29,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Repo:
-    link: str
-    name: str
-    path: str
-    added_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
+    repo_name: str = field(default="", init=False)
+    created_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
     modified_timestamp: str = field(
         default_factory=datetime.now().isoformat, init=False
     )
@@ -134,6 +132,8 @@ class Infrastructure:
                 "${MLOX_AUTO_USER}": generate_username(),
                 "${MLOX_AUTO_PW}": generate_pw(),
                 "${MLOX_AUTO_API_KEY}": generate_pw(),
+                "${MLOX_SERVER_IP}": bundle.server.ip,
+                "${MLOX_SERVER_UUID}": bundle.server.uuid,
             }
 
             port_prefix = "${MLOX_AUTO_PORT_"
@@ -175,6 +175,19 @@ class Infrastructure:
             for s in bundle.services:
                 if s.name == service_name:
                     return s
+        return None
+
+    def get_service_by_uuid(self, service_uuid: str) -> AbstractService | None:
+        for bundle in self.bundles:
+            for s in bundle.services:
+                if s.uuid == service_uuid:
+                    return s
+        return None
+
+    def get_server_by_uuid(self, server_uuid: str) -> AbstractServer | None:
+        for bundle in self.bundles:
+            if bundle.server.uuid == server_uuid:
+                return bundle.server
         return None
 
     def get_service_config(self, service: AbstractServer) -> ServiceConfig | None:

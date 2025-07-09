@@ -4,7 +4,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Dict, cast
 
-from mlox.infra import Bundle
+from mlox.infra import Bundle, Repo
 from mlox.service import AbstractService
 from mlox.server import AbstractGitServer
 from mlox.remote import fs_delete_dir
@@ -16,16 +16,12 @@ logging.basicConfig(
 
 
 @dataclass
-class GithubRepoService(AbstractService):
+class GithubRepoService(AbstractService, Repo):
     link: str
-    repo_name: str = field(default="", init=False)
-    created_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
-    modified_timestamp: str = field(
-        default_factory=datetime.now().isoformat, init=False
-    )
 
     def __post_init__(self):
         self.repo_name = self.link.split("/")[-1][:-4]
+        self.state = "running"
 
     def setup(self, conn) -> None:
         self.service_urls = dict()

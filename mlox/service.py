@@ -1,3 +1,5 @@
+import uuid
+
 from typing import Dict, Literal
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -62,6 +64,7 @@ class AbstractService(ABC):
     template: str
     target_path: str
     service_config_id: str
+    uuid: str = field(default_factory=lambda: uuid.uuid4().hex, init=False)
 
     target_docker_script: str = field(default="docker-compose.yaml", init=False)
     target_docker_env: str = field(default="service.env", init=False)

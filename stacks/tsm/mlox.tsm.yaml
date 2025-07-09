@@ -36,3 +36,4 @@ build:
     template: ${MLOX_STACKS_PATH}/tsm/mlox.tsm.yaml
     target_path: /home/${MLOX_USER}/.secrets
     pw: ${MLOX_AUTO_PW}
+    server_uuid: ${MLOX_SERVER_UUID}

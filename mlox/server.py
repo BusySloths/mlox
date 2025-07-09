@@ -1,4 +1,5 @@
 import time  # Added for retry delay
+import uuid
 import logging
 import tempfile
 import importlib
@@ -185,6 +186,8 @@ class AbstractServer(ABC):
 
     mlox_user: MloxUser | None = field(default=None, init=False)
     remote_user: RemoteUser | None = field(default=None, init=False)
+
+    uuid: str = field(default_factory=lambda: uuid.uuid4().hex, init=False)
 
     backend: List[str] = field(default_factory=list, init=False)
     state: Literal[

@@ -33,3 +33,4 @@ build:
     root_pw: ${MLOX_ROOT_PW}    
     controller_url: ${K3S_CONTROLLER_URL}
     controller_token: ${K3S_CONTROLLER_TOKEN}
+    controller_uuid: ${K3S_CONTROLLER_UUID}    

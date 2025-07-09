@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict
 from dataclasses import dataclass
 
+from mlox.infra import Infrastructure
 from mlox.server import AbstractServer
 from mlox.utils import _get_encryption_key, dict_to_dataclass, load_from_json
 from mlox.remote import (
@@ -47,7 +48,7 @@ class AbstractSecretManager(ABC):
 @dataclass
 class AbstractSecretManagerService(ABC):
     @abstractmethod
-    def get_secret_manager(self, server: AbstractServer) -> AbstractSecretManager:
+    def get_secret_manager(self, infra: Infrastructure) -> AbstractSecretManager:
         pass
 
 

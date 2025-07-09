@@ -22,6 +22,9 @@ class UbuntuK3sServer(UbuntuDockerServer):
     controller_token: str = field(
         default="", metadata={"help": "Optional token for the k3s controller node"}
     )
+    controller_uuid: str = field(
+        default="", metadata={"help": "Optional UUID of the k3s controller node"}
+    )
 
     def __post_init__(self):
         super().__post_init__()

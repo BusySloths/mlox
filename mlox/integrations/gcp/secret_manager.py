@@ -1,13 +1,11 @@
 """Provides GCP Secret Manager functions.
 
-To access the secret manager, a service account with secret manager secret accessor roles is mandatory.
-For local use, you can download the FLOW_ACCESSOR_CREDENTIALS json dict in secret manager and
-    1. either place it as `keyfile.json` in the project root folder
-    2. specify the filename and path in env variable FLOW_ACCESSOR_CREDENTIALS:
-        e.g. FLOW_ACCESSOR_CREDENTIALS="/path/to/secret-accessor-credentials.json"
-    3. set an airflow variable `FLOWPROVIDER_ACCESSOR` containing the json dict contents
+To access the secret manager, a service account with the following roles is necessary:
+    1. secret manager secret accessor (view and read secret contents)
+    2. secret manager viewer (list secrets)
+    3. secret manager admin (create and update secrets and versions)
 
-Author: nicococo
+Author: nicococo|mlox
 """
 
 import os
@@ -18,6 +16,7 @@ from typing import Dict, Tuple, List
 import logging
 from google.oauth2 import service_account
 from google.cloud import secretmanager
+from google.api_core import exceptions as g_exc
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +25,35 @@ ACCESSOR_AIRFLOW_NAME: str = "AIRFLOW_ACCESSOR_CREDENTIALS"
 ACCESSOR_ENV_NAME: str = "FLOW_ACCESSOR_CREDENTIALS"
 ACCESSOR_FILE_NAME: str = "keyfile.json"
 
-SECRET_MANAGER_ID: str = os.environ["GCP_SECRET_MANAGER_ID"]
+SECRET_MANAGER_ID: str = os.environ["GCP_SECRET_MANAGER_ID"]  # project id OR number
 
 _secret_cache: Dict[str, Tuple[int, str]] = dict()
+
+
+def _get_credentials() -> service_account.Credentials:
+    """Helper to load GCP credentials from various sources."""
+    airflow_value = os.environ.get(ACCESSOR_AIRFLOW_NAME, None)
+
+    if airflow_value is not None:
+        logger.info("Using Airflow credentials from variable.")
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(airflow_value)
+        )
+    else:
+        value = os.environ.get(ACCESSOR_ENV_NAME, ACCESSOR_FILE_NAME)
+        if not os.path.exists(value):
+            raise FileNotFoundError(
+                f"Could not find GCP credentials file at '{value}'. "
+                f"Searched for env var '{ACCESSOR_ENV_NAME}' and file '{ACCESSOR_FILE_NAME}'."
+            )
+
+        logger.info(f"GCP secret manager secret accessor keyfile found ({value}).")
+        credentials = service_account.Credentials.from_service_account_file(value)
+
+    if not credentials:
+        raise ValueError("Credentials were found but are not valid.")
+
+    return credentials
 
 
 def read_secret_as_raw_token(secret_name: str, version: str = "latest") -> str | None:
@@ -49,38 +74,94 @@ def read_secret_as_raw_token(secret_name: str, version: str = "latest") -> str |
         )  # increase usage counter
         return _secret_cache[secret_name][1]
 
-    airflow_value = os.environ.get(ACCESSOR_AIRFLOW_NAME, None)
-
-    if airflow_value is not None:
-        logger.info(f"Using Airflow credentials {airflow_value}.")
-        credentials = service_account.Credentials.from_service_account_info(
-            json.loads(airflow_value)
-        )
-    else:
-        value = os.environ.get(ACCESSOR_ENV_NAME, ACCESSOR_FILE_NAME)
-        # Attention: Environment variable GOOGLE_APPLICATION_CREDENTIALS with path to secret-accessor-credentials.json is
-        # required to access the secret manager
-        assert value is not None, (
-            f"Could neither find Airflow credentials, {ACCESSOR_FILE_NAME} in project root, or environment variable {ACCESSOR_ENV_NAME}."
-        )
-        logger.info(f"GCP secret manager secret accessor keyfile found ({value}).")
-        credentials = service_account.Credentials.from_service_account_file(value)
-
-    assert credentials is not None, "Credentials where found but are not valid."
-
-    SECRET_PATH_ID = (
-        f"projects/{SECRET_MANAGER_ID}/secrets/{secret_name}/versions/{version}"
-    )
     payload = None
     try:
+        credentials = _get_credentials()
         client = secretmanager.SecretManagerServiceClient(credentials=credentials)
-        payload = client.access_secret_version(
-            request={"name": SECRET_PATH_ID}
-        ).payload.data.decode("UTF-8")
+
+        SECRET_PATH_ID = (
+            f"projects/{SECRET_MANAGER_ID}/secrets/{secret_name}/versions/{version}"
+        )
+        response = client.access_secret_version(request={"name": SECRET_PATH_ID})
+        payload = response.payload.data.decode("UTF-8")
         _secret_cache[secret_name] = (1, payload)
-    except BaseException as e:
-        logger.error(e)
+    except Exception as e:
+        logger.error(f"Failed to read secret '{secret_name}': {e}")
     return payload
+
+
+def list_secrets() -> List[str]:
+    """Lists all secret names in the configured GCP project.
+
+    Returns:
+        List[str]: A list of secret names, or an empty list on error.
+    """
+    secret_names: List[str] = []
+    try:
+        credentials = _get_credentials()
+        client = secretmanager.SecretManagerServiceClient(credentials=credentials)
+
+        parent = f"projects/{SECRET_MANAGER_ID}"
+
+        # The list_secrets method returns an iterator. We loop through it
+        # to get all the secrets.
+        for secret in client.list_secrets(request={"parent": parent}):
+            # The 'secret.name' attribute is the full resource name, e.g.,
+            # 'projects/{project_id}/secrets/{secret_id}'. We parse out the ID.
+            secret_id = secret.name.split("/")[-1]
+            secret_names.append(secret_id)
+
+    except Exception as e:
+        logger.error(f"Failed to list secrets: {e}")
+
+    return secret_names
+
+
+def save_secret(name: str, secret: Dict) -> bool:
+    """Saves a secret to GCP Secret Manager.
+
+    Creates the secret container if it doesn't exist, then adds the
+    payload as a new version.
+
+    Args:
+        name: The name/ID of the secret.
+        secret: The dictionary content to save.
+
+    Returns:
+        True if successful, False otherwise.
+    """
+    try:
+        credentials = _get_credentials()
+        client = secretmanager.SecretManagerServiceClient(credentials=credentials)
+        parent = f"projects/{SECRET_MANAGER_ID}"
+        secret_path = f"{parent}/secrets/{name}"
+
+        # Try to create the secret container. If it already exists, that's fine.
+        try:
+            client.create_secret(
+                request={
+                    "parent": parent,
+                    "secret_id": name,
+                    "secret": {"replication": {"automatic": {}}},
+                }
+            )
+            logger.info(f"Created new secret container: '{name}'")
+        except g_exc.AlreadyExists:
+            logger.info(f"Secret '{name}' already exists. Adding a new version.")
+
+        # Convert dict to bytes for the payload
+        payload_bytes = json.dumps(secret, indent=2).encode("UTF-8")
+
+        # Add the secret payload as a new version
+        response = client.add_secret_version(
+            request={"parent": secret_path, "payload": {"data": payload_bytes}}
+        )
+        logger.info(f"Added new version to secret '{name}': {response.name}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to save secret '{name}': {e}")
+        return False
 
 
 def read_secret_as_yaml(secret_name: str) -> Dict:
@@ -161,4 +242,12 @@ if __name__ == "__main__":
     print("Read secret #1: ", read_secret_as_yaml("FLOW_SETTINGS"))
     print("Read secret #2: ", read_secret_as_yaml("FLOW_SETTINGS"))
     print("Read secret #3: ", read_secret_as_yaml("FLOW_SETTINGS"))
+
+    print("\n--- Saving a new or existing secret ---")
+    save_success = save_secret("MLOX_TEST_SECRET", {"key": "value", "timestamp": "now"})
+    print(f"Save successful: {save_success}")
+
+    print("\n--- Listing all secrets ---")
+    print(list_secrets())
+
     print("Secret stats (#calls): ", get_secret_usage_statistics())

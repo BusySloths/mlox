@@ -13,6 +13,7 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
 
     controller_url = ""
     controller_token = ""
+    controller_uuid = ""
 
     k8s_controller = [None] + infra.list_kubernetes_controller()
     join_k8s_bundle = st.selectbox(
@@ -26,9 +27,11 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
         controller_token = join_k8s_bundle.server.get_backend_status().get(
             "k3s.token", ""
         )
+        controller_uuid = join_k8s_bundle.server.uuid
 
     params["${K3S_CONTROLLER_URL}"] = controller_url
     params["${K3S_CONTROLLER_TOKEN}"] = controller_token
+    params["${K3S_CONTROLLER_UUID}"] = controller_uuid
 
     return params
 
