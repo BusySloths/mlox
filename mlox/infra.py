@@ -190,7 +190,9 @@ class Infrastructure:
                 return bundle.server
         return None
 
-    def get_service_config(self, service: AbstractServer) -> ServiceConfig | None:
+    def get_service_config(
+        self, service: AbstractService | AbstractServer
+    ) -> ServiceConfig | None:
         if service.service_config_id in self.configs:
             return self.configs[service.service_config_id]
         else:

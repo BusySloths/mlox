@@ -1,0 +1,33 @@
+id: headlamp-newest-k3s
+name: Headlamp Dashboard
+version: "newest"
+maintainer: Your Name
+description_short: Headlamp is a web-based UI for managing Kubernetes clusters.
+description: |
+  Headlamp is a web-based UI for managing Kubernetes clusters. It provides a user-friendly interface to 
+  deploy, manage, and monitor applications running on Kubernetes clusters. Headlamp simplifies the management 
+  of Kubernetes resources and allows users to easily view and control their cluster's state. In MLOX, it serves as 
+  a convenient tool for users to interact with their Kubernetes deployments and manage resources without needing to use the command line.
+links:
+  project: https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/
+  news: https://github.com/kubernetes/dashboard/releases
+  security: https://groups.google.com/g/kubernetes-security-announce
+  documentation: https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/
+  changelog: https://github.com/kubernetes/dashboard/releases
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
+groups:
+  service:
+  dashboard:
+  backend:
+    kubernetes:
+ui:
+  settings: mlox.services.k8s_headlamp.ui.settings
+build:
+  class_name: mlox.services.k8s_headlamp.k8s.K8sHeadlampService
+  params:
+    name: headlamp
+    template: ${MLOX_STACKS_PATH}/k8s_headlamp/mlox.headlamp.yaml
+    target_path: /home/${MLOX_USER}/headlamp

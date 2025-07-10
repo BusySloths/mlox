@@ -61,9 +61,9 @@ def tls_setup(conn, ip, path) -> None:
 @dataclass
 class AbstractService(ABC):
     name: str
+    service_config_id: str
     template: str
     target_path: str
-    service_config_id: str
     uuid: str = field(default_factory=lambda: uuid.uuid4().hex, init=False)
 
     target_docker_script: str = field(default="docker-compose.yaml", init=False)
@@ -103,3 +103,26 @@ class AbstractService(ABC):
         docker_down(conn, f"{self.target_path}/{self.target_docker_script}")
         self.state = "stopped"
         return True
+
+
+# SKETCH of a mixin for Docker services
+# This mixin can be used to provide common Docker functionality to services
+# that need to run in Docker containers, such as Airflow or MLFlow.
+# @dataclass
+# class DockerMixin:
+#     target_docker_script: str = field(default="docker-compose.yaml", init=False)
+#     target_docker_env: str = field(default="service.env", init=False)
+
+#     def spin_up(self, conn, target_path: str) -> bool:
+#         docker_up(
+#             conn,
+#             f"{target_path}/{self.target_docker_script}",
+#             f"{target_path}/{self.target_docker_env}",
+#         )
+#         self.state = "running"
+#         return True
+
+#     def spin_down(self, conn, target_path: str) -> bool:
+#         docker_down(conn, f"{target_path}/{self.target_docker_script}")
+#         self.state = "stopped"
+#         return True

@@ -7,8 +7,9 @@ from datetime import datetime
 from mlox.services.utils_ui import save_infrastructure
 from mlox.services.airflow.docker import AirflowDockerService
 from mlox.services.github.service import GithubRepoService
-from mlox.infra import Infrastructure, Bundle
+from mlox.infra import Infrastructure, Bundle, Repo
 from mlox.server import AbstractGitServer
+from mlox.service import AbstractService
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerService):
@@ -27,14 +28,19 @@ def tab_repositories(
 ):
     my_repos = []
     for r in infra.filter_by_group("git"):
+        if not isinstance(r, GithubRepoService):
+            continue
+        t = (
+            r.created_timestamp
+            if hasattr(r, "created_timestamp")
+            else "2001-01-01T00:00:00"
+        )
         my_repos.append(
             {
                 "name": r.name,
-                "link": r.link,
+                "link": r.link if hasattr(r, "link") else "",
                 "path": r.target_path,
-                "created": datetime.fromisoformat(r.created_timestamp).strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
+                "created": datetime.fromisoformat(t).strftime("%Y-%m-%d %H:%M:%S"),
                 "is_in_dags": r.target_path.startswith(service.path_dags),
                 "repo": r,
             }
@@ -61,15 +67,17 @@ def tab_repositories(
     )
     if len(selection["selection"]["rows"]) > 0:
         idx = selection["selection"]["rows"][0]
-        repo = my_repos[idx]["repo"]
+        repo = cast(GithubRepoService, my_repos[idx]["repo"])
+        repo_service = cast(AbstractService, my_repos[idx]["repo"])
         if st.button("Add to DAGs"):
             new_repo = GithubRepoService(
-                repo.repo_name + " [Airflow DAG]",
-                repo.template,
-                service.path_dags,
-                repo.link,
+                name=repo.repo_name + " [Airflow DAG]",
+                service_config_id=repo_service.service_config_id,
+                template=repo_service.template,
+                target_path=service.path_dags,
+                link=repo.link,
             )
-            config = infra.get_service_config(repo)
+            config = infra.get_service_config(repo_service)
             if config:
                 infra.add_service(bundle.server.ip, config, params={}, service=new_repo)
                 with bundle.server.get_server_connection() as conn:
@@ -89,8 +97,8 @@ def tab_repositories(
     )
     if len(selection["selection"]["rows"]) > 0:
         idx = selection["selection"]["rows"][0]
-        repo = my_repos[idx]["repo"]
+        repo_service = cast(AbstractService, my_repos[idx]["repo"])
         if st.button("Remove from DAGs"):
-            infra.teardown_service(repo)
+            infra.teardown_service(repo_service)
             save_infrastructure()
             st.rerun()
