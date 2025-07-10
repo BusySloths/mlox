@@ -1,3 +1,4 @@
 .grav
 .tmp
+dist
 .streamlit/secrets.toml

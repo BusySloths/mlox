@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mlox"
 readme = "README.md"
 keywords = ["Infrastructure", "Server", "Service", "Dashboard", "Opinionated", "MLOps"]
+license = { file = "LICENSE" }
 description = "MLOps Platform for Data Scientists and Engineers to build, deploy and manage machine learning applications and more."
 requires-python = ">=3.7"
 authors = [{ name = "nicococo", email = "contact@mlox.org" }]
