@@ -3,12 +3,12 @@ requires = ["setuptools", "setuptools-git-versioning"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mlox"
+name = "mlox-demo"
 readme = "README.md"
 keywords = ["Infrastructure", "Server", "Service", "Dashboard", "Opinionated", "MLOps"]
 license = { file = "LICENSE" }
 description = "MLOps Platform for Data Scientists and Engineers to build, deploy and manage machine learning applications and more."
-requires-python = ">=3.7"
+requires-python = ">=3.11"
 authors = [{ name = "nicococo", email = "contact@mlox.org" }]
 classifiers = [
     # How mature is this project? Common values are
@@ -21,7 +21,6 @@ classifiers = [
 
     # Indicate who your project is intended for
     "Intended Audience :: Developers",
-    "Topic :: Information Technology",
     "Topic :: Software Development",
     "Topic :: System :: Distributed Computing",
     "Topic :: Internet",
