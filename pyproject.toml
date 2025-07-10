@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools", "setuptools-git-versioning"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlox"
+readme = "README.md"
+keywords = ["Infrastructure", "Server", "Service", "Dashboard", "Opinionated", "MLOps"]
+description = "MLOps Platform for Data Scientists and Engineers to build, deploy and manage machine learning applications and more."
+requires-python = ">=3.7"
+authors = [{ name = "nicococo", email = "contact@mlox.org" }]
+classifiers = [
+    # How mature is this project? Common values are
+    #   1 - Planning
+    #   2 - Pre-Alpha 
+    #   3 - Alpha
+    #   4 - Beta
+    #   5 - Production/Stable
+    "Development Status :: 3 - Alpha",
+
+    # Indicate who your project is intended for
+    "Intended Audience :: Developers",
+    "Topic :: Information Technology",
+    "Topic :: Software Development",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: Internet",
+    "Topic :: Database",
+
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["dependencies", "version"]
+
+[project.urls]
+"Homepage" = "https://github.com/nicococo/mlox"
+"Tracker" = "https://github.com/nicococo/mlox/issues"
+"Source" = "https://github.com/nicococo/mlox"
+"Examples" = "https://github.com/nicococo/mlox"
+
+[project.scripts]
+mlox-start-multipass = "mlox.cli:start_multipass"
+
+[tool.setuptools-git-versioning]
+enabled = true
+template = "{tag}.post{ccount}"
+dev_template = "{tag}.post{ccount}"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
