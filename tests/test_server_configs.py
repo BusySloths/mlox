@@ -15,8 +15,16 @@ from mlox.infra import Infrastructure
 
 # Dummy Server Implementation for testing
 class DummyServer(AbstractServer):
-    def __init__(self, ip, root, root_pw, port="22", custom_server_param=None):
-        super().__init__(ip=ip, root=root, root_pw=root_pw, port=port)
+    def __init__(
+        self, ip, root, root_pw, service_config_id, port="22", custom_server_param=None
+    ):
+        super().__init__(
+            ip=ip,
+            root=root,
+            root_pw=root_pw,
+            service_config_id=service_config_id,
+            port=port,
+        )
         self.custom_server_param = custom_server_param
 
     # Implementing all abstract methods to make it concrete
@@ -80,6 +88,7 @@ def mock_dummy_modules(monkeypatch):
 @pytest.fixture
 def server_config_data():
     return {
+        "id": "test-config-id",
         "name": "TestServer",
         "version": "24.04",
         "maintainer": "tester",

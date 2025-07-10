@@ -15,8 +15,21 @@ from mlox.infra import Infrastructure, Bundle
 
 # Dummy Service Implementation for testing
 class DummyService(AbstractService):
-    def __init__(self, name, template, target_path, custom_param=None, port=None):
-        super().__init__(name=name, template=template, target_path=target_path)
+    def __init__(
+        self,
+        name,
+        service_config_id,
+        template,
+        target_path,
+        custom_param=None,
+        port=None,
+    ):
+        super().__init__(
+            name=name,
+            service_config_id=service_config_id,
+            template=template,
+            target_path=target_path,
+        )
         self.custom_param = custom_param
         self.port = port
 
@@ -63,6 +76,7 @@ def mock_dummy_modules(monkeypatch):
 @pytest.fixture
 def service_config_data():
     return {
+        "id": "test-config-id",
         "name": "TestService",
         "version": "1.0",
         "maintainer": "tester",
