@@ -1,5 +1,8 @@
 graft mlox
 
+prune mlox/view_st
+exclude mlox/configs_old.py
+
 include README.md
 
 # Exclude directories not meant for distribution

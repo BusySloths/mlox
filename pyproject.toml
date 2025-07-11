@@ -69,6 +69,9 @@ enabled = true
 template = "{tag}"
 # For development builds after a tag (e.g., v0.1.0 + 2 commits -> 0.1.0.post2)
 dev_template = "{tag}.post{ccount}"
+# ATTENTION: Dirty builds are no longer accepted in PyPI, so this is commented out.
+# For dirty builds (e.g., uncommitted changes after a tag -> 0.1.0.post2.dirty)
+# dirty_template = "{tag}.post{ccount}+dirty"
 
 [tool.setuptools]
 include-package-data = true
