@@ -52,6 +52,9 @@ jobs:
       - name: Prepare distribution
         run: |
           python -m build
+          twine check --strict dist/*
+          pip install -U packaging
+          twine check --strict dist/*
       - name: Deploy to PYPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
