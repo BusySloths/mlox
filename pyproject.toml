@@ -30,7 +30,29 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dynamic = ["dependencies", "version"]
+dynamic = ["version"]
+dependencies = [
+    "dacite",
+    "pyyaml",
+    "fabric",
+    "cryptography",
+    "bcrypt",
+    "passlib",
+]
+
+[project.optional-dependencies]
+ui = [
+    "streamlit",
+    "streamlit-vis-timeline",
+    "pandas",
+    "numpy",
+]
+ml = ["mlflow", "mlserver", "psutil"]
+gcp = ["google-cloud-secret-manager", "oauth2client"]
+telemetry = ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp"]
+connectors = ["redis", "grpcio"]
+all = ["mlox-demo[ui,ml,gcp,telemetry,connectors]"]
+dev = ["mlox-demo[all]", "pytest", "pytest-cov", "flake8", "build", "twine"]
 
 [project.urls]
 "Homepage" = "https://github.com/nicococo/mlox"
@@ -43,14 +65,11 @@ mlox-start-multipass = "mlox.cli:start_multipass"
 
 [tool.setuptools-git-versioning]
 enabled = true
-template = "{tag}.post{ccount}"
+# Use the tag directly for a clean release version (e.g., v0.1.0 -> 0.1.0)
+template = "{tag}"
+# For development builds after a tag (e.g., v0.1.0 + 2 commits -> 0.1.0.post2)
 dev_template = "{tag}.post{ccount}"
-
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
 
 [tool.setuptools]
 include-package-data = true
-
-[tool.setuptools.packages.find]
-where = ["."]
+packages = ["mlox"]
