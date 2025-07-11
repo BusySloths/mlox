@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from mlox.configs_old import Infrastructure
+from mlox_old.configs_old import Infrastructure
 from mlox.remote import git_clone
 
 

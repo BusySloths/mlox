@@ -1,8 +1,5 @@
 graft mlox
 
-prune mlox/view_st
-exclude mlox/configs_old.py
-
 include README.md
 
 # Exclude directories not meant for distribution
@@ -10,6 +7,7 @@ prune .github
 prune scripts
 prune services
 prune tests
+prune mlox_old
 
 # Exclude specific file patterns from the root directory
 exclude *.json

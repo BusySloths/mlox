@@ -1,6 +1,6 @@
 import streamlit as st
 
-from mlox.configs_old import MLFlow, Infrastructure
+from mlox_old.configs_old import MLFlow, Infrastructure
 from mlox.remote import fs_read_file
 
 

@@ -1,22 +1,20 @@
 import streamlit as st
 
-from mlox.configs_old import MLFlow, get_server_connections, update_service
+from mlox_old.configs_old import Milvus, get_server_connections, update_service
 from mlox.remote import fs_read_file
 
 
-st.set_page_config(page_title="MLServer Install Page", page_icon="🌍")
-st.markdown("# MLServer Serving")
+st.set_page_config(page_title="Milvus Install Page", page_icon="🌍")
+st.markdown("# Milvus Install")
 
 servers = get_server_connections()
 target_ip = st.selectbox("Choose Server", list(servers.keys()))
 server = servers[target_ip]
 
-target_path = st.text_input("Install Path", f"/home/{server.user}/my_serving")
-port = st.text_input("Port", "1234")
+target_path = st.text_input("Install Path", f"/home/{server.user}/my_milvus")
 
-service = MLFlow(server, target_path, ui_user, ui_pw, port)
+service = Milvus(server, target_path)
 update_service(service)
-
 c1, c2, c3, c4 = st.columns([15, 15, 15, 55])
 if c1.button("Setup"):
     service.setup()
@@ -29,8 +27,10 @@ with st.expander("Details"):
     st.write(service)
 
 files = [
-    "docker-compose-mlflow.yaml",
-    "mlflow.env",
+    "docker-compose.yaml",
+    "service.env",
+    # "cert.pem",
+    # "htpasswd",
 ]
 tabs = st.tabs(files)
 for i in range(len(files)):
@@ -48,4 +48,4 @@ for i in range(len(files)):
             print(res)
 
 st.sidebar.header("Links")
-st.sidebar.page_link(service.get_service_url(), label="MLFlow")
+st.sidebar.page_link(service.get_service_url(), label="Milvus")

@@ -81,7 +81,8 @@ def settings(
     st.write(f"User: {service.user}")
     st.write(f"Password: {service.pw}")
     print(f"Password: {service.pw}")
-    st.write(f"Hashed Password: '{service.hashed_pw.replace('$', '\\$')}'")
+    foo = service.hashed_pw.replace("$", "\\$")
+    st.write(f"Hashed Password: '{foo}'")
 
     url = service.service_url
     if url.endswith("/"):

@@ -3,7 +3,7 @@ import streamlit as st
 
 from Crypto.PublicKey import RSA
 
-from mlox.configs_old import Ubuntu24Server, Infrastructure
+from mlox_old.configs_old import Ubuntu24Server, Infrastructure
 
 
 def add_server_to_infrastructure():

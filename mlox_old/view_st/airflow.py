@@ -1,7 +1,7 @@
 import streamlit as st
 import uuid
 
-from mlox.configs_old import Airflow
+from mlox_old.configs_old import Airflow
 
 
 def configure_and_add_airflow(server):
