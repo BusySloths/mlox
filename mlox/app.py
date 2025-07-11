@@ -28,7 +28,7 @@ def help():
 
 
 def welcome():
-    st.image("resources/mlox_logo_wide.png")
+    st.image("mlox/resources/mlox_logo_wide.png")
     st.markdown("""
     # Welcome to MLOX – MLOps Infrastructure Made Simple
     
@@ -56,14 +56,14 @@ def welcome():
 
 st.set_page_config(
     page_title="MLOX Infrastructure Management",
-    page_icon="resources/mlox_logo_small.png",
+    page_icon="mlox/resources/mlox_logo_small.png",
     layout="wide",
 )
 
 st.logo(
-    "resources/mlox.png",
+    "mlox/resources/mlox.png",
     size="large",
-    icon_image="resources/mlox_logo_small.png",
+    icon_image="mlox/resources/mlox_logo_small.png",
 )
 
 

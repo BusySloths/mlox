@@ -12,17 +12,10 @@ def start_multipass():
     try:
         # Use importlib.resources to access package data reliably.
         # This works correctly whether the package is installed from a wheel,
-        # an sdist, or in editable mode.
-
-        # The 'files()' API is preferred (Python 3.9+), but we fall back
-        # to the legacy 'path()' API for compatibility with Python 3.7/3.8.
-        try:
-            # Python 3.9+
-            script_ref = resources.files("mlox.assets").joinpath("start-multipass.sh")
-            ctx_manager = resources.as_file(script_ref)
-        except AttributeError:
-            # Python 3.7, 3.8
-            ctx_manager = resources.path("mlox.assets", "start-multipass.sh")
+        # an sdist, or in editable mode. Since requires-python is >=3.11,
+        # we can use the modern .files() API directly.
+        script_ref = resources.files("mlox.assets").joinpath("start-multipass.sh")
+        ctx_manager = resources.as_file(script_ref)
 
         with ctx_manager as script_path:
             os.chmod(script_path, 0o755)  # Ensure the script is executable

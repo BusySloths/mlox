@@ -39,7 +39,7 @@ def new_project():
             value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),
             type="password",
         )
-        configs = load_all_server_configs("./stacks")
+        configs = load_all_server_configs()
         config = c3.selectbox(
             "System Configuration",
             configs,

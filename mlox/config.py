@@ -3,13 +3,12 @@ import logging
 import os
 import yaml
 
+from importlib import resources
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Literal, Callable
 
 from mlox.service import AbstractService
 from mlox.server import AbstractServer
-
-CONFIG_ROOT_DIR = "./stacks"
 
 
 @dataclass
@@ -102,13 +101,27 @@ class ServiceConfig:
             return None
 
 
-def load_all_server_configs(root_dir: str) -> List[ServiceConfig]:
-    return load_all_service_configs(root_dir, prefix="mlox-server")
+def load_service_config_by_id(service_id: str) -> ServiceConfig | None:
+    # for service configs
+    for config in load_all_service_configs(prefix="mlox"):
+        if config.id == service_id:
+            return config
+    # for all server configs
+    for config in load_all_service_configs(prefix="mlox-server"):
+        if config.id == service_id:
+            return config
+    return None
+
+
+def load_all_server_configs() -> List[ServiceConfig]:
+    return load_all_service_configs(prefix="mlox-server")
 
 
 def load_all_service_configs(
-    root_dir: str, prefix: Literal["mlox", "mlox-server"] = "mlox"
+    prefix: Literal["mlox", "mlox-server"] = "mlox",
 ) -> List[ServiceConfig]:
+    root_dir = str(resources.files("mlox.stacks"))
+
     configs: List[ServiceConfig] = []
     if not os.path.isdir(root_dir):
         logging.error(f"Configuration directory not found: {root_dir}")
@@ -118,18 +131,6 @@ def load_all_service_configs(
     for candidate in candidates:
         configs.extend(load_service_configs(root_dir, candidate, prefix=prefix))
     return configs
-
-
-def load_service_config_by_id(root_dir: str, service_id: str) -> ServiceConfig | None:
-    # for service configs
-    for config in load_all_service_configs(root_dir, prefix="mlox"):
-        if config.id == service_id:
-            return config
-    # for all server configs
-    for config in load_all_service_configs(root_dir, prefix="mlox-server"):
-        if config.id == service_id:
-            return config
-    return None
 
 
 def load_service_configs(
@@ -192,8 +193,29 @@ def load_config(
     return None
 
 
+def resource_files():
+    # The .files() API returns a traversable object for your package's data
+    # This is the modern way (Python 3.9+) to access package resources.
+    airflow_stack_path_obj = resources.files("mlox.stacks")
+    print(str(airflow_stack_path_obj))
+
+    # You can join paths to get to a specific file
+    compose_file_ref = airflow_stack_path_obj.joinpath(
+        "docker-compose-airflow-2.9.2.yaml"
+    )
+
+    # To get a usable file system path, use the as_file() context manager.
+    # This handles cases where the package is installed as a zip file.
+    with resources.as_file(compose_file_ref) as compose_file_path:
+        print(f"The path to the compose file is: {compose_file_path}")
+        # Now you can use `compose_file_path` with other tools, e.g., to read it
+        # with open(compose_file_path, "r") as f:
+        #     content = f.read()
+
+
 if __name__ == "__main__":
-    configs = load_all_service_configs(CONFIG_ROOT_DIR)
+    # resource_files()
+    configs = load_all_service_configs()
     # configs = load_all_server_configs("./stacks")
     for c in configs:
         print(

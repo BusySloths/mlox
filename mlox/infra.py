@@ -8,7 +8,6 @@ from mlox.config import (
     ServiceConfig,
     load_service_config_by_id,
     load_all_service_configs,
-    CONFIG_ROOT_DIR,
 )
 from mlox.server import AbstractServer
 from mlox.service import AbstractService
@@ -196,9 +195,7 @@ class Infrastructure:
         if service.service_config_id in self.configs:
             return self.configs[service.service_config_id]
         else:
-            config = load_service_config_by_id(
-                CONFIG_ROOT_DIR, service.service_config_id
-            )
+            config = load_service_config_by_id(service.service_config_id)
             if config:
                 self.configs[service.service_config_id] = config
                 return config
@@ -259,7 +256,7 @@ class Infrastructure:
         return infra
 
     def populate_configs(self) -> None:
-        configs = load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox")
-        configs.extend(load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox-server"))
+        configs = load_all_service_configs(prefix="mlox")
+        configs.extend(load_all_service_configs(prefix="mlox-server"))
         for config in configs:
             self.configs[config.id] = config

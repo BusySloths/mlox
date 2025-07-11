@@ -1,8 +1,5 @@
 graft mlox
-graft resources
-graft stacks
 
-include LICENSE
 include README.md
 
 # Exclude directories not meant for distribution

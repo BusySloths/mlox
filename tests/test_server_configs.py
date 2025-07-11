@@ -86,6 +86,29 @@ def mock_dummy_modules(monkeypatch):
 
 
 @pytest.fixture
+def mock_package_resources(monkeypatch, tmp_path):
+    """
+    Mocks `importlib.resources.files` to redirect lookups for 'mlox.stacks'
+    to a temporary directory managed by pytest. This allows testing of
+    package data loading functions without a full package installation.
+    """
+    from importlib import resources
+
+    original_files = resources.files
+
+    def mock_files(package):
+        if package == "mlox.stacks":
+            return tmp_path
+        if package.startswith("mlox.stacks."):
+            # e.g., 'mlox.stacks.dummy' -> 'dummy'
+            sub_path = package.replace("mlox.stacks.", "").replace(".", os.path.sep)
+            return tmp_path / sub_path
+        return original_files(package)
+
+    monkeypatch.setattr(resources, "files", mock_files)
+
+
+@pytest.fixture
 def server_config_data():
     return {
         "id": "test-config-id",
@@ -119,10 +142,19 @@ def create_yaml_file(tmp_path, name, content, prefix="mlox-server"):
 
 class TestServerConfig:
     def test_load_and_instantiate_server(
-        self, tmp_path, server_config_data, mock_dummy_modules
+        self,
+        tmp_path,
+        server_config_data,
+        mock_dummy_modules,
+        mock_package_resources,
     ):
         create_yaml_file(tmp_path, "dummy", server_config_data)
-        config = load_config(tmp_path, "dummy", "mlox-server.dummy.v1.yaml")
+
+        # Use the load_all_server_configs function, which is known to work with
+        # the mocked resources, to get the configuration object for this test.
+        configs = load_all_server_configs()
+        assert len(configs) == 1
+        config = configs[0]
 
         assert isinstance(config, ServiceConfig)
         assert config.name == "TestServer"
@@ -138,12 +170,14 @@ class TestServerConfig:
         assert server.ip == "127.0.0.1"
         assert server.custom_server_param == "build_value"
 
-    def test_load_all_server_configs(self, tmp_path, server_config_data):
+    def test_load_all_server_configs(
+        self, tmp_path, server_config_data, mock_package_resources
+    ):
         create_yaml_file(tmp_path, "dummy1", server_config_data)
         server_config_data["name"] = "TestServer2"
         create_yaml_file(tmp_path, "dummy2", server_config_data)
 
-        configs = load_all_server_configs(tmp_path)
+        configs = load_all_server_configs()
         assert len(configs) == 2
         assert {c.name for c in configs} == {"TestServer", "TestServer2"}
 

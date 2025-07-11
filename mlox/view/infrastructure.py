@@ -187,7 +187,7 @@ def available_server_templates():
     infra = cast(Infrastructure, st.session_state.mlox.infra)
 
     # with st.expander("Add Server"):
-    configs = load_all_server_configs("./stacks")
+    configs = load_all_server_configs()
 
     server = []
     for service in configs:

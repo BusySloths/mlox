@@ -104,7 +104,7 @@ def available_services():
     infra = cast(Infrastructure, st.session_state.mlox.infra)
 
     # with st.expander("Add Server"):
-    configs = load_all_service_configs("./stacks")
+    configs = load_all_service_configs()
 
     services = []
     for service in configs:
