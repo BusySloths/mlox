@@ -2,6 +2,8 @@ import os
 import sys
 import tempfile
 
+from datetime import datetime
+
 try:
     import redis
 except ImportError:
@@ -121,6 +123,17 @@ def main():
         # Ping the server to test the connection
         client.ping()
         print("✅ Success! Connection to Redis is established and is using SSL.")
+
+        for i in range(10):
+            client.set(
+                f"test_key_{i}", f"Hello, Redis {i}! Current time: {datetime.now()}"
+            )
+        value = client.get("test_key")
+        print(f"Test key set and retrieved: {value}")
+        for r in client.scan_iter(
+            "*", count=5
+        ):  # This will trigger a scan operation to ensure the connection works
+            print(f"Found key: {r}")
 
     except redis.exceptions.ConnectionError as e:
         print(f"❌ Error: Could not connect to Redis.")
