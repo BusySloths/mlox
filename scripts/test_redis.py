@@ -5,7 +5,7 @@ import tempfile
 from datetime import datetime
 
 try:
-    import redis
+    import redis  # type: ignore
 except ImportError:
     print("Error: The 'redis' package is not installed.")
     print("Please install it by running: pip install redis")
@@ -15,13 +15,28 @@ from mlox.session import MloxSession
 from mlox.services.redis.docker import RedisDockerService
 from mlox.services.gcp_secrets.secret_manager import GCPSecretManager, read_keyfile
 
-
+LOAD_VIA_INFRASTRUCTURE = False  # Set to False to load via secrets directly
 # There are multiple ways to load the necessary environment variables.
 # Either by loading the whole infrastructure or by loading the secrets directly.
 
-LOAD_VIA_INFRASTRUCTURE = False  # Set to False to load via secrets directly
 
-if LOAD_VIA_INFRASTRUCTURE:
+def load_connection_parameters(keyfile: str, secret_name: str) -> dict:
+    keyfile_dict = read_keyfile(keyfile)
+    sm = GCPSecretManager(keyfile_dict)
+    if not sm.is_working():
+        print("Error: GCP Secret Manager is not working. Check your keyfile.")
+        sys.exit(1)
+    value = sm.load_secret(secret_name)
+    if not value:
+        print(f"Error: Could not load secret '{secret_name}' from GCP Secret Manager.")
+        sys.exit(1)
+    if not isinstance(value, dict):
+        print(f"Error: Secret '{secret_name}' is not a dictionary.")
+        sys.exit(1)
+    return value
+
+
+def load_connection_from_infrastructure() -> dict:
     # --- Load MLOX Session and find Redis service ---
     password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
     if not password:
@@ -50,35 +65,12 @@ if LOAD_VIA_INFRASTRUCTURE:
         exit(1)
 
     # --- CONNECTION PARAMETERS (loaded from MLOX) ---
-    REDIS_HOST = bundle.server.ip
-    REDIS_PORT = redis_service.port
-    REDIS_PASSWORD = redis_service.pw
-    REDIS_CERTIFICATE = redis_service.certificate
-else:
-    secret_name = "MLOX_REDIS_REDIS-8-BOOKWORM"
-    keyfile_dict = read_keyfile("./keyfile.json")
-    sm = GCPSecretManager(keyfile_dict)
-    if not sm.is_working():
-        print("Error: GCP Secret Manager is not working. Check your keyfile.")
-        sys.exit(1)
-
-    value = sm.load_secret(secret_name)
-    if not value:
-        print(f"Error: Could not load secret '{secret_name}' from GCP Secret Manager.")
-        sys.exit(1)
-    if not isinstance(value, dict):
-        print(f"Error: Secret '{secret_name}' is not a dictionary.")
-        sys.exit(1)
-
-    # --- CONNECTION PARAMETERS (loaded from secrets) ---
-    REDIS_HOST = value["url"][8:]
-    REDIS_PORT = value["port"]
-    REDIS_PASSWORD = value["password"]
-    REDIS_CERTIFICATE = value["certificate"]
-
-    if not all([REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_CERTIFICATE]):
-        print("Error: One or more Redis connection parameters are missing.")
-        sys.exit(1)
+    params = {}
+    params["ip"] = bundle.server.ip
+    params["port"] = redis_service.port
+    params["password"] = redis_service.pw
+    params["certificate"] = redis_service.certificate
+    return params
 
 
 def main():
@@ -86,6 +78,17 @@ def main():
     Attempts to connect to the Redis database using the specified
     credentials and SSL.
     """
+    if LOAD_VIA_INFRASTRUCTURE:
+        params = load_connection_from_infrastructure()
+    else:
+        params = load_connection_parameters(
+            "./keyfile.json", "MLOX_REDIS_REDIS-8-BOOKWORM"
+        )
+    REDIS_HOST = params["ip"]
+    REDIS_PORT = params["port"]
+    REDIS_PASSWORD = params["password"]
+    REDIS_CERTIFICATE = params["certificate"]
+
     temp_cert_path = None
     client = None
     try:

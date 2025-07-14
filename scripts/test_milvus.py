@@ -11,7 +11,7 @@ def test_milvus_connection():
             uri=os.environ["TEST_MILVUS_URI"],
             user=os.environ["TEST_MILVUS_USER"],
             password=os.environ["TEST_MILVUS_PW"],
-            # secure=True,
+            secure=False,
         )
         print("Connected to Milvus successfully.")
 
