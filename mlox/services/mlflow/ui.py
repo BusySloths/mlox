@@ -5,6 +5,7 @@ import streamlit as st
 
 from mlox.services.mlflow.docker import MLFlowDockerService
 from mlox.infra import Infrastructure, Bundle
+from mlox.services.utils_ui import save_to_secret_store
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService):
@@ -13,6 +14,16 @@ def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService
 
     st.write(f"UI User: {service.ui_user}")
     st.write(f'UI Password: "{service.ui_pw}"')
+    save_to_secret_store(
+        infra,
+        f"MLOX_MLFLOW_{service.name.upper()}",
+        {
+            "url": service.service_url,
+            "user": service.ui_user,
+            "password": service.ui_pw,
+        },
+    )
+
     st.link_button(
         "Open MLflow UI",
         url=service.service_url,

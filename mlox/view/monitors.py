@@ -44,7 +44,7 @@ def manage_monitors():
     )
     if len(selection["selection"]["rows"]) > 0:
         idx = selection["selection"]["rows"][0]
-        name = my_monitors[idx]["name"]
+        bundle = my_monitors[idx]["bundle"]
         monitor = my_monitors[idx]["service"]
 
         config = infra.get_service_config(monitor)

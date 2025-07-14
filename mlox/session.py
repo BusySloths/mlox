@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from mlox.config import load_config
 from mlox.infra import Infrastructure
-from mlox.secret_manager import TinySecretManager
+from mlox.secret_manager import TinySecretManager, AbstractSecretManager
 from mlox.utils import dataclass_to_dict, save_to_json
 
 
@@ -22,7 +22,7 @@ class MloxSession:
     password: str
 
     infra: Infrastructure = field(init=False)
-    secrets: TinySecretManager = field(init=False)
+    secrets: AbstractSecretManager = field(init=False)
 
     def __post_init__(self):
         self.secrets = TinySecretManager(

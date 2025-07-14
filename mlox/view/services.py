@@ -5,7 +5,7 @@ from typing import cast
 
 from mlox.infra import Infrastructure
 from mlox.config import load_all_service_configs
-from mlox.view.utils import plot_config_nicely
+from mlox.view.utils import plot_config_nicely, st_hack_align
 
 
 def save_infra():
@@ -76,7 +76,8 @@ def installed_services():
             st.rerun()
         new_service_name = c3.text_input("Unique service name", service_name)
         # Add vertical space to align the button with the text input field.
-        c4.write('<div style="height: 28px;"></div>', unsafe_allow_html=True)
+        # c4.write('<div style="height: 28px;"></div>', unsafe_allow_html=True)
+        st_hack_align(c4)
         if (
             c4.button("Update", icon=":material/update:")
             and new_service_name != service_name

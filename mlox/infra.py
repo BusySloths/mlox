@@ -6,6 +6,7 @@ from typing import Optional, List, Literal, Dict, Any
 
 from mlox.config import (
     ServiceConfig,
+    get_stacks_path,
     load_service_config_by_id,
     load_all_service_configs,
 )
@@ -126,7 +127,7 @@ class Infrastructure:
 
         if not service:
             mlox_params = {
-                "${MLOX_STACKS_PATH}": "./stacks/",
+                "${MLOX_STACKS_PATH}": get_stacks_path(),
                 "${MLOX_USER}": bundle.server.mlox_user.name,
                 "${MLOX_AUTO_USER}": generate_username(),
                 "${MLOX_AUTO_PW}": generate_pw(),

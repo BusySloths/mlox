@@ -22,12 +22,12 @@ requirements:
   disk_gb: 1.0
 groups:
   service:
-  database: 
+  database:
     in-memory:
     nosql:
   backend:
     docker:
-ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
   service: 6379
 ui:
   settings: mlox.services.redis.ui.settings
@@ -35,7 +35,7 @@ build:
   class_name: mlox.services.redis.docker.RedisDockerService
   params:
     name: redis-8-bookworm
-    template: ${MLOX_STACKS_PATH}/redis/docker-compose-redis-8-bookworm.yaml 
+    template: ${MLOX_STACKS_PATH}/redis/docker-compose-redis-8-bookworm.yaml
     target_path: /home/${MLOX_USER}/redis-8-bookworm
     pw: ${MLOX_AUTO_PW}
     port: ${MLOX_AUTO_PORT_SERVICE}

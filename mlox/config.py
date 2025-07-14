@@ -101,6 +101,10 @@ class ServiceConfig:
             return None
 
 
+def get_stacks_path() -> str:
+    return str(resources.files("mlox.stacks"))
+
+
 def load_service_config_by_id(service_id: str) -> ServiceConfig | None:
     # for service configs
     for config in load_all_service_configs(prefix="mlox"):
@@ -120,7 +124,7 @@ def load_all_server_configs() -> List[ServiceConfig]:
 def load_all_service_configs(
     prefix: Literal["mlox", "mlox-server"] = "mlox",
 ) -> List[ServiceConfig]:
-    root_dir = str(resources.files("mlox.stacks"))
+    root_dir = get_stacks_path()
 
     configs: List[ServiceConfig] = []
     if not os.path.isdir(root_dir):

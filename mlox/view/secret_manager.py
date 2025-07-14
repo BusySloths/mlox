@@ -51,7 +51,6 @@ def secrets():
     )
     if len(selection["selection"]["rows"]) > 0:
         idx = selection["selection"]["rows"][0]
-        name = secret_manager_service_list[idx]["name"]
         bundle = secret_manager_service_list[idx]["bundle"]
         secret_manager_service = secret_manager_service_list[idx]["service"]
 

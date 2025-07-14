@@ -1,5 +1,6 @@
 import uuid
 
+from importlib import resources
 from typing import Dict, Literal
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -40,10 +41,17 @@ def tls_setup_no_config(conn, ip, path) -> None:
     exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/cert.pem")
 
 
+def get_stacks_path() -> str:
+    # return str(resources.files("mlox.stacks.mlox"))
+    return "./mlox/stacks/mlox"
+
+
 def tls_setup(conn, ip, path) -> None:
     # copy files to target
     fs_create_dir(conn, path)
-    fs_copy(conn, "./stacks/mlox/openssl-san.cnf", f"{path}/openssl-san.cnf")
+
+    stacks_path = get_stacks_path()
+    fs_copy(conn, f"{stacks_path}/openssl-san.cnf", f"{path}/openssl-san.cnf")
     fs_find_and_replace(conn, f"{path}/openssl-san.cnf", "<MY_IP>", f"{ip}")
     # certificates
     exec_command(conn, f"cd {path}; openssl genrsa -out key.pem 2048")

@@ -198,11 +198,22 @@ class GCPSecretManager(AbstractSecretManager):
         return res
 
 
-if __name__ == "__main__":
-    keyfile_dict = None
+def read_keyfile(keyfile_path: str) -> Dict:
+    """Read the GCP keyfile from a JSON file."""
+    try:
+        with open(keyfile_path, "r") as f:
+            keyfile_dict = json.load(f)
+        return keyfile_dict
+    except Exception as e:
+        logger.error(f"Failed to read keyfile '{keyfile_path}': {e}")
+        raise ValueError("Could not read the GCP keyfile.")
 
-    with open("./keyfile.json", "r") as f:
-        keyfile_dict = json.load(f)
+
+if __name__ == "__main__":
+    keyfile_dict = read_keyfile("./keyfile.json")
+
+    # with open("./keyfile.json", "r") as f:
+    #     keyfile_dict = json.load(f)
 
     sm = GCPSecretManager(keyfile_dict=keyfile_dict)
     print("Read secret #1: ", sm.load_secret("MLOX_TEST_SECRET"))
