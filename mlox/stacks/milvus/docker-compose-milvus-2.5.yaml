@@ -25,7 +25,7 @@ services:
     restart: unless-stopped
 
   milvus:
-    image: milvusdb/milvus:v2.3.0    
+    image: milvusdb/milvus:v2.5.14
     container_name: milvus
     environment:
       ETCD_ENDPOINTS: "etcd:2379"
@@ -43,27 +43,16 @@ services:
     security_opt:
     - seccomp:unconfined
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
-    # ports:
-    #   - "19530:19530"
-    #   - "9091:9091"
-      
-  nginx:
-    image: nginx:alpine
+      - ./volumes/milvus:/var/lib/milvus
+      - ./key.pem:/milvus/key.pem
+      - ./cert.pem:/milvus/cert.pem
+      - ./cert.pem:/milvus/ca.pem
+      - ./milvus.yaml:/milvus/configs/milvus.yaml
     ports:
-      - "${MILVUS_PORT}:443"  
-    volumes:
-      - ./milvus.conf:/etc/nginx/conf.d/milvus.conf
-      - ./key.pem:/etc/nginx/ssl/nginx.key
-      - ./cert.pem:/etc/nginx/ssl/nginx.crt
-      - ./htpasswd:/etc/nginx/.htpasswd:ro
-    container_name: milvus-nginx
-    depends_on:
-      - milvus
-    networks:
-      - milvus-network
-    restart: unless-stopped
-
+      - "${MY_MILVUS_PORT}:19532"
+      # - "19528:19528"
+      # - "9091:9091"
+      
 volumes:
   etcd_data:
   minio_data:

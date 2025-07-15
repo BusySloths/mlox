@@ -21,15 +21,14 @@ def settings(infra: Infrastructure, bundle: Bundle, service: MilvusDockerService
     st.write(f"port: {service.port}")
     st.write(f"user: {service.user}, password: {service.pw}")
 
-    # save_to_secret_store(
-    #     infra,
-    #     f"MLOX_REDIS_{service.name.upper()}",
-    #     {
-    #         "url": service.service_urls["Redis"].rpartition(":")[0],
-    #         "ip": service.service_urls["Redis IP"],
-    #         "user": "redis",
-    #         "port": service.port,
-    #         "password": service.pw,
-    #         "certificate": service.certificate,
-    #     },
-    # )
+    save_to_secret_store(
+        infra,
+        f"MLOX_MILVUS_{service.name.upper()}",
+        {
+            "url": service.service_urls["Milvus"],
+            "user": service.user,
+            "port": service.port,
+            "password": service.pw,
+            "certificate": service.certificate,
+        },
+    )

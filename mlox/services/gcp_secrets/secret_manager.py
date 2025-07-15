@@ -224,6 +224,6 @@ if __name__ == "__main__":
     sm.save_secret("MLOX_TEST_SECRET", {"key": "value", "timestamp": "now"})
 
     print("\n--- Listing all secrets ---")
-    print(sm.list_secrets())
+    print(sm.list_secrets(keys_only=True))
 
     print("Secret stats (#calls): ", sm.get_secret_usage_statistics())

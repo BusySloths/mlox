@@ -1,6 +1,6 @@
-id: milvus-2.3
+id: milvus-2.5-docker
 name: Milvus
-version: "2.3"
+version: "2.5"
 maintainer: Your Name
 description_short: Milvus is an open-source vector database designed for scalable similarity search.
 description: |
@@ -32,10 +32,10 @@ ui:
 build:
   class_name: mlox.services.milvus.docker.MilvusDockerService
   params:
-    name: milvus-2.3
-    template: ${MLOX_STACKS_PATH}/milvus/docker-compose-milvus-nginx.yaml
-    config: ${MLOX_STACKS_PATH}/milvus/milvus.conf
-    target_path: /home/${MLOX_USER}/milvus-2.3
+    name: milvus-2.5
+    template: ${MLOX_STACKS_PATH}/milvus/docker-compose-milvus-2.5.yaml
+    config: ${MLOX_STACKS_PATH}/milvus/milvus.yaml
+    target_path: /home/${MLOX_USER}/milvus-2.5
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}
     port: ${MLOX_AUTO_PORT_SERVICE}
