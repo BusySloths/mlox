@@ -9,7 +9,6 @@ Author: nicococo|mlox
 """
 
 import json
-import yaml
 import logging
 
 from typing import Dict, Tuple, List, Any
@@ -19,6 +18,7 @@ from google.oauth2 import service_account
 from google.cloud import secretmanager
 from google.api_core import exceptions as g_exc
 
+
 from mlox.secret_manager import AbstractSecretManager
 
 # Configure logging (optional, but recommended)
@@ -26,6 +26,30 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def dict_to_service_account_credentials(
+    keyfile_dict: Dict,
+) -> service_account.Credentials:
+    """Translates a keyfile dictionary into a service account credential either using oauth2
+        or google oauth client.
+
+    Args:
+        keyfile_dict (Dict): keyfile dict
+
+    Returns:
+        service_account.Credentials: GCP service account credentials
+    """
+    credentials = None
+    try:
+        credentials = service_account.Credentials.from_service_account_info(
+            keyfile_dict
+        )
+    except Exception as e:
+        logger.error(f"Failed to load credentials from keyfile: {e}")
+        raise ValueError("Failed to load credentials from provided keyfile.")
+
+    return credentials
 
 
 @dataclass
@@ -51,13 +75,7 @@ class GCPSecretManager(AbstractSecretManager):
         """Helper to load GCP credentials from various sources."""
         credentials = None
         if self.keyfile_dict:
-            try:
-                credentials = service_account.Credentials.from_service_account_info(
-                    self.keyfile_dict
-                )
-            except Exception as e:
-                logger.error(f"Failed to load credentials from keyfile: {e}")
-                raise ValueError("Failed to load credentials from provided keyfile.")
+            credentials = dict_to_service_account_credentials(self.keyfile_dict)
         else:
             logger.error("Keyfile JSON is not provided.")
         return credentials

@@ -126,6 +126,7 @@ class Infrastructure:
             return None
 
         if not service:
+            # PART I: FILL PLACEHOLDERS
             mlox_params = {
                 "${MLOX_STACKS_PATH}": get_stacks_path(),
                 "${MLOX_USER}": bundle.server.mlox_user.name,
@@ -136,9 +137,16 @@ class Infrastructure:
                 "${MLOX_SERVER_UUID}": bundle.server.uuid,
             }
 
+            # PART II: ASSIGN PORTS
             port_prefix = "${MLOX_AUTO_PORT_"
             port_postfix = "}"
-            used_ports = list()
+            restricted_ports: Any = config.ports.pop("restricted", [])
+            if not isinstance(restricted_ports, list):
+                restricted_ports = list()
+                logger.warning(
+                    f"Restricted ports should be a list, got {type(restricted_ports)}"
+                )
+            used_ports: list = restricted_ports
             for s in bundle.services:
                 used_ports.extend(list(s.service_ports.values()))
             assigned_ports = auto_map_ports(used_ports, config.ports)
@@ -148,19 +156,19 @@ class Infrastructure:
                     for name, port in assigned_ports.items()
                 }
             )
-            # print(f"MLOX PARAMS: {mlox_params}")
             params.update(mlox_params)
+
+            # PART III: INSTANTIATE SERVICE
             _service = config.instantiate_service(params=params)
             if not _service:
                 logger.warning("Could not instantiate service.")
                 return None
             service = _service
 
+        # ENSURE UNIQUE NAME AND CACHE CONFIG
         self.configs[str(type(service))] = config
-        # choose unique name
-        # service.name = service.__class__.__name__
-        service_names = self.list_service_names()
         cntr = 0
+        service_names = self.list_service_names()
         while service.name in service_names:
             service.name = service.name + "_" + str(cntr)
             cntr += 1

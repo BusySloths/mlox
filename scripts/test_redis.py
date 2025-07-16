@@ -13,7 +13,7 @@ except ImportError:
 
 from mlox.session import MloxSession
 from mlox.services.redis.docker import RedisDockerService
-from mlox.services.gcp_secrets.secret_manager import GCPSecretManager, read_keyfile
+from mlox.services.gcp.secret_manager import GCPSecretManager, read_keyfile
 
 LOAD_VIA_INFRASTRUCTURE = False  # Set to False to load via secrets directly
 # There are multiple ways to load the necessary environment variables.

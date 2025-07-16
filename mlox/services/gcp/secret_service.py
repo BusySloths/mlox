@@ -6,7 +6,7 @@ from typing import Dict, cast
 from mlox.secret_manager import AbstractSecretManager, AbstractSecretManagerService
 from mlox.service import AbstractService
 from mlox.infra import Infrastructure
-from mlox.services.gcp_secrets.secret_manager import GCPSecretManager
+from mlox.services.gcp.secret_manager import GCPSecretManager
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -15,7 +15,7 @@ logging.basicConfig(
 
 
 @dataclass
-class GCPSecretsService(AbstractService, AbstractSecretManagerService):
+class GCPSecretService(AbstractService, AbstractSecretManagerService):
     secret_name: str
     secret_manager_uuid: str
 
