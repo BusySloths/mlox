@@ -1,0 +1,38 @@
+id: gcp-storage-0.1.0
+name: GCP Storage
+version: "0.1.0"
+maintainer: Your Name
+description_short: GCP Storage is a secure and scalable service for managing storage in Google Cloud Platform.
+description: |
+  The GCP Storage is a secure and scalable service for managing storage in Google Cloud Platform.
+  It allows users to store, manage, and access sensitive information such as API keys, passwords, and certificates.
+  In MLOX, GCP Storage is used to securely store and manage secrets required for various services and applications,
+  ensuring that sensitive information is protected and easily accessible when needed.
+links:
+  project: https://github.com/nicococo/mlox/
+  news: https://kubeapps.com/
+  security: https://kubeapps.com/
+  documentation: https://kubeapps.com/
+  changelog: https://kubeapps.com/
+requirements:
+  cpus: 1.0
+  ram_gb: 1.0
+  disk_gb: 1.0
+groups:
+  service:
+  secret-manager:
+  backend:
+    kubernetes:
+    docker:
+    native:
+ui:
+  setup: mlox.services.gcp.storage_ui.setup
+  settings: mlox.services.gcp.storage_ui.settings
+build:
+  class_name: mlox.services.gcp.storage_service.GCPStorageService
+  params:
+    name: gcp-storage-0.1.0
+    template: ${MLOX_STACKS_PATH}/gcp/mlox.gcp.storage.yaml
+    target_path: /home/${MLOX_USER}/gcp_storage
+    secret_manager_uuid: ${SECRET_MANAGER_UUID}
+    secret_name: ${SECRET_NAME}

@@ -32,6 +32,14 @@ class GCPStorage:
     def _get_storage_client(self) -> Client:
         return Client(project=self._project_id, credentials=self._credentials)
 
+    def list_buckets(self) -> List:
+        """List all buckets in the project.
+        Returns:
+            List: list of buckets
+        """
+        buckets = self._get_storage_client().list_buckets()
+        return [bucket.name for bucket in buckets]
+
     def list_objects(self, dir: str, bucket_name: str) -> List:
         """List all objects in a certain directory of a storage bucket.
 

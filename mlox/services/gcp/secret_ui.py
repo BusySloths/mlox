@@ -29,7 +29,7 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict | None:
     )
 
     st.markdown("""
-To access the secret manager, a service account with the following roles is necessary:
+To access the secret manager, a service account with the following roles are necessary:
 1. secret manager secret accessor (view and read secret contents)
 2. secret manager viewer (list secrets)
 3. secret manager admin (create and update secrets and versions)
