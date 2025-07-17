@@ -2,28 +2,16 @@ import os
 import sys
 from pymilvus import utility, connections, MilvusClient, DataType  # type: ignore
 
-from mlox.services.gcp_secrets.secret_manager import GCPSecretManager, read_keyfile
-
-
-def load_connection_parameters(keyfile: str, secret_name: str) -> dict:
-    keyfile_dict = read_keyfile(keyfile)
-    sm = GCPSecretManager(keyfile_dict)
-    if not sm.is_working():
-        print("Error: GCP Secret Manager is not working. Check your keyfile.")
-        sys.exit(1)
-    value = sm.load_secret(secret_name)
-    if not value:
-        print(f"Error: Could not load secret '{secret_name}' from GCP Secret Manager.")
-        sys.exit(1)
-    if not isinstance(value, dict):
-        print(f"Error: Secret '{secret_name}' is not a dictionary.")
-        sys.exit(1)
-    return value
+from mlox.services.gcp.secret_manager import load_secret_from_gcp
 
 
 # Milvus Connection Test
 def test_milvus_connection():
-    params = load_connection_parameters("./keyfile.json", "MLOX_MILVUS_MILVUS-STORE")
+    params = load_secret_from_gcp("./keyfile.json", "MLOX_MILVUS_MILVUS-STORE")
+    if not params:
+        print("Could not load secret.")
+        sys.exit(1)
+
     # Write the certificate content to a temp file
     import tempfile
 

@@ -13,27 +13,12 @@ except ImportError:
 
 from mlox.session import MloxSession
 from mlox.services.redis.docker import RedisDockerService
-from mlox.services.gcp.secret_manager import GCPSecretManager, read_keyfile
+from mlox.services.gcp.secret_manager import load_secret_from_gcp
+
 
 LOAD_VIA_INFRASTRUCTURE = False  # Set to False to load via secrets directly
 # There are multiple ways to load the necessary environment variables.
 # Either by loading the whole infrastructure or by loading the secrets directly.
-
-
-def load_connection_parameters(keyfile: str, secret_name: str) -> dict:
-    keyfile_dict = read_keyfile(keyfile)
-    sm = GCPSecretManager(keyfile_dict)
-    if not sm.is_working():
-        print("Error: GCP Secret Manager is not working. Check your keyfile.")
-        sys.exit(1)
-    value = sm.load_secret(secret_name)
-    if not value:
-        print(f"Error: Could not load secret '{secret_name}' from GCP Secret Manager.")
-        sys.exit(1)
-    if not isinstance(value, dict):
-        print(f"Error: Secret '{secret_name}' is not a dictionary.")
-        sys.exit(1)
-    return value
 
 
 def load_connection_from_infrastructure() -> dict:
@@ -81,9 +66,11 @@ def main():
     if LOAD_VIA_INFRASTRUCTURE:
         params = load_connection_from_infrastructure()
     else:
-        params = load_connection_parameters(
-            "./keyfile.json", "MLOX_REDIS_REDIS-8-BOOKWORM"
-        )
+        params = load_secret_from_gcp("./keyfile.json", "MLOX_REDIS_REDIS-8-BOOKWORM")
+        if not params:
+            print("Could not load secret.")
+            sys.exit(1)
+
     REDIS_HOST = params["ip"]
     REDIS_PORT = params["port"]
     REDIS_PASSWORD = params["password"]

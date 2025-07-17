@@ -12,7 +12,7 @@ def save_infrastructure():
         st.session_state.mlox.save_infrastructure()
 
 
-def save_to_secret_store(infra: Infrastructure, secret_name: str, secrets: Dict):
+def save_to_secret_store(infra: Infrastructure, secret_name: str, secrets: Dict | str):
     st.markdown(
         """Save Secrets to Secret Manager. This allows you to save secrets to the secret manager for later use"""
     )

@@ -14,9 +14,9 @@ import logging
 from typing import Dict, Tuple, List, Any
 from dataclasses import dataclass, field
 
-from google.oauth2 import service_account
 from google.cloud import secretmanager
 from google.api_core import exceptions as g_exc
+from google.oauth2.service_account import Credentials
 
 from mlox.secret_manager import AbstractSecretManager
 
@@ -27,9 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def dict_to_service_account_credentials(
-    keyfile_dict: Dict,
-) -> service_account.Credentials:
+def dict_to_service_account_credentials(keyfile_dict: Dict) -> Credentials:
     """Translates a keyfile dictionary into a service account credential either using oauth2
         or google oauth client.
 
@@ -41,13 +39,10 @@ def dict_to_service_account_credentials(
     """
     credentials = None
     try:
-        credentials = service_account.Credentials.from_service_account_info(
-            keyfile_dict
-        )
+        credentials = Credentials.from_service_account_info(keyfile_dict)
     except Exception as e:
         logger.error(f"Failed to load credentials from keyfile: {e}")
         raise ValueError("Failed to load credentials from provided keyfile.")
-
     return credentials
 
 
@@ -70,7 +65,7 @@ class GCPSecretManager(AbstractSecretManager):
             )
         logger.info(f"GCP Secret Manager initialized for project: {self._project_id}")
 
-    def _get_credentials(self) -> service_account.Credentials | None:
+    def _get_credentials(self) -> Credentials | None:
         """Helper to load GCP credentials from various sources."""
         credentials = None
         if self.keyfile_dict:
@@ -224,6 +219,36 @@ def read_keyfile(keyfile_path: str) -> Dict:
     except Exception as e:
         logger.error(f"Failed to read keyfile '{keyfile_path}': {e}")
         raise ValueError("Could not read the GCP keyfile.")
+
+
+def load_secret_from_gcp(keyfile: str, secret_name: str) -> dict | None:
+    """Load a secret from GCP Secret Manager. This method loads a keyfile, creates a
+    GCP Secret Manager instance and then extracts the secret with name `secret_name`. This
+    is a shortcut method and only suitable when loading a single secret (ie for a sepcific service)
+    otherwise creating a GCPSecretManager instance is recommended.
+
+    Args:
+        keyfile (str): The path and name of the service account keyfile (e.g. './keyfile.json')
+        secret_name (str): The name of the secret to load.
+
+    Returns:
+        dict | None: Content of the service account keyfile as a dictionary.
+    """
+    keyfile_dict = read_keyfile(keyfile)
+    sm = GCPSecretManager(keyfile_dict)
+    if not sm.is_working():
+        logger.error("Error: GCP Secret Manager is not working. Check your keyfile.")
+        return None
+    value = sm.load_secret(secret_name)
+    if not value:
+        logger.error(
+            f"Error: Could not load secret '{secret_name}' from GCP Secret Manager."
+        )
+        return None
+    if not isinstance(value, dict):
+        logger.error(f"Error: Secret '{secret_name}' is not a dictionary.")
+        return None
+    return value
 
 
 if __name__ == "__main__":
