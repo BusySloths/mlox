@@ -74,6 +74,7 @@ def settings(
 
     st.write(f"IP: {bundle.server.ip}")
     st.write(f"Model: {service.model}")
+    st.write(f"TargetPath: {service.target_path}")
     st.write(f"Tracking URI: {service.tracking_uri}")
     st.write(f"Service URL: {service.service_url}")
     st.write(f"Tracking User: {service.tracking_user}")

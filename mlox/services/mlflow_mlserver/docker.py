@@ -35,8 +35,10 @@ class MLFlowMLServerDockerService(AbstractService):
     service_url: str = field(init=False, default="")
 
     def __post_init__(self):
-        self.name = f"{self.model}@{self.name}"
-        self.target_path = f"{self.target_path}-{self.port}"
+        if not self.name.startswith(f"{self.model}@"):
+            self.name = f"{self.model}@{self.name}"
+        if not self.target_path.endswith(f"-{self.port}"):
+            self.target_path = f"{self.target_path}-{self.port}"
 
     def _generate_htpasswd_entry(self) -> None:
         """Generates an APR1-MD5 htpasswd entry, escaped for Traefik."""
