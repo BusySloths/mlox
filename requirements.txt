@@ -1,7 +1,10 @@
 fabric
 pyyaml
-oauth2client
+
+# oauth2client
 google-cloud-secret-manager
+gspread
+
 streamlit
 # streamlit-navigation-bar
 pandas

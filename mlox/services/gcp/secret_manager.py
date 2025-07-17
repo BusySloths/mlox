@@ -18,7 +18,6 @@ from google.oauth2 import service_account
 from google.cloud import secretmanager
 from google.api_core import exceptions as g_exc
 
-
 from mlox.secret_manager import AbstractSecretManager
 
 # Configure logging (optional, but recommended)

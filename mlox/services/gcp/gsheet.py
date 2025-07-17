@@ -29,10 +29,8 @@ from typing import Optional, List, Dict, Tuple
 
 import gspread
 import gspread.utils as gspread_utils
-from gspread_formatting import set_column_widths, set_row_heights
-from openpyxl.utils.cell import get_column_letter
 
-from google.oauth2.credentials import Credential
+from google.oauth2.service_account import Credentials
 
 from mlox.services.gcp.secret_manager import (
     GCPSecretManager,
@@ -68,26 +66,35 @@ GOOGLE_SHEETS_API_MAX_WRITE_USER_PER_MIN_PER_PROJECT = 60
 MAX_WRITE_ROWS = 20000
 
 
-def get_system_credentials() -> Credential:
+def get_system_credentials() -> Credentials | None:
     GOOGLE_SHEETS_SECRET_MANAGER_SECRET_NAME = "FLOW_GSHEET_CREDENTIALS"
     keyfile_dict = read_keyfile("./keyfile.json")
     sm = GCPSecretManager(keyfile_dict=keyfile_dict)
     secret = sm.load_secret(GOOGLE_SHEETS_SECRET_MANAGER_SECRET_NAME)
-    if not isinstance(secret, dict):
+    if not secret:
         logger.error("Could not load secret.")
+        return None
+    if not isinstance(secret, dict):
+        logger.error("Could not load secret as keyfile dictionary.")
+        return None
 
-    return dict_to_service_account_credentials(secret)
+    # Use the 'secret' dictionary which contains the gsheet credentials,
+    # not the 'keyfile_dict' used for the Secret Manager itself.
+    base_credentials = dict_to_service_account_credentials(secret)
+    # Add the required scopes for Google Sheets API.
+    scoped_credentials = base_credentials.with_scopes(GOOGLE_SHEETS_SCOPES)
+    return scoped_credentials
 
 
-def _get_spreadsheet(creds: Credential, gname: str) -> gspread.Spreadsheet:
+def _get_spreadsheet(creds: Credentials, gname: str) -> gspread.Spreadsheet | None:
     """Open a google spreadsheet. For access
-        service account credentials with gsheet roles are neccessary.
+        service account Credentialss with gsheet roles are neccessary.
 
     Args:
-        creds (Credential) : OAuth credentials
+        creds (Credentials) : OAuth Credentialss
         gname (str): Name of the google spreadsheet or link to the spreadsheet (gname must start with 'http' for this).
                      Sheet must be shared with the service account email as provided
-                     in the service account credential dict.
+                     in the service account Credentials dict.
     Returns:
         [gspread.Spreadsheet]: spreadsheet
     """
@@ -104,34 +111,39 @@ def _get_spreadsheet(creds: Credential, gname: str) -> gspread.Spreadsheet:
     return sheet
 
 
-def _get_worksheet(creds: Credential, gname: str, sheet_name: str) -> gspread.Worksheet:
+def _get_worksheet(
+    creds: Credentials, gname: str, sheet_name: str
+) -> gspread.Worksheet | None:
     """Open a google spreadsheet and load the worksheet with name 'sheet_name'. For access
-        service account credentials with gsheet roles are neccessary.
+        service account Credentialss with gsheet roles are neccessary.
 
     Args:
-        creds (Credential) : OAuth credentials
+        creds (Credentials) : OAuth Credentialss
         gname (str): Name of the google spreadsheet or link to the spreadsheet (gname must start with 'http' for this).
                      Sheet must be shared with the service account email as provided
-                     in the service account credential dict.
+                     in the service account Credentials dict.
         sheet_name (str): worksheet name (google default is 'Sheet1')
 
     Returns:
         [gspread.Worksheet]: worksheet
     """
-    return _get_spreadsheet(creds, gname).worksheet(sheet_name)
+    spreadsheet = _get_spreadsheet(creds, gname)
+    if spreadsheet is None:
+        return None
+    return spreadsheet.worksheet(sheet_name)
 
 
 def create_spreadsheet(
-    creds: Credential,
+    creds: Credentials,
     gname: str,
     share_emails_writer: Optional[List[str]] = None,
     share_emails_reader: Optional[List[str]] = None,
 ) -> gspread.Spreadsheet:
     """Create a new google spreadsheet. For access
-        service account credentials with gsheet roles are neccessary.
+        service account Credentialss with gsheet roles are neccessary.
 
     Args:
-        creds (Credential) : OAuth credentials
+        creds (Credentials) : OAuth Credentialss
         gname (str): Name of the google spreadsheet.
         share_emails_writer (str): List of email addresses to share the spreadsheet with
         share_emails_reader (str): List of email addresses to share the spreadsheet with
@@ -147,12 +159,12 @@ def create_spreadsheet(
     return sheet
 
 
-def exists_spreadsheet(creds: Credential, gname: str) -> bool:
+def exists_spreadsheet(creds: Credentials, gname: str) -> bool:
     """Check if a google spreadsheet exists. For access
-        service account credentials with gsheet roles are neccessary.
+        service account Credentialss with gsheet roles are neccessary.
 
     Args:
-        creds (Credential) : OAuth credentials
+        creds (Credentials) : OAuth Credentialss
         gname (str): Name of the google spreadsheet.
     Returns:
         [bool]: Does the spreadsheet exist?
@@ -162,37 +174,37 @@ def exists_spreadsheet(creds: Credential, gname: str) -> bool:
 
 
 def share_spreadsheet(
-    creds: Credential,
+    creds: Credentials,
     gname: str,
     emails_read_only: Optional[List[str]],
     emails_write: Optional[List[str]],
     msg: str | None = None,
 ) -> None:
     """Share spreadsheets with other account. Choose between read-only and read/write access. For access
-        service account credentials with gsheet roles are neccessary.
+        service account Credentialss with gsheet roles are neccessary.
 
     Args:
-        creds (Credential) : OAuth credentials
+        creds (Credentials) : OAuth Credentialss
         gname (str): Name of the google spreadsheet.
         emails_read_only (List): (Optional) List of emails to share the document for read-only purposes
         emails_write (List): (Optional) List of emails to share the document for read/write purposes
         msg (str): (Optional) Notification message
     """
     sheet = _get_spreadsheet(creds, gname)
-    if emails_read_only is not None:
+    if sheet and emails_read_only is not None:
         for email in emails_read_only:
             sheet.share(email, perm_type="user", role="reader", email_message=msg)
-    if emails_write is not None:
+    if sheet and emails_write is not None:
         for email in emails_write:
             sheet.share(email, perm_type="user", role="writer", email_message=msg)
 
 
-def exists_worksheet(creds: Credential, gname: str, sheet_name: str) -> bool:
+def exists_worksheet(creds: Credentials, gname: str, sheet_name: str) -> bool:
     """Check if a worksheet in an existing google spreadsheet exists. For access
-        service account credentials with gsheet roles are neccessary.
+        service account Credentialss with gsheet roles are neccessary.
 
     Args:
-        creds (Credential) : OAuth credentials
+        creds (Credentials) : OAuth Credentialss
         gname (str): Name/URL of the google spreadsheet.
         sheet_name (str): The worksheet name to test
     Returns:
@@ -203,7 +215,7 @@ def exists_worksheet(creds: Credential, gname: str, sheet_name: str) -> bool:
     return sheet_name in sheet_names
 
 
-def whats_my_email_again(creds: Credential) -> str:
+def whats_my_email_again(creds: Credentials) -> str:
     email = creds.service_account_email()
     logger.info(
         f"Your Gsheet service account email is {email}. Use this address to share your spreadsheets with."
@@ -215,41 +227,58 @@ def extract_id_from_url(gsheet_url: str) -> str:
     return gspread_utils.extract_id_from_url(gsheet_url)
 
 
-def get_worksheet_names(creds: Credential, gname: str) -> List[str]:
-    return [sheet.title for sheet in _get_spreadsheet(creds, gname).worksheets()]
+def get_worksheet_names(creds: Credentials, gname: str) -> List[str]:
+    sheet = _get_spreadsheet(creds, gname)
+    if sheet is None:
+        return list()
+    return [sheet.title for sheet in sheet.worksheets()]
 
 
-def get_spreadsheet_url_from_name(creds: Credential, name: str) -> str:
-    return _get_spreadsheet(creds, name).url
+def get_spreadsheet_url_from_name(creds: Credentials, name: str) -> str:
+    sheet = _get_spreadsheet(creds, name)
+    if sheet is None:
+        return ""
+    return sheet.url
 
 
-def add_worksheet(creds: Credential, gname: str, sheet: str) -> None:
-    _get_spreadsheet(creds, gname).add_worksheet(title=sheet, rows=0, cols=0)
+def add_worksheet(creds: Credentials, gname: str, sheet: str) -> None:
+    spreadsheet = _get_spreadsheet(creds, gname)
+    if spreadsheet:
+        spreadsheet.add_worksheet(title=sheet, rows=0, cols=0)
 
 
-def remove_worksheet(creds: Credential, gname: str, sheet: str) -> None:
+def remove_worksheet(creds: Credentials, gname: str, sheet: str) -> None:
     worksheet = _get_worksheet(creds, gname, sheet)
-    _get_spreadsheet(creds, gname).del_worksheet(worksheet)
+    spreadsheet = _get_spreadsheet(creds, gname)
+    if spreadsheet and worksheet:
+        spreadsheet.del_worksheet(worksheet)
 
 
-def rename_worksheet(creds: Credential, gname: str, sheet: str, new_title: str) -> None:
+def rename_worksheet(
+    creds: Credentials, gname: str, sheet: str, new_title: str
+) -> None:
     worksheet = _get_worksheet(creds, gname, sheet)
-    worksheet.update_title(new_title)
+    if worksheet:
+        worksheet.update_title(new_title)
 
 
 def copy_worksheet(
-    creds: Credential, src_gname: str, src_sheet: str, target_gname: str
-) -> str:
+    creds: Credentials, src_gname: str, src_sheet: str, target_gname: str
+) -> str | None:
     worksheet = _get_worksheet(creds, src_gname, src_sheet)
+    if worksheet is None:
+        return None
     id = extract_id_from_url(target_gname)
     res = worksheet.copy_to(id)
     return res["title"]
 
 
 def read_worksheet(
-    creds: Credential, gname: str, sheet_name: str, empty_cells_to_nan: bool = True
+    creds: Credentials, gname: str, sheet_name: str, empty_cells_to_nan: bool = True
 ) -> pd.DataFrame:
     worksheet = _get_worksheet(creds, gname, sheet_name)
+    if worksheet is None:
+        return pd.DataFrame()
     # Difference: get_all_records returns a dict while get_all_values return list-of-list direct from api
     # Problem: unexpected behavior of get_all_records in >5.2.0 version (cannot cope with multiple empty headers anymore)
     # df = pd.DataFrame(worksheet.get_all_records())
@@ -262,7 +291,7 @@ def read_worksheet(
 
 
 def write_worksheet(
-    creds: Credential,
+    creds: Credentials,
     gname: str,
     sheet_name: str,
     df: pd.DataFrame,
@@ -273,8 +302,10 @@ def write_worksheet(
         logger.info(f"Worksheet {sheet_name} does not exist. Creating new worksheet.")
         add_worksheet(creds, gname, sheet_name)
     worksheet = _get_worksheet(creds, gname, sheet_name)
+    if worksheet is None:
+        return
     worksheet.clear()
-    end_col = get_column_letter(len(df.columns))
+    end_col = int2a1(len(df.columns) - 1)
     logger.info(
         f"Column size in data frame is {len(df.columns)} which corresponds to column name '{end_col}'."
     )
@@ -321,51 +352,39 @@ def int2a1(number: int) -> str:
 
 
 def format_worksheet(
-    creds: Credential,
-    gname: str,
-    sheet_name: str,
-    fmts: List[Tuple[str, Dict]],
-    auto_resize: bool = False,
+    creds: Credentials, gname: str, sheet_name: str, fmts: List[Tuple[str, Dict]]
 ) -> None:
     worksheet = _get_worksheet(creds, gname, sheet_name)
-    widths = list()
-    heights = list()
+    if not worksheet:
+        return
     formats = list()
     for area, fmt in fmts:
+        props = {}
         if "width" in fmt:
-            grid_range = gspread_utils.a1_range_to_grid_range(area)
-            if "startColumnIndex" in grid_range and "endColumnIndex" in grid_range:
-                start = int2a1(grid_range["startColumnIndex"])
-                end = int2a1(grid_range["endColumnIndex"])
-                widths.append((f"{start}:{end}", fmt.pop("width")))
+            width = fmt.pop("width")
+            props["column_size_px"] = width
         if "height" in fmt:
-            grid_range = gspread_utils.a1_range_to_grid_range(area)
-            if "startRowIndex" in grid_range and "endRowIndex" in grid_range:
-                start = grid_range["startRowIndex"] + 1
-                end = grid_range["endRowIndex"] + 1
-                heights.append((f"{start}:{end}", fmt.pop("height")))
-        # worksheet.format(area, fmt)
-        _ = fmt.pop("width", -1)
-        _ = fmt.pop("height", -1)
+            height = fmt.pop("height")
+            props["row_size_px"] = height
         if len(fmt) > 0:
-            formats.append({"range": area, "format": fmt})
+            props.update(fmt)  # Merge other formatting options
 
-    if len(formats) > 0:
-        worksheet.batch_format(formats)
-
-    if auto_resize:
-        worksheet.columns_auto_resize(0, worksheet.col_count)
-    else:
-        if len(widths) > 0:
-            logger.info(f"Set column widths={widths}")
-            set_column_widths(worksheet, widths)
-        if len(heights) > 0:
-            logger.info(f"Set row heights={heights}")
-            set_row_heights(worksheet, heights)
+        if props:
+            # formats.append({"range": area, "format": props})
+            format = gspread.worksheet.CellFormat(range=area, format=props)
+            formats.append(format)
+    try:
+        if formats:
+            worksheet.batch_format(formats)
+        # No longer auto-resize, as we handle width manually
+        # worksheet.columns_auto_resize(0, worksheet.col_count)
+    except Exception as e:
+        logger.error(f"Error applying formats: {e}")
+        # Depending on your needs, you might want to re-raise or handle differently
 
 
 def update_entry_in_worksheet(
-    creds: Credential,
+    creds: Credentials,
     gname: str,
     sheet_name: str,
     df: pd.DataFrame,
@@ -373,20 +392,23 @@ def update_entry_in_worksheet(
     col_name: str,
 ) -> None:
     worksheet = _get_worksheet(creds, gname, sheet_name)
+    if worksheet is None:
+        return
     ind = df.columns.to_list().index(col_name)
     cell = worksheet.find(query, in_column=ind + 1)
     if cell is not None:
         row = cell.row
-        end_col = get_column_letter(len(df.columns))
+        end_col = int2a1(len(df.columns) - 1)
         worksheet.update(f"A{row}:{end_col}{row}", df.fillna("").values.tolist())
 
 
 def append_to_worksheet(
-    creds: Credential, gname: str, sheet_name: str, df: pd.DataFrame
+    creds: Credentials, gname: str, sheet_name: str, df: pd.DataFrame
 ) -> None:
     worksheet = _get_worksheet(creds, gname, sheet_name)
+    if worksheet is None:
+        return
     num_rows = df.shape[0]
-    num_cols = df.shape[1]
 
     inc = MAX_WRITE_ROWS
     parts = int(np.ceil(num_rows / inc))
@@ -403,13 +425,15 @@ def append_to_worksheet(
 
 
 def write_multiple_worksheets(
-    creds: Credential, gname: str, sheets: Dict[str, pd.DataFrame]
+    creds: Credentials, gname: str, sheets: Dict[str, pd.DataFrame]
 ) -> None:
     for sheet_name in sheets:
         write_worksheet(creds, gname, sheet_name, sheets[sheet_name])
 
 
-def export_as_excel(creds: Credential, gname: str, path: str, output_name: str) -> None:
+def export_as_excel(
+    creds: Credentials, gname: str, path: str, output_name: str
+) -> None:
     sheets = get_worksheet_names(creds, gname)
     with pd.ExcelWriter(f"{path}/{output_name}.xlsx", engine="xlsxwriter") as writer:
         for sheet_name in sheets:
@@ -417,11 +441,11 @@ def export_as_excel(creds: Credential, gname: str, path: str, output_name: str) 
             sheet.to_excel(writer, sheet_name=sheet_name, index=False)
 
 
-def list_spreadsheets(creds: Credential) -> List:
+def list_spreadsheets(creds: Credentials) -> List:
     """Returns the names and ids of files the service account has access to.
         Paginated.
     Args:
-        creds (Credential) : OAuth credentials
+        creds (Credentials) : OAuth Credentialss
     Returns:
         [List]: list of files and properties
     """
@@ -435,16 +459,20 @@ def list_spreadsheets(creds: Credential) -> List:
     # )
 
 
-def get_last_update_time(creds: Credential, gname: str) -> Tuple[datetime, str, str]:
+def get_last_update_time(creds: Credentials, gname: str) -> Tuple[datetime, str, str]:
     gsheet = _get_spreadsheet(creds, gname)
+    if gsheet is None:
+        return datetime.now(), "", ""
     # return datetime.fromisoformat(gsheet.lastUpdateTime[:-1] + '+00:00')
     return datetime.fromisoformat(gsheet.lastUpdateTime[:-1]), gsheet.id, gsheet.title
 
 
 def get_a1_from_column_name(
-    creds: Credential, gname: str, sheet_name: str, column_name: str
-) -> Optional[str]:
+    creds: Credentials, gname: str, sheet_name: str, column_name: str
+) -> str | None:
     sheet = _get_worksheet(creds, gname, sheet_name)
+    if sheet is None:
+        return None
     values = sheet.get_values("1:1")[0]
     idx = -1
     try:
@@ -458,9 +486,11 @@ def get_a1_from_column_name(
 
 
 def convert_to_formula_column(
-    creds: Credential, gname: str, sheet_name: str, column_name: str
+    creds: Credentials, gname: str, sheet_name: str, column_name: str
 ) -> None:
     sheet = _get_worksheet(creds, gname, sheet_name)
+    if sheet is None:
+        return
     a1 = get_a1_from_column_name(creds, gname, sheet_name, column_name)
     print(a1)
     cells = sheet.range(f"{a1}2:{a1}")
@@ -470,9 +500,11 @@ def convert_to_formula_column(
 
 
 def convert_to_raw_column(
-    creds: Credential, gname: str, sheet_name: str, column_name: str
+    creds: Credentials, gname: str, sheet_name: str, column_name: str
 ) -> None:
     sheet = _get_worksheet(creds, gname, sheet_name)
+    if sheet is None:
+        return
     a1 = get_a1_from_column_name(creds, gname, sheet_name, column_name)
     print(a1)
     cells = sheet.range(f"{a1}2:{a1}")
@@ -481,12 +513,15 @@ def convert_to_raw_column(
 
 if __name__ == "__main__":
     creds = get_system_credentials()
+    if creds is None:
+        logger.error("Could not load credentials.")
+        exit(1)
 
-    # df = read_worksheet(
-    #     creds,
-    #     "https://docs.google.com/spreadsheets/d/1OorfebrsPcss16iJoP2BwJiTZhOiovarjAR0WBvb2f0/edit#gid=0",
-    #     "Sheet2",
-    # )
+    df = read_worksheet(
+        creds,
+        "https://docs.google.com/spreadsheets/d/1OorfebrsPcss16iJoP2BwJiTZhOiovarjAR0WBvb2f0/edit#gid=0",
+        "Sheet2",
+    )
     # df["formulas"] = "=SUM(A2:A4)"
     # print(df)
     # df["col1"] = df["col1"].astype("int")

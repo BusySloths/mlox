@@ -1,0 +1,5 @@
+# oauth2client
+google-cloud-secret-manager
+gspread
+# openpyxl
+# gspread_formatting
