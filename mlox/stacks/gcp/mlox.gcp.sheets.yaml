@@ -1,0 +1,42 @@
+id: gcp-sheets-0.1.0
+name: GCP Sheets
+version: "0.1.0"
+maintainer: Your Name
+description_short: Google Spreadsheets is a secure and scalable service for managing sheets in Google Cloud Platform.
+description: |
+  Google Spreadsheets is a secure and scalable service for managing sheets in Google Cloud Platform.
+  It allows users to store, manage, and share information and data and is widely used in a business 
+  context to collaborate on documents, track projects, and perform data analysis.
+  In MLOX, Google Spreadsheets can be used as a data source or sink for various services and applications,
+  facilitating data exchange and collaborative workflows.
+links:
+  project: https://cloud.google.com/bigquery
+  news: https://cloud.google.com/bigquery
+  security: https://cloud.google.com/bigquery
+  documentation: https://cloud.google.com/bigquery
+  changelog: https://cloud.google.com/bigquery
+requirements:
+  cpus: 1.0
+  ram_gb: 1.0
+  disk_gb: 1.0
+groups:
+  service:
+  cloud:
+    gcp:
+  database:
+    spreadsheets:
+  backend:
+    kubernetes:
+    docker:
+    native:
+ui:
+  setup: mlox.services.gcp.sheet_ui.setup
+  settings: mlox.services.gcp.sheet_ui.settings
+build:
+  class_name: mlox.services.gcp.sheet_service.GCPSpreadsheetsService
+  params:
+    name: gcp-sheets-0.1.0
+    template: ${MLOX_STACKS_PATH}/gcp/mlox.gcp.sheets.yaml
+    target_path: /home/${MLOX_USER}/gcp_sheets
+    secret_manager_uuid: ${SECRET_MANAGER_UUID}
+    secret_name: ${SECRET_NAME}

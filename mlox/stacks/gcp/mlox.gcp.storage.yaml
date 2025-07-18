@@ -20,7 +20,9 @@ requirements:
   disk_gb: 1.0
 groups:
   service:
-  secret-manager:
+  storage:
+  cloud:
+    gcp:
   backend:
     kubernetes:
     docker:

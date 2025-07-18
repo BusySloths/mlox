@@ -1,9 +1,6 @@
 fabric
 pyyaml
 
-# oauth2client
-google-cloud-secret-manager
-gspread
 
 streamlit
 # streamlit-navigation-bar
@@ -24,6 +21,12 @@ pycryptodome
 
 # for postgres service
 # psycopg2-binary  # use conda for extra libs
+
+# GCP RELATED
+google-cloud-secret-manager
+google-cloud-bigquery
+gspread
+pandas-gbq
 
 redis
 
