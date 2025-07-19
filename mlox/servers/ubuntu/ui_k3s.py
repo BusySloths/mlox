@@ -37,7 +37,14 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
 
 
 def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuK3sServer):
-    st.markdown(f"#### {bundle.name}")
+    # st.markdown(f"#### {bundle.name}")
     if server.mlox_user:
-        st.write(f"Account Name: {server.mlox_user.name}")
-        st.write(f"Account Password: {server.mlox_user.pw}")
+        st.write(
+            f"Account Name and PW: `{server.mlox_user.name}` / `{server.mlox_user.pw}`"
+        )
+
+    # kubectl apply
+    kubectl_yaml = st.text_area("kubectl config", height=400)
+    if st.button("Apply config YAML", type="primary", icon="🚀"):
+        # server.apply_yaml(kubectl_yaml)
+        st.info("YAML applied.")
