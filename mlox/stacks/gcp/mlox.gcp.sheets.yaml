@@ -10,11 +10,11 @@ description: |
   In MLOX, Google Spreadsheets can be used as a data source or sink for various services and applications,
   facilitating data exchange and collaborative workflows.
 links:
-  project: https://cloud.google.com/bigquery
-  news: https://cloud.google.com/bigquery
-  security: https://cloud.google.com/bigquery
-  documentation: https://cloud.google.com/bigquery
-  changelog: https://cloud.google.com/bigquery
+  project: https://workspace.google.com/intl/en_au/products/sheets/
+  news: https://workspace.google.com/ißntl/en_au/products/sheets/
+  security: https://workspace.google.com/intl/en_au/products/sheets/
+  documentation: https://workspace.google.com/intl/en_au/products/sheets/
+  changelog: https://workspace.google.com/intl/en_au/products/sheets/
 requirements:
   cpus: 1.0
   ram_gb: 1.0
