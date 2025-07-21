@@ -1,5 +1,9 @@
 # mlox
+
+[![Logo](https://github.com/nicococo/mlox/blob/main/mlox/resources/mlox_logo_wide.png)](Logo)
+
 MLOps-in-a-Box: A simple and cost-efficient way of running your OSS MLOps stack.
+
 
 
 [![Maintainability](https://qlty.sh/badges/f6765ee4-a13b-4106-8ba2-236cfa251443/maintainability.svg)](https://qlty.sh/gh/nicococo/projects/mlox)
