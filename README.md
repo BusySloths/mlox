@@ -1,5 +1,5 @@
 ## BusySloths presents
-[![Logo](https://github.com/nicococo/mlox/blob/main/mlox/resources/mlox_logo_wide.png)](Logo)
+[![Logo](https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_logo_wide.png)](Logo)
 
 <p align="center">
 <strong>
@@ -12,10 +12,10 @@ MLOX gives you a calm, streamlined way to deploy, monitor, and maintain producti
 It’s for engineers who prefer thoughtful systems over chaos. Powered by sloths. Backed by open source.
 
 <p align="center">
-  <a href="https://qlty.sh/gh/nicococo/projects/mlox">
+  <a href="https://qlty.sh/gh/BusySloths/projects/mlox">
 	<img src="https://qlty.sh/badges/f6765ee4-a13b-4106-8ba2-236cfa251443/maintainability.svg" alt="Maintainability"/>
   </a>
-  <a href="https://qlty.sh/gh/nicococo/projects/mlox">
+  <a href="https://qlty.sh/gh/BusySloths/projects/mlox">
 	<img src="https://qlty.sh/badges/f6765ee4-a13b-4106-8ba2-236cfa251443/test_coverage.svg" alt="Code Coverage"/>
   </a>
 </p>
@@ -71,11 +71,11 @@ More Links:
 ## Contributing  
 There are many ways to contribute, and they are not limited to writing code. We welcome all contributions such as:
 
-- <a href="https://github.com/nicococo/mlox/issues/new/choose">Bug reports</a>
-- <a href="https://github.com/nicococo/mlox/issues/new/choose">Documentation improvements</a>
-- <a href="https://github.com/nicococo/mlox/issues/new/choose">Enhancement suggestions</a>
-- <a href="https://github.com/nicococo/mlox/issues/new/choose">Feature requests</a>
-- <a href="https://github.com/nicococo/mlox/issues/new/choose">Expanding the tutorials and use case examples</a>
+- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Bug reports</a>
+- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Documentation improvements</a>
+- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Enhancement suggestions</a>
+- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Feature requests</a>
+- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Expanding the tutorials and use case examples</a>
 
 Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
