@@ -13,8 +13,11 @@ It’s for engineers who prefer thoughtful systems over chaos. Powered by sloths
 
 <p align="center">
 <a href="https://qlty.sh/gh/BusySloths/projects/mlox"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" /></a>
+<a href="https://qlty.sh/gh/BusySloths/projects/mlox"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" /></a>
+<img alt="GitHub Issues or Pull Requests" src="https://img.shields.io/github/issues/busysloths/mlox">
+<img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox">
+</p>
 
-<a href="https://qlty.sh/gh/BusySloths/projects/mlox"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" /></a></p>
 ### ATTENTION
 
 MLOX is still in a very early development phase. If you like to contribute in any capacity, we would love to hear from you `contact[at]mlox.org`.
