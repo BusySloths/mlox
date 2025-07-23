@@ -12,14 +12,13 @@ def main():
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
         exit(1)
     session = MloxSession("mlox", password)
-    session.load_infrastructure()
     infra = session.infra
 
     dbs = infra.filter_by_group("database")
     my_influx = None
     for db in dbs:
-        print(f"Database: {db.config.name}")
-        if db.config.name.lower() == "influxdb":
+        print(f"Database: {db}")
+        if "influx" in db.name.lower():
             my_influx = db
 
     bundle = None

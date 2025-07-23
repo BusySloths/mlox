@@ -2,6 +2,11 @@
 
 Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
 
+## BusySloths presents MLOX: MLOps-in-a-Box
+
+Tired of tangled configs, YAML jungles, and broken ML pipelines? So were we.
+MLOX gives you a calm, streamlined way to deploy, monitor, and maintain production-grade MLOps infrastructure—without rushing.
+It’s for engineers who prefer thoughtful systems over chaos. Powered by sloths. Backed by open source.
 
 <p align="center">
   <a href="https://qlty.sh/gh/nicococo/projects/mlox">
