@@ -1,8 +1,6 @@
-# mlox
-
 [![Logo](https://github.com/nicococo/mlox/blob/main/mlox/resources/mlox_logo_wide.png)](Logo)
 
-MLOps-in-a-Box: A simple and cost-efficient way of running your OSS MLOps stack.
+Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
 
 
 <p align="center">
@@ -16,10 +14,25 @@ MLOps-in-a-Box: A simple and cost-efficient way of running your OSS MLOps stack.
 
 ### ATTENTION
 
-Do **not** use MLOX yet.
-MLOX is in a very early development phase.
+MLOX is still in a very early development phase. If you like to contribute in any capacity, we would love to hear from you `contact[at]mlox.org`.
 
-### About
+
+### Installation
+
+There are two parts of the project.
+1. If you want to install the main UI to manage your infrastructure, then
+```
+  pip install mlox-demo[ui]
+```
+This will install the main UI together with all supporting components (ie. lots of packages!).
+
+2. If you have existing MLOX infrastructure and want to use certain functionality in your apps, you can install only the necessary parts, e.g. if you want to use GCP related functionality:
+```
+  pip install mlox-demo[gcp]
+```
+
+
+### Long and Unnecessary Introduction
 
 Machine Learning (ML) and Artificial Intelligence (AI) are revolutionizing businesses and industries. Despite its importance, many companies struggle to go from ML/AI prototype to production.
 
@@ -38,10 +51,32 @@ This is were the MLOX project comes in. The goal of MLOX is four-fold:
 3. [Processes] MLOX provides fully-functional templates for dealing with data from ingestion, transformation, storing, model building, up until serving.
 4. [Migration] Scripts help to easily migrate parts of your MLOps infrastructure to other service providers.
 
-Links:
+More Links:
 
 1. https://en.wikipedia.org/wiki/MLOps
 2. https://www.databricks.com/glossary/mlops
 3. https://martinfowler.com/articles/cd4ml.html
 
 --------
+
+
+## Contributing  
+There are many ways to contribute, and they are not limited to writing code. We welcome all contributions such as:
+
+- <a href="https://github.com/nicococo/mlox/issues/new/choose">Bug reports</a>
+- <a href="https://github.com/nicococo/mlox/issues/new/choose">Documentation improvements</a>
+- <a href="https://github.com/nicococo/mlox/issues/new/choose">Enhancement suggestions</a>
+- <a href="https://github.com/nicococo/mlox/issues/new/choose">Feature requests</a>
+- <a href="https://github.com/nicococo/mlox/issues/new/choose">Expanding the tutorials and use case examples</a>
+
+Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+
+## License  
+
+MLOX is open-source and intended to be a community effort, and it wouldn't be possible without your support and enthusiasm.
+It is distributed under the terms of the MIT license. Any contribution made to this project will be subject to the same provisions.
+
+## Join Us 
+
+We are looking for nice people who are invested in the problem we are trying to solve. 
