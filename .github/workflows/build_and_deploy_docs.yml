@@ -30,7 +30,7 @@ jobs:
       # ADJUST THIS: build your documentation into docs/.
       # We use a custom build script for pdoc itself, ideally you just run `pdoc -o docs/ ...` here.
       # - run: pdoc mlox !mlox.view -o docs/
-      - run: pdoc pages -o docs/
+      - run: pdoc mlox !mlox.view !mlox.assets !mlox.resources !mlox.stacks -o docs/ --logo "https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_logo_small.png"
 
       - uses: actions/upload-pages-artifact@v3
         with:
