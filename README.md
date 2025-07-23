@@ -1,5 +1,5 @@
 ## BusySloths presents
-[![Logo](https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_logo_wide.png)](Logo)
+[![Logo](https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_logo_wide.png?raw=true)](Logo)
 
 <p align="center">
 <strong>
