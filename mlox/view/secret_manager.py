@@ -5,7 +5,7 @@ import streamlit as st
 from typing import cast
 
 from mlox.infra import Infrastructure
-from mlox.secret_manager import AbstractSecretManagerService, AbstractSecretManager
+# from mlox.secret_manager import AbstractSecretManagerService, AbstractSecretManager
 
 
 def save_infra():
@@ -20,7 +20,12 @@ def secrets():
     - Configurations
     """)
 
-    infra = cast(Infrastructure, st.session_state.mlox.infra)
+    infra = None
+    try:
+        infra = cast(Infrastructure, st.session_state.mlox.infra)
+    except BaseException:
+        st.error("Could not load infrastructure configuration.")
+        st.stop()
 
     secret_manager_service_list = []
     for sms in infra.filter_by_group("secret-manager"):

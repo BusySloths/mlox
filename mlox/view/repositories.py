@@ -4,7 +4,8 @@ import streamlit as st
 from datetime import datetime
 from typing import cast
 
-from mlox.session import MloxSession
+# from mlox.session import MloxSession
+from mlox.infra import Infrastructure
 
 
 def save_infra():
@@ -17,9 +18,13 @@ def manage_repositories():
     # Repositories
     This is where you can manage your repositories.""")
 
-    ms = cast(MloxSession, st.session_state.mlox)
-    infra = ms.infra
-    bundles = infra.bundles
+    infra = None
+    try:
+        infra = cast(Infrastructure, st.session_state.mlox.infra)
+    except BaseException:
+        st.error("Could not load infrastructure configuration.")
+        st.stop()
+    # bundles = infra.bundles
     # with st.form("Add Repo"):
     #     c1, c2, c3 = st.columns([40, 40, 20])
     #     link = c1.text_input("GitHub Link")
@@ -65,8 +70,8 @@ def manage_repositories():
     )
     if len(selection["selection"]["rows"]) > 0:
         idx = selection["selection"]["rows"][0]
-        ip = my_repos[idx]["ip"]
-        name = my_repos[idx]["name"]
+        # ip = my_repos[idx]["ip"]
+        # name = my_repos[idx]["name"]
         repo = my_repos[idx]["repo"]
 
         config = infra.get_service_config(repo)

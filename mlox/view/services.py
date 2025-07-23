@@ -16,7 +16,12 @@ def save_infra():
 def installed_services():
     st.markdown("""
     This is where you can manage your services.""")
-    infra = cast(Infrastructure, st.session_state.mlox.infra)
+    infra = None
+    try:
+        infra = cast(Infrastructure, st.session_state.mlox.infra)
+    except BaseException:
+        st.error("Could not load infrastructure configuration.")
+        st.stop()
 
     services = []
     for bundle in infra.bundles:
@@ -102,7 +107,12 @@ def installed_services():
 def available_services():
     st.markdown("""
     Add services to your infrastructure.""")
-    infra = cast(Infrastructure, st.session_state.mlox.infra)
+    infra = None
+    try:
+        infra = cast(Infrastructure, st.session_state.mlox.infra)
+    except BaseException:
+        st.error("Could not load infrastructure configuration.")
+        st.stop()
 
     # with st.expander("Add Server"):
     configs = load_all_service_configs()

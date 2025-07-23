@@ -1,6 +1,10 @@
 import pandas as pd
 import streamlit as st
 
+from typing import cast
+
+from mlox.infra import Infrastructure
+
 
 def save_infra():
     with st.spinner("Saving infrastructure..."):
@@ -12,8 +16,12 @@ def manage_monitors():
     # Monitor
     This is where you can monitor your infrastructure.
     """)
-    ms = st.session_state.mlox
-    infra = ms.infra
+    infra = None
+    try:
+        infra = cast(Infrastructure, st.session_state.mlox.infra)
+    except BaseException:
+        st.error("Could not load infrastructure configuration.")
+        st.stop()
 
     my_monitors = []
     for m in infra.filter_by_group("monitor"):

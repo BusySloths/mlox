@@ -37,7 +37,13 @@ def auto_function(server):
 
 
 def server_management():
-    infra = cast(Infrastructure, st.session_state.mlox.infra)
+    infra = None
+    try:
+        infra = cast(Infrastructure, st.session_state.mlox.infra)
+    except BaseException:
+        st.error("Could not load infrastructure configuration.")
+        st.stop()
+
     st.markdown("### Server List")
 
     if len(infra.bundles) > 0:
@@ -184,7 +190,12 @@ def available_server_templates():
     st.markdown("""
     ### Available Server Templates
     This is where you can manage your server.""")
-    infra = cast(Infrastructure, st.session_state.mlox.infra)
+    infra = None
+    try:
+        infra = cast(Infrastructure, st.session_state.mlox.infra)
+    except BaseException:
+        st.error("Could not load infrastructure configuration.")
+        st.stop()
 
     # with st.expander("Add Server"):
     configs = load_all_server_configs()
