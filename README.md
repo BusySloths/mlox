@@ -1,8 +1,11 @@
+## BusySloths presents
 [![Logo](https://github.com/nicococo/mlox/blob/main/mlox/resources/mlox_logo_wide.png)](Logo)
 
+<p align="center">
+<strong>
 Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
-
-## BusySloths presents MLOX: MLOps-in-a-Box
+</strong>
+</p>
 
 Tired of tangled configs, YAML jungles, and broken ML pipelines? So were we.
 MLOX gives you a calm, streamlined way to deploy, monitor, and maintain production-grade MLOps infrastructure—without rushing.
