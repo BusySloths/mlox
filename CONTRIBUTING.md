@@ -20,8 +20,17 @@ Keep in mind that MLOX is still in a very early stage and we welcome any idea or
 
 ## Getting Help 🙋
 
+<a href="https://github.com/BusySloths/mlox/issues">
 <img alt="GitHub Issues or Pull Requests" src="https://img.shields.io/github/issues/busysloths/mlox">
+</a>
+<a href="https://github.com/BusySloths/mlox/discussions">
 <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox">
+</a>
+<a href="https://github.com/BusySloths/mlox/wiki">
 <img alt="Static Badge" src="https://img.shields.io/badge/Project%20Wiki-mlox-wiki_mlox?logo=github&link=https%3A%2F%2Fgithub.com%2FBusySloths%2Fmlox%2Fwiki">
+</a>
 
 If you have any problems please contact a maintainer or community volunteer. The GitHub issues are a great place to start. We look forward to seeing you there! :purple_heart:
+
+## Still Questions
+Contact us at `contact[at]mlox.org` or `hello[at]busysloths.org`.
