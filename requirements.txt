@@ -25,6 +25,7 @@ pycryptodome
 # GCP RELATED
 google-cloud-secret-manager
 google-cloud-bigquery
+google-cloud-storage
 gspread
 pandas-gbq
 
