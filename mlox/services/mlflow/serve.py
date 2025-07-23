@@ -33,8 +33,8 @@ model_cache: Dict[str, ModelCacheEntry] = dict()
 # )
 os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
 
-mlflow.set_tracking_uri(os.environ["MLFLOW_URI"])
-mlflow.set_registry_uri(os.environ["MLFLOW_URI"])
+mlflow.set_tracking_uri(os.environ.get("MLFLOW_URI", None))
+mlflow.set_registry_uri(os.environ.get("MLFLOW_URI", None))
 
 # CORS middleware settings
 app = FastAPI()
