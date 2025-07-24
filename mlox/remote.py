@@ -57,13 +57,14 @@ def close_connection(conn, tmp_dir=None):
 def exec_command(conn, cmd, sudo=False, pty=False):
     print(f"Execute CMD: {cmd}")
     res = None
+    hide = "stderr" if sudo else True
     if sudo:
         try:
-            res = conn.sudo(cmd, hide="stderr", pty=pty).stdout.strip()
+            res = conn.sudo(cmd, hide=hide, pty=pty).stdout.strip()
         except Exception as e:
             print(e)
     else:
-        res = conn.run(cmd, hide=True).stdout.strip()
+        res = conn.run(cmd, hide=hide).stdout.strip()
     print(res)
     return res
 
