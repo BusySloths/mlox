@@ -3,11 +3,11 @@ requires = ["setuptools", "setuptools-git-versioning"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mlox-demo"
+name = "busysloths-mlox"
 readme = "README.md"
 keywords = ["Infrastructure", "Server", "Service", "Dashboard", "Opinionated", "MLOps"]
 license = { file = "LICENSE" }
-description = "MLOps Platform for Data Scientists and Engineers to build, deploy and manage machine learning applications and more."
+description = "Accelerate your ML journey—deploy production-ready MLOps in minutes, not months."
 requires-python = ">=3.11"
 authors = [{ name = "nicococo", email = "contact@mlox.org" }]
 classifiers = [
@@ -47,21 +47,30 @@ ui = [
     "pandas",
     "numpy",
 ]
+gcp = [
+"pandas",
+"gspread",
+"pandas-gbq",
+"google-cloud-storage",
+"google-cloud-bigquery",
+"google-cloud-secret-manager",
+]
 ml = ["mlflow", "mlserver", "psutil"]
-gcp = ["google-cloud-secret-manager", "oauth2client"]
 telemetry = ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp"]
-connectors = ["redis", "grpcio"]
+connectors = ["redis", "influxdb", "grpcio"]
 all = ["mlox-demo[ui,ml,gcp,telemetry,connectors]"]
-dev = ["mlox-demo[all]", "pytest", "pytest-cov", "flake8", "build", "twine"]
+dev = ["mlox-demo[all]", "pytest", "pytest-cov", "flake8", "pdoc", "build", "twine"]
 
 [project.urls]
-"Homepage" = "https://github.com/nicococo/mlox"
-"Tracker" = "https://github.com/nicococo/mlox/issues"
-"Source" = "https://github.com/nicococo/mlox"
-"Examples" = "https://github.com/nicococo/mlox"
+"Homepage" = "https://busysloths.github.io/mlox/mlox.html"
+"Tracker" = "https://github.com/busysloths/mlox/issues"
+"Source" = "https://github.com/busysloths/mlox"
+"Examples" = "https://github.com/busysloths/mlox"
 
 [project.scripts]
 mlox-start-multipass = "mlox.cli:start_multipass"
+mlox-ui = "mlox.cli:start_ui"
+
 
 [tool.setuptools-git-versioning]
 enabled = true
