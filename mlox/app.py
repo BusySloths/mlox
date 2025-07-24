@@ -28,9 +28,11 @@ def help():
 
 
 def welcome():
+    st.markdown("# BusySloths presents")
     st.image("mlox/resources/mlox_logo_wide.png")
     st.markdown("""
-    # Welcome to MLOX – MLOps Infrastructure Made Simple
+    ### Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
+
     
     MLOX helps individuals and small teams deploy, configure, and monitor full MLOps stacks with minimal effort. 
     Through this interface, you can:

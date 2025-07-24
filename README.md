@@ -38,7 +38,7 @@ This will install the main UI together with all supporting components (ie. lots 
 ```
 
 
-### Long and Unnecessary Introduction
+### Unnecessary Long Introduction
 
 Machine Learning (ML) and Artificial Intelligence (AI) are revolutionizing businesses and industries. Despite its importance, many companies struggle to go from ML/AI prototype to production.
 
@@ -63,7 +63,6 @@ More Links:
 2. https://www.databricks.com/glossary/mlops
 3. https://martinfowler.com/articles/cd4ml.html
 
---------
 
 
 ## Contributing  
@@ -76,6 +75,17 @@ There are many ways to contribute, and they are not limited to writing code. We 
 - <a href="https://github.com/BusySloths/mlox/issues/new/choose">Expanding the tutorials and use case examples</a>
 
 Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+
+## Sponsors
+
+MLOX is funded by the following organisations:
+
+<p align="center">
+<img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" alt="BMFTR"/>
+<img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_dark.png?raw=true" alt="PrototypeFund"/>
+</p>
+
 
 
 ## License  
