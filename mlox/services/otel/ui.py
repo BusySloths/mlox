@@ -16,15 +16,17 @@ from mlox.infra import Infrastructure, Bundle
 def load_jsonl(raw):
     """Loads data from a JSON Lines file."""
     data = []
+    errors = 0
     try:
         for line in raw.splitlines():
             try:
                 data.append(json.loads(line))
             except json.JSONDecodeError as e:
-                st.error(f"Error decoding JSON from line: {line.strip()} - {e}")
+                # st.error(f"Error decoding JSON from line: {line.strip()} - {e}")
+                errors += 1
     except Exception as e:
         st.error(f"An error occurred while reading the file: {e}")
-    return data
+    return data, errors
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
@@ -45,7 +47,11 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OtelDockerService):
 
     # Get the path to the (copied) telemetry data file
     telemetry_raw_data = service.get_telemetry_data(bundle)
-    telemetry_data = load_jsonl(telemetry_raw_data)
+    telemetry_data, errors = load_jsonl(telemetry_raw_data)
+    if errors > 0:
+        st.warning(
+            f"Could not parse {errors} of {errors + len(telemetry_data)} data points."
+        )
 
     if not telemetry_data:
         st.info("No telemetry data loaded or file was empty/corrupt.")
