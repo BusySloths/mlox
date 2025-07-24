@@ -79,11 +79,11 @@ Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## Sponsors
 
-MLOX is funded by the following organisations:
+MLOX is proudly funded by the following organizations:
 
 <p align="center">
-<img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" alt="BMFTR"/>
-<img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_dark.png?raw=true" alt="PrototypeFund"/>
+<img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" alt="BMFTR" width="400px"/>
+<img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_dark.png?raw=true" alt="PrototypeFund" width="400px"/>
 </p>
 
 
