@@ -1,4 +1,4 @@
-name: CI Tests for PYPI Release
+name: CI PYPI Release
 
 on:
   workflow_dispatch:
