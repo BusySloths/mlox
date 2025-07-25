@@ -1,8 +1,20 @@
+import os
 import streamlit as st
 
 from typing import cast
 
 from mlox.infra import Infrastructure
+
+# --- Path setup ---
+# Get the absolute path to the directory containing this script (app.py)
+# This makes the app robust to being run from any CWD.
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+RESOURCES_DIR = os.path.join(APP_DIR, "resources")
+
+
+def get_resource_path(filename: str) -> str:
+    """Constructs an absolute path to a resource file."""
+    return os.path.join(RESOURCES_DIR, filename)
 
 
 def news():
@@ -29,7 +41,7 @@ def help():
 
 def welcome():
     st.markdown("# BusySloths presents")
-    st.image("mlox/resources/mlox_logo_wide.png")
+    st.image(get_resource_path("mlox_logo_wide.png"))
     st.markdown("""
     ### Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
 
@@ -58,14 +70,14 @@ def welcome():
 
 st.set_page_config(
     page_title="MLOX Infrastructure Management",
-    page_icon="mlox/resources/mlox_logo_small.png",
+    page_icon=get_resource_path("mlox_logo_small.png"),
     layout="wide",
 )
 
 st.logo(
-    "mlox/resources/mlox.png",
+    get_resource_path("mlox.png"),
     size="large",
-    icon_image="mlox/resources/mlox_logo_small.png",
+    icon_image=get_resource_path("mlox_logo_small.png"),
 )
 
 

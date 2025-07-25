@@ -53,6 +53,7 @@ all = [
     # ui
     "streamlit",
     "streamlit-vis-timeline",
+    "backports.tarfile",
     "pandas",
     "numpy",
     # gcp
@@ -76,7 +77,7 @@ all = [
 ]
 dev = [
     # All packages from the 'all' extra
-    "streamlit", "streamlit-vis-timeline", "pandas", "numpy",
+    "streamlit", "streamlit-vis-timeline", "backports.tarfile", "pandas", "numpy",
     "gspread", "pandas-gbq", "google-cloud-storage", "google-cloud-bigquery", "google-cloud-secret-manager",
     "mlflow", "mlserver", "psutil",
     "opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp",
