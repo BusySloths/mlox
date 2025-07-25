@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 from importlib import resources
+import shutil
 
 
 def start_multipass():
@@ -29,6 +30,34 @@ def start_ui():
     This replaces the need for a separate start-ui.sh script.
     """
     try:
+        # --- Copy theme config to ensure consistent UI ---
+        # This ensures that the Streamlit app uses the theme defined in the package,
+        # regardless of the user's local or global Streamlit config.
+        try:
+            # Get path to the source config.toml within the package
+            source_config_path_obj = resources.files("mlox.resources").joinpath(
+                "config.toml"
+            )
+
+            # Define the destination path in the user's current directory
+            dest_dir = os.path.join(os.getcwd(), ".streamlit")
+            dest_config_path = os.path.join(dest_dir, "config.toml")
+
+            # Create the .streamlit directory if it doesn't exist
+            os.makedirs(dest_dir, exist_ok=True)
+
+            # Copy the file, overwriting if it exists.
+            with resources.as_file(source_config_path_obj) as source_path:
+                shutil.copy(source_path, dest_config_path)
+                print(f"Copied theme config to {dest_config_path}")
+        except Exception as e:
+            # If copying fails, just print a warning and continue. The UI will still
+            # launch, just maybe without the custom theme.
+            print(
+                f"Warning: Could not copy theme configuration. UI will use default theme. Error: {e}",
+                file=sys.stderr,
+            )
+
         # This is a robust way to get the path to a module file
         app_path = str(resources.files("mlox").joinpath("app.py"))
         print(f"Launching MLOX UI from: {app_path}")

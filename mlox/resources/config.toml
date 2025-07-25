@@ -1,0 +1,117 @@
+# [theme]
+# base="light"
+# # The font family for all text, except code blocks. This can be one of
+# # the following:
+# # - "sans-serif"
+# # - "serif"
+# # - "monospace"
+# # - the `font` value for a custom font table under [[theme.fontFaces]]
+# # - a comma-separated list of these (as a single string) to specify
+# #   fallbacks
+# # For example, you can use the following:
+# # font = "cool-font, fallback-cool-font, sans-serif"
+# font = "sans-serif"
+
+# # The radius used as basis for the corners of most UI elements. This can
+# # be one of the following: "none", "small", "medium", "large", "full",
+# # or the number in pixels or rem. For example, you can use "10px",
+# # "0.5rem", or "2rem". To follow best practices, use rem instead of
+# # pixels when specifying a numeric size.
+# baseRadius = "10px"
+# # Sets the root font size (in pixels) for the app, which determines the
+# # overall scale of text and UI elements. The default base font size is 16.
+# baseFontSize = 14
+# # Whether to show a vertical separator between the sidebar and the main
+# # content area.
+# showSidebarBorder = true
+# # Whether to show a border around input widgets.
+# showWidgetBorder = true
+
+# [theme]
+# base = "light"
+# primaryColor = "#607B8B"  # A muted blue-grey
+# backgroundColor = "#F0F8FF"  # Very light blue-grey (almost white)
+# secondaryBackgroundColor = "#E0ECF8" # Slightly darker blue-grey for widgets
+# textColor = "#36454F"  # Dark grey for text
+# linkColor = "#4682B4"  # A more distinct blue for links
+# codeBackgroundColor = "#D3D3D3" # Light grey for code blocks
+# codeFont = "monospace"
+# font = "sans-serif"
+# headingFont = "sans-serif"
+# baseRadius = "0.3rem"
+# borderColor = "#A9A9A9" # Medium grey for borders
+# showWidgetBorder = true
+# baseFontSize = 14
+# showSidebarBorder = true
+[theme]
+base = "dark"
+primaryColor = "#2E8B57"  # Rich Sea Green - a vibrant, earthy green for "Busysloth"
+backgroundColor = "#1E1E1E"  # Very dark grey background
+secondaryBackgroundColor = "#2D2D2D" # Slightly lighter dark grey for sidebar and widgets
+textColor = "#E0E0E0"  # Soft white for primary text
+linkColor = "#4682B4"  # Steel blue for links (maintains distinctness)
+codeBackgroundColor = "#252526" # Dark background for code blocks
+codeFont = "monospace"
+font = "sans-serif"
+headingFont = "sans-serif"
+baseRadius = "0.2rem"
+borderColor = "#404040"
+showWidgetBorder = false
+baseFontSize = 16
+showSidebarBorder = true
+
+# New advanced theming options for "Busysloth" character
+baseFontWeight = 400 # Regular weight for most body text
+codeFontWeight = 400 # Regular weight for code, keeps it clean
+
+# Chart Colors: A professional, characterful palette that works well on dark backgrounds
+# Categorical colors for distinct "Busysloth" highlights
+chartCategoricalColors = [
+    "#2E8B57", # Primary Sea Green
+    "#DAA520", # Goldenrod - a warm, earthy pop
+    "#4682B4", # Steel Blue - a cool complement
+    "#8A2BE2", # Blue Violet - a vibrant, energetic contrast
+    "#CD5C5C", # Indian Red - for emphasis or warnings, a warm accent
+    "#F0E68C", # Khaki - a soft, light highlight
+    "#5F9EA0", # Cadet Blue - another muted cool tone
+    "#708090"  # Slate Gray - a neutral fallback
+]
+# Sequential colors for gradients, based on the primary green
+chartSequentialColors = [
+    "#1B5B34", # Darker Sea Green
+    "#2E8B57", # Primary Sea Green
+    "#5CB87C", # Lighter Sea Green
+    "#8AD8A2", # Even Lighter Sea Green
+    "#B6E8CA"  # Very Light Sea Green
+]
+
+dataframeHeaderBackgroundColor = "#252526" # Matches code background for consistency, dark and subtle
+
+# Heading Font Sizes: Maintain a clear hierarchy. Values are in pixels.
+headingFontSizes = { h1 = 36, h2 = 28, h3 = 24, h4 = 20, h5 = 18, h6 = 16 }
+
+# Heading Font Weights: Make headings distinct but not overly bold.
+headingFontWeights = { h1 = 600, h2 = 600, h3 = 600, h4 = 500, h5 = 500, h6 = 500 } # Semibold to Medium
+
+linkUnderline = false # No underline for a cleaner, modern web aesthetic
+
+
+[client]
+# Change the visibility of items in the toolbar, options menu,
+# and settings dialog (top right of the app).
+# Allowed values:
+# - "auto"      : Show the developer options if the app is accessed through
+#                 localhost or through Streamlit Community Cloud as a developer.
+#                 Hide them otherwise.
+# - "developer" : Show the developer options.
+# - "viewer"    : Hide the developer options.
+# - "minimal"   : Show only options set externally (e.g. through
+#                 Streamlit Community Cloud) or through st.set_page_config.
+#                 If there are no options left, hide the menu.
+# Default: "auto"
+toolbarMode = "minimal"
+
+[browser]
+# Whether to send usage statistics to Streamlit.
+# Default: true
+gatherUsageStats = false
