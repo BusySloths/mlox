@@ -58,8 +58,8 @@ gcp = [
 ml = ["mlflow", "mlserver", "psutil"]
 telemetry = ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp"]
 connectors = ["redis", "influxdb", "grpcio"]
-all = ["mlox-demo[ui,ml,gcp,telemetry,connectors]"]
-dev = ["mlox-demo[all]", "pytest", "pytest-cov", "flake8", "pdoc", "build", "twine"]
+all = ["busysloths-mlox[ui,ml,gcp,telemetry,connectors]"]
+dev = ["busysloths-mlox[all]", "pytest", "pytest-cov", "flake8", "pdoc", "build", "twine"]
 
 [project.urls]
 "Homepage" = "https://busysloths.github.io/mlox/mlox.html"
