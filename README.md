@@ -81,8 +81,12 @@ Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 MLOX is proudly funded by the following organizations:
 
-<p align="center">
 <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" alt="BMFTR" width="420px"/>
+
+## Supporters
+We would not be here without the generous support of the following people and organizations:
+
+<p align="center">
 <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_light.png?raw=true" alt="PrototypeFund" width="380px"/>
 <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_dark.png?raw=true" alt="PrototypeFund" width="380px"/>
 </p>
