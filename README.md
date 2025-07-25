@@ -28,15 +28,15 @@ MLOX is still in a very early development phase. If you like to contribute in an
 There are two parts of the project.
 1. If you want to install the main UI to manage your infrastructure, then
 ```
-  pip install mlox-demo[ui]
+  pip install busysloths-mlox[all]
 ```
 This will install the main UI together with all supporting components (ie. lots of packages!).
 
 2. If you have existing MLOX infrastructure and want to use certain functionality in your apps, you can install only the necessary parts, e.g. if you want to use GCP related functionality:
 ```
-  pip install mlox-demo[gcp]
+  pip install busysloths-mlox[gcp]
 ```
-
+This will only install the base packages as well as GCP related packages.
 
 ### Unnecessary Long Introduction
 

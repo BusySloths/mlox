@@ -41,12 +41,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ui = [
-    "streamlit",
-    "streamlit-vis-timeline",
-    "pandas",
-    "numpy",
-]
 gcp = [
 "pandas",
 "gspread",
@@ -55,11 +49,41 @@ gcp = [
 "google-cloud-bigquery",
 "google-cloud-secret-manager",
 ]
-ml = ["mlflow", "mlserver", "psutil"]
-telemetry = ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp"]
-connectors = ["redis", "influxdb", "grpcio"]
-all = ["busysloths-mlox[ui,ml,gcp,telemetry,connectors]"]
-dev = ["busysloths-mlox[all]", "pytest", "pytest-cov", "flake8", "pdoc", "build", "twine"]
+all = [
+    # ui
+    "streamlit",
+    "streamlit-vis-timeline",
+    "pandas",
+    "numpy",
+    # gcp
+    "gspread",
+    "pandas-gbq",
+    "google-cloud-storage",
+    "google-cloud-bigquery",
+    "google-cloud-secret-manager",
+    # ml
+    "mlflow",
+    "mlserver",
+    "psutil",
+    # telemetry
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp",
+    # connectors
+    "redis",
+    "influxdb",
+    "grpcio",
+]
+dev = [
+    # All packages from the 'all' extra
+    "streamlit", "streamlit-vis-timeline", "pandas", "numpy",
+    "gspread", "pandas-gbq", "google-cloud-storage", "google-cloud-bigquery", "google-cloud-secret-manager",
+    "mlflow", "mlserver", "psutil",
+    "opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp",
+    "redis", "influxdb", "grpcio",
+    # Development-specific tools
+    "pytest", "pytest-cov", "pytest-mock", "flake8", "pdoc", "build", "twine", "psycopg2-binary",
+]
 
 [project.urls]
 "Homepage" = "https://busysloths.github.io/mlox/mlox.html"
