@@ -4,6 +4,8 @@ import sys
 from importlib import resources
 import shutil
 
+import typer
+
 
 def start_multipass():
     """
@@ -66,3 +68,24 @@ def start_ui():
     except (FileNotFoundError, subprocess.CalledProcessError) as e:
         print(f"Error starting Streamlit UI: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def main():
+    # Typer CLI app
+    app = typer.Typer()
+
+    @app.command()
+    def multipass():
+        """Start multipass VM"""
+        start_multipass()
+
+    @app.command()
+    def ui():
+        """Start the MLOX UI with Streamlit"""
+        start_ui()
+
+    app()
+
+
+if __name__ == "__main__":
+    main()

@@ -38,6 +38,8 @@ dependencies = [
     "cryptography",
     "bcrypt",
     "passlib",
+    # cli
+    "typer",
 ]
 
 [project.optional-dependencies]
@@ -95,6 +97,7 @@ dev = [
 [project.scripts]
 mlox-start-multipass = "mlox.cli:start_multipass"
 mlox-ui = "mlox.cli:start_ui"
+mlox = "mlox.cli:main"
 
 
 [tool.setuptools-git-versioning]
