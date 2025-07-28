@@ -4,6 +4,7 @@ import streamlit as st
 from typing import cast
 
 from mlox.infra import Infrastructure
+from mlox.session import MloxSession
 
 # --- Path setup ---
 # Get the absolute path to the directory containing this script (app.py)
@@ -15,6 +16,21 @@ RESOURCES_DIR = os.path.join(APP_DIR, "resources")
 def get_resource_path(filename: str) -> str:
     """Constructs an absolute path to a resource file."""
     return os.path.join(RESOURCES_DIR, filename)
+
+
+def auto_login():
+    if not st.session_state.get("is_logged_in", False):
+        prj = os.environ.get("MLOX_PROJECT", None)
+        pw = os.environ.get("MLOX_PASSWORD", None)
+        if prj and pw:
+            try:
+                ms = MloxSession(prj, pw)
+                if ms.secrets.is_working():
+                    st.session_state["mlox"] = ms
+                    st.session_state.is_logged_in = True
+            except Exception:
+                return
+    return
 
 
 def news():
@@ -80,6 +96,8 @@ st.logo(
     icon_image=get_resource_path("mlox_logo_small.png"),
 )
 
+
+auto_login()
 
 pages_logged_out = {
     "": [
