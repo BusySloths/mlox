@@ -1,0 +1,174 @@
+import pytest
+import logging
+from unittest.mock import patch, MagicMock
+from mlox.server import (
+    ServerConnection,
+    AbstractServer,
+    MloxUser,
+    RemoteUser,
+    sys_get_distro_info,
+    execute_command,
+)
+
+
+class DummyConn:
+    def __init__(self):
+        self.opened = False
+        self.host = "dummyhost"
+        self.is_connected = True
+
+    def open(self):
+        self.opened = True
+
+    def run(self, cmd, **kwargs):
+        return MagicMock(ok=True, return_code=0, stderr="")
+
+
+class DummyTmpDir:
+    def cleanup(self):
+        pass
+
+
+@patch("mlox.remote.open_connection", return_value=(DummyConn(), DummyTmpDir()))
+@patch("mlox.remote.close_connection", return_value=None)
+def test_server_connection_success(mock_close, mock_open):
+    creds = {"host": "dummyhost", "user": "user", "pw": "pw"}
+    conn = ServerConnection(creds, retries=1, retry_delay=0)
+    with conn as c:
+        assert c.opened
+        assert c.host == "dummyhost"
+
+
+@patch("mlox.remote.open_connection", side_effect=Exception("fail"))
+@patch("mlox.remote.close_connection", return_value=None)
+def test_server_connection_failure(mock_close, mock_open):
+    creds = {"host": "dummyhost", "user": "user", "pw": "pw"}
+    conn = ServerConnection(creds, retries=0, retry_delay=0)
+    with pytest.raises(Exception):
+        with conn:
+            pass
+
+
+@patch("mlox.remote.fs_read_file", return_value='NAME="Ubuntu"\nVERSION_ID="22.04"')
+def test_sys_get_distro_info_os_release(mock_fs):
+    conn = DummyConn()
+    info = sys_get_distro_info(conn)
+    assert info["name"] == "ubuntu"
+    assert info["version"] == "22.04"
+
+
+@patch("mlox.remote.fs_read_file", side_effect=Exception("fail"))
+@patch(
+    "mlox.remote.exec_command",
+    return_value="Distributor ID: Ubuntu\nRelease: 22.04\nDescription: Ubuntu 22.04 LTS\nCodename: jammy",
+)
+def test_sys_get_distro_info_lsb_release(mock_exec, mock_fs):
+    conn = DummyConn()
+    info = sys_get_distro_info(conn)
+    assert info["name"] == "Ubuntu"
+    assert info["version"] == "22.04"
+    assert info["pretty_name"] == "Ubuntu 22.04 LTS"
+    assert info["codename"] == "jammy"
+
+
+@patch("mlox.remote.fs_read_file", side_effect=Exception("fail"))
+@patch("mlox.remote.exec_command", side_effect=Exception("fail"))
+def test_sys_get_distro_info_failure(mock_exec, mock_fs):
+    conn = DummyConn()
+    info = sys_get_distro_info(conn)
+    assert info is None
+
+
+@patch("mlox.remote.exec_command")
+def test_execute_command_str(mock_exec):
+    conn = DummyConn()
+    execute_command(conn, "ls")
+    mock_exec.assert_called_with(conn, "ls", sudo=True)
+
+
+@patch("mlox.remote.exec_command")
+def test_execute_command_list_sudo(mock_exec):
+    conn = DummyConn()
+    execute_command(conn, [True, "ls", "desc"])
+    mock_exec.assert_called_with(conn, "ls", sudo=True)
+
+
+@patch("importlib.import_module")
+def test_execute_command_list_func(mock_import):
+    conn = DummyConn()
+    dummy_func = MagicMock()
+    mock_import.return_value = MagicMock(**{"dummy_func": dummy_func})
+    execute_command(conn, ["dummy_func", "arg1", "arg2"])
+    dummy_func.assert_called_with(conn, "arg1", "arg2")
+
+
+# AbstractServer cannot be instantiated directly, but we can test its templates
+class DummyServer(AbstractServer):
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def teardown(self):
+        pass
+
+    def get_server_info(self, no_cache=False):
+        return {"info": 1}
+
+    def enable_debug_access(self):
+        pass
+
+    def disable_debug_access(self):
+        pass
+
+    def setup_backend(self):
+        pass
+
+    def teardown_backend(self):
+        pass
+
+    def get_backend_status(self):
+        return {"status": "ok"}
+
+    def start_backend_runtime(self):
+        pass
+
+    def stop_backend_runtime(self):
+        pass
+
+
+def test_mlox_user_template():
+    server = DummyServer(
+        ip="1.2.3.4", root="root", root_pw="pw", service_config_id="svc"
+    )
+    user = server.get_mlox_user_template()
+    assert user.name.startswith("mlox_")
+    assert user.pw
+    assert user.home.startswith("/home/mlox_")
+
+
+def test_remote_user_template():
+    server = DummyServer(
+        ip="1.2.3.4", root="root", root_pw="pw", service_config_id="svc"
+    )
+    user = server.get_remote_user_template()
+    assert user.ssh_passphrase
+
+
+def test_test_connection(monkeypatch):
+    server = DummyServer(
+        ip="1.2.3.4", root="root", root_pw="pw", service_config_id="svc"
+    )
+
+    class DummyConn:
+        is_connected = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+    monkeypatch.setattr(server, "get_server_connection", lambda *a, **kw: DummyConn())
+    assert server.test_connection() is True

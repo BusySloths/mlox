@@ -3,10 +3,22 @@ import time
 import logging
 import traceback
 import multiprocessing as mp
+from multiprocessing.managers import DictProxy
 
 from datetime import datetime
 from threading import Timer
-from typing import Dict, Callable
+from typing import Dict, Callable, cast
+
+from dataclasses import dataclass
+
+
+@dataclass
+class QueueEntry:
+    state: str
+    process: Callable
+    callback: Callable
+    params_process: dict
+    params_callback: dict
 
 
 class ProcessSchedulerError:
@@ -38,44 +50,51 @@ class ProcessScheduler:
         max_processes: int = 2,
         watchdog_wakeup_sec: int = 1,
         watchdog_timeout_sec: int = 1500,
+        disable_garbage_collection: bool = False,
     ) -> None:
         self.max_processes: int = max_processes
         self.watchdog_wakeup_sec: int = watchdog_wakeup_sec
         self.watchdog_timeout_sec: int = watchdog_timeout_sec
-
+        self.watchdog_cleanup_iter: int = 10
+        self.watchdog_cleanup_cntr: int = 0
+        self.gc: bool = not disable_garbage_collection
+        self.queue_lock = mp.Lock()
         try:
             mp.set_start_method("fork")
         except RuntimeError:
             pass
 
+        self.queue: Dict[int, QueueEntry] = dict()
+        self.queue_key_counter = 0
+
         manager = mp.Manager()
-        self.processes_results: Dict[int, object] = manager.dict()
-        self.queue_callables: list[tuple[Callable, Callable]] = []
-        self.queue_parameters: list[tuple[dict, dict]] = []
-        self.queue_states: list[str] = []
+        self.processes_results: DictProxy[int, object] = manager.dict()
         self.processes: list[tuple[datetime, mp.Process, int]] = [
             (datetime.now(), mp.Process(target=_process_init), -1)
             for _ in range(self.max_processes)
         ]
+
         self.watchdog_timer: Timer | None = None
         self._watchdog()
 
     def _watchdog(self) -> None:
-        next_ind = self.get_next()
-        for p_ind, (start_time, proc, queue_ind) in enumerate(self.processes):
+        self.watchdog_cleanup_cntr += 1
+        if self.gc and self.watchdog_cleanup_cntr >= self.watchdog_cleanup_iter:
+            self.watchdog_cleanup_cntr = 0
+            self.remove_entries_by_state()
+
+        for p_ind, (start_time, proc, key) in enumerate(self.processes):
             # Collect results
-            if not proc.is_alive() and queue_ind >= 0:
+            if not proc.is_alive() and key >= 0:
                 if isinstance(self.processes_results.get(p_ind), ProcessSchedulerError):
-                    self.queue_states[queue_ind] = self.STATE_ERROR
-                    logging.error(
-                        f"Scheduler error in process {p_ind}:\n{self.processes_results[p_ind].tb}"
-                    )
+                    self.queue[key].state = self.STATE_ERROR
+                    error = cast(ProcessSchedulerError, self.processes_results[p_ind])
+                    logging.error(f"Scheduler error in process {p_ind}:\n{error.tb}")
                 else:
-                    self.queue_states[queue_ind] = self.STATE_FINISHED
-                    callback = self.queue_callables[queue_ind][1]
-                    callback(
+                    self.queue[key].state = self.STATE_FINISHED
+                    self.queue[key].callback(
                         self.processes_results.get(p_ind),
-                        **self.queue_parameters[queue_ind][1],
+                        **self.queue[key].params_callback,
                     )
                 self.processes[p_ind] = (
                     start_time,
@@ -84,30 +103,32 @@ class ProcessScheduler:
                 )
 
             # Start new process if possible
-            if not proc.is_alive() and next_ind >= 0:
-                self.queue_states[next_ind] = self.STATE_RUNNING
-                new_proc = mp.Process(
-                    target=_process_run,
-                    args=(
-                        p_ind,
-                        self.processes_results,
-                        self.queue_callables[next_ind][0],
-                        self.queue_parameters[next_ind][0],
-                    ),
-                )
-                new_proc.daemon = True
-                new_proc.start()
-                self.processes[p_ind] = (datetime.now(), new_proc, next_ind)
-                next_ind = self.get_next()
+            if not proc.is_alive():
+                next_key = self.get_next()
+                if next_key >= 0:
+                    self.queue[next_key].state = self.STATE_RUNNING
+                    new_proc = mp.Process(
+                        target=_process_run,
+                        args=(
+                            p_ind,
+                            self.processes_results,
+                            self.queue[next_key].process,
+                            self.queue[next_key].params_process,
+                        ),
+                    )
+                    new_proc.daemon = True
+                    new_proc.start()
+                    self.processes[p_ind] = (datetime.now(), new_proc, next_key)
 
             # Timeout check
             if (
-                queue_ind >= 0
+                key >= 0
                 and (datetime.now() - start_time).seconds > self.watchdog_timeout_sec
             ):
-                logging.info(f"Watchdog: Process {queue_ind} takes too long. Killing.")
-                os.kill(proc.pid, 9)
-                self.queue_states[queue_ind] = self.STATE_TIMEOUT
+                logging.info(f"Watchdog: Process {key} takes too long. Killing.")
+                if proc.pid is not None:
+                    os.kill(proc.pid, 9)
+                self.queue[key].state = self.STATE_TIMEOUT
                 self.processes[p_ind] = (
                     start_time,
                     mp.Process(target=_process_init),
@@ -120,10 +141,28 @@ class ProcessScheduler:
         self.watchdog_timer.start()
 
     def get_next(self) -> int:
-        for idx, state in enumerate(self.queue_states):
-            if state == self.STATE_IDLE:
-                return idx
+        """
+        Generator that yields indices of idle processes asynchronously.
+        Usage: for idx in scheduler.get_next(): ...
+        """
+        with self.queue_lock:
+            for k, v in self.queue.items():
+                if v.state == self.STATE_IDLE:
+                    return k
         return -1
+
+    def remove_entries_by_state(self, state: str | None = None) -> None:
+        """
+        Remove all entries in the queues with the given state (default: FINISHED).
+        Blocks add and get_next while running.
+        """
+        with self.queue_lock:
+            if state is None:
+                state = self.STATE_FINISHED
+            keys_to_remove = [k for k, v in self.queue.items() if v.state == state]
+            for k in keys_to_remove:
+                self.queue.pop(k, None)
+                print(f"Cleanup entry {k}")
 
     def add(
         self,
@@ -132,24 +171,22 @@ class ProcessScheduler:
         params_process: dict,
         params_callback: dict,
     ) -> None:
-        self.queue_callables.append((process, callback))
-        self.queue_parameters.append((params_process, params_callback))
-        self.queue_states.append(self.STATE_IDLE)
-
-    def get_inds_matching_callback_params(
-        self, param_name: str, param_value: object
-    ) -> list[int]:
-        inds: list[int] = []
-        for i, (_, cb_params) in enumerate(self.queue_parameters):
-            if param_name in cb_params and cb_params[param_name] == param_value:
-                inds.append(i)
-        return inds
+        with self.queue_lock:
+            self.queue_key_counter += 1
+            self.queue[self.queue_key_counter] = QueueEntry(
+                state=self.STATE_IDLE,
+                process=process,
+                callback=callback,
+                params_process=params_process,
+                params_callback=params_callback,
+            )
 
 
 def my_process(a_param):
-    print("my_process", a_param)
+    print(f"my_process_{a_param}")
     # takes a long time
     time.sleep(10)
+    print(f"my_process_{a_param} done")
     return 1, 2
 
 
@@ -159,17 +196,60 @@ def my_callback(x, name):
     print(name)
 
 
-if __name__ == "__main__":
-    print("Scheduler Demo")
+class MockServer:
+    def my_process(self, a_param):
+        print(f"Method my_process_{a_param}")
+        # takes a long time
+        time.sleep(3)
+        print(f"Method my_process_{a_param} done")
+        return 1, 2, a_param
 
-    ps = ProcessScheduler()
+
+class MockControl:
+    def my_callback(self, x, name):
+        print(f"Method my_callback_{x[2]}")
+        print(x)
+        print(name)
+
+
+def error_process():
+    raise ValueError("Test error")
+
+
+def too_long_process():
+    time.sleep(10)
+    return 0
+
+
+if __name__ == "__main__":
+    print("Scheduler Demo (Methods)")
+    ps = ProcessScheduler(max_processes=2, watchdog_timeout_sec=6)
     ps.add(
-        process=my_process,
-        callback=my_callback,
-        params_process={"a_param": "hello"},
+        process=too_long_process,
+        callback=MockControl().my_callback,
+        params_process={},
         params_callback={"name": "me"},
     )
+    # for i in range(5):
+    #     time.sleep(1.2)
+    #     ps.add(
+    #         process=MockServer().my_process,
+    #         callback=MockControl().my_callback,
+    #         params_process={"a_param": i},
+    #         params_callback={"name": "me"},
+    #     )
+
+    # print("Scheduler Demo (Functions)")
+    # for i in range(5):
+    #     time.sleep(1.2)
+    #     ps.add(
+    #         process=my_process,
+    #         callback=my_callback,
+    #         params_process={"a_param": i + 100},
+    #         params_callback={"name": "me"},
+    #     )
 
     print("Wait loop...")
     while True:
+        print(ps.queue[1])
         time.sleep(5)

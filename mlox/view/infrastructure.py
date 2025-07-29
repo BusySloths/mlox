@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import streamlit as st
 
@@ -6,6 +7,33 @@ from typing import cast, List, Dict, Any
 from mlox.infra import Infrastructure
 from mlox.config import load_all_server_configs
 from mlox.view.utils import plot_config_nicely
+from mlox.scheduler import ProcessScheduler
+
+
+def my_process(a_param):
+    print(f"my_process_{a_param}")
+    # takes a long time
+    time.sleep(10)
+    print(f"my_process_{a_param} done")
+    return 1, 2, a_param
+
+
+def my_callback(x, name):
+    print(f"my_callback_{x[2]}")
+    print(x)
+    print(name)
+
+
+if st.session_state.get("mlox_scheduler", None) is None:
+    st.session_state["mlox_scheduler"] = ProcessScheduler(max_processes=1)
+else:
+    scheduler = cast(ProcessScheduler, st.session_state["mlox_scheduler"])
+    scheduler.add(
+        process=my_process,
+        callback=my_callback,
+        params_process={"a_param": len(scheduler.queue_states) + 1},
+        params_callback={"name": "me"},
+    )
 
 
 def save_infra():
