@@ -1,7 +1,8 @@
 import pytest
 import logging
-from unittest.mock import patch, MagicMock
-from mlox.scheduler import ProcessScheduler, QueueEntry, ProcessSchedulerError
+from unittest.mock import patch
+
+from mlox.scheduler import ProcessScheduler
 
 
 class DummyProcess:
