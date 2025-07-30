@@ -49,9 +49,14 @@ class Bundle:
 class Infrastructure:
     bundles: List[Bundle] = field(default_factory=list, init=False)
     configs: Dict[str, ServiceConfig] = field(default_factory=dict, init=False)
+    focus: List[str] = field(default_factory=list, init=False)
 
     def __post_init__(self):
         self.populate_configs()
+
+    def focus_service(self, service: AbstractService) -> None:
+        if service.uuid not in self.focus:
+            self.focus.append(service.uuid)
 
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
@@ -84,6 +89,9 @@ class Infrastructure:
     def remove_bundle(self, bundle: Bundle) -> None:
         try:
             self.bundles.remove(bundle)
+            for s in bundle.services:
+                if s.uuid in self.focus:
+                    self.focus.remove(s.uuid)
         except ValueError:
             logging.warning(f"Could not find bundle {bundle.server.ip}")
         return None
@@ -106,6 +114,8 @@ class Infrastructure:
             service.spin_down(conn)
             service.teardown(conn)
         bundle.services.remove(service)
+        if service.uuid in self.focus:
+            self.focus.remove(service.uuid)
 
     def add_service(
         self,
@@ -257,11 +267,6 @@ class Infrastructure:
     def from_dict(cls, infra_dict: Dict) -> "Infrastructure":
         infra = dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])
         infra.populate_configs()
-        # load all configs
-        # configs = load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox")
-        # configs.extend(load_all_service_configs(CONFIG_ROOT_DIR, prefix="mlox-server"))
-        # for config in configs:
-        #     infra.configs[config.id] = config
         return infra
 
     def populate_configs(self) -> None:

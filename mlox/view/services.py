@@ -67,7 +67,7 @@ def installed_services():
         config = infra.get_service_config(service)
 
         state = service.state
-        c1, c2, _, c3, c4 = st.columns([10, 15, 30, 30, 15])
+        c1, c2, cf, _, c3, c4 = st.columns([10, 15, 10, 20, 30, 15])
         if c1.button("Setup", disabled=state != "un-initialized"):
             with st.spinner(f"Setting up service {service_name}...", show_time=True):
                 infra.setup_service(service)
@@ -79,6 +79,14 @@ def installed_services():
                 infra.teardown_service(service)
             save_infra()
             st.rerun()
+
+        if cf.button(
+            "Focus", disabled=state != "running" or service.uuid in infra.focus
+        ):
+            infra.focus_service(service)
+            save_infra()
+            st.rerun()
+
         new_service_name = c3.text_input("Unique service name", service_name)
         # Add vertical space to align the button with the text input field.
         # c4.write('<div style="height: 28px;"></div>', unsafe_allow_html=True)

@@ -1,5 +1,4 @@
 import os
-import time
 import logging
 import traceback
 import multiprocessing as mp
@@ -180,76 +179,3 @@ class ProcessScheduler:
                 params_process=params_process,
                 params_callback=params_callback,
             )
-
-
-def my_process(a_param):
-    print(f"my_process_{a_param}")
-    # takes a long time
-    time.sleep(10)
-    print(f"my_process_{a_param} done")
-    return 1, 2
-
-
-def my_callback(x, name):
-    print("my_callback")
-    print(x)
-    print(name)
-
-
-class MockServer:
-    def my_process(self, a_param):
-        print(f"Method my_process_{a_param}")
-        # takes a long time
-        time.sleep(3)
-        print(f"Method my_process_{a_param} done")
-        return 1, 2, a_param
-
-
-class MockControl:
-    def my_callback(self, x, name):
-        print(f"Method my_callback_{x[2]}")
-        print(x)
-        print(name)
-
-
-def error_process():
-    raise ValueError("Test error")
-
-
-def too_long_process():
-    time.sleep(10)
-    return 0
-
-
-if __name__ == "__main__":
-    print("Scheduler Demo (Methods)")
-    ps = ProcessScheduler(max_processes=2, watchdog_timeout_sec=6)
-    ps.add(
-        process=too_long_process,
-        callback=MockControl().my_callback,
-        params_process={},
-        params_callback={"name": "me"},
-    )
-    # for i in range(5):
-    #     time.sleep(1.2)
-    #     ps.add(
-    #         process=MockServer().my_process,
-    #         callback=MockControl().my_callback,
-    #         params_process={"a_param": i},
-    #         params_callback={"name": "me"},
-    #     )
-
-    # print("Scheduler Demo (Functions)")
-    # for i in range(5):
-    #     time.sleep(1.2)
-    #     ps.add(
-    #         process=my_process,
-    #         callback=my_callback,
-    #         params_process={"a_param": i + 100},
-    #         params_callback={"name": "me"},
-    #     )
-
-    print("Wait loop...")
-    while True:
-        print(ps.queue[1])
-        time.sleep(5)

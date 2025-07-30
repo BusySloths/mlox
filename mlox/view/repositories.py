@@ -45,6 +45,7 @@ def manage_repositories():
                 "ip": bundle.server.ip,
                 "server": bundle.name,
                 "name": r.name,
+                "state": r.state,
                 "link": r.link,
                 "path": r.target_path,
                 "added": datetime.fromisoformat(r.created_timestamp).strftime(
@@ -59,10 +60,20 @@ def manage_repositories():
 
     df = pd.DataFrame(
         my_repos,
-        columns=["ip", "server", "name", "link", "path", "added", "modified", "repo"],
+        columns=[
+            "ip",
+            "server",
+            "name",
+            "state",
+            "link",
+            "path",
+            "added",
+            "modified",
+            "repo",
+        ],
     )
     selection = st.dataframe(
-        df[["server", "name", "link", "path", "added", "modified"]],
+        df[["name", "state", "link", "server", "path", "added", "modified"]],
         hide_index=True,
         selection_mode="single-row",
         use_container_width=True,
@@ -77,7 +88,8 @@ def manage_repositories():
         config = infra.get_service_config(repo)
 
         callable_settings_func = config.instantiate_ui("settings")
-        if callable_settings_func and repo.state == "running":
+        # if callable_settings_func and repo.state == "running":
+        if callable_settings_func:
             callable_settings_func(infra, bundle, repo)
 
         # if st.button("Delete"):

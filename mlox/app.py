@@ -40,21 +40,6 @@ def news():
     """)
 
 
-def help():
-    st.markdown("""
-    # Help and Documentation
-    Quick access to the documentation and help resources.
-    """)
-    ms = st.session_state["mlox"]
-    infra = ms.infra
-    for b in infra.bundles:
-        for s in b.services:
-            config = infra.get_service_config(s)
-            st.markdown(
-                f"__{config.name}__ docs: [{config.links['documentation']}]({config.links['documentation']})"
-            )
-
-
 def welcome():
     st.markdown("# BusySloths presents")
     st.image(get_resource_path("mlox_logo_wide.png"))
@@ -76,12 +61,6 @@ def welcome():
     Explore the different sections of the application in the menu on the left.
     If you are not already logged in, you can do so under "Your Account".
     """)
-    st.session_state["sidebar_menu"] = st.checkbox(
-        "Sidebar Menu",
-        value=True,
-        key="my_sidebar_menu",
-        help="Toggle the sidebar menu visibility.",
-    )
 
 
 st.set_page_config(
@@ -109,7 +88,7 @@ pages_logged_out = {
 pages_logged_in = {
     "": [
         st.Page(welcome, title="Home", icon=":material/home:"),
-        st.Page("view/login.py", title="Close Project", icon=":material/logout:"),
+        st.Page("view/login.py", title="Project Settings", icon=":material/settings:"),
     ],
 }
 
@@ -147,6 +126,14 @@ if st.session_state.get("mlox", None):
         )
     )
 
+    if len(infra.filter_by_group("model-server")) > 0:
+        pages_infrastructure.append(
+            st.Page(
+                "view/models.py",
+                title="Models",
+                icon=":material/model_training:",
+            )
+        )
     if len(infra.filter_by_group("monitor")) > 0:
         pages_infrastructure.append(
             st.Page(
@@ -156,10 +143,11 @@ if st.session_state.get("mlox", None):
             )
         )
 
+
 pages_docs = {
     "Help and Documentation": [
         st.Page(
-            help,
+            "view/docs.py",
             title="Documentation",
             icon=":material/docs:",
         ),
@@ -174,9 +162,5 @@ if st.session_state.get("is_logged_in", False):
     pages.update(pages_docs)
 
 
-if st.session_state.get("sidebar_menu", True):
-    pg = st.navigation(pages, position="sidebar")
-else:
-    pg = st.navigation(pages, position="top")
-
+pg = st.navigation(pages, position="sidebar")
 pg.run()

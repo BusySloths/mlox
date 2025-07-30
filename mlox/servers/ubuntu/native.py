@@ -61,7 +61,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             exec_command(conn, "dpkg --configure -a", sudo=True)
             exec_command(conn, "apt-get update", sudo=True)
             exec_command(conn, "apt-get -y upgrade", sudo=True)
-            print("Done updating")
+            logger.info("Done updating")
 
     def install_packages(self):
         with self.get_server_connection() as conn:
@@ -116,7 +116,6 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         if system_info is not None:
             info.update(system_info)
 
-        print(f"VPS information: {info}")
         self._specs = info
         return info
 
@@ -124,8 +123,8 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         mlox_user = self.get_mlox_user_template()
         # 1. add mlox user
         with self.get_server_connection() as conn:
-            print(
-                f"Add user: {mlox_user.name} with password {mlox_user.pw}. Create home dir and add to sudo group."
+            logger.info(
+                f"Add user: {mlox_user.name}. Create home dir and add to sudo group."
             )
             sys_add_user(
                 conn, mlox_user.name, mlox_user.pw, with_home_dir=True, sudoer=True
@@ -147,12 +146,12 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         # 2. generate ssh keys for mlox and remote user
         with self.get_server_connection() as conn:
             # 1. create .ssh dir
-            print(f"Create .ssh dir for user {self.mlox_user.name}.")
+            logger.info(f"Create .ssh dir for user {self.mlox_user.name}.")
             command = "mkdir -p ~/.ssh; chmod 700 ~/.ssh"
             exec_command(conn, command)
 
             # 2. generate rsa keys for remote user
-            print(f"Generate RSA keys for remote user on server {self.ip}.")
+            logger.info(f"Generate RSA keys for remote user on server {self.ip}.")
             command = f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N {remote_user.ssh_passphrase}"
             exec_command(conn, command, sudo=False)
 
@@ -163,12 +162,11 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             remote_user.ssh_key = fs_read_file(
                 conn, f"{self.mlox_user.home}/.ssh/id_rsa", format="string"
             ).strip()
-            print(f"Remote user public key: {remote_user.ssh_pub_key}")
-            print(f"Remote user private key: {remote_user.ssh_key}")
-            print(f"Remote user passphrase: {remote_user.ssh_passphrase}")
 
             # 4. generate rsa keys for mlox user
-            print(f"Generate RSA keys for {self.mlox_user.name} on server {self.ip}.")
+            logger.info(
+                f"Generate RSA keys for {self.mlox_user.name} on server {self.ip}."
+            )
             command = f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N {self.mlox_user.ssh_passphrase}"
             exec_command(conn, command, sudo=False)
 
@@ -189,11 +187,9 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
 
         self.remote_user = remote_user
         if not self.test_connection():
-            print("Uh oh, something went while setting up the SSH connection.")
+            logger.error("Uh oh, something went while setting up the SSH connection.")
         else:
-            print(
-                f"User {self.mlox_user.name} created with password {self.mlox_user.pw}."
-            )
+            logger.info(f"User {self.mlox_user.name} created.")
 
     def disable_password_authentication(self):
         with self.get_server_connection() as conn:
@@ -301,7 +297,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     def git_clone(self, repo_url: str, abs_path: str) -> None:
         with self.get_server_connection() as conn:
             fs_create_dir(conn, abs_path)
-            exec_command(conn, f"cd {abs_path}; git clone {repo_url}", sudo=False)
+            exec_command(conn, f"cd {abs_path}; yes | git clone {repo_url}", sudo=False)
 
     def git_pull(self, abs_path: str) -> None:
         # TODO check if the path exists, rn we assume the path is valid
@@ -323,7 +319,10 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
 
     def get_backend_status(self) -> Dict[str, Any]:
         status_info: Dict[str, Any] = {}
-        status_info["backend.is_running"] = True
+        if self.state != "running":
+            status_info["backend.is_running"] = False
+        else:
+            status_info["backend.is_running"] = True
         return status_info
 
     def start_backend_runtime(self) -> None:

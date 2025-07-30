@@ -6,8 +6,8 @@ from typing import Dict, List
 from mlox.config import ServiceConfig
 
 
-def st_hack_align(container):
-    container.write('<div style="height: 28px;"></div>', unsafe_allow_html=True)
+def st_hack_align(container, px=28):
+    container.write(f'<div style="height: {px}px;"></div>', unsafe_allow_html=True)
 
 
 def _plot_config_nicely_helper(d: Dict, prefix: str = "") -> List[str]:

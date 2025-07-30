@@ -174,6 +174,20 @@ def fs_copy_dir(conn, src_path: str, dst_path: str, sudo: bool = False):
     exec_command(conn, f"cp -r {src_path} {dst_path}", sudo=sudo)
 
 
+def fs_exists_dir(conn, path: str) -> bool:
+    """
+    Checks if a directory exists on the remote server.
+    Returns True if the directory exists, False otherwise.
+    """
+    try:
+        # Use 'test -d' to check for directory existence
+        res = exec_command(conn, f"test -d {path} && echo exists || echo missing")
+        return str(res).strip() == "exists"
+    except Exception as e:
+        logger.warning(f"Error checking if directory exists: {e}")
+        return False
+
+
 def fs_create_symlink(conn, target_path, link_path, sudo=False):
     """
     Creates a symbolic link on the remote server.

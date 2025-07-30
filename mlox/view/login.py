@@ -78,6 +78,31 @@ def new_project():
             st.rerun()
 
 
+def logout():
+    session = st.session_state.get("mlox")
+    infra = session.infra
+    st.markdown(f"# Project: {session.username}")
+    st.markdown("---")
+    st.markdown("## Infrastructure")
+    st.markdown(
+        f"Your infrastrcuture consists of **`{len(infra.bundles)}` servers and `{sum([len(b.services) for b in infra.bundles])}` services.**"
+    )
+
+    st.markdown("## Danger Zone")
+    st.warning(
+        "Closing the project will log you out and remove the current session from memory. "
+    )
+
+    if st.button("Close Project", icon=":material/logout:"):
+        st.session_state.is_logged_in = False
+        st.session_state.pop("mlox")
+        st.rerun()
+    with st.expander("Admin"):
+        if st.button("Reload Configs", icon=":material/refresh:"):
+            infra.populate_configs()
+            st.rerun()
+
+
 if not st.session_state.get("is_logged_in", False):
     tab_login, tab_new = st.tabs(["Load Existing Project", "Create a New Project"])
 
@@ -86,9 +111,5 @@ if not st.session_state.get("is_logged_in", False):
 
     with tab_new:
         new_project()
-
 else:
-    if st.button("Close Project", icon=":material/logout:"):
-        st.session_state.is_logged_in = False
-        st.session_state.pop("mlox")
-        st.rerun()
+    logout()

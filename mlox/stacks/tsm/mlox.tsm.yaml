@@ -11,11 +11,8 @@ description: |
   full-fledged secret management solution is not required, but secure storage of sensitive data 
   is still necessary.
 links:
-  project: https://github.com/nicococo/mlox/
-  news: https://kubeapps.com/
-  security: https://kubeapps.com/
-  documentation: https://kubeapps.com/
-  changelog: https://kubeapps.com/
+  project: https://mlox.org
+  documentation: https://github.com/busysloths/mlox/
 requirements:
   cpus: 1.0
   ram_gb: 1.0

@@ -7,6 +7,7 @@ from mlox.config import load_config
 from mlox.infra import Infrastructure
 from mlox.secret_manager import TinySecretManager, AbstractSecretManager
 from mlox.utils import dataclass_to_dict, save_to_json
+from mlox.scheduler import ProcessScheduler
 
 
 # Configure logging (optional, but recommended)
@@ -23,8 +24,18 @@ class MloxSession:
 
     infra: Infrastructure = field(init=False)
     secrets: AbstractSecretManager = field(init=False)
+    # scheduler: ProcessScheduler = field(init=False)
+
+    temp_kv: dict = field(default_factory=dict, init=False)
 
     def __post_init__(self):
+        # self.scheduler = ProcessScheduler(
+        #     max_processes=1,
+        #     watchdog_wakeup_sec=1,
+        #     watchdog_timeout_sec=1500,
+        #     disable_garbage_collection=False,
+        # )
+        # Add the process scheduler to take care of background jobs.
         self.secrets = TinySecretManager(
             f"/{self.username}.key", ".secrets", self.password
         )

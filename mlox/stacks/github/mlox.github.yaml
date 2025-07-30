@@ -2,15 +2,12 @@ id: github-repo-0.1-beta-docker
 name: Github Repository
 version: 0.1-beta
 maintainer: Your Name
-description_short: Clone and pull Github Repositories on your servers. 
+description_short: Clone and pull Github Repositories on your servers.
 description: |
   Clone and pull Github Repositories on your servers. Make your repositories accessible for installed services.
 links:
-  project: https://github.com/nicococo/mlox/
-  news: https://kubeapps.com/
-  security: https://kubeapps.com/
-  documentation: https://kubeapps.com/
-  changelog: https://kubeapps.com/
+  project: https://mlox.org
+  documentation: https://github.com/busysloths/mlox/
 requirements:
   cpus: 1.0
   ram_gb: 1.0
@@ -34,3 +31,4 @@ build:
     template: ${MLOX_STACKS_PATH}/tsm/mlox.github.yaml
     target_path: /home/${MLOX_USER}/repos
     link: ${GITHUB_LINK}
+    private_repo: ${GITHUB_PRIVATE}

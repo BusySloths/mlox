@@ -2,7 +2,8 @@ id: airflow-3.0.1-docker
 name: Airflow
 version: 3.0.1
 maintainer: Your Name
-description_short: Apache Airflow is a workflow orchestrator used to schedule and monitor 
+description_short:
+  Apache Airflow is a workflow orchestrator used to schedule and monitor
   machine learning pipelines.
 description: |
   Apache Airflow is an open-source workflow orchestrator used to schedule and monitor 
@@ -13,9 +14,9 @@ description: |
 links:
   project: https://airflow.apache.org/
   news: https://airflow.apache.org/announcements/
-  security: https://airflow.apache.org/docs/apache-airflow/stable/security.html
-  documentation: https://airflow.apache.org/docs/apache-airflow/stable/index.html
-  changelog: https://airflow.apache.org/docs/apache-airflow/stable/changelog.html
+  security: https://airflow.apache.org/docs/apache-airflow/3.0.1/security/index.html
+  documentation: https://airflow.apache.org/docs/apache-airflow/3.0.1/index.html
+  changelog: https://airflow.apache.org/docs/apache-airflow/stable/release_notes.html
 requirements:
   cpus: 2.0
   ram_gb: 4.0
@@ -33,7 +34,7 @@ build:
   class_name: mlox.services.airflow.docker.AirflowDockerService
   params:
     name: airflow-3.0.1
-    template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.1.yaml 
+    template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.1.yaml
     target_path: /home/${MLOX_USER}/airflow-3.0.1
     path_output: /home/${MLOX_USER}/airflow-3.0.1/output
     path_dags: /home/${MLOX_USER}/airflow-3.0.1/dags
