@@ -107,9 +107,14 @@ def installed_services():
 
             # st.divider()
             callable_settings_func = config.instantiate_ui("settings")
-            if callable_settings_func and state == "running":
-                callable_settings_func(infra, bundle, service)
-                # save_infra()
+            if callable_settings_func:
+                if state == "running":
+                    callable_settings_func(infra, bundle, service)
+                    # save_infra()
+                elif state == "un-initialized":
+                    st.markdown(
+                        "#### The service is not running. Please set it up first to access the settings."
+                    )
 
 
 def available_services():

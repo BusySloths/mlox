@@ -6,6 +6,11 @@ from typing import Dict, List
 from mlox.config import ServiceConfig
 
 
+def save_infra():
+    with st.spinner("Saving infrastructure..."):
+        st.session_state.mlox.save_infrastructure()
+
+
 def st_hack_align(container, px=28):
     container.write(f'<div style="height: {px}px;"></div>', unsafe_allow_html=True)
 

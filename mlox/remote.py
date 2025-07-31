@@ -65,7 +65,7 @@ def exec_command(conn, cmd, sudo=False, pty=False):
             print(e)
     else:
         res = conn.run(cmd, hide=hide).stdout.strip()
-    print(res)
+    # print(res)
     return res
 
 

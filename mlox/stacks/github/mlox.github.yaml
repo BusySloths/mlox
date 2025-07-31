@@ -29,6 +29,6 @@ build:
   params:
     name: Github:${GITHUB_LINK}@${MLOX_SERVER_IP}
     template: ${MLOX_STACKS_PATH}/tsm/mlox.github.yaml
-    target_path: /home/${MLOX_USER}/repos
+    target_path: /home/${MLOX_USER}/repo_${GITHUB_NAME}
     link: ${GITHUB_LINK}
     private_repo: ${GITHUB_PRIVATE}
