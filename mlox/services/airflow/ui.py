@@ -72,6 +72,7 @@ def tab_repositories(
         if st.button("Add to DAGs"):
             new_repo = GithubRepoService(
                 name=repo.repo_name + " [Airflow DAG]",
+                is_private=repo.is_private,
                 service_config_id=repo_service.service_config_id,
                 template=repo_service.template,
                 target_path=service.path_dags,
@@ -83,7 +84,8 @@ def tab_repositories(
                 with bundle.server.get_server_connection() as conn:
                     new_repo.setup(conn)
                     new_repo.spin_up(conn)
-                    new_repo.create_and_add_repo(bundle)
+                    new_repo.git_clone(conn)
+                    new_repo.git_pull(conn)
                 save_infrastructure()
                 st.rerun()
 

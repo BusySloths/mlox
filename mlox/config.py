@@ -51,20 +51,20 @@ class ServiceConfig:
             )
         return callable_settings_func
 
-    def instantiate_server(self, params: Dict[str, str]) -> AbstractServer | None:
+    def instantiate_server(self, params: Dict[str, Any]) -> AbstractServer | None:
         res = self.instantiate_build(params)
         if res and isinstance(res, AbstractServer):
             return res
         return None
 
-    def instantiate_service(self, params: Dict[str, str]) -> AbstractService | None:
+    def instantiate_service(self, params: Dict[str, Any]) -> AbstractService | None:
         res = self.instantiate_build(params)
         if res and isinstance(res, AbstractService):
             return res
         return None
 
     def instantiate_build(
-        self, params: Dict[str, str]
+        self, params: Dict[str, Any]
     ) -> AbstractServer | AbstractService | None:
         try:
             # Split the string into module path and function name
@@ -85,7 +85,13 @@ class ServiceConfig:
             for key, value in init_params.items():
                 for k in params.keys():
                     if k in value:
-                        init_params[key] = init_params[key].replace(k, params[k])
+                        # Two cases:
+                        # 1. value contains exactly k -> value does not need to be a string type
+                        # 2. value is a string that contains k maybe even multiple times
+                        if len(value) == len(k):
+                            init_params[key] = params[k]
+                        else:
+                            init_params[key] = init_params[key].replace(k, params[k])
 
             # Pass the server instance and combined parameters
             service_instance = service_class(**init_params)

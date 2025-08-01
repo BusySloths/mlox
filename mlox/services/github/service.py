@@ -14,6 +14,8 @@ from mlox.remote import (
     exec_command,
     fs_read_file,
     fs_create_dir,
+    fs_list_files,
+    fs_list_file_tree,
 )
 
 # Configure logging (optional, but recommended)
@@ -27,19 +29,26 @@ logging.basicConfig(
 @dataclass
 class GithubRepoService(AbstractService, Repo):
     link: str
-    private_repo: str
+    is_private: bool = field(default=False, init=True)
+    repo_name: str = field(default="", init=False)
+    user_or_org_name: str = field(default="", init=False)
     deploy_key: str = field(default="", init=False)
     cloned: bool = field(default=False, init=False)
 
     def __post_init__(self):
-        self.repo_name = self.link.split("/")[-1][:-4]
+        splits = self.link.split("/")
+        self.repo_name = splits[-1][:-4]
+        self.user_or_org_name = splits[-2]
         self.state = "un-initialized"
 
+    def get_url(self) -> str:
+        return f"https://github.com/{self.user_or_org_name}/{self.repo_name}"
+
     def setup(self, conn) -> None:
-        self.service_urls = dict()
+        self.service_urls = {"Repository": self.get_url()}
         self.service_ports = dict()
 
-        if bool(self.private_repo):
+        if self.is_private:
             logging.info(f"Generate deploy keys for {self.repo_name}.")
             self._generate_deploy_ssh_key(conn)
             self.state = "running"
@@ -60,14 +69,20 @@ class GithubRepoService(AbstractService, Repo):
         """
         repo_path = self.target_path + "/" + self.repo_name
         exists = False
+        repo_files = list()
+        repo_tree = list()
         try:
             exists = fs_exists_dir(conn, repo_path)
+            repo_files = fs_list_files(conn, repo_path)
+            repo_tree = fs_list_file_tree(conn, repo_path)
         except Exception as e:
             logging.warning(f"Could not check repo directory existence: {e}")
         return {
             "cloned": self.cloned,
             "exists": exists,
-            "private": bool(self.private_repo),
+            "private": self.is_private,
+            "files": repo_files,
+            "tree": repo_tree,
         }
 
     def _generate_deploy_ssh_key(
@@ -146,7 +161,7 @@ class GithubRepoService(AbstractService, Repo):
         return err_code
 
     def git_clone(self, conn) -> None:
-        if bool(self.private_repo):
+        if self.is_private:
             self._repo_with_deploy_key(conn, "clone")
         else:
             self._repo_public(conn, "clone")
@@ -159,26 +174,26 @@ class GithubRepoService(AbstractService, Repo):
             self.state = "unknown"
 
     def git_pull(self, conn) -> None:
-        if bool(self.private_repo):
+        if self.is_private:
             self._repo_with_deploy_key(conn, "pull")
         else:
             self._repo_public(conn, "pull")
         self.modified_timestamp = datetime.now().isoformat()
 
-    def pull_repo(self, bundle: Bundle) -> None:
-        self.modified_timestamp = datetime.now().isoformat()
-        if hasattr(bundle.server, "git_pull"):
-            try:
-                server = cast(AbstractGitServer, bundle.server)
-                server.git_pull(self.target_path + "/" + self.repo_name)
-            except Exception as e:
-                logging.warning(f"Could not clone repo: {e}")
-                self.state = "unknown"
-                return
-            self.state = "running"
-        else:
-            logging.warning("Server is not a git server.")
-            self.state = "unknown"
+    # def pull_repo(self, bundle: Bundle) -> None:
+    #     self.modified_timestamp = datetime.now().isoformat()
+    #     if hasattr(bundle.server, "git_pull"):
+    #         try:
+    #             server = cast(AbstractGitServer, bundle.server)
+    #             server.git_pull(self.target_path + "/" + self.repo_name)
+    #         except Exception as e:
+    #             logging.warning(f"Could not clone repo: {e}")
+    #             self.state = "unknown"
+    #             return
+    #         self.state = "running"
+    #     else:
+    #         logging.warning("Server is not a git server.")
+    #         self.state = "unknown"
 
     # def remove_repo(self, ip: str, repo: Repo) -> None:
     #     bundle = next(

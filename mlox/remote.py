@@ -304,3 +304,30 @@ def fs_list_files(conn, path: str, sudo: bool = False) -> list[str]:
     command = f"ls -A1 {path}"  # -A for almost all, -1 for one per line
     output = exec_command(conn, command, sudo=sudo, pty=False)
     return output.splitlines() if output else []
+
+
+def fs_list_file_tree(conn, path: str, sudo: bool = False) -> list[dict]:
+    """
+    Recursively lists the file tree for a given path on the remote server.
+    Returns a list of dicts for each entry with keys:
+      'name', 'path', 'is_file', 'is_dir', 'size', 'modification_datetime'
+    """
+    command = f"find {path} -printf '%p|%y|%s|%TY-%Tm-%Td %TH:%TM:%TS\n'"
+    output = exec_command(conn, command, sudo=sudo, pty=False)
+    entries = []
+    if output:
+        for line in output.splitlines():
+            try:
+                p, y, s, mdt = line.split("|", 3)
+                entry = {
+                    "name": os.path.basename(p),
+                    "path": p,
+                    "is_file": y == "f",
+                    "is_dir": y == "d",
+                    "size": int(s),
+                    "modification_datetime": mdt.split(".")[0],
+                }
+                entries.append(entry)
+            except Exception as e:
+                logger.warning(f"Error parsing file tree line: {line} ({e})")
+    return entries

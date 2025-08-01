@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 from typing import Dict, Any
@@ -28,23 +29,24 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any] | None:
         params = {
             "${GITHUB_LINK}": link,
             "${GITHUB_NAME}": repo_name,
-            "${GITHUB_PRIVATE}": str(is_private),
+            "${GITHUB_PRIVATE}": is_private,
         }
 
     return params
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: GithubRepoService):
-    st.header(f"Settings for service {service.name}")
-    st.write(f"IP: {bundle.server.ip}")
-    st.write(f'Link: "{service.link}"')
-    st.write(f'Path: "{service.target_path}"')
-    st.write(f'Private: "{service.private_repo}"')
-    st.write(f'created_timestamp: "{service.created_timestamp}"')
-    st.write(f'modified_timestamp: "{service.modified_timestamp}"')
+    # st.header(f"Settings for service {service.name}")
+    # st.write(f'Link: "{service.link}"')
+    # st.write(f'Path: "{service.target_path}"')
+    with bundle.server.get_server_connection() as conn:
+        info = service.check(conn)
 
-    info = service.check(bundle.server.get_server_connection())
-    st.write(info)
+    private_str = "**private**" if service.is_private else "**public**"
+    st.markdown(f""" The {private_str} repository is accessible on `{bundle.name}`. It was created on `{service.created_timestamp}`
+                and last modified on `{service.modified_timestamp}`.
+            **Link:** [{service.get_url()}]({service.get_url()})
+""")
 
     if info.get("cloned", False):
         if st.button("Pull", type="primary"):
@@ -64,6 +66,18 @@ def settings(infra: Infrastructure, bundle: Bundle, service: GithubRepoService):
                     service.git_clone(conn)
             save_infra()
             st.rerun()
+
+    if "tree" in info and len(info["tree"]) > 0:
+        tree_df = pd.DataFrame(info["tree"])
+        tree_df["path"] = tree_df["path"].str.removeprefix(
+            service.target_path + "/" + service.repo_name
+        )
+        tree_df = tree_df[~tree_df["path"].str.startswith("/.git/")]
+
+        show_path = st.text_input("Filter Path", value="/")
+        st.dataframe(
+            tree_df[tree_df["path"].str.startswith(show_path)], hide_index=True
+        )
 
     if service.state == "unknown":
         st.info(

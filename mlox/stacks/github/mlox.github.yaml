@@ -31,4 +31,4 @@ build:
     template: ${MLOX_STACKS_PATH}/tsm/mlox.github.yaml
     target_path: /home/${MLOX_USER}/repo_${GITHUB_NAME}
     link: ${GITHUB_LINK}
-    private_repo: ${GITHUB_PRIVATE}
+    is_private: ${GITHUB_PRIVATE}

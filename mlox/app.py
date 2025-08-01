@@ -88,12 +88,11 @@ pages_logged_out = {
 pages_logged_in = {
     "": [
         st.Page(welcome, title="Home", icon=":material/home:"),
-        st.Page("view/login.py", title="Project Settings", icon=":material/settings:"),
     ],
 }
 
 pages_infrastructure = [
-    st.Page(news, title="Security and News", icon=":material/news:"),
+    st.Page("view/login.py", title="Settings", icon=":material/settings:"),
     st.Page(
         "view/infrastructure.py",
         title="Infrastructure",
@@ -146,6 +145,7 @@ if st.session_state.get("mlox", None):
 
 pages_docs = {
     "Help and Documentation": [
+        st.Page(news, title="Security and News", icon=":material/news:"),
         st.Page(
             "view/docs.py",
             title="Documentation",
