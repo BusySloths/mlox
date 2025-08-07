@@ -10,11 +10,14 @@ from mlox.config import load_all_server_configs
 def create_session(username, password) -> bool:
     ms = None
     try:
+        print(f"Creating session for user: {username}")
         ms = MloxSession(username, password)
+        print(f"Done Creating session for user: {username}")
         if ms.secrets.is_working():
             st.session_state["mlox"] = ms
             st.session_state.is_logged_in = True
     except Exception as e:
+        print(e)
         return False
     return True
 

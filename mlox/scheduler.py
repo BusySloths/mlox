@@ -1,11 +1,13 @@
 import os
 import logging
 import traceback
+import streamlit as st
 import multiprocessing as mp
 from multiprocessing.managers import DictProxy
 
 from datetime import datetime
-from threading import Timer
+from threading import Timer, current_thread
+from threading import enumerate as threading_enumerate
 from typing import Dict, Callable, cast
 
 from dataclasses import dataclass
@@ -73,8 +75,20 @@ class ProcessScheduler:
             for _ in range(self.max_processes)
         ]
 
+        self.parent_pid = mp.current_process().pid
+
+        self.watchdog_name = "mlox-scheduler-watchdog"
+        self.watchdog_name_shutdown_postfix = "-shutdown"
+        for t in threading_enumerate():
+            if t.name == self.watchdog_name:
+                t.name += self.watchdog_name_shutdown_postfix
+
+        self.watchdog_shutdown = False
         self.watchdog_timer: Timer | None = None
         self._watchdog()
+
+    def shutdown(self) -> None:
+        self.watchdog_shutdown = True
 
     def _watchdog(self) -> None:
         self.watchdog_cleanup_cntr += 1
@@ -135,9 +149,37 @@ class ProcessScheduler:
                 )
 
         # Restart watchdog
-        self.watchdog_timer = Timer(self.watchdog_wakeup_sec, self._watchdog)
-        self.watchdog_timer.daemon = True
-        self.watchdog_timer.start()
+        print(f"Watchdog: {current_thread().name}")
+        print([t.name for t in threading_enumerate()])
+        if not self.watchdog_shutdown:
+            if not self.parent_process_exists():
+                print(
+                    f"Watchdog thread name mismatch, skipping restart. {self.parent_pid}"
+                )
+                mp.current_process().close()
+                return
+            if current_thread().name.endswith(self.watchdog_name_shutdown_postfix):
+                print(
+                    f"Watchdog thread {current_thread().name} is shutting down, skipping restart."
+                )
+                mp.current_process().close()
+                return
+            self.watchdog_timer = Timer(self.watchdog_wakeup_sec, self._watchdog)
+            self.watchdog_timer.name = self.watchdog_name
+            self.watchdog_timer.daemon = True
+            self.watchdog_timer.start()
+
+    def parent_process_exists(self) -> bool:
+        """Return True if process with pid exists, False otherwise."""
+        try:
+            if not self.parent_pid:
+                return False
+            # Signal 0 does not kill the process, just checks for existence
+            os.kill(self.parent_pid, 0)
+        except OSError:
+            return False
+        else:
+            return True
 
     def get_next(self) -> int:
         """

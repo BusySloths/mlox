@@ -17,6 +17,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class GlobalProcessScheduler:
+    """
+    Global process scheduler instance for managing background jobs.
+    This is a singleton to ensure only one instance is used across the application.
+    """
+
+    _instance: Optional["GlobalProcessScheduler"] = None
+    scheduler: ProcessScheduler
+
+    def init_scheduler(self):
+        self.scheduler = ProcessScheduler(
+            max_processes=2,
+            watchdog_wakeup_sec=1.0,
+            watchdog_timeout_sec=1500.0,
+            disable_garbage_collection=False,
+        )
+
+    def __new__(cls) -> "GlobalProcessScheduler":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.init_scheduler()
+        return cls._instance
+
+
 @dataclass
 class MloxSession:
     username: str
@@ -24,17 +48,12 @@ class MloxSession:
 
     infra: Infrastructure = field(init=False)
     secrets: AbstractSecretManager = field(init=False)
-    # scheduler: ProcessScheduler = field(init=False)
+    scheduler: ProcessScheduler = field(init=False)
 
     temp_kv: dict = field(default_factory=dict, init=False)
 
     def __post_init__(self):
-        # self.scheduler = ProcessScheduler(
-        #     max_processes=1,
-        #     watchdog_wakeup_sec=1,
-        #     watchdog_timeout_sec=1500,
-        #     disable_garbage_collection=False,
-        # )
+        self.scheduler = GlobalProcessScheduler().scheduler
         # Add the process scheduler to take care of background jobs.
         self.secrets = TinySecretManager(
             f"/{self.username}.key", ".secrets", self.password
