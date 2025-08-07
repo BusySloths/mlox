@@ -106,7 +106,7 @@ def tab_server_management(infra: Infrastructure):
             info = st.session_state[session_key]
         else:
             info = {
-                "connection": False,
+                "connection": None,
                 "host": "Unknown",
                 "cpu_count": 0,
                 "ram_gb": 0,
@@ -116,14 +116,19 @@ def tab_server_management(infra: Infrastructure):
             st.session_state[session_key] = info
         info = st.session_state[session_key]
 
+        if info["connection"] is None:
+            state = "unknown"
+        elif info["connection"] == False:
+            state = "no connection"
+        else:
+            state = bundle.server.state
+
         srv.append(
             {
                 "ip": bundle.server.ip,
                 "name": bundle.name,
                 "backend": bundle.server.backend,
-                "status": [
-                    bundle.server.state if info["connection"] else "no connection"
-                ],
+                "status": [state],
                 "tags": bundle.tags,
                 "discovered": bundle.server.discovered,
                 "services": [s.name for s in bundle.services],
@@ -167,12 +172,21 @@ def tab_server_management(infra: Infrastructure):
             save_infra()
             st.rerun()
 
-        c1, c2, c3, _, c4, c5, c6 = st.columns([10, 15, 10, 15, 15, 10, 25])
-        if c4.button("Refresh Status"):
+        c1, c2, c3, _, c4, c5, c6 = st.columns([10, 15, 10, 17, 18, 15, 25])
+        if c4.button("Refresh Status", icon=":material/refresh:"):
             with st.spinner("Refreshing server status...", show_time=True):
                 check_server_status(bundle.server, session_key)
-            save_infra()
-            st.rerun()
+                save_infra()
+                st.rerun()
+
+        if c5.button("Refresh All", icon=":material/refresh:"):
+            with st.spinner("Refreshing server status...", show_time=True):
+                for s in srv:
+                    b = infra.get_bundle_by_ip(s["ip"])
+                    if b:
+                        check_server_status(b.server, s["session_key"])
+                save_infra()
+                st.rerun()
 
         if c2.button("Delete", type="primary"):
             st.info(f"Backend for server with IP {selected_server} will be deleted.")

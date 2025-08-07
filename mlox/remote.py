@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def open_connection(
-    config: Dict,
+    config: Dict, timeout: int = 10
 ) -> Tuple[Connection, None | tempfile.TemporaryDirectory]:
     connect_kwargs = {"password": config["pw"]}
 
@@ -40,6 +40,7 @@ def open_connection(
         port=config["port"],
         connect_kwargs=connect_kwargs,
         config=Config(overrides={"sudo": {"password": config["pw"]}}),
+        connect_timeout=timeout,
     )
 
     # optionally return tmpdir to keep it alive

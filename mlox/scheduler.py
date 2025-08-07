@@ -1,7 +1,6 @@
 import os
 import logging
 import traceback
-import streamlit as st
 import multiprocessing as mp
 from multiprocessing.managers import DictProxy
 
@@ -149,17 +148,17 @@ class ProcessScheduler:
                 )
 
         # Restart watchdog
-        print(f"Watchdog: {current_thread().name}")
-        print([t.name for t in threading_enumerate()])
+        logging.debug(f"Watchdog: {current_thread().name}")
+        logging.debug([t.name for t in threading_enumerate()])
         if not self.watchdog_shutdown:
             if not self.parent_process_exists():
-                print(
+                logging.warning(
                     f"Watchdog thread name mismatch, skipping restart. {self.parent_pid}"
                 )
                 mp.current_process().close()
                 return
             if current_thread().name.endswith(self.watchdog_name_shutdown_postfix):
-                print(
+                logging.info(
                     f"Watchdog thread {current_thread().name} is shutting down, skipping restart."
                 )
                 mp.current_process().close()
@@ -203,7 +202,7 @@ class ProcessScheduler:
             keys_to_remove = [k for k, v in self.queue.items() if v.state == state]
             for k in keys_to_remove:
                 self.queue.pop(k, None)
-                print(f"Cleanup entry {k}")
+                logging.info(f"Cleanup entry {k}")
 
     def add(
         self,
