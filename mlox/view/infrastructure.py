@@ -150,7 +150,11 @@ def tab_server_management(infra: Infrastructure):
     if len(select_server["selection"].get("rows", [])) == 1:
         selected_server = srv[select_server["selection"]["rows"][0]]["ip"]
         session_key = srv[select_server["selection"]["rows"][0]]["session_key"]
-        bundle = infra.get_bundle_by_ip(selected_server)
+        bundle_tmp = infra.get_bundle_by_ip(selected_server)
+        if not bundle_tmp:
+            st.error(f"Could not find bundle for server {selected_server}.")
+            return
+        bundle = bundle_tmp
 
         # server_management(infra, selected_server)
         c1, c2, c3 = st.columns([30, 55, 15])

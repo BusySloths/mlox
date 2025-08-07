@@ -13,6 +13,8 @@ from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
 def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
     params: Dict = dict()
 
+    c1, c2, c3 = st.columns(3)
+
     mlflows = list()
     for bundle in infra.bundles:
         for s in bundle.services:
@@ -23,7 +25,7 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
         st.warning("No MLFlow server found. You need to add one first.")
         return None
 
-    service = st.selectbox(
+    service = c1.selectbox(
         "MLFlow Registry Server",
         mlflows,
         format_func=lambda x: f"{x.name} @ {x.service_url}",
@@ -43,7 +45,7 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
     for rm in client.search_registered_models():
         models.append(rm.name)
 
-    my_model = st.selectbox("Registered Models", models)
+    my_model = c2.selectbox("Registered Models", models)
 
     names = list()
     filter_string = f"name='{my_model}'"
@@ -51,7 +53,7 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
         # names.append([rm.name, rm.version, rm.current_stage, rm.source, rm.run_id])
         names.append([rm.version, rm.aliases])
 
-    model = st.selectbox(
+    model = c3.selectbox(
         "Model Version", names, format_func=lambda x: f"Version: {x[0]} - {x[1]}"
     )
 

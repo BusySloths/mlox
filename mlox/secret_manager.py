@@ -106,6 +106,8 @@ class TinySecretManager(AbstractSecretManager):
         self, keys_only: bool = False, use_cache: bool = True
     ) -> Dict[str, Any]:
         if use_cache:
+            if keys_only:
+                return {k: None for k in self.cache.keys()}
             return self.cache
         secrets: Dict[str, Any] = {}
         with self.server.get_server_connection() as conn:

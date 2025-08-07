@@ -44,7 +44,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService
     with tab_nb_exm:
         st.markdown(
             "#### Notebooks Examples\n"
-            "You can find some example notebooks in the [mlox repository](https://github.com/nicococo/mlox) "
+            "You can find some example notebooks in the [mlox repository](https://github.com/busysloths/mlox) "
             "Init your scripts as follows to connect to the MLflow server:"
         )
         st.code(
