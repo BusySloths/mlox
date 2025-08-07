@@ -39,6 +39,7 @@ MLOX is still in a very early development phase. If you like to contribute in an
 - Use a centralized secret and configuration manager out-of-the-box
 - Install secured Docker Services (e.g. MLFlow, Airflow, LiteLLM, Ollama, InfluxDB, Redis, etc pp)
 - Install K8s Services (e.g. Dashboard, Helm, Headlamp)
+- Easily import public or private Github repositories
 - Use the following GCP services in your code:
   - BigQuery
   - Secret Manager
