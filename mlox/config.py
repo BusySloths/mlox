@@ -1,3 +1,10 @@
+import logging
+
+# Configure logging for all levels with a visually pleasing format
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
+)
 import importlib
 import logging
 import os

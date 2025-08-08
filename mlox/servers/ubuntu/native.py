@@ -75,8 +75,17 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             exec_command(conn, "apt-get -y install curl", sudo=True)
 
     def get_server_info(self, no_cache: bool = False) -> Dict[str, str | int | float]:
-        if self._specs and not no_cache:
-            return self._specs
+        if not no_cache:
+            if self._specs:
+                return self._specs
+            else:
+                return {
+                    "host": "Unknown",
+                    "cpu_count": 0,
+                    "ram_gb": 0,
+                    "storage_gb": 0,
+                    "pretty_name": "Unknown",
+                }
 
         cmd = """
                 cpu_count=$(lscpu | grep "^CPU(s):" | awk '{print $2}')

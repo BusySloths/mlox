@@ -25,7 +25,7 @@ logging.basicConfig(
 @dataclass
 class TSMService(AbstractService, AbstractSecretManagerService):
     pw: str
-    server_uuid: str | None = field(default=None, init=False)
+    server_uuid: str
     secrets_abs_path: str | None = field(default=None, init=False)
 
     def __post_init__(self):

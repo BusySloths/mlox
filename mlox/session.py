@@ -1,9 +1,9 @@
 import logging
 
-from typing import Optional, Any
+from typing import Optional
 from dataclasses import dataclass, field
 
-from mlox.config import load_config
+from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure
 from mlox.secret_manager import TinySecretManager, AbstractSecretManager
 from mlox.utils import dataclass_to_dict, save_to_json
@@ -12,7 +12,8 @@ from mlox.scheduler import ProcessScheduler
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,8 @@ class MloxSession:
         # STEP 4: Add the service to the infrastructure
         try:
             ms.infra = infra
-            config = load_config("./stacks", "/tsm", "mlox.tsm.yaml")
+            # config = load_config("./stacks", "/tsm", "mlox.tsm.yaml")
+            config = load_config(get_stacks_path(), "/tsm", "mlox.tsm.yaml")
             bundle = ms.infra.add_service(bundle.server.ip, config, {})
             bundle.services[0].pw = password
             bundle.tags.append("mlox.secrets")

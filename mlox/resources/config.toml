@@ -78,11 +78,16 @@ chartCategoricalColors = [
 ]
 # Sequential colors for gradients, based on the primary green
 chartSequentialColors = [
-    "#1B5B34", # Darker Sea Green
+    "#1B5B34", # Very Dark Sea Green
+    "#237243", # Darker Sea Green
     "#2E8B57", # Primary Sea Green
+    "#46A66C", # Greenish-teal
     "#5CB87C", # Lighter Sea Green
-    "#8AD8A2", # Even Lighter Sea Green
-    "#B6E8CA"  # Very Light Sea Green
+    "#74C48D", # Even Lighter Sea Green
+    "#8AD8A2", # Pale Sea Green
+    "#A1E3B7", # Light Mint
+    "#B6E8CA", # Very Light Sea Green
+    "#CFF2D9"  # Whitish Green
 ]
 
 dataframeHeaderBackgroundColor = "#252526" # Matches code background for consistency, dark and subtle

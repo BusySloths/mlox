@@ -45,12 +45,12 @@
 # showSidebarBorder = true
 [theme]
 base = "dark"
-primaryColor = "#2E8B57"
-backgroundColor = "#1E1E1E"
-secondaryBackgroundColor = "#2D2D2D"
-textColor = "#E0E0E0"
-linkColor = "#4682B4"
-codeBackgroundColor = "#252526"
+primaryColor = "#2E8B57"  # Rich Sea Green - a vibrant, earthy green for "Busysloth"
+backgroundColor = "#1E1E1E"  # Very dark grey background
+secondaryBackgroundColor = "#2D2D2D" # Slightly lighter dark grey for sidebar and widgets
+textColor = "#E0E0E0"  # Soft white for primary text
+linkColor = "#4682B4"  # Steel blue for links (maintains distinctness)
+codeBackgroundColor = "#252526" # Dark background for code blocks
 codeFont = "monospace"
 font = "sans-serif"
 headingFont = "sans-serif"
@@ -60,21 +60,23 @@ showWidgetBorder = false
 baseFontSize = 16
 showSidebarBorder = true
 
-baseFontWeight = 400
-codeFontWeight = 400
+# New advanced theming options for "Busysloth" character
+baseFontWeight = 400 # Regular weight for most body text
+codeFontWeight = 400 # Regular weight for code, keeps it clean
 
+# Chart Colors: A professional, characterful palette that works well on dark backgrounds
+# Categorical colors for distinct "Busysloth" highlights
 chartCategoricalColors = [
-    "#2E8B57",
-    "#DAA520",
-    "#4682B4",
-    "#8A2BE2",
-    "#CD5C5C",
-    "#F0E68C",
-    "#5F9EA0",
-    "#708090"
+    "#2E8B57", # Primary Sea Green
+    "#DAA520", # Goldenrod - a warm, earthy pop
+    "#4682B4", # Steel Blue - a cool complement
+    "#8A2BE2", # Blue Violet - a vibrant, energetic contrast
+    "#CD5C5C", # Indian Red - for emphasis or warnings, a warm accent
+    "#F0E68C", # Khaki - a soft, light highlight
+    "#5F9EA0", # Cadet Blue - another muted cool tone
+    "#708090"  # Slate Gray - a neutral fallback
 ]
-
-# Sequential colors for a smooth 10-step gradient based on Sea Green
+# Sequential colors for gradients, based on the primary green
 chartSequentialColors = [
     "#1B5B34", # Very Dark Sea Green
     "#237243", # Darker Sea Green
@@ -88,12 +90,16 @@ chartSequentialColors = [
     "#CFF2D9"  # Whitish Green
 ]
 
-dataframeHeaderBackgroundColor = "#252526"
+dataframeHeaderBackgroundColor = "#252526" # Matches code background for consistency, dark and subtle
 
+# Heading Font Sizes: Maintain a clear hierarchy. Values are in pixels.
 headingFontSizes = { h1 = 36, h2 = 28, h3 = 24, h4 = 20, h5 = 18, h6 = 16 }
-headingFontWeights = { h1 = 600, h2 = 600, h3 = 600, h4 = 500, h5 = 500, h6 = 500 }
 
-linkUnderline = false
+# Heading Font Weights: Make headings distinct but not overly bold.
+headingFontWeights = { h1 = 600, h2 = 600, h3 = 600, h4 = 500, h5 = 500, h6 = 500 } # Semibold to Medium
+
+linkUnderline = false # No underline for a cleaner, modern web aesthetic
+
 
 [client]
 # Change the visibility of items in the toolbar, options menu,
