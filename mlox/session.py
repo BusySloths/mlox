@@ -54,7 +54,7 @@ class MloxSession:
     temp_kv: dict = field(default_factory=dict, init=False)
 
     def __post_init__(self):
-        self.scheduler = GlobalProcessScheduler().scheduler
+        # self.scheduler = GlobalProcessScheduler().scheduler
         # Add the process scheduler to take care of background jobs.
         self.secrets = TinySecretManager(
             f"/{self.username}.key", ".secrets", self.password

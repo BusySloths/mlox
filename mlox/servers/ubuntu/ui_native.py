@@ -52,4 +52,24 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
 
 
 def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuNativeServer):
-    st.markdown(f"#### {bundle.name}")
+    if server.mlox_user:
+        if server.is_debug_access_enabled or "mlox.debug" in bundle.tags:
+            st.markdown("Debug access is enabled.")
+            st.markdown(
+                "You can access the server via SSH using the following command:"
+            )
+            st.markdown(f"```bash\nssh {server.mlox_user.name}@{server.ip}\n```")
+            st.markdown(f"Password: `{server.mlox_user.pw}`\n")
+        # st.write(f"ssh {server.mlox_user.name}@{server.ip}")
+        # st.write(server.mlox_user.pw)
+
+    if server.state != "running":
+        st.markdown("Server is not running. Please start the server first.")
+        return
+
+    tab_server, tab_backend = st.tabs(["Server Info", "Backend Status"])
+    with tab_server:
+        st.write(server.get_server_info())
+
+    with tab_backend:
+        st.write(server.get_backend_status())

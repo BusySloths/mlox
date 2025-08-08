@@ -25,6 +25,11 @@ class UbuntuK3sServer(UbuntuDockerServer):
     controller_uuid: str = field(
         default="", metadata={"help": "Optional UUID of the k3s controller node"}
     )
+    kubeconfig_path: str = field(
+        default="/etc/rancher/k3s/k3s.yaml",
+        metadata={"help": "Path to the kubeconfig file for k3s"},
+        init=False,
+    )
 
     def __post_init__(self):
         super().__post_init__()

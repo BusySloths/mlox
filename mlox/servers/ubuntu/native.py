@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     _specs: Dict[str, str | int | float] | None = field(default=None, init=False)
+    is_debug_access_enabled: bool = field(default=False, init=False)
 
     def __post_init__(self):
         super().__post_init__()
@@ -51,9 +52,11 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         self.state = "no-backend"
 
     def enable_debug_access(self) -> None:
+        self.is_debug_access_enabled = True
         self.enable_password_authentication()
 
     def disable_debug_access(self) -> None:
+        self.is_debug_access_enabled = False
         self.disable_password_authentication()
 
     def update(self):

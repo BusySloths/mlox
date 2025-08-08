@@ -96,8 +96,11 @@ def tab_server_management(infra: Infrastructure):
         if session_key in st.session_state:
             info = st.session_state[session_key]
         else:
-            info = bundle.server.get_server_info(no_cache=False)
-            info["connection"] = bundle.server.test_connection()
+            with st.spinner(
+                f"Loading server info for {bundle.server.ip}...", show_time=True
+            ):
+                info = bundle.server.get_server_info(no_cache=False)
+                info["connection"] = bundle.server.test_connection()
             st.session_state[session_key] = info
         info = st.session_state[session_key]
 
@@ -222,16 +225,6 @@ def tab_server_management(infra: Infrastructure):
 
             #     with bundle.server.get_server_connection() as conn:
             #         emulate_basic_terminal(conn)
-
-        with st.expander("More info"):
-            #     from mlox.remote import exec_command
-
-            #     with bundle.server.get_server_connection() as conn:
-            #         st.write(exec_command(conn, "ufw status", sudo=True))
-
-            st.write(bundle.server.get_backend_status())
-        #     st.write(bundle.server.get_kubernetes_status())
-        #     st.write(bundle)
 
 
 def tab_server_templates(infra: Infrastructure):

@@ -219,9 +219,10 @@ def available_services():
                 disabled=len(supported_backends) <= 1,
             )
 
+            bundle_candidates = infra.list_bundles_with_backend(backend=select_backend)
             bundle = c3.selectbox(
                 "Server",
-                infra.list_bundles_with_backend(backend=select_backend),
+                [b for b in bundle_candidates if b.server.state == "running"],
                 format_func=lambda x: f"{x.name}",
             )
 
@@ -231,7 +232,9 @@ def available_services():
                 params = callable_setup_func(infra, bundle)
 
             # if st.form_submit_button("Add Service", type="primary"):
-            if st.button("Add Service", type="primary", disabled=params is None):
+            if st.button(
+                "Add Service", type="primary", disabled=params is None or not bundle
+            ):
                 st.info(
                     f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
                 )
