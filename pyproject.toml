@@ -97,7 +97,7 @@ dev = [
 [project.scripts]
 mlox-start-multipass = "mlox.cli:start_multipass"
 mlox-ui = "mlox.cli:start_ui"
-mlox = "mlox.cli:main"
+mlox = "mlox.cli:app"
 
 
 [tool.setuptools-git-versioning]
