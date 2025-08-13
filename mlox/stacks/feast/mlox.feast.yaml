@@ -1,0 +1,39 @@
+id: feast-latest
+name: Feast Feature Store
+version: latest
+maintainer: Your Name
+description_short: Feast is an open-source feature store for managing and serving machine learning features.
+description: |
+  Feast is an open-source feature store designed to help data scientists and engineers manage 
+  and serve machine learning features. It provides a centralized repository for features, 
+  enabling teams to share and reuse them across different models and projects. Feast supports 
+  both online and offline feature retrieval, making it suitable for real-time inference as well 
+  as batch processing. It integrates seamlessly with various data sources and can be deployed 
+  on-premises or in the cloud.
+links:
+  project: https://feast.dev/
+  news: https://feast.dev/blog/
+  documentation: https://docs.feast.dev/
+  repository: https://github.com/feast-dev/feast
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
+groups:
+  service:
+  feature-store:
+  backend:
+    docker:
+ports:
+  web_ui: 1099
+ui:
+  settings: mlox.services.feast.ui.settings
+build:
+  class_name: mlox.services.feast.docker.FeastDockerService
+  params:
+    name: feast-latest
+    template: ${MLOX_STACKS_PATH}/feast/docker-compose-feast.yaml
+    target_path: /home/${MLOX_USER}/feast-latest
+    port: ${MLOX_AUTO_PORT_WEB_UI}
+    # ui_user: ${MLOX_AUTO_USER}
+    # ui_pw: ${MLOX_AUTO_PW}
