@@ -13,8 +13,8 @@ MLOX gives you a calm, streamlined way to deploy, monitor, and maintain producti
 It’s for engineers who prefer thoughtful systems over chaos. Powered by sloths. Backed by open source.
 
 <p align="center">
-<a href="https://qlty.sh/gh/BusySloths/projects/mlox"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" /></a>
-<a href="https://qlty.sh/gh/BusySloths/projects/mlox"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" /></a>
+<a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" /></a>
+<a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" /></a>
 <a href="https://github.com/BusySloths/mlox/issues" target="_blank">
 <img alt="GitHub Issues or Pull Requests" src="https://img.shields.io/github/issues/busysloths/mlox"></a>
 <a href="https://github.com/BusySloths/mlox/discussions" target="_blank">
