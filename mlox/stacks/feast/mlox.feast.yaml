@@ -27,6 +27,7 @@ groups:
 ports:
   web_ui: 1099
 ui:
+  setup: mlox.services.feast.ui.setup
   settings: mlox.services.feast.ui.settings
 build:
   class_name: mlox.services.feast.docker.FeastDockerService
