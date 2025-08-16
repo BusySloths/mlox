@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 
 from pathlib import Path
@@ -7,10 +8,54 @@ from typing import Dict, Any
 from feast import Field, RequestSource
 from feast.on_demand_feature_view import on_demand_feature_view
 from feast.types import Float64, Int64
-from feast import FeatureStore
+from feast import FeatureStore, RepoConfig
+
+from mlox.session import MloxSession
 
 
-store = FeatureStore(fs_yaml_file=Path("./feature_store.yaml"))
+# --- DATABASE CONNECTION PARAMETERS ---
+# These parameters can be set directly in this script or, for better security,
+# as environment variables on your system. The script will use environment
+# variables if they are set, otherwise it will fall back to the values here.
+#
+# Example of setting an environment variable in bash:
+# export DB_HOST="my.database.com"
+
+password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
+# Make sure your environment variable is set!
+if not password:
+    print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
+    exit(1)
+session = MloxSession("mlox", password)
+infra = session.infra
+
+pdb = infra.get_service("feast-latest")
+if not pdb:
+    print("Could not load service")
+    exit(1)
+
+bundle = infra.get_bundle_by_service(pdb)
+if not bundle:
+    print("Could not load server")
+    exit(1)
+
+rc = RepoConfig(
+    project="mlox",
+    registry=pdb.service_url,
+    online_store=pdb.service_url,
+    offline_store=pdb.service_url,
+    provider="local",
+    feature_repo=Path("./feature_repo"),
+    feature_store_yaml=Path("./feature_store.yaml"),
+    credentials={
+        "password": pdb.pw,
+        "user": pdb.user,
+        "host": bundle.server.ip,
+        "port": pdb.port,
+    },
+)
+
+store = FeatureStore(fs_yaml_file=Path("./feature_store.yaml"), config=rc)
 for e in store.list_all_feature_views():
     print(e.name)
 

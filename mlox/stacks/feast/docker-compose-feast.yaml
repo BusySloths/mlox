@@ -69,7 +69,7 @@ services:
       context: .  # Use the Dockerfile in the current directory
     container_name: "feast_registry"  
     ports:
-      - "6564:6564"  # gRPC endpoint for Feast
+      - ${FEAST_REGISTRY_PORT}:6564  # gRPC endpoint for Feast
     volumes:
       - ./${FEAST_PROJECT_NAME:-my_project}:/app/${FEAST_PROJECT_NAME:-my_project}
     depends_on:
@@ -88,7 +88,7 @@ services:
       context: .  # Use the Dockerfile in the current directory
     container_name: "feast_offline"  
     ports:
-      - "6565:6565"  # gRPC endpoint for Feast
+      - ${FEAST_OFFLINE_PORT}:6565  # gRPC endpoint for Feast
     volumes:
       # - ./feature_repo:/app/feature_repo
       # - ./feature_store.yaml:/app/feature_repo/feature_store.yaml
@@ -115,7 +115,7 @@ services:
       context: .  # Use the Dockerfile in the current directory
     container_name: "feast_online"  
     ports:
-      - "6566:6566"  # gRPC endpoint for Feast
+      - ${FEAST_ONLINE_PORT}:6566  # gRPC endpoint for Feast
       # - "8080:8080"  # HTTP endpoint for Feast
     volumes:
       # - ./feature_repo:/app/feature_repo

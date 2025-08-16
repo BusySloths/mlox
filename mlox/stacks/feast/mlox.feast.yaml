@@ -25,7 +25,9 @@ groups:
   backend:
     docker:
 ports:
-  web_ui: 1099
+  registry: 6564
+  online_store: 6566
+  offline_store: 6565
 ui:
   setup: mlox.services.feast.ui.setup
   settings: mlox.services.feast.ui.settings
@@ -35,6 +37,9 @@ build:
     name: feast-latest
     template: ${MLOX_STACKS_PATH}/feast/docker-compose-feast.yaml
     target_path: /home/${MLOX_USER}/feast-latest
-    port: ${MLOX_AUTO_PORT_WEB_UI}
+    config: ${MLOX_STACKS_PATH}/feast/feature_store.yaml
+    registry_port: ${MLOX_AUTO_PORT_REGISTRY}
+    online_port: ${MLOX_AUTO_PORT_ONLINE_STORE}
+    offline_port: ${MLOX_AUTO_PORT_OFFLINE_STORE}
     # ui_user: ${MLOX_AUTO_USER}
     # ui_pw: ${MLOX_AUTO_PW}

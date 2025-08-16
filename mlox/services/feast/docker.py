@@ -33,9 +33,11 @@ def _generate_htpasswd_sha1(user: str, password: str) -> str:
 @dataclass
 class FeastDockerService(AbstractService):
     config: str
-    user: str
-    pw: str
-    port: str | int
+    # user: str
+    # pw: str
+    registry_port: str | int
+    online_port: str | int
+    offline_port: str | int
     service_url: str = field(init=False, default="")
 
     def setup(self, conn) -> None:
@@ -49,13 +51,19 @@ class FeastDockerService(AbstractService):
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
-        fs_append_line(conn, env_path, f"MY_FEAST_PORT={self.port}")
-        fs_append_line(conn, env_path, f"MY_FEAST_USER={self.user}")
-        fs_append_line(conn, env_path, f"MY_FEAST_PW={self.pw}")
+        fs_append_line(conn, env_path, f"FEAST_REGISTRY_PORT={self.registry_port}")
+        fs_append_line(conn, env_path, f"FEAST_ONLINE_PORT={self.online_port}")
+        fs_append_line(conn, env_path, f"FEAST_OFFLINE_PORT={self.offline_port}")
+        # fs_append_line(conn, env_path, f"MY_FEAST_USER={self.user}")
+        # fs_append_line(conn, env_path, f"MY_FEAST_PW={self.pw}")
 
-        self.service_ports["Feast"] = int(self.port)
-        self.service_urls["Feast"] = f"https://{conn.host}:{self.port}"
-        self.service_url = f"tcp://{conn.host}:{self.port}"  # Default Feast port
+        self.service_ports["registry"] = int(self.registry_port)
+        self.service_ports["online_store"] = int(self.online_port)
+        self.service_ports["offline_store"] = int(self.offline_port)
+        self.service_urls["Feast"] = f"https://{conn.host}:{self.registry_port}"
+        self.service_url = (
+            f"tcp://{conn.host}:{self.registry_port}"  # Default Feast port
+        )
 
     def teardown(self, conn):
         docker_down(

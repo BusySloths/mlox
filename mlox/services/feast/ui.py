@@ -18,8 +18,10 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
 def settings(infra: Infrastructure, bundle: Bundle, service: FeastDockerService):
     st.write(f"host: {service.service_urls}")
 
-    st.write(f"port: {service.port}")
-    st.write(f"user: {service.user}, password: {service.pw}")
+    st.write(f"registry port: {service.registry_port}")
+    st.write(f"online port: {service.online_port}")
+    st.write(f"offline port: {service.offline_port}")
+    # st.write(f"user: {service.user}, password: {service.pw}")
 
     # save_to_secret_store(
     #     infra,
