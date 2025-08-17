@@ -39,23 +39,29 @@ if not bundle:
     print("Could not load server")
     exit(1)
 
-rc = RepoConfig(
-    project="mlox",
-    registry=pdb.service_url,
-    online_store=pdb.service_url,
-    offline_store=pdb.service_url,
-    provider="local",
-    feature_repo=Path("./feature_repo"),
-    feature_store_yaml=Path("./feature_store.yaml"),
-    credentials={
-        "password": pdb.pw,
-        "user": pdb.user,
-        "host": bundle.server.ip,
-        "port": pdb.port,
-    },
-)
+# rc = RepoConfig(
+#     project="mlox",
+#     registry=pdb.service_url,
+#     online_store=pdb.service_url,
+#     offline_store=pdb.service_url,
+#     provider="local",
+#     feature_repo=Path("./feature_repo"),
+#     feature_store_yaml=Path("./feature_store.yaml"),
+#     credentials={
+#         "password": pdb.pw,
+#         "user": pdb.user,
+#         "host": bundle.server.ip,
+#         "port": pdb.port,
+#     },
+# )
 
-store = FeatureStore(fs_yaml_file=Path("./feature_store.yaml"), config=rc)
+
+# Write the certificate to disk
+with open("feast_cert.pem", "w") as cert_file:
+    cert_file.write(pdb.certificate)
+
+# store = FeatureStore(fs_yaml_file=Path("./feature_store.yaml"), config=rc)
+store = FeatureStore(fs_yaml_file=Path("./test_feature_store.yaml"))
 for e in store.list_all_feature_views():
     print(e.name)
 
@@ -95,7 +101,7 @@ entity_rows = [
 # print(store.list_on_demand_feature_views())
 
 feature_service = store.get_feature_service("driver_activity_v3")
-# print(feature_service)
+print(feature_service)
 online_response = store.get_online_features(
     entity_rows=entity_rows,
     # features=feature_service,

@@ -60,8 +60,9 @@ services:
   #   command: >
   #     bash -c "
   #     cd /app/${FEAST_PROJECT_NAME:-my_project}/feature_repo/;
-  #     feast ui -p 6563 --root_path /app/${FEAST_PROJECT_NAME:-my_project}/feature_repo/"
+  #     feast ui -p 6563"
   #   networks:
+  #     # feast ui -p 6563 --root_path /app/${FEAST_PROJECT_NAME:-my_project}/feature_repo/"
   #     - feast_network
 
   feast-registry:
@@ -79,7 +80,7 @@ services:
     command: >
       bash -c "
       cd /app/${FEAST_PROJECT_NAME:-my_project}/;
-      feast -c feature_repo serve_registry -p 6564"
+      feast -c feature_repo serve_registry -p 6564 "
     networks:
       - feast_network
 

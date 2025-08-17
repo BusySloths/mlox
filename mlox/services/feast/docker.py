@@ -33,6 +33,7 @@ def _generate_htpasswd_sha1(user: str, password: str) -> str:
 @dataclass
 class FeastDockerService(AbstractService):
     config: str
+    dockerfile: str
     # user: str
     # pw: str
     registry_port: str | int
@@ -44,6 +45,7 @@ class FeastDockerService(AbstractService):
         fs_create_dir(conn, self.target_path)
         fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         fs_copy(conn, self.config, f"{self.target_path}/feature_store.yaml")
+        fs_copy(conn, self.dockerfile, f"{self.target_path}/Dockerfile")
         tls_setup(conn, conn.host, self.target_path)
         self.certificate = fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
@@ -54,6 +56,7 @@ class FeastDockerService(AbstractService):
         fs_append_line(conn, env_path, f"FEAST_REGISTRY_PORT={self.registry_port}")
         fs_append_line(conn, env_path, f"FEAST_ONLINE_PORT={self.online_port}")
         fs_append_line(conn, env_path, f"FEAST_OFFLINE_PORT={self.offline_port}")
+        fs_append_line(conn, env_path, f"FEAST_PROJECT_NAME=my_project")
         # fs_append_line(conn, env_path, f"MY_FEAST_USER={self.user}")
         # fs_append_line(conn, env_path, f"MY_FEAST_PW={self.pw}")
 

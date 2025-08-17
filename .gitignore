@@ -142,6 +142,7 @@ dmypy.json
 .metrics
 
 feature_store.yaml
+test_feature_store.yaml
 
 # certificates/keys
 *.pem
