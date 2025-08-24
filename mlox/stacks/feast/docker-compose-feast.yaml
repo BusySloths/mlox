@@ -1,13 +1,13 @@
 version: '3.8'
 
 services:
-  redis:
+  feast-redis:
     image: redis:7.2-bookworm
     container_name: "feast_redis"
     # ports:
     #   - "6379:6379"
     volumes:
-      - redis_data:/data
+      - feast_redis_data:/data
     networks:
       - feast_network
 
@@ -150,4 +150,4 @@ networks:
   feast_network:
 
 volumes:
-  redis_data:
+  feast_redis_data:

@@ -98,26 +98,26 @@ entity_rows = [
     }
 ]
 
-# print(store.list_on_demand_feature_views())
+print(store.list_on_demand_feature_views())
 
 feature_service = store.get_feature_service("driver_activity_v3")
 print(feature_service)
-online_response = store.get_online_features(
-    entity_rows=entity_rows,
-    # features=feature_service,
-    features=[
-        "driver_hourly_stats:conv_rate",
-        "driver_hourly_stats:acc_rate",
-    ],
-).to_df()
-print(online_response)
+# online_response = store.get_online_features(
+#     entity_rows=entity_rows,
+#     # features=feature_service,
+#     features=[
+#         "driver_hourly_stats:conv_rate",
+#         "driver_hourly_stats:acc_rate",
+#     ],
+# ).to_df()
+# print(online_response)
 
 training_df = store.get_historical_features(entity_df, features).to_df()
 
 store.materialize_incremental(end_date=datetime.now())  # results in NotImplementedError
-store.materialize(
-    start_date=datetime.fromisoformat("2019-01-01"), end_date=datetime.now()
-)  # results in NotImplementedError
+# store.materialize(
+#     start_date=datetime.fromisoformat("2019-01-01"), end_date=datetime.now()
+# )  # results in NotImplementedError
 
 print("----- Feature schema -----\n")
 training_df.info()
