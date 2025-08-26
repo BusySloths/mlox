@@ -14,7 +14,9 @@ from mlox.services.gcp.secret_manager import dict_to_service_account_credentials
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -130,8 +132,7 @@ if __name__ == "__main__":
 
     DATALAKE_BUCKET_NAME: str = "magical-place"
     storage = GCPStorage(keyfile_dict=secret)
-
-    print(
+    logger.info(
         storage.write_dataframe_as_csv(
             "test1.csv",
             pd.DataFrame(["A", "b", "c"], columns=["c1"]),
@@ -139,9 +140,9 @@ if __name__ == "__main__":
         )
     )
     df = storage.read_csv_as_dataframe("test1.csv", DATALAKE_BUCKET_NAME)
-    print(df)
+    logger.info(df)
     fnames = storage.list_objects("", DATALAKE_BUCKET_NAME)
-    print(fnames)
+    logger.info(fnames)
     # rename_file('tests/test1.csv', 'tests/new_test1.csv')
     # fnames = list_objects('tests/')
     # print(fnames)

@@ -1,4 +1,5 @@
 import os
+import logging
 import mlflow  # type: ignore
 import pandas as pd
 import streamlit as st
@@ -8,6 +9,13 @@ from typing import Dict, cast
 from mlox.infra import Infrastructure, Bundle
 from mlox.services.mlflow.docker import MLFlowDockerService
 from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
@@ -83,7 +91,7 @@ def settings(
     st.write(f"Tracking Password: {service.tracking_pw}")
     st.write(f"User: {service.user}")
     st.write(f"Password: {service.pw}")
-    print(f"Password: {service.pw}")
+    logger.info(f"Password: {service.pw}")
     foo = service.hashed_pw.replace("$", "\\$")
     st.write(f"Hashed Password: '{foo}'")
 

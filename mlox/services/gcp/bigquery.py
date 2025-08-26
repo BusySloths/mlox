@@ -11,6 +11,7 @@ Author: nicococo
 """
 
 import sys
+import logging
 import pandas as pd
 
 from google.cloud import bigquery
@@ -23,6 +24,13 @@ from mlox.services.gcp.secret_manager import (
     dict_to_service_account_credentials,
     load_secret_from_gcp,
 )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -107,16 +115,16 @@ class BigQuery:
 if __name__ == "__main__":
     secret = load_secret_from_gcp("./keyfile.json", "FLOW_BIGQUERY_CREDENTIALS")
     if not secret:
-        print("Could not load secret.")
+        logger.error("Could not load secret.")
         sys.exit(1)
     if not isinstance(secret, dict):
-        print("Could not load secret as keyfile dictionary.")
+        logger.error("Could not load secret as keyfile dictionary.")
         sys.exit(1)
     bq = BigQuery(keyfile_dict=secret)
     res = bq.list_datasets()
-    print(res)
+    logger.info(res)
     res = bq.list_tables("sheetcloud")
-    print(res)
+    logger.info(res)
 
     # df = pd.DataFrame(["A", "b", "c"], columns=["c1"])
     # _bq_df_table_interaction('dev', 'tbl_my_test_1', df)
