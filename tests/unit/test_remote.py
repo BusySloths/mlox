@@ -1,6 +1,6 @@
 import pytest
 
-from fabric import Connection, Result
+from fabric import Connection, Result  # type: ignore[import]
 from unittest.mock import MagicMock, call, ANY
 from io import BytesIO
 

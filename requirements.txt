@@ -1,51 +1,58 @@
-fabric
-pyyaml
-typer # cli
+# mlox project requirements
+# Sections: base, web/data, services, observability, cloud, testing & linting
+# Notes:
+# - Use >= to avoid overly strict pinning here; CI/packaging can pin exact versions if desired.
+# - Some package names differ from import names (e.g. pyyaml -> yaml, grpcio -> grpc).
 
+######################## BASE / CORE UTILITIES
+fabric>=3.0    # remote command execution workflow (uses paramiko under the hood)
+paramiko>=3.0  # explicit SSH dependency used by Fabric
+pyyaml>=6.0    # yaml parsing (import name: yaml)
+typer>=0.9     # CLI helpers
+dacite>=1.8    # dataclass mapping (loading/saving nested dataclasses)
+grpcio>=1.59   # gRPC runtime (import name: grpc)
 
-streamlit
-# streamlit-navigation-bar
-pandas
-numpy
-psutil  # used for system metrics logging in mlflow
+cryptography>=40.0
+pycryptodome>=3.18
+bcrypt>=4.0
+passlib>=1.7
+python-dotenv>=1.0   # load .env credentials in local development
+requests>=2.31
 
-cryptography
-bcrypt
-passlib
+######################## WEB UI AND DATA
+streamlit>=1.26
+streamlit-vis-timeline>=0.0.6
+pandas>=2.2
+numpy>=1.26
+psutil>=5.9
 
-mlflow
-# mlflow[extras]
-mlserver
-# pyenv  VIA BREW/BASH 
-pycryptodome
-# jose # JWT
+######################## SERVICES
+mlflow>=2.5
+mlserver>=1.7
+psycopg2-binary>=2.9  # Postgres client
+redis>=4.6
 
-# for postgres service
-# psycopg2-binary  # use conda for extra libs
+# Untested in-the-works libs
+# pymilvus>=2.2
+# feast[redis]>=0.27
 
-# GCP RELATED
-google-cloud-secret-manager
-google-cloud-bigquery
-google-cloud-storage
-gspread
-pandas-gbq
+######################## CLOUD / GCP
+google-cloud-secret-manager>=2.18
+google-cloud-bigquery>=3.10
+google-cloud-storage>=2.10
+gspread>=5.8
+pandas-gbq>=0.20
 
-redis
+######################## OBSERVABILITY (OpenTelemetry)
+opentelemetry-api>=1.17
+opentelemetry-sdk>=1.17
+opentelemetry-exporter-otlp>=1.17
+# add instrumentation packages as needed, e.g. opentelemetry-instrumentation-logging
 
+######################## TESTING & LINTING / DEV
+pytest>=8.3
+flake8>=6.1
 
-# sqlmodel
-opentelemetry-api
-opentelemetry-sdk
-opentelemetry-exporter-otlp
-
-streamlit-vis-timeline
-
-grpcio
-# pymilvus
-
-# langchain
-# langchain-openai
-
-# feast[redis]
-
-dacite  # loading and saving of nested dataclasses
+# Development helpers (uncomment if used in CI or local development)
+# black>=24.3
+# isort>=5.12
