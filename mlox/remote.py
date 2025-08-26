@@ -127,7 +127,7 @@ def sys_add_user(
 def docker_list_container(conn):
     res = exec_command(conn, "docker container ls", sudo=True)
     dl = str(res).split("\n")
-    dlist = [re.sub("\ {2,}", "    ", dl[i]).split("   ") for i in range(len(dl))]
+    dlist = [re.sub(r"\ {2,}", "    ", dl[i]).split("   ") for i in range(len(dl))]
     return dlist
 
 
