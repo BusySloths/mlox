@@ -9,6 +9,11 @@ from io import BytesIO
 from typing import Dict, Tuple
 from fabric import Connection, Config  # type: ignore
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -56,17 +61,16 @@ def close_connection(conn, tmp_dir=None):
 
 
 def exec_command(conn, cmd, sudo=False, pty=False):
-    print(f"Execute CMD: {cmd}")
+    logger.debug(f"Executing command: {cmd}")
     res = None
     hide = "stderr" if sudo else True
     if sudo:
         try:
             res = conn.sudo(cmd, hide=hide, pty=pty).stdout.strip()
         except Exception as e:
-            print(e)
+            logger.error(f"Command failed: {e}")
     else:
         res = conn.run(cmd, hide=hide).stdout.strip()
-    # print(res)
     return res
 
 
@@ -123,7 +127,7 @@ def sys_add_user(
 def docker_list_container(conn):
     res = exec_command(conn, "docker container ls", sudo=True)
     dl = str(res).split("\n")
-    dlist = [re.sub("\ {2,}", "    ", dl[i]).split("   ") for i in range(len(dl))]
+    dlist = [re.sub(r"\ {2,}", "    ", dl[i]).split("   ") for i in range(len(dl))]
     return dlist
 
 
