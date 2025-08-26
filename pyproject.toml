@@ -31,61 +31,92 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dynamic = ["version"]
+
+# Core/runtime dependencies (minimal, pinned with >= to allow compatibility)
 dependencies = [
-    "dacite",
-    "pyyaml",
-    "fabric",
-    "cryptography",
-    "bcrypt",
-    "passlib",
-    # cli
-    "typer",
+    "dacite>=1.8",
+    "pyyaml>=6.0",
+    "fabric>=3.0",
+    "paramiko>=3.0",            # SSH support used by Fabric
+    "cryptography>=40.0",
+    "bcrypt>=4.0",
+    "passlib>=1.7",
+    "typer>=0.9",               # CLI helpers
+    "grpcio>=1.59",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
+# GCP related extras
 gcp = [
-"pandas",
-"gspread",
-"pandas-gbq",
-"google-cloud-storage",
-"google-cloud-bigquery",
-"google-cloud-secret-manager",
+    "pandas>=2.2",
+    "gspread>=5.8",
+    "pandas-gbq>=0.20",
+    "google-cloud-storage>=2.10",
+    "google-cloud-bigquery>=3.10",
+    "google-cloud-secret-manager>=2.18",
 ]
+
 all = [
-    # ui
-    "streamlit",
-    "streamlit-vis-timeline",
-    "backports.tarfile",
-    "pandas",
-    "numpy",
-    # gcp
-    "gspread",
-    "pandas-gbq",
-    "google-cloud-storage",
-    "google-cloud-bigquery",
-    "google-cloud-secret-manager",
-    # ml
-    "mlflow",
-    "mlserver",
-    "psutil",
-    # telemetry
-    "opentelemetry-api",
-    "opentelemetry-sdk",
-    "opentelemetry-exporter-otlp",
-    # connectors
-    "redis",
-    "influxdb",
-    "grpcio",
+    # UI and data
+    "streamlit>=1.26",
+    "streamlit-vis-timeline>=0.0.6",
+    "backports.tarfile>=1.0",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    # GCP
+    "gspread>=5.8",
+    "pandas-gbq>=0.20",
+    "google-cloud-storage>=2.10",
+    "google-cloud-bigquery>=3.10",
+    "google-cloud-secret-manager>=2.18",
+    # ML
+    "mlflow>=2.5",
+    "mlserver>=1.7",
+    "psutil>=5.9",
+    # Telemetry
+    "opentelemetry-api>=1.17",
+    "opentelemetry-sdk>=1.17",
+    "opentelemetry-exporter-otlp>=1.17",
+    # Connectors
+    "redis>=4.6",
+    "influxdb>=5.3",
+    "grpcio>=1.59",
+    # Database
+    "psycopg2-binary>=2.9",
 ]
+
 dev = [
-    # All packages from the 'all' extra
-    "streamlit", "streamlit-vis-timeline", "backports.tarfile", "pandas", "numpy",
-    "gspread", "pandas-gbq", "google-cloud-storage", "google-cloud-bigquery", "google-cloud-secret-manager",
-    "mlflow", "mlserver", "psutil",
-    "opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp",
-    "redis", "influxdb", "grpcio",
-    # Development-specific tools
-    "pytest", "pytest-cov", "pytest-mock", "flake8", "pdoc", "build", "twine", "psycopg2-binary",
+    # developer extras (includes 'all')
+    "streamlit>=1.26",
+    "streamlit-vis-timeline>=0.0.6",
+    "backports.tarfile>=1.0",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "gspread>=5.8",
+    "pandas-gbq>=0.20",
+    "google-cloud-storage>=2.10",
+    "google-cloud-bigquery>=3.10",
+    "google-cloud-secret-manager>=2.18",
+    "mlflow>=2.5",
+    "mlserver>=1.7",
+    "psutil>=5.9",
+    "opentelemetry-api>=1.17",
+    "opentelemetry-sdk>=1.17",
+    "opentelemetry-exporter-otlp>=1.17",
+    "redis>=4.6",
+    "influxdb>=5.3",
+    "grpcio>=1.59",
+    # Development tools
+    "pytest>=8.3",
+    "pytest-cov>=4.1",
+    "pytest-mock>=3.11",
+    "flake8>=6.1",
+    "pdoc>=12.0",
+    "build>=1.1",
+    "twine>=4.0",
+    "psycopg2-binary>=2.9",
 ]
 
 [project.urls]
