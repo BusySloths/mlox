@@ -45,7 +45,12 @@ class OTelClient:
         )
         # Set up the Python logging module to use OpenTelemetry
         self.logging_handler = LoggingHandler(logger_provider=self.logger_provider)
-        logging.basicConfig(level=logging.INFO, handlers=[self.logging_handler])
+        logging.basicConfig(
+            level=logging.INFO,
+            format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+            handlers=[self.logging_handler],
+        )
         self.logger = logging.getLogger("otel_logger")
 
     def _setup_metrics(self):

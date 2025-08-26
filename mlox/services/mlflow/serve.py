@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import logging
 import mlflow  # type: ignore
 import numpy as np
 import pandas as pd
@@ -13,6 +14,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 SYS_PATH = sys.path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 class ModelCacheEntry(BaseModel):
@@ -63,14 +71,14 @@ class PredictionRequest(BaseModel):
 
 
 def runandget(data: PredictionRequest):
-    print("sys.path.BEFORE", SYS_PATH, flush=True)
-    print("Input data: ", data)
-    print("Input model_name: ", data.registry_model_name)
-    print("Input model_version: ", data.registry_model_version)
+    logger.info(f"sys.path.BEFORE {SYS_PATH}")
+    logger.info(f"Input data: {data}")
+    logger.info(f"Input model_name: {data.registry_model_name}")
+    logger.info(f"Input model_version: {data.registry_model_version}")
 
     # Assuming your 'run_databricks_model' function and input handling are correct
     model_uri = f"models:/{data.registry_model_name}/{data.registry_model_version}"
-    print(f"Load model from = {model_uri}")
+    logger.info(f"Load model from = {model_uri}")
 
     model_uri = f"models:/{data.registry_model_name}/{data.registry_model_version}"
     is_cached_model = False
@@ -85,23 +93,23 @@ def runandget(data: PredictionRequest):
         sys.path = mce.sys_path
         is_cached_model = True
 
-    print("Model loaded: ", loaded_model)
+    logger.info(f"Model loaded: {loaded_model}")
     input_data = np.array(data.input_data)
-    print("Model data: ", input_data)
-    print("Model params: ", data.params)
+    logger.info(f"Model data: {input_data}")
+    logger.info(f"Model params: {data.params}")
     df_pred = loaded_model.predict(input_data, params=data.params)
-    print("Model prediction: ", df_pred)
+    logger.info(f"Model prediction: {df_pred}")
 
     # Proper JSON serialization
     if not isinstance(df_pred, pd.DataFrame):
         df_pred = pd.DataFrame(df_pred)
     parsed = json.loads(df_pred.to_json(orient="records", date_format="iso"))
 
-    print("sys.path.BEFORE", SYS_PATH)
-    print("sys.path.AFTER", sys.path)
+    logger.info(f"sys.path.BEFORE {SYS_PATH}")
+    logger.info(f"sys.path.AFTER {sys.path}")
     # reset sys_path
     sys.path = list(SYS_PATH)
-    print("sys.path.RESET", sys.path)
+    logger.info(f"sys.path.RESET {sys.path}")
     # Returning JSON response properly
     return parsed, is_cached_model
 
@@ -131,7 +139,7 @@ def predict(data: PredictionRequest):
 
 @app.get("/model/{model_name}/list")
 def list_models(model_name: str):
-    print("Model name: ", model_name)
+    logger.info(f"Model name: {model_name}")
     client = mlflow.MlflowClient()
 
     res_list = list()

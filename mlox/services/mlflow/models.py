@@ -1,8 +1,8 @@
 import os
+import logging
 
 import numpy as np
 import pandas as pd
-import logging
 
 from datetime import datetime
 from typing import List, Dict
@@ -12,8 +12,12 @@ import mlflow  # type: ignore
 from mlflow.tracking import MlflowClient  # type: ignore
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class MLOpsModelInterface(ABC):
@@ -165,4 +169,4 @@ def list_versions_for_model(model_name: str) -> List:
 
 
 if __name__ == "__main__":
-    print(list_versions_for_model(model_name="Test"))
+    logger.info(list_versions_for_model(model_name="Test"))

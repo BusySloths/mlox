@@ -18,8 +18,11 @@ from mlox.utils import load_from_json, dict_to_dataclass
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -95,7 +98,7 @@ def load_secret_manager_from_keyfile(path: str, pw: str) -> AbstractSecretManage
         raise ValueError(f"Keyfile {path} does not contain secrets information.")
     path = keyfile_dict["secrets_path"]
     pw = keyfile_dict["secrets_pw"]
-    print(path)
+    logger.info(path)
 
     if "server" not in keyfile_dict:
         raise ValueError(f"Keyfile {path} does not contain server information.")
@@ -111,7 +114,7 @@ if __name__ == "__main__":
         "/tsm.key", os.getenv("MLOX_TSM_KEYFILE_PW", "no_password")
     )
     if sm.is_working():
-        print("Secret Manager is working.")
+        logger.info("Secret Manager is working.")
     else:
-        print("Secret Manager is not working.")
-    print(sm.list_secrets(keys_only=True))
+        logger.error("Secret Manager is not working.")
+    logger.info(sm.list_secrets(keys_only=True))

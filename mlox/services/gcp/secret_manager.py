@@ -22,7 +22,9 @@ from mlox.secret_manager import AbstractSecretManager
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -258,14 +260,14 @@ if __name__ == "__main__":
     #     keyfile_dict = json.load(f)
 
     sm = GCPSecretManager(keyfile_dict=keyfile_dict)
-    print("Read secret #1: ", sm.load_secret("MLOX_TEST_SECRET"))
-    print("Read secret #2: ", sm.load_secret("MLOX_TEST_SECRET"))
-    print("Read secret #3: ", sm.load_secret("MLOX_TEST_SECRET"))
+    logger.info(f"Read secret #1: {sm.load_secret('MLOX_TEST_SECRET')}")
+    logger.info(f"Read secret #2: {sm.load_secret('MLOX_TEST_SECRET')}")
+    logger.info(f"Read secret #3: {sm.load_secret('MLOX_TEST_SECRET')}")
 
-    print("\n--- Saving a new or existing secret ---")
+    logger.info("\n--- Saving a new or existing secret ---")
     sm.save_secret("MLOX_TEST_SECRET", {"key": "value", "timestamp": "now"})
 
-    print("\n--- Listing all secrets ---")
-    print(sm.list_secrets(keys_only=True))
+    logger.info("\n--- Listing all secrets ---")
+    logger.info(sm.list_secrets(keys_only=True))
 
-    print("Secret stats (#calls): ", sm.get_secret_usage_statistics())
+    logger.info(f"Secret stats (#calls): {sm.get_secret_usage_statistics()}")

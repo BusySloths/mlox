@@ -1,13 +1,16 @@
 import logging
 import numpy as np
 import pandas as pd
-
 from typing import Dict
 from datetime import datetime
 
 from mlox.services.mlflow.models import MlopsModelWrapper, MLOpsModelInterface
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -36,13 +39,15 @@ class MyTrackedModel(MLOpsModelInterface):
         logger.info("Check params.")
         if params is not None:
             my_param = params.get("my_param", False)
-            print(f"Values = {my_param}")
+            logger.info(f"Values = {my_param}")
         logger.info("Done. Return results")
         return df_res
 
     def tracking(self, mlflow, params: Dict | None = None) -> Dict | None:
         if params is not None:
-            print(f"Tracking: my_train_param_1={params.get('my_train_param_1', None)}")
+            logger.info(
+                f"Tracking: my_train_param_1={params.get('my_train_param_1', None)}"
+            )
 
         # DO TRAINING AND STUFF
         df_train = pd.DataFrame([[0, 1], [2, 3]], columns=["ColA", "ColB"])
@@ -90,7 +95,7 @@ def local_experiment():
     mlops = MlopsModelWrapper(my_model, "krabbelbox")
 
     # mlops.track_model sets up mlops and calls my_model.tracking
-    print(
+    logger.info(
         mlops.predict(
             None,
             model_input=np.array(

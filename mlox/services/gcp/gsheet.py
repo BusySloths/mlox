@@ -41,7 +41,9 @@ from mlox.services.gcp.secret_manager import (
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -87,7 +89,6 @@ class GCPSheets:
             else:
                 sheet = file.open(gname)
         except BaseException as e:
-            print(e)
             logger.warning(f"Could not open spreadsheet {gname} due to {str(e)}.")
         return sheet
 
@@ -449,7 +450,7 @@ class GCPSheets:
         if sheet is None:
             return
         a1 = self.get_a1_from_column_name(gname, sheet_name, column_name)
-        print(a1)
+        logger.info(a1)
         cells = sheet.range(f"{a1}2:{a1}")
         sheet.update_cells(
             cells, value_input_option=gspread_utils.ValueInputOption.user_entered
@@ -462,7 +463,7 @@ class GCPSheets:
         if sheet is None:
             return
         a1 = self.get_a1_from_column_name(gname, sheet_name, column_name)
-        print(a1)
+        logger.info(a1)
         cells = sheet.range(f"{a1}2:{a1}")
         sheet.update_cells(cells, value_input_option=gspread_utils.ValueInputOption.raw)
 
@@ -502,7 +503,7 @@ if __name__ == "__main__":
     # )
     # print(df)
 
-    print(sheets.list_spreadsheets())
+    logger.info(sheets.list_spreadsheets())
     # print(whats_my_email_again(creds))
 
     # ts1 = get_modified_time(creds, '1USfTluR_J0HE4iO30sCbyNzxKx7VVtM79tnKMwxaj5s')
