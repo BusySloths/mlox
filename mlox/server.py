@@ -20,9 +20,10 @@ import socket
 from mlox.utils import generate_password
 from mlox.remote import open_connection, close_connection, exec_command, fs_read_file
 
-# Configure logging (optional, but recommended)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -250,9 +251,9 @@ class AbstractServer(ABC):
             with self.get_server_connection() as conn:
                 if conn.is_connected:
                     verified = True
-            print(f"Public key SSH login verified={verified}.")
+            logger.info(f"Public key SSH login verified={verified}.")
         except Exception as e:
-            print(f"Failed to login via SSH with public key: {e}")
+            logger.error(f"Failed to login via SSH with public key: {e}")
         return verified
 
     @abstractmethod
@@ -383,7 +384,7 @@ def execute_command(conn, cmd: List | str):
             module = importlib.import_module(module_name)
             func = getattr(module, func_name)
             args = cmd[1:]
-            print(f"Execute CMD: {func_name} with args: {args}")
+            logger.debug(f"Execute CMD: {func_name} with args: {args}")
             if args:
                 func(conn, *args)
             else:
