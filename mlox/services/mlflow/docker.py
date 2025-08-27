@@ -1,9 +1,11 @@
+import os
+import mlflow  # type: ignore
 import logging
 
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup_no_config
+from mlox.service import AbstractService
 from mlox.remote import (
     fs_copy,
     fs_create_dir,
@@ -20,6 +22,7 @@ logging.basicConfig(
     format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -62,22 +65,25 @@ class MLFlowDockerService(AbstractService):
     def check(self, conn) -> Dict:
         """
         Check if the MLFlow service is running and accessible.
-        Returns a dictionary with the status and any relevant information.
+        Returns a dictionary with the status and some basic stats from the MLflow server.
         """
+        # Primary approach: use the mlflow client API for a structured health check
         try:
-            response = conn.run(
-                f"curl -s -o /dev/null -w '%{{http_code}}' http://{conn.host}:{self.port}/",
-                hide=True,
-            )
-            if response.stdout.strip() == "200":
-                return {
-                    "status": "running",
-                    "message": "MLFlow service is up and running.",
-                }
-            else:
-                return {
-                    "status": "down",
-                    "message": f"MLFlow service returned HTTP status {response.stdout.strip()}.",
-                }
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
+            mlflow.set_registry_uri(self.service_url)
+            os.environ["MLFLOW_TRACKING_USERNAME"] = self.ui_user
+            os.environ["MLFLOW_TRACKING_PASSWORD"] = self.ui_pw
+            os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
+            client = mlflow.tracking.MlflowClient()
+
+            models = client.search_registered_models(filter_string="", max_results=10)
+            return {
+                "status": "running",
+                "message": "MLflow API reachable",
+                "registered_models (cutoff=10)": len(models),
+            }
+        except Exception as e_ml:
+            logger.debug("MLflow API check failed: %s", e_ml)
+        return {
+            "status": "unknown",
+            "message": "MLflow API not reachable",
+        }

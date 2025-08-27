@@ -80,12 +80,17 @@ def installed_services():
             save_infra()
             st.rerun()
 
-        if cf.button(
-            "Focus", disabled=state != "running" or service.uuid in infra.focus
-        ):
-            infra.focus_service(service)
-            save_infra()
-            st.rerun()
+        if cf.button("Check"):
+            status = {}
+            with bundle.server.get_server_connection() as conn:
+                status = service.check(conn)
+            st.write(status)
+        # if cf.button(
+        #     "Focus", disabled=state != "running" or service.uuid in infra.focus
+        # ):
+        #     infra.focus_service(service)
+        #     save_infra()
+        #     st.rerun()
 
         new_service_name = c3.text_input("Unique service name", service_name)
         # Add vertical space to align the button with the text input field.
