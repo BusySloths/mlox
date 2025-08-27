@@ -1,0 +1,97 @@
+import uuid
+import time
+import socket
+import logging
+import pytest
+from pathlib import Path
+from multipass import MultipassClient, MultipassVM  # type: ignore
+from mlox.config import load_config, get_stacks_path
+from mlox.infra import Infrastructure
+
+# Mark this module as an integration test
+pytestmark = pytest.mark.integration
+
+
+def wait_for_ssh(
+    vm: MultipassVM, vm_name: str, timeout: int = 120, interval: float = 2.0
+) -> str:
+    """Wait until the VM has an IPv4 and port 22 is reachable. Returns the ip when ready."""
+    deadline = time.time() + timeout
+    last_exc = None
+    while time.time() < deadline:
+        try:
+            info = vm.info()
+            # info JSON structure varies; try common shapes
+            data = (
+                info.get("info", {}).get(vm_name, info)
+                if isinstance(info, dict)
+                else {}
+            )
+            # look for ipv4
+            ip = None
+            if isinstance(data, dict):
+                ipv4 = data.get("ipv4")
+                if isinstance(ipv4, list) and ipv4:
+                    ip = ipv4[0]
+                elif isinstance(ipv4, str):
+                    ip = ipv4
+            if ip:
+                # quick TCP connect check for port 22
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(3.0)
+                try:
+                    if s.connect_ex((ip, 22)) == 0:
+                        s.close()
+                        return ip
+                finally:
+                    s.close()
+        except Exception as e:
+            last_exc = e
+        time.sleep(interval)
+    raise TimeoutError(
+        f"VM {vm_name} SSH not reachable after {timeout}s. Last error: {last_exc!r}"
+    )
+
+
+@pytest.fixture(scope="package")
+def multipass_instance():
+    client = MultipassClient()
+    name = f"mlox-test-{uuid.uuid4().hex[:8]}"
+    cloud_init_path = (
+        Path(__file__).resolve().parents[2] / "mlox/assets/cloud-init.yaml"
+    )
+    logging.info(f"Launching Multipass VM {name} with cloud-init {cloud_init_path}")
+    vm = client.launch(
+        vm_name=name, cpu=2, disk="10G", mem="4G", cloud_init=cloud_init_path
+    )
+    # wait_for_ssh(...) same implementation as in your test file
+    ip = wait_for_ssh(vm, name, timeout=180, interval=3.0)
+    logging.info(f"Multipass VM {name} is running at IP {ip}")
+    yield {"client": client, "vm": vm, "name": name, "ip": ip}
+    try:
+        client.delete(name, purge=True)
+    except Exception:
+        pass
+
+
+@pytest.fixture(scope="package")
+def ubuntu_docker_server(multipass_instance):
+    infra = Infrastructure()
+    config = load_config(get_stacks_path(), "/ubuntu", "mlox-server.ubuntu.docker.yaml")
+    params = {
+        "${MLOX_IP}": multipass_instance["ip"],
+        "${MLOX_PORT}": "22",
+        "${MLOX_ROOT}": "root",
+        "${MLOX_ROOT_PW}": "pass",
+    }
+    bundle = infra.add_server(config, params)
+    if not bundle:
+        pytest.skip("Failed to add server to infrastructure")
+    server = bundle.server
+    server.setup()
+    yield server
+    try:
+        server.teardown()
+    except Exception:
+        pass
+    infra.remove_bundle(bundle)
