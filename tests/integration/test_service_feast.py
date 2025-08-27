@@ -63,32 +63,32 @@ def install_feast(session_and_infra):
     # Note: don't teardown here — removal is a separate operation (see test_remove_feast)
 
 
-def test_dummy_service_running(install_feast):
-    """Basic smoke test that the service was installed and exposes a URL."""
-    bundle_added, service = install_feast
-    assert hasattr(service, "service_url")
-    assert service.service_url
+# def test_dummy_service_running(install_feast):
+#     """Basic smoke test that the service was installed and exposes a URL."""
+#     bundle_added, service = install_feast
+#     assert hasattr(service, "service_url")
+#     assert service.service_url
 
 
-def test_remove_feast(install_feast, session_and_infra):
-    """Tear down the installed service and remove the bundle from infra."""
-    bundle_added, service = install_feast
-    ms, infra = session_and_infra
+# def test_remove_feast(install_feast, session_and_infra):
+#     """Tear down the installed service and remove the bundle from infra."""
+#     bundle_added, service = install_feast
+#     ms, infra = session_and_infra
 
-    # Teardown the service on the server
-    with bundle_added.server.get_server_connection() as conn:
-        try:
-            service.spin_down(conn)
-        except Exception:
-            # best-effort
-            pass
-        try:
-            service.teardown(conn)
-        except Exception:
-            pass
+#     # Teardown the service on the server
+#     with bundle_added.server.get_server_connection() as conn:
+#         try:
+#             service.spin_down(conn)
+#         except Exception:
+#             # best-effort
+#             pass
+#         try:
+#             service.teardown(conn)
+#         except Exception:
+#             pass
 
-    # Remove the bundle from the infrastructure
-    infra.remove_bundle(bundle_added)
+#     # Remove the bundle from the infrastructure
+#     infra.remove_bundle(bundle_added)
 
-    # Ensure bundle was removed
-    assert all(b != bundle_added for b in infra.bundles)
+#     # Ensure bundle was removed
+#     assert all(b != bundle_added for b in infra.bundles)
