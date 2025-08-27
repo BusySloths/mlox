@@ -1,6 +1,4 @@
 import logging
-import hashlib
-import base64
 
 from dataclasses import dataclass, field
 from typing import Dict
@@ -23,13 +21,6 @@ logging.basicConfig(
     format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-
-
-def _generate_htpasswd_sha1(user: str, password: str) -> str:
-    """Generates a htpasswd entry using SHA1, supported by many web servers."""
-    sha1_hash = hashlib.sha1(password.encode("utf-8")).digest()
-    b64_hash = base64.b64encode(sha1_hash).decode("utf-8")
-    return f"{user}:{{SHA}}{b64_hash}"
 
 
 @dataclass

@@ -51,6 +51,7 @@ opentelemetry-exporter-otlp>=1.17
 
 ######################## TESTING & LINTING / DEV
 pytest>=8.3
+pytest-sugar>=1.1.1
 flake8>=6.1
 
 # Development helpers (uncomment if used in CI or local development)

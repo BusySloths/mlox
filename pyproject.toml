@@ -114,6 +114,7 @@ dev = [
     "pytest>=8.3",
     "pytest-cov>=4.1",
     "pytest-mock>=3.11",
+    "pytest-sugar>=1.1.1",
     "flake8>=6.1",
     "pdoc>=12.0",
     "build>=1.1",
