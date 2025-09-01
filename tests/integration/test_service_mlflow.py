@@ -102,4 +102,4 @@ def test_mlflow_log_dummy_model(install_mlflow_service):
             assert pred.equals(df)
 
     except Exception as e:
-        pytest.skip(f"Could not log/load model against MLflow server: {e}")
+        pytest.fail(f"Could not log/load model against MLflow server: {e}")
