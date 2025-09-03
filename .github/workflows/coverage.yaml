@@ -21,7 +21,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8 pytest coverage
-          pip install -r requirements.txt
+          pip install -e '.[dev]'
       - name: Generate Code Coverage
         run: |
             coverage run -m pytest tests
