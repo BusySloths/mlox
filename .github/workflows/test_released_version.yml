@@ -1,4 +1,4 @@
-name: CI PYPI Release
+name: Test Released Package
 
 on:
   workflow_dispatch:
@@ -20,4 +20,4 @@ jobs:
       - name: Install Dev Package
         run: |
           python -m pip install --upgrade pip
-          pip install busysloths-mlox[dev]
+          pip install 'busysloths-mlox[dev]'

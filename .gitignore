@@ -141,8 +141,10 @@ dmypy.json
 .vscode
 .metrics
 
+# Local configuration/project files
 feature_store.yaml
 test_feature_store.yaml
+requirements.gen*
 
 # certificates/keys
 *.pem

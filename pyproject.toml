@@ -121,6 +121,7 @@ dev = [
     "twine>=4.0",
     "psycopg2-binary>=2.9",
     "colorama>=0.4.6",
+    "go-task-bin>=3.44.1",
     "multipass-sdk @ git+https://github.com/okyanusoz/multipass-sdk.git@main#egg=multipass-sdk",
 ]
 

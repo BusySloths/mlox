@@ -1,0 +1,27 @@
+# https://taskfile.dev
+
+version: "3"
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  default:
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
+
+  docker-build-macos:
+    platforms:
+      - darwin
+    cmds:
+      - docker build -t mlox:latest .
+    desc: Build the Docker image
+
+  deps:lock:*:
+    desc: Generate requirements.txt from extras (dev, all, gcp) in pyproject.toml
+    vars:
+      EXTRA: "{{index .MATCH 0}}"
+    cmds:
+      - '{{.PYTHON | default "python"}} -m pip install --upgrade pip-tools'
+      - '{{.PYTHON | default "python"}} -m piptools compile pyproject.toml --extra {{.EXTRA}} --output-file requirements.gen.{{.EXTRA}}.txt'

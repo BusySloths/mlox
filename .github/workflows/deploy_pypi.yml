@@ -1,4 +1,4 @@
-name: PYPI
+name: Deploy to PYPI
 
 on:
   workflow_dispatch:
@@ -26,6 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -e '.[dev]'
           pip install --upgrade flake8
           pip install --upgrade setuptools
           pip install --upgrade setuptools-git-versioning
@@ -33,7 +34,6 @@ jobs:
           pip install --upgrade pytest-cov
           pip install --upgrade build
           pip install --upgrade twine
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Test setuptools-git-versioning
         run: | 
           python -m setuptools_git_versioning
@@ -43,19 +43,19 @@ jobs:
           flake8 mlox/ --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 mlox/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      - name: Test with pytest
+      - name: Run Unit Tests
         run: |
           pip install pytest
           pip install pytest-cov
           export PYTHONPATH=.
           pytest tests
-      - name: Prepare distribution
+      - name: Prepare Distribution
         run: |
           python -m build
           twine check --strict dist/*
           pip install -U packaging
           twine check --strict dist/*
-      - name: Deploy to PYPI
+      - name: Deploy
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}        

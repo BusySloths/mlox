@@ -1,4 +1,4 @@
-name: Code Coverage Report
+name: Unit Test Code Coverage Report
 
 on:
   workflow_dispatch:
