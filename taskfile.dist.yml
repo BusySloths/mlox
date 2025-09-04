@@ -1,22 +1,60 @@
-# https://taskfile.dev
-
+# Reference: https://taskfile.dev
 version: "3"
 
 vars:
-  GREETING: Hello, World!
+  GREETING: |
+    \033[1;36mMLOX Taskfile (Developer)\033[0m
+
+    MLOX helps you stand up opinionated MLOps infrastructure (MLflow, Feast,
+    Milvus, telemetry) on your own servers and in hybrid setups. This Taskfile acts as a
+    lightweight developer CLI to keep common actions consistent and repeatable.
+
+    Key tasks
+    - deps:lock             : compile base requirements from pyproject.toml
+    - deps:lock:all|dev|gcp : compile extras to requirements-<extra>.txt
+    - deps:install:tools    : install tools like Multipass for integration tests
+    - tests:integration:run     : run integration tests (requires Multipass)
+    - tests:integration:cleanup : clean up test Multipass VMs
+    - docker:build        : build local Docker image
+
+    Get started by following these steps:
+    1) Install Task: https://taskfile.dev/installation
+    2) Install Tools:  task deps:install:tools
+    3) Run integration tests: task tests:integration:run
+    4) Clean up test VMs: task tests:integration:cleanup
 
 tasks:
   default:
     cmds:
-      - echo "{{.GREETING}}"
+      - printf "%b\n" "{{.GREETING}}"
     silent: true
 
-  docker-build-macos:
+  tests:integration:run:
+    silent: true
+    cmds:
+      - |
+        if ! command -v multipas >/dev/null 2>&1; then \
+          printf '\n\033[1;31m✖ Multipass is not installed.\033[0m\n'; \
+          printf 'Install it first. Run: \033[1mtask deps:install:tools\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - pytest -m integration --run-integration
+    desc: Run integration tests
+
+  tests:integration:cleanup:
+    silent: true
+    cmds:
+      - printf '\n\033[1;36m══════════ ▶ BEFORE CLEANUP (Multipass VMs) ◀ ══════════\033[0m\n'; multipass list || true
+      - multipass list | grep mlox-test- | cut -d' ' -f1 | xargs multipass delete $1 --purge
+      - printf '\n\033[1;32m══════════ ✓ AFTER CLEANUP (Multipass VMs) ✓ ══════════\033[0m\n'; multipass list || true
+    desc: Remove all Multipass VMs used for integration testing
+
+  deps:install:tools:
     platforms:
       - darwin
     cmds:
-      - docker build -t mlox:latest .
-    desc: Build the Docker image
+      - brew install multipass
+    desc: Install Multipass VM (macOS) for local development and integration testing
 
   deps:lock:*:
     desc: Generate requirements.txt from extras (dev, all, gcp) in pyproject.toml
@@ -25,3 +63,8 @@ tasks:
     cmds:
       - '{{.PYTHON | default "python"}} -m pip install --upgrade pip-tools'
       - '{{.PYTHON | default "python"}} -m piptools compile pyproject.toml --extra {{.EXTRA}} --output-file requirements.gen.{{.EXTRA}}.txt'
+
+  docker:build:
+    cmds:
+      - docker build -t mlox:latest .
+    desc: Build the Docker image
