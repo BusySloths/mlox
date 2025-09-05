@@ -31,6 +31,28 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         super().__post_init__()
         self.backend = ["native"]
 
+    def _apt_wait(self, conn) -> None:
+        """Wait until apt/dpkg locks are free to avoid contention errors."""
+        wait_cmd = (
+            "bash -lc '"
+            "while pgrep -x apt >/dev/null || pgrep -x apt-get >/dev/null || "
+            "pgrep -x unattended-upgrade >/dev/null || "
+            "fuser /var/lib/dpkg/lock >/dev/null 2>&1 || "
+            "fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do "
+            'echo "[apt-wait] Waiting for other apt/dpkg processes..."; sleep 3; done\''
+        )
+        try:
+            exec_command(conn, wait_cmd, sudo=True, pty=False)
+            # Fix partially configured packages if previous runs were interrupted
+            exec_command(
+                conn,
+                "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                sudo=True,
+                pty=False,
+            )
+        except Exception as e:
+            logger.warning(f"apt-wait encountered an issue (continuing): {e}")
+
     def setup(self):
         if self.state != "un-initialized":
             logging.error("Can not initialize an already initialized server.")
@@ -61,21 +83,40 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
 
     def update(self):
         with self.get_server_connection() as conn:
-            exec_command(conn, "dpkg --configure -a", sudo=True)
-            exec_command(conn, "apt-get update", sudo=True)
-            exec_command(conn, "apt-get -y upgrade", sudo=True)
+            # Clean up partial states and wait for apt locks to clear
+            exec_command(
+                conn,
+                "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                sudo=True,
+            )
+            self._apt_wait(conn)
+            exec_command(
+                conn,
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 update",
+                sudo=True,
+            )
+            self._apt_wait(conn)
+            exec_command(
+                conn,
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 upgrade",
+                sudo=True,
+            )
             logger.info("Done updating")
 
     def install_packages(self):
         with self.get_server_connection() as conn:
-            exec_command(conn, "dpkg --configure -a", sudo=True)
             exec_command(
-                conn, "apt-get -y install mc", sudo=True
-            )  # why does it not find mc??
-            exec_command(conn, "apt-get -y install git", sudo=True)
-            exec_command(conn, "apt-get -y install zsh", sudo=True)
-            exec_command(conn, "apt-get -y install host", sudo=True)
-            exec_command(conn, "apt-get -y install curl", sudo=True)
+                conn,
+                "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                sudo=True,
+            )
+            self._apt_wait(conn)
+            # Install common utilities in a single transaction to reduce lock contention
+            exec_command(
+                conn,
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 install mc git zsh host curl",
+                sudo=True,
+            )
 
     def get_server_info(self, no_cache: bool = False) -> Dict[str, str | int | float]:
         if not no_cache:

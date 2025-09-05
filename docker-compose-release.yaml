@@ -1,9 +1,7 @@
 services:
 
   mlox:  
-    build: 
-      context: .
-      dockerfile: Dockerfile
+    image: drbusysloth/mlox:latest
     restart: always
     container_name: mlox
     ports:

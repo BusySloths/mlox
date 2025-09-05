@@ -2,7 +2,7 @@
 
 # 1. Base Image
 # Use a slim Python image for a smaller footprint and better security.
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # 2. Set Working Directory
 # This is where the application code will live inside the container.

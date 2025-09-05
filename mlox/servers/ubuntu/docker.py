@@ -23,7 +23,13 @@ class UbuntuDockerServer(UbuntuNativeServer):
     def setup_backend(self) -> None:
         self.state = "starting"
         with self.get_server_connection() as conn:  # MyPy will understand this call
-            exec_command(conn, "apt-get -y install ca-certificates curl", sudo=True)
+            # Ensure apt is ready (avoid dpkg lock races on fresh instances)
+            self._apt_wait(conn)
+            exec_command(
+                conn,
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 install ca-certificates curl",
+                sudo=True,
+            )
             exec_command(conn, "install -m 0755 -d /etc/apt/keyrings", sudo=True)
             exec_command(
                 conn,
@@ -40,10 +46,15 @@ class UbuntuDockerServer(UbuntuNativeServer):
             exec_command(
                 conn, full_cmd, sudo=True, pty=False
             )  # pty=False should be fine
-            exec_command(conn, "apt-get update", sudo=True)
+            self._apt_wait(conn)
             exec_command(
                 conn,
-                "apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 update",
+                sudo=True,
+            )
+            exec_command(
+                conn,
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
                 sudo=True,
             )
             print("Done installing docker")
