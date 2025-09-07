@@ -224,3 +224,46 @@ tasks:
       - multipass list | grep {{.PREFIX}} | cut -d' ' -f1 | xargs multipass delete $1 --purge
       - printf '\n\033[1;32m══════════ ✓ AFTER CLEANUP (Multipass VMs) ✓ ══════════\033[0m\n'; multipass list || true
     desc: Remove all Multipass VMs starting with the given prefix
+
+  # -----------------------
+  # UI helpers (local dev)
+  # -----------------------
+  ui:streamlit:
+    desc: Start the Streamlit UI (local)
+    cmds:
+      - |
+        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('streamlit') else 1)"; then \
+          printf '\n\033[1;31m✖ streamlit is not installed.\033[0m\n'; \
+          printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - "streamlit run mlox/app.py"
+
+  ui:cli:
+    desc: Start the Typer CLI app
+    cmds:
+      - '{{.PYTHON | default "python"}} -m mlox.cli'
+
+  ui:textual:terminal:
+    desc: Start the Textual TUI in the terminal
+    cmds:
+      - |
+        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('textual') else 1)"; then \
+          printf '\n\033[1;31m✖ textual is not installed.\033[0m\n'; \
+          printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - "export MLOX_TUI=true; textual run --dev mlox/tui.py"
+
+  ui:textual:web:
+    desc: Serve the Textual TUI over the web (dev server)
+    env:
+      MLOX_TUI: "true"
+    cmds:
+      - |
+        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('textual') else 1)"; then \
+          printf '\n\033[1;31m✖ textual is not installed.\033[0m\n'; \
+          printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - "export MLOX_TUI=true; textual serve --dev mlox/tui.py"
