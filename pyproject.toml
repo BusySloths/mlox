@@ -64,6 +64,7 @@ all = [
     # UI and data
     "streamlit==1.49.1",  # M
     "streamlit-vis-timeline==0.3.0",  # M
+    "textual==0.78.1",  # M
     "backports.tarfile>=1.0",
     "pandas>=2.2",
     "numpy>=1.26",
@@ -95,6 +96,7 @@ dev = [
     # developer extras (includes 'all')
     "streamlit==1.49.1",  # M
     "streamlit-vis-timeline==0.3.0",  # M
+    "textual==0.78.1",  # M
     "backports.tarfile>=1.0",
     "pandas>=2.2",
     "numpy>=1.26",

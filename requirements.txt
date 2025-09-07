@@ -25,6 +25,7 @@ streamlit-vis-timeline>=0.0.6
 pandas>=2.2
 numpy>=1.26
 psutil>=5.9
+textual>=0.78
 
 ######################## SERVICES
 mlflow>=2.5

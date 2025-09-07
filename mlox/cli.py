@@ -182,6 +182,28 @@ def start_ui(env: dict | None = None):
         sys.exit(1)
 
 
+def start_tui(env: dict | None = None):
+    """Launch the Textual-based terminal UI."""
+    try:
+        try:
+            import textual  # noqa: F401
+        except Exception:
+            logger.error(
+                "Textual is not installed. Please install 'textual' to use the terminal UI."
+            )
+            sys.exit(1)
+
+        app_path = str(resources.files("mlox").joinpath("tui.py"))
+        logger.info(f"Launching MLOX TUI from: {app_path}")
+        run_env = os.environ.copy()
+        if env:
+            run_env.update(env)
+        subprocess.run([sys.executable, app_path], check=True, env=run_env)
+    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        logger.error(f"Error starting Textual UI: {e}")
+        sys.exit(1)
+
+
 def get_session(project: str, password: str) -> MloxSession:
     try:
         session = MloxSession(project, password)
@@ -218,6 +240,23 @@ def ui(
         env["MLOX_PASSWORD"] = password
     # Optionally, you could pass session to the UI if needed
     start_ui(env)
+
+
+@app.command()
+def tui(
+    project: str = typer.Option(
+        "", prompt_required=False, help="Project name (username for session)"
+    ),
+    password: str = typer.Option(
+        "", prompt_required=False, hide_input=True, help="Password for the session"
+    ),
+):
+    """Start the MLOX terminal UI (requires project and password)"""
+    env: dict = {}
+    if len(password) > 4 and len(project) >= 1:
+        env["MLOX_PROJECT"] = project
+        env["MLOX_PASSWORD"] = password
+    start_tui(env)
 
 
 @infra_app.command("list")
