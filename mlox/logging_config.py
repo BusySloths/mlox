@@ -5,6 +5,8 @@ import logging.config
 
 from typing import Optional
 
+from textual.logging import TextualHandler
+
 # Try to use colorama on platforms that need it (optional dependency)
 try:
     import colorama  # type: ignore
@@ -68,9 +70,38 @@ LOG_CONFIG = {
     "root": {"handlers": ["console"], "level": "INFO"},
 }
 
+LOG_CONFIG_TEXTUAL = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    # "formatters": {
+    #     "colored": {
+    #         "()": ColoredFormatter,
+    #         "fmt": LOG_FORMAT,
+    #         "datefmt": DATE_FMT,
+    #         "use_color": True,
+    #     },
+    # },
+    "handlers": {
+        "console_tui": {
+            "class": TextualHandler,
+            # "formatter": "colored",
+            # "level": "INFO",
+            "stream": "ext://sys.stdout",
+        }
+    },
+    "root": {"handlers": ["console_tui"], "level": "INFO"},
+}
+
 
 def configure_logging() -> None:
     """Configure logging for the project. Call once at startup.
     Set NO_COLOR=1 to disable colors, or install colorama for Windows support.
     """
-    logging.config.dictConfig(LOG_CONFIG)
+    if os.environ.get("MLOX_TUI") == "true":
+        logging.basicConfig(
+            handlers=[TextualHandler(stderr=True, stdout=True)], level=logging.INFO
+        )
+        logging.info("Textual logging configured")
+    else:
+        logging.config.dictConfig(LOG_CONFIG)
+        logging.info("Logging configured")

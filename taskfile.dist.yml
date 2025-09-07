@@ -47,7 +47,7 @@ tasks:
           printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
           exit 1; \
         fi
-      - '{{.PYTHON | default "python"}} -m flake8 mlox tests --max-line-length=128 --statistics --extend-ignore=E203,W503'
+      - '{{.PYTHON | default "python"}} -m flake8 mlox tests --statistics --extend-ignore=E203,W503'
 
   dev:env:create:
     desc: Create a Conda dev environment with selected Python and install .[dev]
@@ -82,8 +82,8 @@ tasks:
     cmds:
       - task: dev:env:create
         vars:
-          NAME: '{{.NAME}}'
-          PY: '{{.PY}}'
+          NAME: "{{.NAME}}"
+          PY: "{{.PY}}"
       - |
         printf '\n\033[1;35m══════════════════════════════════════════════════════════\033[0m\n'
         printf '\033[1;35m   ✅ Next Steps\033[0m\n'

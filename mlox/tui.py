@@ -43,19 +43,33 @@ class LoginScreen(Screen):
         yield Header(show_clock=True)
         with Container(id="login-form"):
             yield Static("MLOX Login", id="login-title")
-            yield Input(placeholder="Project", id="project")
-            yield Input(placeholder="Password", password=True, id="password")
+            yield Input(
+                value=os.environ.get("MLOX_CONFIG_USER", "mlox"),
+                placeholder="Project",
+                id="project",
+            )
+            yield Input(
+                value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),
+                placeholder="Password",
+                password=True,
+                id="password",
+            )
             yield Button("Login", id="login-btn")
             yield Static("", id="message")
         yield Footer()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:  # pragma: no cover - UI callback
+    def on_button_pressed(
+        self, event: Button.Pressed
+    ) -> None:  # pragma: no cover - UI callback
         if event.button.id != "login-btn":
             return
         project = self.query_one("#project", Input).value
         password = self.query_one("#password", Input).value
-        if self.app.login(project, password):
-            self.app.switch_screen("main")
+        # Call the app's login method if available, then navigate to main screen
+        login_fn = getattr(self.app, "login", None)
+        if callable(login_fn) and login_fn(project, password):
+            # Use push_screen for broader Textual compatibility
+            self.app.push_screen("main")
         else:
             self.query_one("#message", Static).update("Login failed")
 
@@ -117,4 +131,3 @@ def main() -> None:  # pragma: no cover - entry point
 
 if __name__ == "__main__":  # pragma: no cover - script execution
     main()
-
