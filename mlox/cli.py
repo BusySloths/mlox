@@ -1,8 +1,10 @@
 import os
 import sys
+import time
 import typer
 import shutil
 import subprocess
+import textual  # noqa: F401
 import logging
 
 from importlib import resources
@@ -68,14 +70,14 @@ def setup_demo_project(ip1: str, ip2: str, ip3: str):
 @app.command()
 def demo():
     """Spin up a demo MLOX testbed (3 VMs), show IPs, credentials, and launch the UI."""
-    import time
-
     # 1. Start the multipass testbed
     try:
         with resources.as_file(
             resources.files("mlox.assets").joinpath("start-multipass-testbed.sh")
         ) as script_path:
-            logger.info(f"[MLOX DEMO] Executing multipass testbed script: {script_path}")
+            logger.info(
+                f"[MLOX DEMO] Executing multipass testbed script: {script_path}"
+            )
             os.chmod(script_path, 0o755)
             subprocess.run([str(script_path)], check=True)
     except (FileNotFoundError, subprocess.CalledProcessError) as e:
@@ -185,14 +187,6 @@ def start_ui(env: dict | None = None):
 def start_tui(env: dict | None = None):
     """Launch the Textual-based terminal UI."""
     try:
-        try:
-            import textual  # noqa: F401
-        except Exception:
-            logger.error(
-                "Textual is not installed. Please install 'textual' to use the terminal UI."
-            )
-            sys.exit(1)
-
         app_path = str(resources.files("mlox").joinpath("tui.py"))
         logger.info(f"Launching MLOX TUI from: {app_path}")
         run_env = os.environ.copy()

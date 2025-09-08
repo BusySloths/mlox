@@ -13,7 +13,7 @@ import os
 from typing import Optional
 
 from textual.app import App, ComposeResult
-from textual.containers import Container
+from textual.containers import Container, CenterMiddle
 from textual.screen import Screen
 from textual.widgets import (
     Button,
@@ -41,7 +41,7 @@ class LoginScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        with Container(id="login-form"):
+        with CenterMiddle(id="login-form"):
             yield Static("MLOX Login", id="login-title")
             yield Input(
                 value=os.environ.get("MLOX_CONFIG_USER", "mlox"),
@@ -90,11 +90,11 @@ class MainScreen(Screen):
 class MLOXTextualApp(App):
     """Main Textual application."""
 
-    CSS_PATH = None
+    CSS_PATH = "tui.tcss"
     BINDINGS = [("q", "quit", "Quit")]
     SCREENS = {
-        "login": LoginScreen(),
-        "main": MainScreen(),
+        "login": LoginScreen,
+        "main": MainScreen,
     }
 
     def __init__(self) -> None:

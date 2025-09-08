@@ -242,7 +242,7 @@ tasks:
   ui:cli:
     desc: Start the Typer CLI app
     cmds:
-      - '{{.PYTHON | default "python"}} -m mlox.cli'
+      - "python -m mlox.cli"
 
   ui:textual:terminal:
     desc: Start the Textual TUI in the terminal

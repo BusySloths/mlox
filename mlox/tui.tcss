@@ -1,0 +1,68 @@
+LoginScreen {
+  background: #0e1320;
+  color: #e6edf7;
+  margin: 4 4;
+}
+
+#login-form {
+  width: auto;
+  height: auto;
+  margin: 10;
+  padding: 1 2;
+  background: #121a2b;
+  border: round #2b3c5f;
+  color: #ffffff;
+  layer: 1;
+}
+
+#login-title {
+  content-align: center middle;
+  text-style: bold;
+  height: 3;
+  color: #e6edf7;
+}
+
+Input {
+  background: #121a2b;
+  color: #e6edf7;
+  border: round #2b3c5f;  
+}
+
+#project {
+  width: 32;
+  min-height: 3;
+  height: 3;
+  padding: 0 1;
+  margin: 0 0 1 0;
+  color: #e6edf7;
+}
+
+#password {
+  width: 32;
+  min-height: 3;
+  height: 3;
+  padding: 0 1;
+  margin: 0 0 1 0;
+  color: #e6edf7;
+}
+
+Button {
+  background: #121a2b;
+  color: #e6edf7;
+  border: round #2b3c5f;
+  text-style: bold;
+}
+
+#login-btn {
+  width: 16;
+  min-height: 3;
+  height: 3;
+  margin: 1 0 0 0;
+  content-align: center middle;
+}
+
+#message {
+  height: auto;
+  color: #ff6b6b;
+  margin-top: 1;
+}
