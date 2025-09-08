@@ -7,7 +7,8 @@ terminal UI could look.  The functionality is intentionally limited but
 serves as a starting point for further development.
 """
 
-from __future__ import annotations
+import random
+from statistics import mean
 
 import os
 from typing import Optional
@@ -22,6 +23,7 @@ from textual.widgets import (
     Input,
     Static,
     TabPane,
+    Sparkline,
     TabbedContent,
 )
 
@@ -74,17 +76,44 @@ class LoginScreen(Screen):
             self.query_one("#message", Static).update("Login failed")
 
 
+random.seed(73)
+data = [random.expovariate(1 / 3) for _ in range(1000)]
+
+
 class MainScreen(Screen):
     """Main application screen shown after login."""
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield TabbedContent(
-            TabPane("Home", Static(WELCOME_TEXT)),
-            TabPane("Infrastructure", Static("Infrastructure view coming soon.")),
-            TabPane("Services", Static("Services view coming soon.")),
-        )
+        # Main horizontal layout: sidebar | content
+        with Container(id="main-area"):
+            yield Sparkline(data, summary_function=max)
+            yield Sparkline(data, summary_function=mean)
+            yield Sparkline(data, summary_function=min)
+            with Container(id="sidebar"):
+                yield Static("Menu", id="sidebar-title")
+                yield Button("Home", id="btn-home")
+                yield Button("Infrastructure", id="btn-infra")
+                yield Button("Services", id="btn-services")
+            with Container(id="content"):
+                with TabbedContent("Services", "Infrastructure", "Templates"):
+                    yield Static(WELCOME_TEXT, id="content-body")
+                    yield Static(WELCOME_TEXT, id="content-body")
+                    yield Static(WELCOME_TEXT, id="content-body")
         yield Footer()
+
+    def on_button_pressed(
+        self, event: Button.Pressed
+    ) -> None:  # pragma: no cover - UI callback
+        # Update main content depending on which sidebar button was pressed
+        content = self.query_one("#content-body", Static)
+        bid = event.button.id
+        if bid == "btn-home":
+            content.update(WELCOME_TEXT)
+        elif bid == "btn-infra":
+            content.update("Infrastructure view coming soon.")
+        elif bid == "btn-services":
+            content.update("Services view coming soon.")
 
 
 class MLOXTextualApp(App):

@@ -1,7 +1,11 @@
+import json
+import base64
+import ssl
 import logging
+import urllib.request
 
-from dataclasses import dataclass
 from typing import Dict
+from dataclasses import dataclass
 
 from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
@@ -14,12 +18,7 @@ from mlox.remote import (
     docker_down,
 )
 
-# Configure logging (optional, but recommended)
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -75,4 +74,48 @@ class AirflowDockerService(AbstractService):
         fs_delete_dir(conn, self.target_path)
 
     def check(self, conn) -> Dict:
-        return dict()
+        """
+        Checks if the Airflow API is responsive using the /api/v2/version endpoint.
+        This corresponds to the health check from the docker-compose file:
+        `curl --fail "${_AIRFLOW_BASE_URL:-http://localhost:8080}/api/v2/version"`
+        """
+        url = self.service_urls["Airflow UI"] + "/api/v2/version"
+        logger.info(f"Performing health check on Airflow service at {url}")
+
+        try:
+            # Create an SSL context that does not verify certificates. This is
+            # necessary for self-signed certificates used in local/dev setups.
+            ssl_context = ssl._create_unverified_context()
+            request = urllib.request.Request(url)
+            # Airflow's REST API uses Basic Authentication.
+            auth_string = f"{self.ui_user}:{self.ui_pw}"
+            encoded_auth = base64.b64encode(auth_string.encode("utf-8")).decode("ascii")
+            request.add_header("Authorization", f"Basic {encoded_auth}")
+
+            with urllib.request.urlopen(
+                request, timeout=10, context=ssl_context
+            ) as response:
+                data = json.loads(response.read().decode("utf-8"))
+                if "version" in data:
+                    logger.info(f"Airflow health check OK. Version: {data['version']}")
+                    return {"status": "running", "version": data["version"]}
+                logger.warning(
+                    "Health check failed: 'version' key not in response JSON."
+                )
+                return {
+                    "status": "unknown",
+                    "message": "'version' key missing in response",
+                }
+        except urllib.error.URLError as e:
+            reason = (
+                f"HTTP Status: {e.code}"
+                if hasattr(e, "code")
+                else f"Reason: {e.reason}"
+            )
+            logger.error(f"Airflow health check failed for {url}. {reason}")
+            return {"status": "unknown", "message": f"Connection error: {reason}"}
+        except (json.JSONDecodeError, Exception) as e:
+            logger.error(
+                f"An unexpected error occurred during Airflow health check for {url}: {e}"
+            )
+            return {"status": "unknown", "message": f"Error: {e}"}

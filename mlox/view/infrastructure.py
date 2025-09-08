@@ -1,4 +1,3 @@
-import time
 import pandas as pd
 import streamlit as st
 
@@ -9,30 +8,6 @@ from mlox.config import load_all_server_configs
 from mlox.view.utils import plot_config_nicely
 
 
-# def my_process(a_param):
-#     print(f"my_process_{a_param}")
-#     # takes a long time
-#     time.sleep(10)
-#     print(f"my_process_{a_param} done")
-#     return 1, 2, a_param
-
-
-# def my_callback(x, name):
-#     print(f"my_callback_{x[2]}")
-#     print(x)
-#     print(name)
-
-
-# if st.session_state.get("mlox", None) is not None:
-#     scheduler = st.session_state.mlox.scheduler
-#     scheduler.add(
-#         process=my_process,
-#         callback=my_callback,
-#         params_process={"a_param": len(scheduler.queue) + 1},
-#         params_callback={"name": "me"},
-#     )
-
-
 def save_infra():
     with st.spinner("Saving infrastructure..."):
         st.session_state.mlox.save_infrastructure()
@@ -40,7 +15,6 @@ def save_infra():
 
 def format_groups(groups: Dict[str, Any]) -> List[str]:
     group_list: List[str] = list()
-
     for k, v in groups.items():
         if isinstance(v, Dict):
             group_list.extend([f"{k}:{e}" for e in format_groups(v)])
@@ -93,24 +67,17 @@ def tab_server_management(infra: Infrastructure):
     srv = []
     for bundle in infra.bundles:
         session_key = f"mlox_server_status_{bundle.server.ip}"
-        if session_key in st.session_state:
-            info = st.session_state[session_key]
-        else:
-            with st.spinner(
-                f"Loading server info for {bundle.server.ip}...", show_time=True
-            ):
-                info = bundle.server.get_server_info(no_cache=False)
-                info["connection"] = bundle.server.test_connection()
-            st.session_state[session_key] = info
-        info = st.session_state[session_key]
 
-        if info["connection"] is None:
-            state = "unknown"
-        elif info["connection"] == False:
-            state = "no connection"
-        else:
-            state = bundle.server.state
-
+        state = bundle.server.state
+        info = bundle.server.get_server_info()
+        if not info:
+            info = {
+                "host": "unknown",
+                "cpu_count": "unknown",
+                "ram_gb": "unknown",
+                "storage_gb": "unknown",
+                "pretty_name": "unknown",
+            }
         srv.append(
             {
                 "ip": bundle.server.ip,
@@ -121,8 +88,10 @@ def tab_server_management(infra: Infrastructure):
                 "discovered": bundle.server.discovered,
                 "services": [s.name for s in bundle.services],
                 "hostname": info["host"],
-                "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
-                "session_key": session_key,
+                "specs": (
+                    f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, "
+                    f"{info['storage_gb']} GB Storage, {info['pretty_name']}"
+                ),
             }
         )
 
@@ -137,8 +106,7 @@ def tab_server_management(infra: Infrastructure):
 
     if len(select_server["selection"].get("rows", [])) == 1:
         selected_server = srv[select_server["selection"]["rows"][0]]["ip"]
-        session_key = srv[select_server["selection"]["rows"][0]]["session_key"]
-        bundle_tmp = infra.get_bundle_by_ip(selected_server)
+        bundle_tmp = infra.get_bundle_by_ip(str(selected_server))
         if not bundle_tmp:
             st.error(f"Could not find bundle for server {selected_server}.")
             return

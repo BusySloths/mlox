@@ -130,19 +130,14 @@ tasks:
       - printf '\n\033[1;32m══════════ ✓ AFTER CLEANUP (Multipass VMs) ✓ ══════════\033[0m\n'; multipass list || true
     desc: Remove all Multipass VMs used for integration testing
 
-  docker:build:
-    cmds:
-      - docker build -t mlox:latest .
-    desc: Build the Docker image
-
-  docker:mlox:up:
+  docker:up:
     cmds:
       - docker compose up -d --build
       - docker compose ps
       - docker compose logs -f --tail=10
     desc: Start MLOX UI locally with Docker Compose
 
-  docker:mlox:down:
+  docker:down:
     cmds:
       - docker compose down
     desc: Stop MLOX UI
@@ -254,6 +249,7 @@ tasks:
           exit 1; \
         fi
       - "export MLOX_TUI=true; textual run --dev mlox/tui.py"
+      - "export MLOX_TUI=false"
 
   ui:textual:web:
     desc: Serve the Textual TUI over the web (dev server)
@@ -267,3 +263,4 @@ tasks:
           exit 1; \
         fi
       - "export MLOX_TUI=true; textual serve --dev mlox/tui.py"
+      - "export MLOX_TUI=false"
