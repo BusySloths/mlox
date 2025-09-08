@@ -13,6 +13,13 @@ from mlox.service import AbstractService
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerService):
+    st.link_button(
+        "Open Airflow UI",
+        url=service.service_urls["Airflow UI"],
+        icon=":material/open_in_new:",
+        help="Open the Airflow UI in a new tab",
+    )
+
     tab_general, tab_repos = st.tabs(["General", "Repositories"])
     with tab_general:
         st.header(f"Settings for service {service.name}")
@@ -64,6 +71,7 @@ def tab_repositories(
         selection_mode="single-row",
         use_container_width=True,
         on_select="rerun",
+        key="airflow-repo-select",
     )
     if len(selection["selection"]["rows"]) > 0:
         idx = selection["selection"]["rows"][0]
@@ -96,6 +104,7 @@ def tab_repositories(
         selection_mode="single-row",
         use_container_width=True,
         on_select="rerun",
+        key="airflow-repo-associated",
     )
     if len(selection["selection"]["rows"]) > 0:
         idx = selection["selection"]["rows"][0]
