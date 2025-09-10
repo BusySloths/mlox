@@ -1,6 +1,6 @@
+import ssl
 import json
 import base64
-import ssl
 import logging
 import urllib.request
 

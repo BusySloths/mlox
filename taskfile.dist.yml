@@ -122,6 +122,20 @@ tasks:
       - pytest -m integration --run-integration
     desc: Run integration tests
 
+  tests:integration:service:
+    silent: true
+    vars:
+      SERVICE: "{{.SERVICE}}"
+    cmds:
+      - |
+        if ! command -v multipass >/dev/null 2>&1; then \
+          printf '\n\033[1;31m✖ Multipass is not installed.\033[0m\n'; \
+          printf 'Install it first. Run: \033[1mtask deps:install:tools\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration;
+    desc: Run integration tests for a specific service only (e.g. mlflow, airflow, etc.)
+
   tests:integration:cleanup:
     silent: true
     cmds:
@@ -237,7 +251,7 @@ tasks:
   ui:cli:
     desc: Start the Typer CLI app
     cmds:
-      - "python -m mlox.cli"
+      - "python -m mlox.cli {{.CLI_ARGS}}"
 
   ui:textual:terminal:
     desc: Start the Textual TUI in the terminal

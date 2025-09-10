@@ -41,7 +41,7 @@ def install_mlflow_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
         # Allow some time for containers to become healthy
-        time.sleep(10)
+    time.sleep(120)
 
     yield bundle_added, service
 

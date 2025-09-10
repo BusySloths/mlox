@@ -4,9 +4,12 @@ import socket
 import logging
 import pytest
 from pathlib import Path
+
 from multipass import MultipassClient, MultipassVM  # type: ignore
+
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure
+
 
 # Mark this module as an integration test
 pytestmark = pytest.mark.integration
@@ -66,12 +69,15 @@ def multipass_instance():
     )
     # wait_for_ssh(...) same implementation as in your test file
     ip = wait_for_ssh(vm, name, timeout=180, interval=3.0)
+    vm.info()
     logging.info(f"Multipass VM {name} is running at IP {ip}")
     yield {"client": client, "vm": vm, "name": name, "ip": ip}
+    logging.info(f"Cleaning up Multipass VM {name}...")
     try:
         client.delete(name, purge=True)
-    except Exception:
-        pass
+        logging.info(f"Successfully cleaned up Multipass VM {name}.")
+    except Exception as e:
+        logging.warning(f"Could not clean up Multipass VM {name}: {e}")
 
 
 @pytest.fixture(scope="package")
@@ -86,12 +92,16 @@ def ubuntu_docker_server(multipass_instance):
     }
     bundle = infra.add_server(config, params)
     if not bundle:
-        pytest.skip("Failed to add server to infrastructure")
+        pytest.fail("Failed to add server to infrastructure")
     server = bundle.server
     server.setup()
     yield server
+    logging.info(
+        f"Tearing down ubuntu_docker_server on VM {multipass_instance['name']}..."
+    )
     try:
         server.teardown()
-    except Exception:
-        pass
+        logging.info("Successfully tore down ubuntu_docker_server.")
+    except Exception as e:
+        logging.warning(f"Could not tear down ubuntu_docker_server: {e}")
     infra.remove_bundle(bundle)

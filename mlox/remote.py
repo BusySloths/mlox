@@ -27,7 +27,7 @@ def open_connection(
     if "private_key" in config and "passphrase" in config:
         tmpdir = tempfile.TemporaryDirectory()
         tmpdirname = tmpdir.name
-        logger.info(f"Created temporary directory at {tmpdirname}")
+        logger.debug(f"Created temporary directory at {tmpdirname}")
 
         private_key_path = os.path.join(tmpdirname, "id_rsa")
         with open(private_key_path, "w") as priv_file:
@@ -56,8 +56,8 @@ def close_connection(conn, tmp_dir=None):
     conn.close()
     if tmp_dir is not None:
         tmp_dir.cleanup()
-        logger.info(f"Temporary directory {tmp_dir.name} deleted.")
-    logger.info("SSH connection closed and tmp dir deleted.")
+        logger.debug(f"Temporary directory {tmp_dir.name} deleted.")
+    logger.debug("SSH connection closed and tmp dir deleted.")
 
 
 def exec_command(conn, cmd, sudo=False, pty=False):

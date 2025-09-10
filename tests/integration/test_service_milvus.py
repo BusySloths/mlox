@@ -31,7 +31,7 @@ def install_milvus_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
         # Allow some time for containers to become healthy
-        time.sleep(10)
+    time.sleep(30)
 
     yield bundle_added, service
 

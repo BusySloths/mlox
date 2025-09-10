@@ -85,7 +85,7 @@ class ServerConnection:
 
                 self._conn = raw_conn  # Assign to self._conn only after successful open and verification
 
-                logging.info(
+                logging.debug(
                     f"Successfully opened and verified connection to {host} on attempt {current_attempt + 1}"
                 )
                 return self._conn
@@ -133,7 +133,7 @@ class ServerConnection:
         try:
             if self._conn:
                 close_connection(self._conn, self._tmp_dir)
-                logging.info(f"Successfully closed connection to {self._conn.host}")
+                logging.debug(f"Successfully closed connection to {self._conn.host}")
             if exc_type is not None:
                 logging.exception(
                     f"An exception occurred during connection usage: {exc_val}"

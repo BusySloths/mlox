@@ -49,7 +49,7 @@ class MloxSession:
 
     infra: Infrastructure = field(init=False)
     secrets: AbstractSecretManager = field(init=False)
-    scheduler: ProcessScheduler = field(init=False)
+    # scheduler: ProcessScheduler = field(init=False)
 
     temp_kv: dict = field(default_factory=dict, init=False)
 
