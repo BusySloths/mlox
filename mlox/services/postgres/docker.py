@@ -57,4 +57,19 @@ class PostgresDockerService(AbstractService):
         fs_delete_dir(conn, self.target_path)
 
     def check(self, conn) -> Dict:
+        try:
+            output = exec_command(
+                conn,
+                f"docker ps --filter 'name=postgres' --filter 'status=running' --format '{{{{.Names}}}}'",
+                sudo=True,
+            )
+            if "postgres" in output:
+                self.state = "running"
+                return {"status": "running"}
+            else:
+                self.state = "stopped"
+                return {"status": "stopped"}
+        except Exception as e:
+            logging.error(f"Error checking Redis service status: {e}")
+            self.state = "unknown"
         return {"status": "unknown"}

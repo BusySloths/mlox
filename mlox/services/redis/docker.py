@@ -5,6 +5,7 @@ from typing import Dict
 
 from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
+    exec_command,
     fs_copy,
     fs_read_file,
     fs_create_dir,
@@ -53,4 +54,27 @@ class RedisDockerService(AbstractService):
         fs_delete_dir(conn, self.target_path)
 
     def check(self, conn) -> Dict:
+        # client = redis.Redis(
+        #     host=service.params.get("host", "localhost"),
+        #     port=service.params.get("port", 6379),
+        #     password=service.params.get("password", None),
+        #     decode_responses=True,
+        # )
+        # pong = client.ping()
+        # assert pong is True
+        try:
+            output = exec_command(
+                conn,
+                f"docker ps --filter 'name=redis' --filter 'status=running' --format '{{{{.Names}}}}'",
+                sudo=True,
+            )
+            if "redis" in output:
+                self.state = "running"
+                return {"status": "running"}
+            else:
+                self.state = "stopped"
+                return {"status": "stopped"}
+        except Exception as e:
+            logging.error(f"Error checking Redis service status: {e}")
+            self.state = "unknown"
         return {"status": "unknown"}
