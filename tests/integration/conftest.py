@@ -4,6 +4,7 @@ import socket
 import logging
 import pytest
 from pathlib import Path
+from typing import Callable, Dict, Optional
 
 from multipass import MultipassClient, MultipassVM  # type: ignore
 
@@ -54,6 +55,57 @@ def wait_for_ssh(
     raise TimeoutError(
         f"VM {vm_name} SSH not reachable after {timeout}s. Last error: {last_exc!r}"
     )
+
+
+def wait_for_service_ready(
+    service,
+    bundle,
+    check_fn: Optional[Callable[[], Dict[str, str]]] = None,
+    retries: int = 40,
+    interval: int = 60,
+) -> Dict[str, str]:
+    """Poll a service until it reports ``status == 'running'``.
+
+    Parameters
+    ----------
+    service: AbstractService
+        Service instance to check.
+    bundle: Bundle
+        Bundle containing the server the service is running on.
+    check_fn: Callable, optional
+        Optional custom check function returning a status dict. If not
+        provided, ``service.check`` is invoked using a server connection.
+    retries: int
+        Number of times to poll before giving up.
+    interval: int
+        Sleep interval in seconds between polls.
+
+    Returns
+    -------
+    Dict[str, str]
+        The last status dictionary returned by the check function.
+    """
+
+    status: Dict[str, str] = {"status": "unknown"}
+    for i in range(retries):
+        try:
+            if check_fn:
+                status = check_fn()
+            else:
+                with bundle.server.get_server_connection() as conn:
+                    status = service.check(conn)
+            if status.get("status") == "running":
+                return status
+            logging.warning(
+                f"Retry {i + 1}/{retries} in {interval}s. Service state {getattr(service, 'state', '?')} not yet running: {status}"
+            )
+        except Exception as e:
+            status = {"status": "unknown", "error": str(e)}
+            logging.warning(
+                f"Retry {i + 1}/{retries} in {interval}s. Exception during status check: {e}"
+            )
+        time.sleep(interval)
+    return status
 
 
 @pytest.fixture(scope="package")
