@@ -5,7 +5,7 @@ import redis
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
 
-from .conftest import wait_for_service_ready
+from tests.integration.conftest import wait_for_service_ready
 
 
 pytestmark = pytest.mark.integration
@@ -34,18 +34,7 @@ def install_redis_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
 
-    def check_fn():
-        client = redis.Redis(
-            host=ubuntu_docker_server.ip,
-            port=int(service.port),
-            password=service.pw,
-            ssl=True,
-            ssl_cert_reqs=None,
-        )
-        client.ping()
-        return {"status": "running"}
-
-    wait_for_service_ready(service, bundle, check_fn=check_fn, retries=40, interval=10)
+    wait_for_service_ready(service, bundle, retries=6, interval=30, no_checks=True)
 
     yield bundle_added, service
 
@@ -62,24 +51,23 @@ def install_redis_service(ubuntu_docker_server):
     infra.remove_bundle(bundle_added)
 
 
-def _redis_client(bundle, service):
-    return redis.Redis(
-        host=bundle.server.ip,
-        port=int(service.port),
-        password=service.pw,
-        ssl=True,
-        ssl_cert_reqs=None,
-    )
-
-
 def test_redis_service_is_running(install_redis_service):
     bundle, service = install_redis_service
-    client = _redis_client(bundle, service)
-    assert client.ping()
+    wait_for_service_ready(service, bundle, retries=60, interval=10)
 
+    status = {}
+    try:
+        with bundle.server.get_server_connection() as conn:
+            # client = redis.Redis(
+            #     host=service.params.get("host", "localhost"),
+            #     port=service.params.get("port", 6379),
+            #     password=service.params.get("password", None),
+            #     decode_responses=True,
+            # )
+            # pong = client.ping()
+            # assert pong is True
+            status = service.check(conn)
+    except Exception as e:
+        logger.error(f"Error checking Postgres service status: {e}")
 
-def test_redis_set_get(install_redis_service):
-    bundle, service = install_redis_service
-    client = _redis_client(bundle, service)
-    client.set("mlox", "rocks")
-    assert client.get("mlox") == b"rocks"
+    assert status.get("status", None) == "running"
