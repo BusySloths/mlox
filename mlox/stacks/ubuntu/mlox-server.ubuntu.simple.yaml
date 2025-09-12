@@ -1,5 +1,5 @@
 id: ubuntu-simple-24.04-server
-name: Ubuntu (Simple)
+name: Ubuntu (no setup)
 version: 24.04
 maintainer: Your Name
 description_short: Ubuntu with pre-configured access.
@@ -14,10 +14,7 @@ links:
   changelog: https://ubuntu.com/
 groups:
   server:
-    git:
-    initial_auth_password:
   backend:
-    native:
 ui:
   setup: mlox.servers.ubuntu.ui_simple.setup
   settings: mlox.servers.ubuntu.ui_simple.settings
