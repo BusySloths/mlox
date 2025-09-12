@@ -1,6 +1,7 @@
 import os
 import re
 import yaml
+import json
 import logging
 import tempfile
 import secrets
@@ -147,6 +148,42 @@ def docker_up(conn, config_yaml, env_file=None):
             f'docker compose --env-file {env_file} -f "{config_yaml}" up -d --build'
         )
     return exec_command(conn, command, sudo=True)
+
+
+def docker_service_state(conn, service_name: str) -> str:
+    """Return the status of a Docker service/container.
+
+    Args:
+        conn: Fabric connection object.
+        service_name: Name or ID of the Docker service/container.
+
+    Returns:
+        The state status string such as "running", "exited", etc. Returns an
+        empty string if the state cannot be determined.
+    """
+    cmd = f"docker inspect --format '{{{{.State.Status}}}}' {service_name}"
+    res = exec_command(conn, cmd, sudo=True, pty=False)
+    return res if res is not None else ""
+
+
+def docker_all_service_states(conn) -> dict[str, dict]:
+    """Retrieve state information for all Docker containers on the host.
+
+    Returns a dictionary keyed by container name with the value being the
+    container's ``State`` dictionary as returned by ``docker inspect``.
+    """
+    ids = exec_command(conn, "docker ps -aq", sudo=True, pty=False)
+    if not ids:
+        return {}
+
+    id_list = " ".join(ids.split())
+    inspect_output = exec_command(conn, f"docker inspect {id_list}", sudo=True, pty=False)
+    try:
+        containers = json.loads(inspect_output)
+        return {c.get("Name", "").lstrip("/"): c.get("State", {}) for c in containers}
+    except Exception as e:
+        logger.warning(f"Failed to parse docker state info: {e}")
+        return {}
 
 
 def git_clone(conn, repo_url, install_path):

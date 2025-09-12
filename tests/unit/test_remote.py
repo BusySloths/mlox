@@ -1,23 +1,45 @@
+import json
 import pytest
 
-from fabric import Connection, Result  # type: ignore[import]
+from dataclasses import dataclass
 from unittest.mock import MagicMock, call, ANY
 from io import BytesIO
 
-from mlox.remote import (
-    open_connection,
-    close_connection,
-    exec_command,
-    sys_disk_free,
-    fs_create_dir,
-    fs_delete_dir,
-    fs_append_line,
-    fs_create_empty_file,
-    fs_find_and_replace,
-    fs_write_file,
-    fs_read_file,
-    fs_list_files,
-)
+import importlib.util
+import pathlib
+import sys
+
+root_dir = pathlib.Path(__file__).resolve().parents[2]
+sys.path.append(str(root_dir))
+
+from fabric import Connection
+
+
+@dataclass
+class Result:
+    stdout: str
+    stderr: str
+    exited: int
+    connection: Connection
+remote_path = root_dir / "mlox" / "remote.py"
+spec = importlib.util.spec_from_file_location("remote", remote_path)
+remote = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(remote)
+
+open_connection = remote.open_connection
+close_connection = remote.close_connection
+exec_command = remote.exec_command
+sys_disk_free = remote.sys_disk_free
+fs_create_dir = remote.fs_create_dir
+fs_delete_dir = remote.fs_delete_dir
+fs_append_line = remote.fs_append_line
+fs_create_empty_file = remote.fs_create_empty_file
+fs_find_and_replace = remote.fs_find_and_replace
+fs_write_file = remote.fs_write_file
+fs_read_file = remote.fs_read_file
+fs_list_files = remote.fs_list_files
+docker_service_state = remote.docker_service_state
+docker_all_service_states = remote.docker_all_service_states
 
 
 @pytest.fixture
@@ -121,3 +143,36 @@ def test_fs_list_files(mock_connection):
     )
     result = fs_list_files(mock_connection, "/test/path")
     assert result == ["file1", "file2", "dir1"]
+
+
+def test_docker_service_state(mock_connection, monkeypatch):
+    mock_exec = MagicMock(return_value="running")
+    monkeypatch.setattr(remote, "exec_command", mock_exec)
+    result = docker_service_state(mock_connection, "svc1")
+    expected_cmd = "docker inspect --format '{{.State.Status}}' svc1"
+    mock_exec.assert_called_once_with(mock_connection, expected_cmd, sudo=True, pty=False)
+    assert result == "running"
+
+
+def test_docker_all_service_states(mock_connection, monkeypatch):
+    outputs = [
+        "id1\nid2",
+        json.dumps(
+            [
+                {"Name": "/svc1", "State": {"Status": "running"}},
+                {"Name": "/svc2", "State": {"Status": "exited"}},
+            ]
+        ),
+    ]
+    mock_exec = MagicMock(side_effect=outputs)
+    monkeypatch.setattr(remote, "exec_command", mock_exec)
+    result = docker_all_service_states(mock_connection)
+    expected_calls = [
+        call(mock_connection, "docker ps -aq", sudo=True, pty=False),
+        call(mock_connection, "docker inspect id1 id2", sudo=True, pty=False),
+    ]
+    assert mock_exec.call_args_list == expected_calls
+    assert result == {
+        "svc1": {"Status": "running"},
+        "svc2": {"Status": "exited"},
+    }
