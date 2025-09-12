@@ -101,9 +101,23 @@ More Links:
 2. <https://www.databricks.com/glossary/mlops>
 3. <https://martinfowler.com/articles/cd4ml.html>
 
-## Contributing  
+## Contributing
 
-There are many ways to contribute, and they are not limited to writing code. We welcome all contributions such as:
+### Sloth-Friendly Setup
+
+Easing into MLOX should feel like a lazy stretch on a sunny branch:
+
+1. Install [Task](https://taskfile.dev/installation/) – our go-powered task runner.
+2. Clone this repository.
+3. Mosey into the project and run:
+
+   ```bash
+   task first:steps
+   ```
+
+   This unhurried command crafts a conda environment and gathers every dependency for you.
+
+Once you're comfortably set up, there are many ways to contribute, and they are not limited to writing code. We welcome all contributions such as:
 
 - <a href="https://github.com/BusySloths/mlox/issues/new/choose">Bug reports</a>
 - <a href="https://github.com/BusySloths/mlox/issues/new/choose">Documentation improvements</a>
