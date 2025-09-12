@@ -74,8 +74,6 @@ class LoginScreen(Screen):
             self.query_one("#message", Static).update("Login failed")
 
 
-
-
 class MainScreen(Screen):
     """Main application screen shown after login."""
 
@@ -83,11 +81,12 @@ class MainScreen(Screen):
         yield Header(show_clock=True)
         with Container(id="main-area"):
             with Container(id="sidebar"):
-                menu = Tree("Menu", id="menu-tree")
+                menu: Tree = Tree("Menu", id="menu-tree")
                 menu.root.expand()
-                menu.root.add("Home", id="tab-home")
-                menu.root.add("Servers", id="tab-servers")
-                menu.root.add("Services", id="tab-services")
+                # Store target TabPane ids as node data for robust selection
+                menu.root.add("Home", data="tab-home")
+                menu.root.add("Servers", data="tab-servers")
+                menu.root.add("Services", data="tab-services")
                 yield menu
             with Container(id="content"):
                 with TabbedContent(id="tabs"):
@@ -120,9 +119,20 @@ class MainScreen(Screen):
             for svc in bundle.services:
                 services.add_row(svc.name, bundle.server.ip, svc.state)
 
-    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:  # pragma: no cover - UI callback
+    def on_tree_node_selected(
+        self, event: Tree.NodeSelected
+    ) -> None:  # pragma: no cover - UI callback
         tabbed = self.query_one(TabbedContent)
-        tabbed.active = event.node.id
+        # Prefer explicit target from node data; fallback to label mapping
+        target = event.node.data
+        if not isinstance(target, str) or not target:
+            label = event.node.label
+            label_text = getattr(label, "plain", label)  # Textual Text or str
+            target = f"tab-{str(label_text).strip().lower()}"
+        tabbed.active = target
+        # Ensure the latest data appears when switching to tables
+        if target in ("tab-servers", "tab-services"):
+            self.populate_tables()
 
 
 class MLOXTextualApp(App):
