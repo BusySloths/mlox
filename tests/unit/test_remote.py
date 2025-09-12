@@ -1,3 +1,4 @@
+import os
 import json
 import pytest
 
@@ -9,10 +10,7 @@ import importlib.util
 import pathlib
 import sys
 
-root_dir = pathlib.Path(__file__).resolve().parents[2]
-sys.path.append(str(root_dir))
-
-from fabric import Connection
+from fabric import Connection  # type: ignore
 
 
 @dataclass
@@ -21,9 +19,24 @@ class Result:
     stderr: str
     exited: int
     connection: Connection
-remote_path = root_dir / "mlox" / "remote.py"
+
+
+root_dir = pathlib.Path(__file__).resolve().parents[2]
+sys.path.append(str(root_dir))
+
+mlox_dir = os.environ.get("MLOX_DIR", "mlox")
+remote_file = os.environ.get("REMOTE_FILE", "remote.py")
+remote_path = root_dir / mlox_dir / remote_file
 spec = importlib.util.spec_from_file_location("remote", remote_path)
+if spec is None:
+    raise ImportError(f"Could not create module spec from {remote_path}")
+if spec.loader is None:
+    raise ImportError(f"Could not find module loader for {remote_path}")
 remote = importlib.util.module_from_spec(spec)
+try:
+    spec.loader.exec_module(remote)
+except Exception as e:
+    raise ImportError(f"Failed to import remote module from {remote_path}: {e}") from e
 spec.loader.exec_module(remote)
 
 open_connection = remote.open_connection
@@ -150,7 +163,9 @@ def test_docker_service_state(mock_connection, monkeypatch):
     monkeypatch.setattr(remote, "exec_command", mock_exec)
     result = docker_service_state(mock_connection, "svc1")
     expected_cmd = "docker inspect --format '{{.State.Status}}' svc1"
-    mock_exec.assert_called_once_with(mock_connection, expected_cmd, sudo=True, pty=False)
+    mock_exec.assert_called_once_with(
+        mock_connection, expected_cmd, sudo=True, pty=False
+    )
     assert result == "running"
 
 
