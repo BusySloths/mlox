@@ -7,24 +7,22 @@ terminal UI could look.  The functionality is intentionally limited but
 serves as a starting point for further development.
 """
 
-import random
-from statistics import mean
-
 import os
 from typing import Optional
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, CenterMiddle
+from textual.containers import CenterMiddle, Container
 from textual.screen import Screen
 from textual.widgets import (
     Button,
+    DataTable,
     Footer,
     Header,
     Input,
     Static,
     TabPane,
-    Sparkline,
     TabbedContent,
+    Tree,
 )
 
 from mlox.session import MloxSession
@@ -76,8 +74,6 @@ class LoginScreen(Screen):
             self.query_one("#message", Static).update("Login failed")
 
 
-random.seed(73)
-data = [random.expovariate(1 / 3) for _ in range(1000)]
 
 
 class MainScreen(Screen):
@@ -85,35 +81,48 @@ class MainScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        # Main horizontal layout: sidebar | content
         with Container(id="main-area"):
-            yield Sparkline(data, summary_function=max)
-            yield Sparkline(data, summary_function=mean)
-            yield Sparkline(data, summary_function=min)
             with Container(id="sidebar"):
-                yield Static("Menu", id="sidebar-title")
-                yield Button("Home", id="btn-home")
-                yield Button("Infrastructure", id="btn-infra")
-                yield Button("Services", id="btn-services")
+                menu = Tree("Menu", id="menu-tree")
+                menu.root.expand()
+                menu.root.add("Home", id="tab-home")
+                menu.root.add("Servers", id="tab-servers")
+                menu.root.add("Services", id="tab-services")
+                yield menu
             with Container(id="content"):
-                with TabbedContent("Services", "Infrastructure", "Templates"):
-                    yield Static(WELCOME_TEXT, id="content-body")
-                    yield Static(WELCOME_TEXT, id="content-body")
-                    yield Static(WELCOME_TEXT, id="content-body")
+                with TabbedContent(id="tabs"):
+                    with TabPane("Home", id="tab-home"):
+                        yield Static(WELCOME_TEXT, id="home-content")
+                    with TabPane("Servers", id="tab-servers"):
+                        yield DataTable(id="servers-table")
+                    with TabPane("Services", id="tab-services"):
+                        yield DataTable(id="services-table")
         yield Footer()
 
-    def on_button_pressed(
-        self, event: Button.Pressed
-    ) -> None:  # pragma: no cover - UI callback
-        # Update main content depending on which sidebar button was pressed
-        content = self.query_one("#content-body", Static)
-        bid = event.button.id
-        if bid == "btn-home":
-            content.update(WELCOME_TEXT)
-        elif bid == "btn-infra":
-            content.update("Infrastructure view coming soon.")
-        elif bid == "btn-services":
-            content.update("Services view coming soon.")
+    def on_mount(self) -> None:
+        self.populate_tables()
+
+    def populate_tables(self) -> None:
+        """Populate tables with current infrastructure data."""
+        servers = self.query_one("#servers-table", DataTable)
+        services = self.query_one("#services-table", DataTable)
+        servers.clear(columns=True)
+        services.clear(columns=True)
+        servers.add_columns("Name", "IP", "State")
+        services.add_columns("Name", "Server", "State")
+        infra = getattr(getattr(self.app, "session", None), "infra", None)
+        if not infra or len(infra.bundles) == 0:
+            servers.add_row("No servers", "-", "-")
+            services.add_row("No services", "-", "-")
+            return
+        for bundle in infra.bundles:
+            servers.add_row(bundle.name, bundle.server.ip, bundle.server.state)
+            for svc in bundle.services:
+                services.add_row(svc.name, bundle.server.ip, svc.state)
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:  # pragma: no cover - UI callback
+        tabbed = self.query_one(TabbedContent)
+        tabbed.active = event.node.id
 
 
 class MLOXTextualApp(App):

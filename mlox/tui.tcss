@@ -66,3 +66,24 @@ Button {
   color: #ff6b6b;
   margin-top: 1;
 }
+
+#main-area {
+  layout: horizontal;
+}
+
+#sidebar {
+  width: 30;
+  border: round #2b3c5f;
+}
+
+#content {
+  width: 1fr;
+}
+
+Tree {
+  height: 100%;
+}
+
+DataTable {
+  height: 100%;
+}
