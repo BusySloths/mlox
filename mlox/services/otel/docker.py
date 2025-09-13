@@ -15,6 +15,7 @@ from mlox.remote import (
     fs_append_line,
     docker_down,
     exec_command,
+    docker_service_state,
 )
 
 # Configure logging (optional, but recommended)
@@ -97,4 +98,11 @@ class OtelDockerService(AbstractService):
         self.state = "un-initialized"
 
     def check(self, conn) -> Dict:
-        return dict()
+        docker_state = docker_service_state(conn, "otel-collector")
+        status = "failed"
+        if docker_state == "running":
+            status = "running"
+        elif docker_state in ("created", "restarting"):
+            status = "starting"
+
+        return {"status": status, "docker_state": docker_state}
