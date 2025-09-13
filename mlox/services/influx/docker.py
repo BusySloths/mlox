@@ -70,8 +70,7 @@ class InfluxDockerService(AbstractService):
     def check(self, conn) -> Dict:
         try:
             state = docker_service_state(conn, "influxdbv2")
-            self.state = state if state else "unknown"
-            return {"status": self.state}
+            return {"status": state}
         except Exception as e:
             logging.error(f"Error checking InfluxDB service status: {e}")
             self.state = "unknown"
