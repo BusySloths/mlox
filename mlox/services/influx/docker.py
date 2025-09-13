@@ -12,6 +12,7 @@ from mlox.remote import (
     docker_down,
     fs_delete_dir,
     exec_command,
+    docker_service_state,
 )
 
 
@@ -67,4 +68,11 @@ class InfluxDockerService(AbstractService):
         fs_delete_dir(conn, self.target_path)
 
     def check(self, conn) -> Dict:
+        try:
+            state = docker_service_state(conn, "influxdbv2")
+            self.state = state if state else "unknown"
+            return {"status": self.state}
+        except Exception as e:
+            logging.error(f"Error checking InfluxDB service status: {e}")
+            self.state = "unknown"
         return {"status": "unknown"}
