@@ -39,10 +39,18 @@ server_app = typer.Typer(help="Manage servers in the project infrastructure")
 service_app = typer.Typer(help="Manage services running on servers")
 template_app = typer.Typer(help="List available templates")
 
+# New nested groups for configs under server and service
+server_configs_app = typer.Typer(help="Server configuration templates")
+service_configs_app = typer.Typer(help="Service configuration templates")
+
 app.add_typer(project_app, name="project")
 app.add_typer(server_app, name="server")
 app.add_typer(service_app, name="service")
 app.add_typer(template_app, name="templates")
+
+# Attach configs namespace under existing groups
+server_app.add_typer(server_configs_app, name="configs")
+service_app.add_typer(service_configs_app, name="configs")
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +373,35 @@ def service_teardown(
 
 
 # ---------------------------------------------------------------------------
+# Configs commands (nested under server and service)
+# ---------------------------------------------------------------------------
+
+
+@server_configs_app.command("list")
+def server_configs_list():
+    """List available server configuration templates."""
+
+    configs = load_all_server_configs()
+    if not configs:
+        typer.echo("No server configs found.")
+        return
+    for cfg in configs:
+        typer.echo(f"{cfg.id} - {cfg.path}")
+
+
+@service_configs_app.command("list")
+def service_configs_list():
+    """List available service configuration templates."""
+
+    configs = load_all_service_configs()
+    if not configs:
+        typer.echo("No service configs found.")
+        return
+    for cfg in configs:
+        typer.echo(f"{cfg.id} - {cfg.path}")
+
+
+# ---------------------------------------------------------------------------
 # Template commands
 # ---------------------------------------------------------------------------
 
@@ -389,4 +426,3 @@ def template_services():
 
 if __name__ == "__main__":
     app()
-

@@ -1,14 +1,7 @@
-import logging
-
-# Configure logging for all levels with a visually pleasing format
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
-)
-import importlib
-import logging
 import os
 import yaml
+import logging
+import importlib
 
 from importlib import resources
 from dataclasses import dataclass, field
@@ -157,7 +150,7 @@ def load_service_configs(
     config_dir = f"{root_dir}/{service_dir}"
     configs: List[ServiceConfig] = []
     if not os.path.isdir(config_dir):
-        logging.error(f"Configuration directory not found: {config_dir}")
+        logging.info(f"Configuration directory not found: {config_dir}")
         return configs
 
     # Look for mlox-config.yaml specifically within the provided directory
@@ -201,7 +194,11 @@ def load_config(
             logging.error(f"Error parsing YAML file {filepath}: {e}")
         except TypeError as e:
             logging.error(
-                f"Error initializing ServiceConfig from {filepath}: {e}. Check if all required fields are present and correctly structured in the YAML. Data: {service_data}"
+                (
+                    f"Error initializing ServiceConfig from {filepath}: {e}. "
+                    "Check if all required fields are present and correctly structured in the YAML. "
+                    f"Data: {service_data}"
+                )
             )
         except Exception as e:  # Catch other potential errors
             logging.error(
