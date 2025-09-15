@@ -21,8 +21,10 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any] | None:
     st_hack_align(c3, px=32)
     is_private = c3.checkbox("Private Repository", value=False)
 
-    # link = f"https://github.com/{user_name}/{repo_name}.git"
-    link = f"git@github.com:{user_name}/{repo_name}.git"
+    if is_private:
+        link = f"git@github.com:{user_name}/{repo_name}.git"
+    else:
+        link = f"https://github.com/{user_name}/{repo_name}.git"
     st.markdown(f"Link: {link}")
 
     if user_name and repo_name:
@@ -39,6 +41,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: GithubRepoService):
     # st.header(f"Settings for service {service.name}")
     # st.write(f'Link: "{service.link}"')
     # st.write(f'Path: "{service.target_path}"')
+    st.write(service.target_path)
     with bundle.server.get_server_connection() as conn:
         info = service.check(conn)
 

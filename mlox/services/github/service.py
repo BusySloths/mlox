@@ -3,7 +3,7 @@ import logging
 
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Dict, cast, Literal
+from typing import Dict, Literal
 
 from mlox.infra import Bundle, Repo
 from mlox.service import AbstractService
@@ -38,7 +38,10 @@ class GithubRepoService(AbstractService, Repo):
     def __post_init__(self):
         splits = self.link.split("/")
         self.repo_name = splits[-1][:-4]
-        self.user_or_org_name = splits[-2]
+        if self.repo_name.startswith("git@github.com"):
+            self.user_or_org_name = splits[-2].split(":")[-1]
+        else:
+            self.user_or_org_name = splits[-2]
         self.state = "un-initialized"
 
     def get_url(self) -> str:
@@ -47,6 +50,7 @@ class GithubRepoService(AbstractService, Repo):
     def setup(self, conn) -> None:
         self.service_urls = {"Repository": self.get_url()}
         self.service_ports = dict()
+        fs_create_dir(conn, self.target_path)
 
         if self.is_private:
             logging.info(f"Generate deploy keys for {self.repo_name}.")
@@ -56,7 +60,7 @@ class GithubRepoService(AbstractService, Repo):
             self.git_clone(conn)
 
     def teardown(self, conn):
-        fs_delete_dir(conn, self.target_path)
+        fs_delete_dir(conn, self.target_path + "/" + self.repo_name)
         self.state = "un-initialized"
 
     def spin_up(self, conn):
