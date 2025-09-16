@@ -24,6 +24,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class UbuntuNativeServer(AbstractServer, AbstractGitServer):
+    DEFAULT_SERVER_INFO: Dict[str, str | int | float] = {
+        "host": "Unknown",
+        "cpu_count": 0,
+        "ram_gb": 0,
+        "storage_gb": 0,
+        "pretty_name": "Unknown",
+    }
     _specs: Dict[str, str | int | float] | None = field(default=None, init=False)
     is_debug_access_enabled: bool = field(default=False, init=False)
 
@@ -111,10 +118,20 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 sudo=True,
             )
             self._apt_wait(conn)
+            # Update package list before installing to avoid "package not found" errors
+            exec_command(
+                conn,
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 update",
+                sudo=True,
+            )
             # Install common utilities in a single transaction to reduce lock contention
             exec_command(
                 conn,
-                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 install mc git zsh host curl",
+                (
+                    "DEBIAN_FRONTEND=noninteractive apt-get -yq "
+                    "-o DPkg::Lock::Timeout=300 install "
+                    "mc git zsh host curl openssl || true"
+                ),
                 sudo=True,
             )
 
@@ -123,19 +140,13 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             if self._specs:
                 return self._specs
             else:
-                return {
-                    "host": "Unknown",
-                    "cpu_count": 0,
-                    "ram_gb": 0,
-                    "storage_gb": 0,
-                    "pretty_name": "Unknown",
-                }
+                return self.DEFAULT_SERVER_INFO.copy()
 
         cmd = """
                 cpu_count=$(lscpu | grep "^CPU(s):" | awk '{print $2}')
                 ram_gb=$(free -m | grep Mem | awk '{printf "%.0f", $2/1024}')
                 storage_gb=$(df -h / | awk 'NR==2 {print $2}' | sed 's/G//')
-                echo "$cpu_count,$ram_gb,$storage_gb" 
+                echo "$cpu_count,$ram_gb,$storage_gb"
             """
 
         host_info = ""
@@ -205,7 +216,10 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
 
             # 2. generate rsa keys for remote user
             logger.info(f"Generate RSA keys for remote user on server {self.ip}.")
-            command = f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N {remote_user.ssh_passphrase}"
+            command = (
+                f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; "
+                f"ssh-keygen -b 4096 -t rsa -f id_rsa -N {remote_user.ssh_passphrase}"
+            )
             exec_command(conn, command, sudo=False)
 
             # 3. read pub and private keys and store to remote user
@@ -220,7 +234,10 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             logger.info(
                 f"Generate RSA keys for {self.mlox_user.name} on server {self.ip}."
             )
-            command = f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; ssh-keygen -b 4096 -t rsa -f id_rsa -N {self.mlox_user.ssh_passphrase}"
+            command = (
+                f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; "
+                f"ssh-keygen -b 4096 -t rsa -f id_rsa -N {self.mlox_user.ssh_passphrase}"
+            )
             exec_command(conn, command, sudo=False)
 
             # 5. read pub and private keys and store to mlox user
