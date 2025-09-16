@@ -1,7 +1,7 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Dict, Any, ClassVar
 
 from mlox.server import AbstractServer, AbstractGitServer, sys_get_distro_info
 from mlox.remote import (
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class UbuntuNativeServer(AbstractServer, AbstractGitServer):
-    DEFAULT_SERVER_INFO: Dict[str, str | int | float] = {
+    DEFAULT_SERVER_INFO: ClassVar[Dict[str, str | int | float]] = {
         "host": "Unknown",
         "cpu_count": 0,
         "ram_gb": 0,
