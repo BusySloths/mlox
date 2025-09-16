@@ -146,6 +146,9 @@ feature_store.yaml
 test_feature_store.yaml
 requirements.gen*
 
+# keys for integration tests
+mlox_integration_tests_key*
+
 # certificates/keys
 *.pem
 *.crt

@@ -1,5 +1,4 @@
 import logging
-import os
 from datetime import datetime
 
 import pytest
@@ -13,10 +12,10 @@ pytestmark = pytest.mark.integration
 logger = logging.getLogger(__name__)
 
 PUBLIC_MLOX_REPO = "https://github.com/busysloths/mlox.git"
-PRIVATE_MLOX_REPO = "git@github.com:busysloth/mlox-test-private-repo.git"
-PRIVATE_MLOX_REPO_HTTP_URL = "https://github.com/busysloth/mlox-test-private-repo"
-PRIVATE_DEPLOY_KEY_ENV = "MLOX_TEST_GITHUB_PRIVATE_REPO_DEPLOY_KEY_PUBLIC"
-PRIVATE_DEPLOY_PRIVATE_KEY_ENV = "MLOX_TEST_GITHUB_PRIVATE_REPO_DEPLOY_KEY_PRIVATE"
+PRIVATE_MLOX_REPO = "git@github.com:busysloths/mlox-test-private-repo.git"
+PRIVATE_MLOX_REPO_HTTP_URL = "https://github.com/busysloths/mlox-test-private-repo"
+# Path to the private key file; public key is expected at "<path>.pub"
+PRIVATE_DEPLOY_KEY_FILE = "mlox_integration_tests_key"
 
 
 def _normalize_key_material(key_material: str) -> str:
@@ -26,7 +25,9 @@ def _normalize_key_material(key_material: str) -> str:
     return normalized
 
 
-def _install_preconfigured_deploy_keys(conn, server, service, public_key: str, private_key: str) -> None:
+def _install_preconfigured_deploy_keys(
+    conn, server, service, public_key: str, private_key: str
+) -> None:
     key_name = f"mlox_deploy_{service.repo_name}"
     ssh_dir = f"{service.target_path}/.ssh"
     fs_create_dir(conn, ssh_dir)
@@ -99,7 +100,9 @@ def test_github_repo_public_clone(github_repo_service):
     bundle, service = github_repo_service
 
     assert service.repo_name == "mlox"
-    assert service.service_urls.get("Repository") == "https://github.com/busysloths/mlox"
+    assert (
+        service.service_urls.get("Repository") == "https://github.com/busysloths/mlox"
+    )
 
     with bundle.server.get_server_connection() as conn:
         status = service.check(conn)
@@ -133,11 +136,16 @@ def test_github_repo_public_pull(github_repo_service):
 def github_private_repo_service(ubuntu_docker_server):
     """Provision the GitHub repository service for a private repository."""
 
-    public_key = os.environ.get(PRIVATE_DEPLOY_KEY_ENV)
-    private_key = os.environ.get(PRIVATE_DEPLOY_PRIVATE_KEY_ENV)
-    if not public_key or not private_key:
+    public_key_path = f"{PRIVATE_DEPLOY_KEY_FILE}.pub"
+    private_key_path = f"{PRIVATE_DEPLOY_KEY_FILE}"
+    try:
+        with open(private_key_path, "r") as f:
+            private_key = f.read()
+        with open(public_key_path, "r") as f:
+            public_key = f.read()
+    except FileNotFoundError:
         pytest.skip(
-            "Deploy key environment variables for the private GitHub repo are not configured"
+            f"Deploy key files not found: '{private_key_path}' and/or '{public_key_path}'"
         )
 
     infra = Infrastructure()
@@ -155,7 +163,9 @@ def github_private_repo_service(ubuntu_docker_server):
 
     bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
-        pytest.skip("Failed to add private GitHub repository service to the infrastructure")
+        pytest.skip(
+            "Failed to add private GitHub repository service to the infrastructure"
+        )
 
     service = bundle_added.services[-1]
 
@@ -173,7 +183,8 @@ def github_private_repo_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception as exc:  # pragma: no cover - teardown best effort
             logger.warning(
-                "Ignoring error during private GitHub repository service teardown: %s", exc
+                "Ignoring error during private GitHub repository service teardown: %s",
+                exc,
             )
 
     infra.remove_bundle(bundle_added)
@@ -186,9 +197,16 @@ def test_github_repo_private_clone(github_private_repo_service):
 
     assert service.repo_name == "mlox-test-private-repo"
     assert service.service_urls.get("Repository") == PRIVATE_MLOX_REPO_HTTP_URL
-    expected_public_key = os.environ.get(PRIVATE_DEPLOY_KEY_ENV)
-    if expected_public_key:
-        assert service.deploy_key.strip() == expected_public_key.strip()
+    public_key_path = f"{PRIVATE_DEPLOY_KEY_FILE}.pub"
+    private_key_path = f"{PRIVATE_DEPLOY_KEY_FILE}"
+    if private_key_path:
+        public_key_path = f"{private_key_path}.pub"
+        try:
+            with open(public_key_path, "r") as f:
+                expected_public_key = f.read()
+            assert service.deploy_key.strip() == expected_public_key.strip()
+        except FileNotFoundError:
+            pass
 
     with bundle.server.get_server_connection() as conn:
         status = service.check(conn)
