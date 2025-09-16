@@ -36,12 +36,34 @@ class GithubRepoService(AbstractService, Repo):
     cloned: bool = field(default=False, init=False)
 
     def __post_init__(self):
-        splits = self.link.split("/")
-        self.repo_name = splits[-1][:-4]
-        if self.repo_name.startswith("git@github.com"):
-            self.user_or_org_name = splits[-2].split(":")[-1]
+        link = self.link.strip()
+        # Remove trailing slashes and optional .git suffix
+        sanitized_link = link.rstrip("/")
+        if sanitized_link.endswith(".git"):
+            sanitized_link = sanitized_link[:-4]
+
+        repo_path = ""
+        if "@" in sanitized_link and ":" in sanitized_link.split("@", 1)[1]:
+            # SSH form: git@github.com:org/repo
+            repo_path = sanitized_link.split(":", 1)[1]
         else:
-            self.user_or_org_name = splits[-2]
+            segments = sanitized_link.split("/")
+            if len(segments) >= 2:
+                repo_path = "/".join(segments[-2:])
+            elif segments:
+                repo_path = segments[-1]
+
+        repo_segments = [part for part in repo_path.split("/") if part]
+        if len(repo_segments) >= 2:
+            self.user_or_org_name = repo_segments[-2]
+            self.repo_name = repo_segments[-1]
+        elif repo_segments:
+            self.user_or_org_name = ""
+            self.repo_name = repo_segments[-1]
+        else:
+            self.user_or_org_name = ""
+            self.repo_name = ""
+
         self.state = "un-initialized"
 
     def get_url(self) -> str:
