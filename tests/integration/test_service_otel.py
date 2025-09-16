@@ -25,7 +25,10 @@ def install_otel_service(ubuntu_docker_server):
     bundle_added = infra.add_service(
         ubuntu_docker_server.ip,
         config,
-        params={"${MLOX_RELIC_KEY}": "", "${MLOX_RELIC_ENDPOINT}": ""},
+        params={
+            "${MLOX_RELIC_KEY}": "123",
+            "${MLOX_RELIC_ENDPOINT}": "https://otlp.eu01.nr-data.net:4317",
+        },
     )
     if not bundle_added:
         pytest.fail("Failed to add otel service from config")
@@ -35,7 +38,7 @@ def install_otel_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
     # Initial stabilization wait while containers/images start up
-    wait_for_service_ready(service, bundle, retries=6, interval=30, no_checks=True)
+    wait_for_service_ready(service, bundle, retries=3, interval=10, no_checks=True)
 
     yield bundle_added, service
 
@@ -53,7 +56,7 @@ def install_otel_service(ubuntu_docker_server):
 
 def test_otel_service_is_running(install_otel_service):
     bundle, service = install_otel_service
-    status = wait_for_service_ready(service, bundle, retries=10, interval=60)
+    status = wait_for_service_ready(service, bundle, retries=3, interval=10)
     assert status.get("status") == "running"
 
 

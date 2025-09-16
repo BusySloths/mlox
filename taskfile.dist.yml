@@ -126,14 +126,21 @@ tasks:
     silent: true
     vars:
       SERVICE: "{{.SERVICE}}"
+      PDB: '{{.PDB | default "false"}}'
+      VSCODE_DEBUG: '{{.VSCODE_DEBUG | default "false"}}'
     cmds:
       - |
-        if ! command -v multipass >/dev/null 2>&1; then \
-          printf '\n\033[1;31m✖ Multipass is not installed.\033[0m\n'; \
-          printf 'Install it first. Run: \033[1mtask deps:install:tools\033[0m\n\n'; \
-          exit 1; \
+        {{if eq .VSCODE_DEBUG "true"}}
+        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('debugpy') else 1)"; then
+          printf '\n\033[1;31m✖ debugpy is not installed.\033[0m\n';
+          printf 'Please install it first: \033[1m{{.PYTHON | default "python"}} -m pip install debugpy\033[0m\n\n';
+          exit 1;
         fi
-      - pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration;
+        printf '\n\033[1;36m▶ Starting debugger. Waiting for VS Code to attach on port 5678...\033[0m\n'
+        {{.PYTHON | default "python"}} -m debugpy --listen 5678 --wait-for-client -m pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration
+        {{else}}
+        pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration{{if eq .PDB "true"}} --pdb{{end}}
+        {{end}}
     desc: Run integration tests for a specific service only (e.g. mlflow, airflow, etc.)
 
   tests:integration:cleanup:

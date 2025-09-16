@@ -27,7 +27,7 @@ MLOX is still in a very early development phase. If you like to contribute in an
 
 ### What Can You Do With MLOX?
 
-#### Server
+#### Infrastructure
 
 - Add, delete, tag and name server
 - Select Native, Docker, Kubernetes backend
