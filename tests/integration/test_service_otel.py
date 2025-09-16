@@ -60,28 +60,28 @@ def test_otel_service_is_running(install_otel_service):
     assert status.get("status") == "running"
 
 
-# def test_otel_log_file_written(install_otel_service):
-#     bundle, service = install_otel_service
-#     # Ensure service is up before sending logs
-#     wait_for_service_ready(service, bundle, retries=40, interval=15)
+def test_otel_log_file_written(install_otel_service):
+    bundle, service = install_otel_service
+    # Ensure service is up before sending logs
+    wait_for_service_ready(service, bundle, retries=40, interval=15)
 
-#     ssl_credentials = grpc.ssl_channel_credentials(
-#         root_certificates=service.certificate.encode("utf-8")
-#     )
-#     resource = Resource.create({"service.name": "mlox.test"})
-#     exporter = OTLPLogExporter(
-#         endpoint=service.service_url, credentials=ssl_credentials, insecure=False
-#     )
-#     logger_provider = LoggerProvider(resource=resource)
-#     logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
-#     handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
-#     otel_logger = logging.getLogger("test_otel_logger")
-#     otel_logger.addHandler(handler)
-#     otel_logger.setLevel(logging.INFO)
-#     msg = "integration test log message"
-#     otel_logger.info(msg)
-#     time.sleep(3)
-#     logger_provider.shutdown()
+    ssl_credentials = grpc.ssl_channel_credentials(
+        root_certificates=service.certificate.encode("utf-8")
+    )
+    resource = Resource.create({"service.name": "mlox.test"})
+    exporter = OTLPLogExporter(
+        endpoint=service.service_url, credentials=ssl_credentials, insecure=False
+    )
+    logger_provider = LoggerProvider(resource=resource)
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+    handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+    otel_logger = logging.getLogger("test_otel_logger")
+    otel_logger.addHandler(handler)
+    otel_logger.setLevel(logging.INFO)
+    msg = "integration test log message"
+    otel_logger.info(msg)
+    time.sleep(3)
+    logger_provider.shutdown()
 
-#     data = service.get_telemetry_data(bundle)
-#     assert msg in data
+    data = service.get_telemetry_data(bundle)
+    assert msg in data
