@@ -97,9 +97,9 @@ This is were the MLOX project comes in. The goal of MLOX is four-fold:
 
 More Links:
 
-1. <https://en.wikipedia.org/wiki/MLOps>
-2. <https://www.databricks.com/glossary/mlops>
-3. <https://martinfowler.com/articles/cd4ml.html>
+1. [Wikipedia](https://en.wikipedia.org/wiki/MLOps)
+2. [Databricks](https://www.databricks.com/glossary/mlops)
+3. [Continuous Delivery for Machine Learning](https://martinfowler.com/articles/cd4ml.html)
 
 ## Contributing
 
@@ -119,13 +119,13 @@ Easing into MLOX should feel like a lazy stretch on a sunny branch:
 
 Once you're comfortably set up, there are many ways to contribute, and they are not limited to writing code. We welcome all contributions such as:
 
-- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Bug reports</a>
-- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Documentation improvements</a>
-- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Enhancement suggestions</a>
-- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Feature requests</a>
-- <a href="https://github.com/BusySloths/mlox/issues/new/choose">Expanding the tutorials and use case examples</a>
+- [Bug reports](https://github.com/BusySloths/mlox/issues/new/choose)
+- [Documentation improvements](https://github.com/BusySloths/mlox/issues/new/choose)
+- [Enhancement suggestions](https://github.com/BusySloths/mlox/issues/new/choose)
+- [Feature requests](https://github.com/BusySloths/mlox/issues/new/choose)
+- [Expanding the tutorials and use case examples](https://github.com/BusySloths/mlox/issues/new/choose)
 
-Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+Please see our [Contributing Guide](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) for details.
 
 ## Big Thanks to our Sponsors
 
