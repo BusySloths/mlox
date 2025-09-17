@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 import streamlit as st
 
@@ -6,6 +7,8 @@ from typing import cast, List, Dict, Any
 from mlox.infra import Infrastructure
 from mlox.config import load_all_server_configs
 from mlox.view.utils import plot_config_nicely
+
+logger = logging.getLogger(__name__)
 
 
 def save_infra():
@@ -24,15 +27,12 @@ def format_groups(groups: Dict[str, Any]) -> List[str]:
 
 
 # @st.fragment(run_every="30s")
-def check_server_status(server, session_key):
-    is_running = server.test_connection()
-    info = st.session_state[session_key]
+def check_server_status(server):
     try:
-        info = server.get_server_info(no_cache=True)
+        _ = server.test_connection()
+        _ = server.get_server_info(no_cache=True)
     except Exception as e:
-        print(f"Could not get server info: {e}")
-    info["connection"] = is_running
-    st.session_state[session_key] = info
+        logger.warning(f"Could not get server info: {e}")
 
 
 @st.cache_data
@@ -66,18 +66,8 @@ def tab_server_management(infra: Infrastructure):
 
     srv = []
     for bundle in infra.bundles:
-        session_key = f"mlox_server_status_{bundle.server.ip}"
-
         state = bundle.server.state
         info = bundle.server.get_server_info()
-        if not info:
-            info = {
-                "host": "unknown",
-                "cpu_count": "unknown",
-                "ram_gb": "unknown",
-                "storage_gb": "unknown",
-                "pretty_name": "unknown",
-            }
         srv.append(
             {
                 "ip": bundle.server.ip,
@@ -135,7 +125,7 @@ def tab_server_management(infra: Infrastructure):
         c1, c2, c3, _, c4, c5, c6 = st.columns([10, 15, 10, 17, 18, 15, 25])
         if c4.button("Refresh Status", icon=":material/refresh:"):
             with st.spinner("Refreshing server status...", show_time=True):
-                check_server_status(bundle.server, session_key)
+                check_server_status(bundle.server)
                 save_infra()
                 st.rerun()
 
@@ -242,7 +232,7 @@ def tab_server_templates(infra: Infrastructure):
                 "description_short",
             ]
         ],
-        use_container_width=True,
+        # width="stretch",
         selection_mode="single-row",
         hide_index=True,
         on_select="rerun",

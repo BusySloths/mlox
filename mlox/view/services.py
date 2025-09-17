@@ -3,8 +3,9 @@ import streamlit as st
 
 from typing import cast
 
-from mlox.infra import Infrastructure
+from mlox.session import MloxSession
 from mlox.config import load_all_service_configs
+from mlox.secret_manager import AbstractSecretManagerService
 from mlox.view.utils import plot_config_nicely, st_hack_align
 
 
@@ -18,7 +19,8 @@ def installed_services():
     This is where you can manage your services.""")
     infra = None
     try:
-        infra = cast(Infrastructure, st.session_state.mlox.infra)
+        session = cast(MloxSession, st.session_state.mlox)
+        infra = session.infra
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()
@@ -51,7 +53,7 @@ def installed_services():
     )
     select_server = st.dataframe(
         df,
-        use_container_width=True,
+        width="stretch",
         selection_mode="single-row",
         hide_index=True,
         on_select="rerun",
@@ -114,6 +116,13 @@ def installed_services():
             callable_settings_func = config.instantiate_ui("settings")
             if callable_settings_func:
                 if state == "running":
+                    if isinstance(service, AbstractSecretManagerService) and st.button(
+                        "Set as default secret manager", icon=":material/key:"
+                    ):
+                        session.set_secret_manager(service.get_secret_manager(infra))
+                        save_infra()
+                        st.success(f"Set {service.name} as default secret manager.")
+
                     callable_settings_func(infra, bundle, service)
                     # save_infra()
                 elif state == "un-initialized":
@@ -127,7 +136,8 @@ def available_services():
     Add services to your infrastructure.""")
     infra = None
     try:
-        infra = cast(Infrastructure, st.session_state.mlox.infra)
+        session = cast(MloxSession, st.session_state.mlox)
+        infra = session.infra
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()
@@ -200,7 +210,7 @@ def available_services():
                 "description_short",
             ]
         ],
-        use_container_width=True,
+        width="stretch",
         selection_mode="single-row",
         hide_index=True,
         on_select="rerun",

@@ -152,7 +152,7 @@ class MLOXTextualApp(App):
     def login(self, project: str, password: str) -> bool:
         try:
             ms = MloxSession(project, password)
-            if ms.secrets.is_working():
+            if not ms.secrets or ms.secrets.is_working():
                 self.session = ms
                 return True
         except Exception:

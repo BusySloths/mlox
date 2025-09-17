@@ -153,6 +153,7 @@ mlox_integration_tests_key*
 *.pem
 *.crt
 *.key
+*.project
 keyfile.json
 test_server*.json
 infrastructure.json

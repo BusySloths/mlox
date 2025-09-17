@@ -6,11 +6,16 @@ from cryptography.fernet import Fernet
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mlox.infra import Infrastructure
 from mlox.server import AbstractServer
-from mlox.utils import _get_encryption_key, dict_to_dataclass, load_from_json
+from mlox.utils import (
+    _get_encryption_key,
+    dict_to_dataclass,
+    load_from_json,
+    dataclass_to_dict,
+)
 from mlox.remote import (
     fs_create_dir,
     fs_touch,
@@ -42,6 +47,19 @@ class AbstractSecretManager(ABC):
     @abstractmethod
     def load_secret(self, name: str) -> Dict | str | None:
         """Load a secret from the secret manager."""
+        pass
+
+    @classmethod
+    @abstractmethod
+    def instantiate_secret_manager(
+        cls, info: Dict[str, Any]
+    ) -> "AbstractSecretManager | None":
+        """Load the infrastructure configuration from the secret manager."""
+        pass
+
+    @abstractmethod
+    def get_access_secrets(self) -> Dict[str, Any] | None:
+        """Get MLOX access information from the secret manager."""
         pass
 
 
@@ -184,6 +202,70 @@ class TinySecretManager(AbstractSecretManager):
             logging.error(f"Error decrypting secret '{name}': {e}")
             return None
         return json.loads(json_string)
+
+    @classmethod
+    def instantiate_secret_manager(
+        cls, info: Dict[str, Any]
+    ) -> "AbstractSecretManager | None":
+        try:
+            server_dict = info.get("keyfile", None)
+            password = info.get("secrets_master_token", None)
+            abs_path = info.get("secrets_abs_path", None)
+            return TinySecretManager(
+                "", "", password, server_dict=server_dict, secrets_abs_path=abs_path
+            )
+        except Exception as e:
+            logging.error(f"Error initializing secret manager: {e}")
+        return None
+
+    def get_access_secrets(self) -> Dict[str, Any] | None:
+        server_dict = dataclass_to_dict(self.server)
+        return {
+            "keyfile": server_dict,
+            "secrets_abs_path": self.path,
+            "secrets_master_token": self.master_token,
+        }
+
+
+@dataclass
+class InMemorySecretManager(AbstractSecretManager):
+    """A lightweight, ephemeral secret manager that keeps secrets in memory.
+    Useful for tests and local runs where no remote secret storage is available.
+    """
+
+    _store: Dict[str, Any] = field(default_factory=dict, init=False)
+
+    def __post_init__(self):
+        if not self._store:
+            self._store = {}
+
+    def is_working(self) -> bool:
+        return True
+
+    def list_secrets(self, keys_only: bool = False) -> Dict[str, Any]:
+        if keys_only:
+            return {k: None for k in self._store.keys()}
+        return dict(self._store)
+
+    def save_secret(self, name: str, my_secret: Dict | str) -> None:
+        # store raw dict/string; caller controls encryption if needed
+        self._store[name] = my_secret
+
+    def load_secret(self, name: str) -> Dict | str | None:
+        return self._store.get(name)
+
+    @classmethod
+    def instantiate_secret_manager(
+        cls, info: Dict[str, Any]
+    ) -> "InMemorySecretManager | None":
+        # info may contain an initial 'secrets' dict
+        inst = InMemorySecretManager()
+        inst._store.update(info.get("secrets", {}))
+        return inst
+
+    def get_access_secrets(self) -> Dict[str, Any] | None:
+        # expose the entire store as access info for persistence if needed
+        return {"secrets": dict(self._store)}
 
 
 if __name__ == "__main__":

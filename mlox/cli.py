@@ -13,7 +13,6 @@ from typing import Dict, List
 import typer
 
 from mlox.session import MloxSession
-from mlox.infra import Infrastructure
 from mlox.config import (
     get_stacks_path,
     load_config,
@@ -32,12 +31,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-app = typer.Typer(help="MLOX command line interface")
+app = typer.Typer(help="MLOX command line interface", no_args_is_help=True)
 
 project_app = typer.Typer(help="Manage MLOX projects")
 server_app = typer.Typer(help="Manage servers in the project infrastructure")
 service_app = typer.Typer(help="Manage services running on servers")
-template_app = typer.Typer(help="List available templates")
 
 # New nested groups for configs under server and service
 server_configs_app = typer.Typer(help="Server configuration templates")
@@ -46,7 +44,6 @@ service_configs_app = typer.Typer(help="Service configuration templates")
 app.add_typer(project_app, name="project")
 app.add_typer(server_app, name="server")
 app.add_typer(service_app, name="service")
-app.add_typer(template_app, name="templates")
 
 # Attach configs namespace under existing groups
 server_app.add_typer(server_configs_app, name="configs")
@@ -63,7 +60,7 @@ def get_session(project: str, password: str) -> MloxSession:
 
     try:
         session = MloxSession(project, password)
-        if not session.secrets.is_working():
+        if session.secrets and not session.secrets.is_working():
             typer.echo(
                 "[ERROR] Could not initialize session (secrets not working)",
                 err=True,
@@ -106,42 +103,12 @@ def project_new(
     password: str = typer.Option(
         ..., prompt=True, hide_input=True, help="Password for the session"
     ),
-    server_template: str = typer.Option(
-        ..., help="Server template path relative to the stacks directory"
-    ),
-    ip: str = typer.Option(..., help="IP or hostname of the server"),
-    port: int = typer.Option(22, help="SSH port of the server"),
-    root_user: str = typer.Option("root", help="Initial root user"),
-    root_pw: str = typer.Option(
-        ..., prompt=True, hide_input=True, help="Root password"
-    ),
-    param: List[str] = typer.Option(
-        [], "--param", help="Additional template parameter in the form KEY=VALUE"
-    ),
 ):
-    """Create a new project and initialise the first server."""
-
-    infra = Infrastructure()
-    config = _load_config_from_path(server_template)
-    if not config:
-        typer.echo("[ERROR] Server template not found", err=True)
-        raise typer.Exit(code=1)
-
-    params = {
-        "${MLOX_IP}": ip,
-        "${MLOX_PORT}": str(port),
-        "${MLOX_ROOT}": root_user,
-        "${MLOX_ROOT_PW}": root_pw,
-    }
-    params.update(parse_kv(param))
-
-    ms = MloxSession.new_infrastructure(
-        infra=infra, config=config, params=params, username=name, password=password
-    )
+    ms = MloxSession(project_name=name, password=password)
     if not ms:
         typer.echo("[ERROR] Failed to initialise project", err=True)
         raise typer.Exit(code=1)
-    typer.echo(f"Created project '{name}' with server {ip}")
+    typer.echo(f"Created project '{name}'.")
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +132,7 @@ def server_list(
 
     for bundle in session.infra.bundles:
         typer.echo(
-            f"{bundle.server.ip} ({bundle.server.uuid}) - {len(bundle.services)} services"
+            f"{bundle.server.ip} ({bundle.server.state}) - {len(bundle.services)} services"
         )
 
 
@@ -191,7 +158,7 @@ def server_add(
     """Register a new server in the current project."""
 
     session = get_session(project, password)
-    config = _load_config_from_path(server_template)
+    config = _load_config_from_path("ubuntu/mlox-server." + server_template + ".yaml")
     if not config:
         typer.echo("[ERROR] Server template not found", err=True)
         raise typer.Exit(code=1)
@@ -262,7 +229,8 @@ def server_save_key(
     ),
     ip: str = typer.Argument(..., help="Server IP or hostname"),
     output: str = typer.Option(
-        ..., help="Path to store the encrypted key file",
+        ...,
+        help="Path to store the encrypted key file",
     ),
 ):
     """Save a server key file for local access."""
@@ -402,27 +370,5 @@ def service_configs_list():
 
 
 # ---------------------------------------------------------------------------
-# Template commands
-# ---------------------------------------------------------------------------
-
-
-@template_app.command("servers")
-def template_servers():
-    """List available server templates."""
-
-    configs = load_all_server_configs()
-    for cfg in configs:
-        typer.echo(f"{cfg.id} - {cfg.path}")
-
-
-@template_app.command("services")
-def template_services():
-    """List available service templates."""
-
-    configs = load_all_service_configs()
-    for cfg in configs:
-        typer.echo(f"{cfg.id} - {cfg.path}")
-
-
 if __name__ == "__main__":
     app()
