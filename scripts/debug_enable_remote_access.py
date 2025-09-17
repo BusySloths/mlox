@@ -1,9 +1,6 @@
 import os
 
-from mlox.server import AbstractServer
-from mlox.service import AbstractService
-from mlox.secret_manager import TinySecretManager
-from mlox.utils import dict_to_dataclass
+from mlox.session import MloxSession
 from mlox.remote import fs_find_and_replace, exec_command
 
 
@@ -14,14 +11,19 @@ def enable_password_authentication(bundle_name: str):
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
         exit(1)
 
-    secret_manager = TinySecretManager("/mlox.key", ".secrets", password)
+    project = (
+        os.environ.get("MLOX_CONFIG_USER")
+        or os.environ.get("MLOX_PROJECT")
+        or "mlox"
+    )
 
-    infra = None
-    infra_dict = secret_manager.load_secret("MLOX_CONFIG_INFRASTRUCTURE")
-    if infra_dict and isinstance(infra_dict, dict):
-        infra = dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])
+    session = MloxSession(project, password)
+    if not session.secrets or not session.secrets.is_working():
+        print("Project does not have an active secret manager configured.")
+        return
 
-    if not infra:
+    infra = session.infra
+    if not infra or not infra.bundles:
         print("Could not load infrastructure")
         return
 

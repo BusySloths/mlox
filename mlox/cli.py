@@ -63,7 +63,7 @@ def get_session(project: str, password: str) -> MloxSession:
 
     try:
         session = MloxSession(project, password)
-        if not session.secrets.is_working():
+        if session.secrets and not session.secrets.is_working():
             typer.echo(
                 "[ERROR] Could not initialize session (secrets not working)",
                 err=True,

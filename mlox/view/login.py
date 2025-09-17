@@ -13,7 +13,7 @@ def create_session(username, password) -> bool:
         print(f"Creating session for user: {username}")
         ms = MloxSession(username, password)
         print(f"Done Creating session for user: {username}")
-        if ms.secrets.is_working():
+        if not ms.secrets or ms.secrets.is_working():
             st.session_state["mlox"] = ms
             st.session_state.is_logged_in = True
     except Exception as e:
