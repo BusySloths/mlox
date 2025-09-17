@@ -1,4 +1,5 @@
 import json
+import logging
 import pandas as pd
 import streamlit as st
 
@@ -7,6 +8,8 @@ from typing import cast, Dict
 from mlox.services.gcp.secret_service import GCPSecretService
 from mlox.infra import Infrastructure, Bundle
 from mlox.secret_manager import AbstractSecretManagerService
+
+logger = logging.getLogger(__name__)
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> dict | None:
@@ -42,7 +45,8 @@ To access the secret manager, a service account with the following roles are nec
         keyfile_dict = json.loads(keyfile_dict)
         is_keyfile_dict = True
     except Exception as e:  # noqa: BLE001
-        st.info(f"Invalid JSON format. Please provide a valid JSON object. ")
+        st.info("Invalid JSON format. Please provide a valid JSON object. ")
+        logger.warning(f"Invalid JSON format for keyfile: {e}")
 
     if hasattr(select_secret_manager_service, "get_secret_manager"):
         sms = cast(AbstractSecretManagerService, select_secret_manager_service)

@@ -1,21 +1,19 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
 
-from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure
-from mlox.secret_manager import TinySecretManager, AbstractSecretManager
-from mlox.utils import dataclass_to_dict, save_to_json, load_from_json
+from mlox.secret_manager import AbstractSecretManager, InMemorySecretManager
+from mlox.utils import (
+    dataclass_to_dict,
+    save_to_json,
+    load_from_json,
+    dict_to_dataclass,
+)
 from mlox.scheduler import ProcessScheduler
 
-
-# Configure logging (optional, but recommended)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -43,259 +41,139 @@ class GlobalProcessScheduler:
         return cls._instance
 
 
-PROJECT_SECRET_MANAGER_KEY = "secret_manager"
-
-
 @dataclass
 class MloxProject:
     name: str
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    last_opened_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    secret_manager_service_uuid: Optional[str] = None
-    additional_info: Dict[str, Any] = field(default_factory=dict)
+    descr: str = field(default="", init=False)
+    version: str = field(default="0.1.0", init=False)
+    created_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    last_opened_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    secret_manager_class: str | None = None
+    secret_manager_info: Dict[str, Any] = field(default_factory=dict)
 
     def touch(self) -> None:
-        self.last_opened_at = datetime.utcnow().isoformat()
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "created_at": self.created_at,
-            "last_opened_at": self.last_opened_at,
-            "secret_manager_service_uuid": self.secret_manager_service_uuid,
-            "additional_info": self.additional_info,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MloxProject":
-        return cls(
-            name=data.get("name", ""),
-            created_at=data.get("created_at", datetime.utcnow().isoformat()),
-            last_opened_at=data.get("last_opened_at", datetime.utcnow().isoformat()),
-            secret_manager_service_uuid=data.get("secret_manager_service_uuid"),
-            additional_info=data.get("additional_info") or {},
-        )
-
-    def get_secret_manager_info(self) -> Optional[Dict[str, Any]]:
-        info = self.additional_info.get(PROJECT_SECRET_MANAGER_KEY)
-        if isinstance(info, dict):
-            return info
-        return None
-
-    def set_secret_manager_info(
-        self,
-        service_uuid: str,
-        keyfile: Dict[str, Any],
-        secrets_path: str,
-        password: Optional[str] = None,
-        relative_path: Optional[str] = None,
-    ) -> None:
-        payload: Dict[str, Any] = {
-            "keyfile": keyfile,
-            "secrets_path": secrets_path,
-        }
-        if password:
-            payload["password"] = password
-        if relative_path:
-            payload["relative_path"] = relative_path
-        self.secret_manager_service_uuid = service_uuid
-        self.additional_info[PROJECT_SECRET_MANAGER_KEY] = payload
+        self.last_opened_at = datetime.now(timezone.utc).isoformat()
 
 
-@dataclass
 class MloxSession:
-    username: str
     password: str
+    project: MloxProject
+    infra: Infrastructure
+    secrets: AbstractSecretManager | None = None
 
-    project: MloxProject = field(init=False)
-    infra: Infrastructure = field(init=False)
-    secrets: Optional[AbstractSecretManager] = field(default=None, init=False)
-    # scheduler: ProcessScheduler = field(init=False)
-
-    temp_kv: dict = field(default_factory=dict, init=False)
-
-    def __post_init__(self):
+    def __init__(self, project_name: str, password: str):
         # self.scheduler = GlobalProcessScheduler().scheduler
-        self.project = self._load_or_create_project()
-        self.infra = Infrastructure()
-        self.secrets = self._init_secret_manager()
-        if self.secrets and self.secrets.is_working():
-            self.load_infrastructure()
-        else:
-            self.infra = Infrastructure()
-
-    def _get_project_save_path(self) -> str:
-        return f"./{self.username}.project"
-
-    def _get_project_load_path(self) -> str:
-        return f"/{self.username}.project"
-
-    def _persist_project(self, project: Optional[MloxProject] = None) -> None:
-        target = project if project is not None else getattr(self, "project", None)
-        if not target:
-            return
-        save_to_json(target.to_dict(), self._get_project_save_path(), self.password, True)
-
-    def _load_or_create_project(self) -> MloxProject:
-        load_path = self._get_project_load_path()
-        try:
-            data = load_from_json(load_path, self.password)
-            project = MloxProject.from_dict(data)
-        except FileNotFoundError:
+        self.secrets = None
+        self.password = password
+        self.load_project(project_name)
+        self.load_secret_manager()
+        self.load_infrastructure()
+        if not self.secrets:
             logger.info(
-                "Project file not found for %s. Initialising a blank project.",
-                self.username,
+                "No secret manager could be loaded. Initialising in-memory secret manager."
             )
-            project = MloxProject(name=self.username)
-            self._persist_project(project)
-        except Exception as exc:
-            logger.error(
-                "Failed to load project information for %s: %s",
-                self.username,
-                exc,
-            )
-            raise
-        project.touch()
-        self._persist_project(project)
-        return project
+            self.set_secret_manager(InMemorySecretManager())
 
-    def _init_secret_manager(self) -> Optional[AbstractSecretManager]:
-        info = self.project.get_secret_manager_info()
-        if not info:
-            return None
-        keyfile = info.get("keyfile")
-        if not keyfile:
-            logger.warning(
-                "Project %s is missing keyfile data for the secret manager.",
-                self.username,
-            )
-            return None
-        secret_password = info.get("password", self.password)
-        secrets_path = info.get("secrets_path")
-        relative_path = info.get("relative_path")
-        try:
-            if secrets_path:
-                return TinySecretManager(
-                    "",
-                    "",
-                    secret_password,
-                    server_dict=keyfile,
-                    secrets_abs_path=secrets_path,
+    def save_project(self) -> None:
+        self.project.touch()
+        if self.secrets:
+            info = self.secrets.get_access_secrets()
+            if info:
+                self.project.secret_manager_info = info
+            else:
+                logger.warning(
+                    "Secret manager %s did not return any access info.",
+                    self.project.secret_manager_class,
                 )
-            relative_arg = relative_path if relative_path else ".secrets"
-            return TinySecretManager(
-                "",
-                relative_arg,
-                secret_password,
-                server_dict=keyfile,
+
+        prj_dict = dataclass_to_dict(self.project)
+        if prj_dict:
+            save_to_json(
+                prj_dict, f"./{self.project.name}.project", self.password, True
             )
-        except Exception as exc:
-            logger.error(
-                "Failed to initialize secret manager for project %s: %s",
-                self.username,
-                exc,
-            )
-            return None
 
     @classmethod
-    def new_infrastructure(
-        cls, infra, config, params, username, password
-    ) -> Optional["MloxSession"]:
-        # STEP 1: Instantiate the server template
-        server_bundle = infra.add_server(config, params)
-        if not server_bundle:
-            logger.error("Failed to instantiate server template.")
-            return None
-
-        # STEP 2: Initialize the server
+    def check_project_exists_and_loads(cls, project_name: str, password: str) -> bool:
+        load_path = f"/{project_name}.project"
         try:
-            server_bundle.server.setup()
-        except Exception as e:
-            logger.error(f"Server setup failed: {e}")
-            if not (server_bundle.server.mlox_user and server_bundle.server.remote_user):
-                logger.error(
-                    "Could not setup user. Check server credentials and try again."
-                )
-                return None
+            _ = load_from_json(load_path, password, encrypted=True)
+            return True
+        except Exception:
+            return False
 
-        project = MloxProject(name=username)
+    def load_project(self, project_name: str) -> None:
+        load_path = f"/{project_name}.project"
+        try:
+            data = load_from_json(load_path, self.password, encrypted=True)
+            project = dict_to_dataclass(data, [MloxProject])
+            if not project or not isinstance(project, MloxProject):
+                raise ValueError("Loaded project data is not valid.")
+        except FileNotFoundError:
+            logger.info("Project file not found for %s. Initialising a blank project.")
+            project = MloxProject(name=project_name)
+        project.touch()
+        self.project = project
+        self.save_project()
 
-        # STEP 3: Configure the secret manager service
-        secret_manager_config = load_config(get_stacks_path(), "/tsm", "mlox.tsm.yaml")
-        if not secret_manager_config:
-            logger.error("Failed to load secret manager configuration.")
-            return None
-
-        secret_bundle = infra.add_service(
-            server_bundle.server.ip, secret_manager_config, {}
-        )
-        if not secret_bundle or not secret_bundle.services:
-            logger.error("Failed to instantiate secret manager service.")
-            return None
-
-        secret_service = secret_bundle.services[0]
-        secret_service.pw = password
-        secret_bundle.tags.append("mlox.secrets")
-        secret_bundle.tags.append("mlox.primary")
-
-        secrets_path = (
-            secret_service.get_absolute_path()
-            if hasattr(secret_service, "get_absolute_path")
-            else secret_service.target_path
-        )
-        relative_path = None
-        if (
-            server_bundle.server.mlox_user
-            and isinstance(secrets_path, str)
-            and secrets_path.startswith(server_bundle.server.mlox_user.home)
-        ):
-            relative_path = secrets_path.removeprefix(
-                server_bundle.server.mlox_user.home
-            ).lstrip("/")
-
-        project.set_secret_manager_info(
-            secret_service.uuid,
-            dataclass_to_dict(server_bundle.server),
-            secrets_path,
-            password=secret_service.pw,
-            relative_path=relative_path,
-        )
-
-        # Persist the project metadata and keyfile information
-        save_to_json(project.to_dict(), f"./{username}.project", password, True)
-
-        ms = MloxSession(username, password)
-        if project.get_secret_manager_info():
-            if not ms.secrets or not ms.secrets.is_working():
-                logger.error("Secret manager setup failed.")
-                return None
-
-        # STEP 4: Persist the infrastructure to the secret manager (if available)
-        ms.infra = infra
-        if ms.secrets and ms.secrets.is_working():
-            ms.save_infrastructure()
-        else:
-            logger.info(
-                "No secret manager configured for project %s; infrastructure not persisted.",
-                username,
+    def set_secret_manager(self, sm: AbstractSecretManager) -> None:
+        self.secrets = sm
+        if sm:
+            self.project.secret_manager_class = (
+                sm.__class__.__module__ + "." + sm.__class__.__name__
             )
+        else:
+            self.project.secret_manager_class = None
+            self.project.secret_manager_info = {}
+        self.save_project()
 
-        return ms
+    def load_secret_manager(self) -> None:
+        info = self.project.secret_manager_info
+        class_name = self.project.secret_manager_class
+        if not class_name:
+            return None
+        try:
+            module_path, class_name = class_name.rsplit(".", 1)
+            module = __import__(module_path, fromlist=[class_name])
+            class_ = getattr(module, class_name)
+            self.secrets = class_.instantiate_secret_manager(info)
+            if not self.secrets:
+                logger.warning(
+                    "Secret manager class %s could not be instantiated.",
+                    self.project.secret_manager_class,
+                )
+        except (ImportError, AttributeError) as e:
+            logger.error(
+                f"Could not load secret manager class {self.project.secret_manager_class}: {e}"
+            )
+            self.secrets = None
 
     def save_infrastructure(self) -> None:
         if not self.secrets:
             logger.info(
                 "No secret manager configured for project %s. Skipping infrastructure persistence.",
-                self.username,
+                self.project,
             )
             return
         infra_dict = self.infra.to_dict()
         self.secrets.save_secret("MLOX_CONFIG_INFRASTRUCTURE", infra_dict)
+        self.save_project()
 
     def load_infrastructure(self) -> None:
         if not self.secrets:
+            logger.info(
+                "No secret manager configured for project %s. Initialising blank infrastructure.",
+                self.project,
+            )
             self.infra = Infrastructure()
             return None
+        logger.info(
+            "Loading infrastructure for project %s from secret manager.",
+            self.project.name,
+        )
         infra_dict = self.secrets.load_secret("MLOX_CONFIG_INFRASTRUCTURE")
         if not infra_dict:
             self.infra = Infrastructure()

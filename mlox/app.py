@@ -25,9 +25,8 @@ def auto_login():
         if prj and pw:
             try:
                 ms = MloxSession(prj, pw)
-                if not ms.secrets or ms.secrets.is_working():
-                    st.session_state["mlox"] = ms
-                    st.session_state.is_logged_in = True
+                st.session_state["mlox"] = ms
+                st.session_state.is_logged_in = True
             except Exception:
                 return
     return
@@ -75,8 +74,20 @@ st.logo(
     icon_image=get_resource_path("mlox_logo_small.png"),
 )
 
-
 auto_login()
+
+if "mlox" in st.session_state:
+    session = st.session_state.mlox
+    if not session.secrets or not session.secrets.is_working():
+        st.warning(
+            "Project does not have an active secret manager configured "
+            "meaning changes to infrastructure or services will not be saved. "
+            "To resolve this issue, please follow these steps: \n"
+            " - Add at least one server to your infrastructure\n"
+            " - Set up a secret manager service (first secret manager will be used automatically)\n",
+            icon=":material/warning:",
+        )
+
 
 pages_logged_out = {
     "": [
@@ -157,7 +168,7 @@ pages_docs = {
 pages = pages_logged_out
 if st.session_state.get("is_logged_in", False):
     pages = pages_logged_in
-    prj_name = st.session_state["mlox"].username
+    prj_name = st.session_state["mlox"].project.name
     pages[prj_name] = pages_infrastructure
     pages.update(pages_docs)
 

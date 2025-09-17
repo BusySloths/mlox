@@ -20,12 +20,6 @@ from google.oauth2.service_account import Credentials
 
 from mlox.secret_manager import AbstractSecretManager
 
-# Configure logging (optional, but recommended)
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -210,6 +204,22 @@ class GCPSecretManager(AbstractSecretManager):
         for k, v in self._secret_cache.items():
             res[k] = v[0]
         return res
+
+    @classmethod
+    def instantiate_secret_manager(
+        cls, info: Dict[str, Any]
+    ) -> "GCPSecretManager | None":
+        try:
+            keyfile_dict = info.get("keyfile_dict", None)
+            if not keyfile_dict:
+                raise ValueError("Keyfile dictionary not found in info.")
+            return GCPSecretManager(keyfile_dict=keyfile_dict)
+        except Exception as e:
+            logger.error(f"Error initializing GCP Secret Manager: {e}")
+        return None
+
+    def get_access_secrets(self) -> Dict[str, Any] | None:
+        return {"keyfile_dict": self.keyfile_dict}
 
 
 def read_keyfile(keyfile_path: str) -> Dict:
