@@ -1,4 +1,3 @@
-import re
 import logging
 
 from datetime import datetime
@@ -143,15 +142,14 @@ class GithubRepoService(AbstractService, Repo):
         self, conn, clone_or_pull: Literal["clone", "pull"]
     ) -> int:
         """
-        1. Start ssh-agent and add the deploy key (assumes key is already generated and stored)
-        2. Clone the repo using the key
-        3. Kill the agent and reset previous state
+        Clone or pull a private repository using the generated deploy key.
+
+        Instead of relying on ``ssh-agent`` the command uses ``GIT_SSH_COMMAND``
+        so the scope of the key is limited to the git invocation. This avoids
+        interfering with any pre-existing ssh-agent instances on the remote
+        system.
         """
         key_name = f"mlox_deploy_{self.repo_name}"
-        # agent_check = exec_command(
-        #     conn, "pgrep ssh-agent || echo 'not_running'", sudo=False
-        # )
-
         git_cmd = "pull"
         trg_path = self.target_path + "/" + self.repo_name
         private_key_path = f"../.ssh/{key_name}"
@@ -159,26 +157,25 @@ class GithubRepoService(AbstractService, Repo):
             git_cmd = f"clone {self.link}"
             trg_path = self.target_path
             private_key_path = f".ssh/{key_name}"
-        full_cmd = (
-            f"cd {trg_path} && "
-            'eval "$(ssh-agent -s)" && '
-            f"ssh-add {private_key_path} && "
-            f"git {git_cmd}"
+        ssh_cmd = (
+            f"ssh -i {private_key_path} -o IdentitiesOnly=yes "
+            "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+            "-o BatchMode=yes"
         )
-        res = exec_command(conn, f"bash -c '{full_cmd}'", sudo=False, pty=False)
-        err_code = 1
-        if res:
-            # Try to find the agent pid from the output
-            pid_match = re.search(r"Agent pid (\d+)", str(res))
-            if pid_match:
-                pid = pid_match.group(1)
-                exec_command(conn, f"kill -9 {pid}", sudo=False)
-                err_code = 0
-            else:
-                logging.error(
-                    "Could not find ssh-agent PID to kill after cloning repo."
-                )
-                err_code = 2
+        env_prefix = f'GIT_SSH_COMMAND="{ssh_cmd}" '
+        full_cmd = f"cd {trg_path} && {env_prefix}git {git_cmd}"
+
+        err_code = 0
+        try:
+            exec_command(conn, f"bash -c '{full_cmd}'", sudo=False, pty=False)
+        except Exception as exc:  # noqa: BLE001 - propagate command failure info
+            logging.error(
+                "Failed to execute git command with deploy key for %s: %s",
+                self.repo_name,
+                exc,
+            )
+            err_code = 1
+
         if err_code == 0:
             self.cloned = True
             self.state = "running"

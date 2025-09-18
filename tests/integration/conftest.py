@@ -123,7 +123,7 @@ def multipass_instance():
     )
     logging.info(f"Launching Multipass VM {name} with cloud-init {cloud_init_path}")
     vm = client.launch(
-        vm_name=name, cpu=2, disk="10G", mem="4G", cloud_init=cloud_init_path
+        vm_name=name, cpu=4, disk="40G", mem="12G", cloud_init=cloud_init_path
     )
     # wait_for_ssh(...) same implementation as in your test file
     ip = wait_for_ssh(vm, name, timeout=180, interval=3.0)
@@ -167,28 +167,28 @@ def ubuntu_docker_server(multipass_instance):
     infra.remove_bundle(bundle)
 
 
-@pytest.fixture(scope="package")
-def ubuntu_native_server(multipass_instance):
-    infra = Infrastructure()
-    config = load_config(get_stacks_path(), "/ubuntu", "mlox-server.ubuntu.native.yaml")
-    params = {
-        "${MLOX_IP}": multipass_instance["ip"],
-        "${MLOX_PORT}": "22",
-        "${MLOX_ROOT}": "root",
-        "${MLOX_ROOT_PW}": "pass",
-    }
-    bundle = infra.add_server(config, params)
-    if not bundle:
-        pytest.fail("Failed to add server to infrastructure")
-    server = bundle.server
-    server.setup()
-    yield server
-    logging.info(
-        f"Tearing down ubuntu_native_server on VM {multipass_instance['name']}..."
-    )
-    try:
-        server.teardown()
-        logging.info("Successfully tore down ubuntu_native_server.")
-    except Exception as e:
-        logging.warning(f"Could not tear down ubuntu_native_server: {e}")
-    infra.remove_bundle(bundle)
+# @pytest.fixture(scope="package")
+# def ubuntu_native_server(multipass_instance):
+#     infra = Infrastructure()
+#     config = load_config(get_stacks_path(), "/ubuntu", "mlox-server.ubuntu.native.yaml")
+#     params = {
+#         "${MLOX_IP}": multipass_instance["ip"],
+#         "${MLOX_PORT}": "22",
+#         "${MLOX_ROOT}": "root",
+#         "${MLOX_ROOT_PW}": "pass",
+#     }
+#     bundle = infra.add_server(config, params)
+#     if not bundle:
+#         pytest.fail("Failed to add server to infrastructure")
+#     server = bundle.server
+#     server.setup()
+#     yield server
+#     logging.info(
+#         f"Tearing down ubuntu_native_server on VM {multipass_instance['name']}..."
+#     )
+#     try:
+#         server.teardown()
+#         logging.info("Successfully tore down ubuntu_native_server.")
+#     except Exception as e:
+#         logging.warning(f"Could not tear down ubuntu_native_server: {e}")
+#     infra.remove_bundle(bundle)
