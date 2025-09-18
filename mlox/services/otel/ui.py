@@ -21,7 +21,7 @@ def load_jsonl(raw):
         for line in raw.splitlines():
             try:
                 data.append(json.loads(line))
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 # st.error(f"Error decoding JSON from line: {line.strip()} - {e}")
                 errors += 1
     except Exception as e:
