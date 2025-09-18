@@ -8,9 +8,9 @@ from mlox.remote import fs_read_file, exec_command
 pytestmark = pytest.mark.integration
 
 
-def test_secret_roundtrip(ubuntu_native_server):
+def test_secret_roundtrip(ubuntu_docker_server):
     password = "integration-test"
-    server_dict = dataclass_to_dict(ubuntu_native_server)
+    server_dict = dataclass_to_dict(ubuntu_docker_server)
     sm = TinySecretManager("", ".secrets", password, server_dict=server_dict)
 
     assert sm.is_working()
@@ -27,7 +27,7 @@ def test_secret_roundtrip(ubuntu_native_server):
     keys_only = sm.list_secrets(keys_only=True, use_cache=False)
     assert secret_name in keys_only and keys_only[secret_name] is None
 
-    with ubuntu_native_server.get_server_connection() as conn:
+    with ubuntu_docker_server.get_server_connection() as conn:
         file_path = f"{sm.path}/{secret_name}.json"
         raw_contents = fs_read_file(conn, file_path, encoding="utf-8", format="json")
         with pytest.raises(json.JSONDecodeError):
