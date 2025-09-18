@@ -46,8 +46,9 @@ def test_get_session_success(monkeypatch):
 
 
 def test_get_session_secrets_failure(monkeypatch, capsys):
-    dummy_session = DummySession(working_secrets=False)
-    monkeypatch.setattr(cli, "MloxSession", mock.Mock(return_value=dummy_session))
+    mock_session = mock.Mock()
+    mock_session.secrets.is_working.return_value = False
+    monkeypatch.setattr(cli, "MloxSession", mock.Mock(return_value=mock_session))
 
     with pytest.raises(typer.Exit) as exc_info:
         cli.get_session("project", "password")
@@ -175,7 +176,9 @@ def test_server_add_success(monkeypatch):
 
 
 def test_service_list_no_services(monkeypatch):
-    bundle = types.SimpleNamespace(services=[], server=types.SimpleNamespace(ip="1.1.1.1"))
+    bundle = types.SimpleNamespace(
+        services=[], server=types.SimpleNamespace(ip="1.1.1.1")
+    )
     session = types.SimpleNamespace(infra=types.SimpleNamespace(bundles=[bundle]))
     monkeypatch.setattr(cli, "get_session", mock.Mock(return_value=session))
 
@@ -236,7 +239,9 @@ def test_service_configs_list_no_configs(monkeypatch):
 
 def test_service_configs_list_outputs(monkeypatch):
     configs = [types.SimpleNamespace(id="svc", path="services/svc.yaml")]
-    monkeypatch.setattr(cli, "load_all_service_configs", mock.Mock(return_value=configs))
+    monkeypatch.setattr(
+        cli, "load_all_service_configs", mock.Mock(return_value=configs)
+    )
 
     result = runner.invoke(cli.app, ["service", "configs", "list"])
 

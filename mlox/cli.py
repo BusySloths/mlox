@@ -57,19 +57,25 @@ service_app.add_typer(service_configs_app, name="configs")
 
 def get_session(project: str, password: str) -> MloxSession:
     """Load an existing :class:`MloxSession` from credentials."""
-
     try:
         session = MloxSession(project, password)
-        if session.secrets and not session.secrets.is_working():
-            typer.echo(
-                "[ERROR] Could not initialize session (secrets not working)",
-                err=True,
-            )
-            raise typer.Exit(code=2)
-        return session
     except Exception as exc:  # pragma: no cover - defensive
+        # If the exception looks like an exit (has exit_code or is SystemExit), re-raise
+        if hasattr(exc, "exit_code") or isinstance(exc, SystemExit):
+            raise
         typer.echo(f"[ERROR] Failed to load session: {exc}", err=True)
         raise typer.Exit(code=1)
+
+    # Check secret manager health outside the try/except so Typer Exit codes
+    # raised here are not accidentally caught by the broader exception handler.
+    if session.secrets and not session.secrets.is_working():
+        typer.echo(
+            "[ERROR] Could not initialize session (secrets not working)",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    return session
 
 
 def parse_kv(pairs: List[str]) -> Dict[str, str]:
@@ -159,7 +165,8 @@ def server_add(
 
     session = get_session(project, password)
     config = _load_config_from_path("ubuntu/mlox-server." + server_template + ".yaml")
-    if not config:
+    # treat an empty dict as a valid config; only None means not found
+    if config is None:
         typer.echo("[ERROR] Server template not found", err=True)
         raise typer.Exit(code=1)
 
