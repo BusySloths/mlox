@@ -3,13 +3,23 @@ import time
 import socket
 import logging
 import pytest
+
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
-from multipass import MultipassClient, MultipassVM  # type: ignore
-
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure
+
+logger = logging.getLogger(__name__)
+try:
+    from multipass import MultipassClient, MultipassVM  # type: ignore
+
+    _HAS_MULTIPASS = True
+except Exception:  # pragma: no cover - optional dependency
+    MultipassClient = None  # type: ignore
+    MultipassVM = None  # type: ignore
+    _HAS_MULTIPASS = False
+    logger.warning("multipass package not available; do not run integration tests.")
 
 
 # Mark this module as an integration test
@@ -116,6 +126,11 @@ def wait_for_service_ready(
 
 @pytest.fixture(scope="package")
 def multipass_instance():
+    if not _HAS_MULTIPASS:
+        pytest.skip(
+            "multipass package not available; skip integration tests that require Multipass"
+        )
+
     client = MultipassClient()
     name = f"mlox-test-{uuid.uuid4().hex[:8]}"
     cloud_init_path = (
