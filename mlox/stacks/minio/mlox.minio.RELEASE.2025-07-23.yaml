@@ -1,6 +1,6 @@
-id: minio-release-2024-09-10-docker
+id: minio-release-2025-07-23-docker
 name: MinIO
-version: "RELEASE.2024-09-10T18-08-20Z"
+version: "RELEASE.2025-07-23T15-54-02Z-cpuv1"
 maintainer: MLOX Contributors
 description_short: MinIO is a high-performance, S3 compatible object store.
 description: |
@@ -30,9 +30,9 @@ ui:
 build:
   class_name: mlox.services.minio.docker.MinioDockerService
   params:
-    name: minio-release-2024-09-10
+    name: minio-release-2025-07-23
     template: ${MLOX_STACKS_PATH}/minio/docker-compose-minio.yaml
-    target_path: /home/${MLOX_USER}/minio-release-2024-09-10
+    target_path: /home/${MLOX_USER}/minio-release-2025-07-23
     root_user: ${MLOX_AUTO_USER}
     root_password: ${MLOX_AUTO_PW}
     api_port: ${MLOX_AUTO_PORT_API}

@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   minio:
-    image: quay.io/minio/minio:RELEASE.2024-09-10T18-08-20Z
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z-cpuv1
     container_name: minio
     command: server /data --console-address ":9001"
     environment:

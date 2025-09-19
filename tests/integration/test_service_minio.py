@@ -1,4 +1,4 @@
-import shlex
+import boto3
 import pytest
 
 from mlox.config import load_config, get_stacks_path
@@ -17,7 +17,7 @@ def install_minio_service(ubuntu_docker_server):
     infra.bundles.append(bundle)
 
     config = load_config(
-        get_stacks_path(), "/minio", "mlox.minio.RELEASE.2024-09-10.yaml"
+        get_stacks_path(), "/minio", "mlox.minio.RELEASE.2025-07-23.yaml"
     )
 
     bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
@@ -63,32 +63,45 @@ def test_minio_service_is_running(install_minio_service):
 
 @pytest.mark.parametrize("bucket", ["mlox-minio-integration"])
 def test_minio_basic_read_write(install_minio_service, bucket):
+    # Use boto3 S3 client to interact with MinIO
     bundle, service = install_minio_service
 
-    endpoint = shlex.quote(service.service_url)
-    access_key = shlex.quote(service.root_user)
-    secret_key = shlex.quote(service.root_password)
-    bucket_target = shlex.quote(f"local/{bucket}")
-    with bundle.server.get_server_connection() as conn:
-        conn.run(
-            "docker run --rm --network host minio/mc sh -c "
-            f"\"mc alias set local {endpoint} {access_key} {secret_key} --insecure "
-            f"&& mc mb --ignore-existing --insecure {bucket_target}\"",
-            hide=False,
-        )
+    # service.service_url is like https://<host>:<port>
+    # boto3 expects endpoint_url without scheme when using signature_version, so pass full URL
+    endpoint = service.service_url
+    access_key = service.root_user
+    secret_key = service.root_password
 
-        conn.run(
-            "docker run --rm --network host minio/mc sh -c "
-            f"\"mc alias set local {endpoint} {access_key} {secret_key} --insecure "
-            f"&& printf 'hello from mlox' | mc pipe --insecure {bucket_target}/sample.txt\"",
-            hide=False,
-        )
+    s3 = boto3.resource(
+        "s3",
+        endpoint_url=endpoint,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        verify=False,
+    )
 
-        result = conn.run(
-            "docker run --rm --network host minio/mc sh -c "
-            f"\"mc alias set local {endpoint} {access_key} {secret_key} --insecure "
-            f"&& mc cat --insecure {bucket_target}/sample.txt\"",
-            hide=True,
-        )
+    bucket_name = bucket
+    key = "sample.txt"
+    body = b"hello from mlox"
 
-    assert "hello from mlox" in result.stdout
+    # create bucket if not exists
+    try:
+        s3.create_bucket(Bucket=bucket_name)
+    except Exception as e:
+        pytest.fail(f"Failed to create bucket {bucket_name}: {e}")
+
+    # upload object
+    bucket = s3.Bucket(bucket_name)
+    bucket.put_object(Key=key, Body=body)
+
+    # read back
+    res = bucket.Object(key).get()
+    data = res["Body"].read()
+    assert data == body
+
+    # cleanup
+    bucket.Object(key).delete()
+    try:
+        bucket.delete()
+    except Exception:
+        pass

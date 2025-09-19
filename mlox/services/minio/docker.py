@@ -6,13 +6,13 @@ from typing import Dict
 from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
     docker_down,
-    exec_command,
     fs_append_line,
     fs_copy,
     fs_create_dir,
     fs_delete_dir,
     fs_read_file,
 )
+from mlox.remote import docker_all_service_states
 
 
 logging.basicConfig(
@@ -64,14 +64,23 @@ class MinioDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         try:
-            output = exec_command(
-                conn,
-                "docker ps --filter 'name=minio' --filter 'status=running' --format '{{{{.Names}}}}'",
-                sudo=True,
-            )
-            if "minio" in output:
-                self.state = "running"
-                return {"status": "running"}
+            states = docker_all_service_states(conn)
+            if not states:
+                # no containers found
+                self.state = "stopped"
+                return {"status": "stopped"}
+
+            # look for any container name that contains 'minio' and is running
+            for name, state in states.items():
+                try:
+                    if "minio" in name and state.get("Status") == "running":
+                        self.state = "running"
+                        return {"status": "running"}
+                except Exception:
+                    # ignore malformed state entries
+                    continue
+
+            # no matching running container found
             self.state = "stopped"
             return {"status": "stopped"}
         except Exception as exc:  # pragma: no cover - defensive logging path
