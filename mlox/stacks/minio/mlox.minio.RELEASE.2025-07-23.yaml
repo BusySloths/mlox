@@ -1,0 +1,39 @@
+id: minio-release-2025-07-23-docker
+name: MinIO
+version: "RELEASE.2025-07-23T15-54-02Z-cpuv1"
+maintainer: MLOX Contributors
+description_short: MinIO is a high-performance, S3 compatible object store.
+description: |
+  MinIO is a high-performance, S3 compatible object store designed for large-scale
+  AI/ML, data lake, and database workloads. This stack deploys a single MinIO server
+  secured with a self-signed TLS certificate so you can experiment locally with
+  S3-compatible object storage.
+links:
+  project: https://min.io/
+  documentation: https://min.io/docs/
+  security: https://min.io/docs/minio/linux/operations/site-reliability/security.html
+  changelog: https://github.com/minio/minio/releases
+requirements:
+  cpus: 1.0
+  ram_gb: 2.0
+  disk_gb: 5.0
+groups:
+  service:
+  storage:
+  backend:
+    docker:
+ports:
+  api: 9000
+  console: 9001
+ui:
+  settings: mlox.services.minio.ui.settings
+build:
+  class_name: mlox.services.minio.docker.MinioDockerService
+  params:
+    name: minio-release-2025-07-23
+    template: ${MLOX_STACKS_PATH}/minio/docker-compose-minio.yaml
+    target_path: /home/${MLOX_USER}/minio-release-2025-07-23
+    root_user: ${MLOX_AUTO_USER}
+    root_password: ${MLOX_AUTO_PW}
+    api_port: ${MLOX_AUTO_PORT_API}
+    console_port: ${MLOX_AUTO_PORT_CONSOLE}
