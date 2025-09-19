@@ -13,17 +13,7 @@ from typing import Optional
 from textual.app import App, ComposeResult
 from textual.containers import CenterMiddle, Container
 from textual.screen import Screen
-from textual.widgets import (
-    Button,
-    DataTable,
-    Footer,
-    Header,
-    Input,
-    Static,
-    TabPane,
-    TabbedContent,
-    Tree,
-)
+from textual.widgets import Button, Footer, Header, Input, Static, Tree
 
 from mlox.session import MloxSession
 
@@ -81,58 +71,106 @@ class MainScreen(Screen):
         yield Header(show_clock=True)
         with Container(id="main-area"):
             with Container(id="sidebar"):
-                menu: Tree = Tree("Menu", id="menu-tree")
-                menu.root.expand()
-                # Store target TabPane ids as node data for robust selection
-                menu.root.add("Home", data="tab-home")
-                menu.root.add("Servers", data="tab-servers")
-                menu.root.add("Services", data="tab-services")
-                yield menu
+                tree: Tree = Tree("Infrastructure", id="infra-tree")
+                tree.root.expand()
+                yield tree
             with Container(id="content"):
-                with TabbedContent(id="tabs"):
-                    with TabPane("Home", id="tab-home"):
-                        yield Static(WELCOME_TEXT, id="home-content")
-                    with TabPane("Servers", id="tab-servers"):
-                        yield DataTable(id="servers-table")
-                    with TabPane("Services", id="tab-services"):
-                        yield DataTable(id="services-table")
+                with Container(id="main-panel"):
+                    yield Static(
+                        "Select a server or service from the tree.",
+                        id="selection-title",
+                    )
+                    yield Static(WELCOME_TEXT, id="home-content")
+                with Container(id="detail-panel"):
+                    yield Static("State: -", id="selection-state")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.populate_tables()
+        self.populate_tree()
+        self.update_selection_display(None)
 
-    def populate_tables(self) -> None:
-        """Populate tables with current infrastructure data."""
-        servers = self.query_one("#servers-table", DataTable)
-        services = self.query_one("#services-table", DataTable)
-        servers.clear(columns=True)
-        services.clear(columns=True)
-        servers.add_columns("Name", "IP", "State")
-        services.add_columns("Name", "Server", "State")
+    def populate_tree(self) -> None:
+        """Populate tree with current infrastructure."""
+        tree = self.query_one("#infra-tree", Tree)
+        tree.root.label = "Infrastructure"
+        tree.root.data = {"type": "root"}
         infra = getattr(getattr(self.app, "session", None), "infra", None)
         if not infra or len(infra.bundles) == 0:
-            servers.add_row("No servers", "-", "-")
-            services.add_row("No services", "-", "-")
+            tree.root.add("No infrastructure available", data={"type": "empty"})
+            tree.root.expand()
             return
+
         for bundle in infra.bundles:
-            servers.add_row(bundle.name, bundle.server.ip, bundle.server.state)
+            bundle_node = tree.root.add(
+                f"Bundle: {bundle.name}", data={"type": "bundle", "bundle": bundle}
+            )
+            bundle_node.expand()
+            server = getattr(bundle, "server", None)
+            server_label = (
+                f"Server: {getattr(server, 'ip', 'unknown')}"
+                if server
+                else "Server: unknown"
+            )
+            bundle_node.add(
+                server_label,
+                data={"type": "server", "bundle": bundle, "server": server},
+            )
+            if not bundle.services:
+                bundle_node.add("No services", data={"type": "empty"})
+                continue
             for svc in bundle.services:
-                services.add_row(svc.name, bundle.server.ip, svc.state)
+                bundle_node.add(
+                    f"Service: {svc.name}",
+                    data={"type": "service", "bundle": bundle, "service": svc},
+                )
+        tree.root.expand()
+
+    def update_selection_display(self, selection: Optional[dict]) -> None:
+        """Update the detail panes based on the selected tree node."""
+
+        title_widget = self.query_one("#selection-title", Static)
+        state_widget = self.query_one("#selection-state", Static)
+        description_widget = self.query_one("#home-content", Static)
+
+        if not isinstance(selection, dict):
+            title_widget.update("Select a server or service from the tree.")
+            state_widget.update("State: -")
+            description_widget.update(WELCOME_TEXT)
+            return
+
+        node_type = selection.get("type")
+        if node_type == "service":
+            service = selection.get("service")
+            bundle = selection.get("bundle")
+            if service and bundle:
+                title_widget.update(f"{bundle.name}.{service.name}")
+                state_widget.update(f"State: {getattr(service, 'state', 'unknown')}")
+                server = getattr(bundle, "server", None)
+                server_ip = getattr(server, "ip", "unknown") if server else "unknown"
+                description_widget.update(
+                    f"Bundle: {bundle.name}\nServer: {server_ip}\nService Path: {getattr(service, 'target_path', '-')}"
+                )
+                return
+        elif node_type in {"server", "bundle"}:
+            bundle = selection.get("bundle")
+            server = selection.get("server")
+            if bundle and server:
+                server_ip = getattr(server, "ip", "unknown")
+                title_widget.update(f"{bundle.name}.{server_ip}")
+                state_widget.update(f"State: {getattr(server, 'state', 'unknown')}")
+                description_widget.update(
+                    f"Bundle: {bundle.name}\nServer IP: {server_ip}\nBackend: {', '.join(getattr(server, 'backend', []) or ['unknown'])}"
+                )
+                return
+
+        title_widget.update("Select a server or service from the tree.")
+        state_widget.update("State: -")
+        description_widget.update(WELCOME_TEXT)
 
     def on_tree_node_selected(
         self, event: Tree.NodeSelected
     ) -> None:  # pragma: no cover - UI callback
-        tabbed = self.query_one(TabbedContent)
-        # Prefer explicit target from node data; fallback to label mapping
-        target = event.node.data
-        if not isinstance(target, str) or not target:
-            label = event.node.label
-            label_text = getattr(label, "plain", label)  # Textual Text or str
-            target = f"tab-{str(label_text).strip().lower()}"
-        tabbed.active = target
-        # Ensure the latest data appears when switching to tables
-        if target in ("tab-servers", "tab-services"):
-            self.populate_tables()
+        self.update_selection_display(event.node.data)
 
 
 class MLOXTextualApp(App):

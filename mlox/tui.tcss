@@ -74,16 +74,43 @@ Button {
 #sidebar {
   width: 30;
   border: round #2b3c5f;
+  padding: 0 1;
 }
 
 #content {
   width: 1fr;
+  layout: vertical;
+  gap: 1;
+  padding-left: 1;
 }
 
 Tree {
   height: 100%;
 }
 
-DataTable {
-  height: 100%;
+#main-panel {
+  border: round #2b3c5f;
+  padding: 1;
+  height: 1fr;
+  background: #121a2b;
+}
+
+#home-content {
+  margin-top: 1;
+}
+
+#detail-panel {
+  border: round #2b3c5f;
+  padding: 1;
+  min-height: 5;
+  background: #121a2b;
+}
+
+#selection-title {
+  text-style: bold;
+  color: #e6edf7;
+}
+
+#selection-state {
+  color: #e6edf7;
 }
