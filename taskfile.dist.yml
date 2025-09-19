@@ -69,6 +69,8 @@ tasks:
         conda run -n '{{.NAME}}' python -m pip install --upgrade pip
         printf '\n\033[1;36m▶ Installing project (.[dev])\033[0m into env %s\n' '{{.NAME}}'
         conda run -n '{{.NAME}}' python -m pip install -e .[dev]
+        printf '\n\033[1;36m▶ Installing multipass-sdk (needed for integration tests)\033[0from GitHub\033[0m into env %s\n' '{{.NAME}}'
+        conda run -n '{{.NAME}}' python -m pip install "multipass-sdk @ git+https://github.com/okyanusoz/multipass-sdk.git@main#egg=multipass-sdk"
         printf '\n\033[1;36m▶ Verifying CLI import\033[0m\n'
         conda run -n '{{.NAME}}' python -c "import mlox.cli; print('mlox.cli OK')"
         printf '\n\033[1;32m✓ Environment ready:\033[0m activate with: \033[1mconda activate {{.NAME}}\033[0m\n'
