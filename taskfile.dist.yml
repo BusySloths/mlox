@@ -109,7 +109,7 @@ tasks:
   tests:unit:run:
     silent: true
     cmds:
-      - pytest -m "not integration"
+      - pytest -m 'not integration'
     desc: Run unit tests
 
   tests:integration:run:
