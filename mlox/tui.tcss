@@ -80,7 +80,6 @@ Button {
 #content {
   width: 1fr;
   layout: vertical;
-  gap: 1;
   padding-left: 1;
 }
 

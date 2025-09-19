@@ -105,7 +105,7 @@ class MainScreen(Screen):
                 f"Bundle: {bundle.name}", data={"type": "bundle", "bundle": bundle}
             )
             bundle_node.expand()
-            server = getattr(bundle, "server", None)
+            server = bundle.server
             server_label = (
                 f"Server: {getattr(server, 'ip', 'unknown')}"
                 if server
