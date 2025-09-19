@@ -1,0 +1,15 @@
+# Title: Remove direct dependency on multipass-sdk from Python packaging and install via go-task
+
+The PyPI deployment job fails due to a direct dependency on multipass-sdk, which is not supported by PyPI and also installs an old, incompatible version if replaced with the package from PyPI.
+
+**Solution:**
+- Remove the direct dependency on multipass-sdk from setup.py, setup.cfg, or requirements.txt (any Python packaging files).
+- Instead, add the installation of multipass-sdk to the `go-tasks` taskfile, within the same task that currently installs multipass.
+- This ensures the correct version is installed consistently for local development and CI, without interfering with PyPI publishing.
+
+Reference: See the PyPI deploy workflow and job failure here: https://github.com/BusySloths/mlox/actions/runs/17851873323/job/50762031852
+
+Acceptance criteria:
+- multipass-sdk is no longer present as a direct dependency in Python packaging files
+- The go-task taskfile installs multipass-sdk alongside multipass in the relevant task
+- PyPI deployment succeeds without dependency errors.
