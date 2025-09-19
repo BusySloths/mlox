@@ -109,7 +109,8 @@ tasks:
   tests:unit:run:
     silent: true
     cmds:
-      - pytest -m 'not integration'
+      - python -m pytest -m "not integration" -v --cov=coverage-mlox --cov
+      - coverage report -m
     desc: Run unit tests
 
   tests:integration:run:

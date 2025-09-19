@@ -40,7 +40,10 @@ jobs:
           flake8 mlox/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Run Unit Tests
         run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)
           task tests:unit:run
+          python -m pytest -m "not integration" -v --cov=mlox --cov
+          coverage report -m
       - name: Prepare Distribution
         run: |
           python -m build
