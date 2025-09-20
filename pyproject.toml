@@ -42,6 +42,7 @@ dependencies = [
     "passlib==1.7.4",  # M
     "typer==0.17.4",  # M               # CLI helpers
     "grpcio==1.73.1",  # M
+    "kafka-python==2.0.2",
     # "bcrypt>=4.0",
     # "requests>=2.31",
     # "python-dotenv>=1.0",
