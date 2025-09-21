@@ -42,29 +42,34 @@ class KafkaDockerService(AbstractService):
         # Generate self-signed TLS assets for the broker
         tls_setup_no_config(conn, conn.host, self.target_path)
 
-        password_escaped = shlex.quote(self.ssl_password)
+        # For PEM setup, cert.pem and key.pem already exist from tls_setup_no_config
+        # Create files with names expected by Bitnami entrypoint
         exec_command(
             conn,
             (
                 f"cd {self.target_path}; "
-                f"openssl pkcs12 -export -in cert.pem -inkey key.pem "
-                f"-out kafka.keystore.p12 -name kafka -passout pass:{password_escaped}"
-            ),
-        )
-        exec_command(
-            conn,
-            (
-                f"cd {self.target_path}; "
-                f"openssl pkcs12 -export -in cert.pem -nokeys "
-                f"-out kafka.truststore.p12 -name kafka -passout pass:{password_escaped}"
+                f"cp cert.pem kafka.keystore.pem && "
+                f"cp key.pem kafka.keystore.key && "
+                f"cp cert.pem kafka.truststore.pem && "
+                f"chmod 644 kafka.keystore.key && chmod 644 kafka.keystore.pem kafka.truststore.pem"
             ),
         )
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
-        fs_append_line(conn, env_path, f"KAFKA_SSL_PASSWORD={self.ssl_password}")
         fs_append_line(conn, env_path, f"KAFKA_SSL_PORT={self.ssl_port}")
         fs_append_line(conn, env_path, f"KAFKA_PUBLIC_HOST={conn.host}")
+        # PEM mode: compose file supplies the SSL_* PEM config and mounts certs
+        fs_append_line(
+            conn,
+            env_path,
+            f"KAFKA_CFG_SSL_KEYSTORE_PASSWORD={self.ssl_password}",
+        )
+        fs_append_line(
+            conn,
+            env_path,
+            f"KAFKA_CFG_SSL_TRUSTSTORE_PASSWORD={self.ssl_password}",
+        )
 
         self.certificate = fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"

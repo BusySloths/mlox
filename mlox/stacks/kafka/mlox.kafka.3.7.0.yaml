@@ -23,12 +23,12 @@ groups:
   streaming:
   backend:
     docker:
-ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
-  ssl: 9094
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
+  service: 9094
 ui:
-  settings: mlox.services.Kafka.ui.settings
+  settings: mlox.services.kafka.ui.settings
 build:
-  class_name: mlox.services.Kafka.docker.KafkaDockerService
+  class_name: mlox.services.kafka.docker.KafkaDockerService
   params:
     name: kafka-3.7.0
     template: ${MLOX_STACKS_PATH}/kafka/docker-compose-kafka-3.7.0.yaml

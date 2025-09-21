@@ -2,7 +2,7 @@ import textwrap
 import streamlit as st
 
 from mlox.infra import Infrastructure, Bundle
-from mlox.services.Kafka.docker import KafkaDockerService
+from mlox.services.kafka.docker import KafkaDockerService
 from mlox.services.utils_ui import save_to_secret_store
 
 
@@ -25,7 +25,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: KafkaDockerService)
             f"""
             from kafka import KafkaProducer, KafkaConsumer
 
-            bootstrap = "{bundle.server.ip}:{service.service_ports.get('Kafka SSL')}"
+            bootstrap = "{bundle.server.ip}:{service.service_ports.get("Kafka SSL")}"
             cafile_path = "./kafka-ca.pem"
 
             # Producer example
