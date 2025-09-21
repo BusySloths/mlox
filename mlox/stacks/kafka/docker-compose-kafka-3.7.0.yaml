@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  kafka:
+    image: bitnami/kafka:3.7.0
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - ${KAFKA_SSL_PORT:-9094}:9094
+    environment:
+      - BITNAMI_DEBUG=true
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CFG_LISTENERS=CONTROLLER://:9093,INTERNAL://:9092,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,EXTERNAL://${KAFKA_PUBLIC_HOST}:${KAFKA_SSL_PORT}
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SSL
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_SSL_CLIENT_AUTH=none
+      # Use PEM certs/keys (supported by Bitnami); expects specific filenames mounted below
+      - KAFKA_TLS_TYPE=PEM
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_CFG_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+    volumes:
+      - ./kafka.keystore.key:/bitnami/kafka/config/certs/kafka.keystore.key:ro
+      - ./kafka.keystore.pem:/bitnami/kafka/config/certs/kafka.keystore.pem:ro
+      - ./kafka.truststore.pem:/bitnami/kafka/config/certs/kafka.truststore.pem:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 20s
+
+volumes: {}
+
+networks: {}

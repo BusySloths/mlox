@@ -1,0 +1,37 @@
+id: kafka-3.7.0-docker
+name: Apache Kafka
+version: "3.7.0"
+maintainer: Your Name
+description_short: Apache Kafka is a distributed event streaming platform for high-performance data pipelines.
+description: |
+  Apache Kafka is an open-source distributed event streaming platform capable of
+  handling trillions of events a day. In MLOX it can be used for building real-time
+  data pipelines, streaming analytics, and integrating machine learning workloads
+  that rely on reliable event delivery. This stack deploys a single-node Kafka broker
+  secured with self-signed TLS certificates suitable for development and testing.
+links:
+  project: https://kafka.apache.org/
+  documentation: https://kafka.apache.org/documentation/
+  changelog: https://kafka.apache.org/downloads
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 2.0
+groups:
+  service:
+  messaging:
+  streaming:
+  backend:
+    docker:
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
+  service: 9094
+ui:
+  settings: mlox.services.kafka.ui.settings
+build:
+  class_name: mlox.services.kafka.docker.KafkaDockerService
+  params:
+    name: kafka-3.7.0
+    template: ${MLOX_STACKS_PATH}/kafka/docker-compose-kafka-3.7.0.yaml
+    target_path: /home/${MLOX_USER}/kafka-3.7.0
+    ssl_password: ${MLOX_AUTO_PW}
+    ssl_port: ${MLOX_AUTO_PORT_SERVICE}
