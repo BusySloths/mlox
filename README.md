@@ -25,56 +25,26 @@ It’s for engineers who prefer thoughtful systems over chaos. Powered by sloths
 
 MLOX is still in a very early development phase. If you like to contribute in any capacity, we would love to hear from you `contact[at]mlox.org`.
 
-### What Can You Do With MLOX?
+### What can you do with MLOX?
 
 #### Infrastructure
 
-- Add, delete, tag and name server
-- Select Native, Docker, Kubernetes backend
-- Setup one or more single- or multi-node Kubernetes Cluster
+- Manage servers: add, remove, tag, and name.
+- Choose your runtime: Native, Docker, or Kubernetes.
+- Spin up Kubernetes: single node or small multi‑node clusters.
 
 #### Services
 
-- Add, delete, and update Services
-- Use a centralized secret and configuration manager out-of-the-box
-- Install secured Docker Services (e.g. MLFlow, Airflow, LiteLLM, Ollama, InfluxDB, Redis, etc pp)
-- Install K8s Services (e.g. Dashboard, Helm, Headlamp)
-- Easily import public or private Github repositories
-- Use the following GCP services in your code:
+- Install, update, and remove services without fuss.
+- Centralized secrets and configuration, ready to use.
+- Secure Docker services: MLflow, Airflow, LiteLLM, Ollama, InfluxDB, Redis, and more.
+- Kubernetes add‑ons: Dashboard, Helm, Headlamp.
+- Import GitHub repositories — public or private — with ease.
+- Use GCP integrations in your code:
   - BigQuery
   - Secret Manager
-  - Storage
-  - and Spreadsheets
-
-### Installation
-
-There are two parts of the project.
-
-#### A Web UI to Manage Your Infrastructure and Services
-
-If you want to install the main UI to manage your infrastructure, then
-
-```
-  pip install busysloths-mlox[all]
-```
-
-and start the UI via
-
-```
-  mlox ui
-```
-
-This will install the main UI together with all supporting components (means lots of packages).
-
-#### Utilize Your Infrastructure in Your Code
-
-If you have existing MLOX infrastructure and want to use certain functionality in your apps, you can install only the necessary parts, e.g. if you want to use GCP related functionality:
-
-```
-  pip install busysloths-mlox[gcp]
-```
-
-This will only install the base packages as well as GCP related packages.
+  - Cloud Storage
+  - Sheets
 
 ### Unnecessary Long Introduction
 
@@ -126,6 +96,20 @@ Once you're comfortably set up, there are many ways to contribute, and they are 
 - [Expanding the tutorials and use case examples](https://github.com/BusySloths/mlox/issues/new/choose)
 
 Please see our [Contributing Guide](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) for details.
+
+### Project Organization
+
+We use GitHub Projects, Milestones, and Issues to organize our development workflow:
+
+- **[GitHub Projects](https://github.com/BusySloths/mlox/projects)**: High-level functional areas and strategic initiatives
+- **[Milestones](https://github.com/BusySloths/mlox/milestones)**: Release planning and goal tracking
+- **[Issues](https://github.com/BusySloths/mlox/issues)**: Specific features, bugs, and tasks
+
+📚 **Documentation:**
+
+- [GitHub Project Guide](docs/GITHUB_PROJECT.md) - Understanding our project organization
+- [Project Planning Guide](docs/PROJECT_PLANNING.md) - How to create and manage projects
+- [Labels Guide](docs/LABELS.md) - Our issue categorization system
 
 ## Big Thanks to our Sponsors
 

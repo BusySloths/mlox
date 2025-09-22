@@ -18,6 +18,19 @@ If you're new to open-source development, we recommend going through the [GitHub
 
 Keep in mind that MLOX is still in a very early stage and we welcome any idea or improvements.
 
+### Understanding Our Workflow
+
+We use a structured approach to manage development:
+- **GitHub Projects**: High-level functional areas and epics
+- **Milestones**: Release planning and goal setting  
+- **Issues**: Specific features, bugs, and tasks
+- **Labels**: Categorization and prioritization
+
+For detailed information about our project organization and workflow, see:
+- [GitHub Project Guide](docs/GITHUB_PROJECT.md) - How we organize work and manage projects
+- [Project Planning Guide](docs/PROJECT_PLANNING.md) - Detailed steps for creating and managing projects, milestones, and issues
+- [Labels Guide](docs/LABELS.md) - Our labeling system for categorizing issues
+
 ## Getting Help 🙋
 
 <a href="https://github.com/BusySloths/mlox/issues">
