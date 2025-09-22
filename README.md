@@ -21,19 +21,19 @@ It’s for engineers who prefer thoughtful systems over chaos. Powered by sloths
 <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox"></a>
 </p>
 
-### ATTENTION
+## ATTENTION
 
 MLOX is still in a very early development phase. If you like to contribute in any capacity, we would love to hear from you `contact[at]mlox.org`.
 
-### What can you do with MLOX?
+## What can you do with MLOX?
 
-#### Infrastructure
+### Infrastructure
 
 - Manage servers: add, remove, tag, and name.
 - Choose your runtime: Native, Docker, or Kubernetes.
-- Spin up Kubernetes: single node or small multi‑node clusters.
+- Spin up Kubernetes: single node or multi‑node clusters.
 
-#### Services
+### Services
 
 - Install, update, and remove services without fuss.
 - Centralized secrets and configuration, ready to use.
@@ -46,7 +46,7 @@ MLOX is still in a very early development phase. If you like to contribute in an
   - Cloud Storage
   - Sheets
 
-### Unnecessary Long Introduction
+## Unnecessary Long Introduction
 
 Machine Learning (ML) and Artificial Intelligence (AI) are revolutionizing businesses and industries. Despite its importance, many companies struggle to go from ML/AI prototype to production.
 
