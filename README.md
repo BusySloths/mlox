@@ -127,6 +127,19 @@ Once you're comfortably set up, there are many ways to contribute, and they are 
 
 Please see our [Contributing Guide](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) for details.
 
+### Project Organization
+
+We use GitHub Projects, Milestones, and Issues to organize our development workflow:
+
+- **[GitHub Projects](https://github.com/BusySloths/mlox/projects)**: High-level functional areas and strategic initiatives
+- **[Milestones](https://github.com/BusySloths/mlox/milestones)**: Release planning and goal tracking
+- **[Issues](https://github.com/BusySloths/mlox/issues)**: Specific features, bugs, and tasks
+
+📚 **Documentation:**
+- [GitHub Project Guide](docs/GITHUB_PROJECT.md) - Understanding our project organization
+- [Project Planning Guide](docs/PROJECT_PLANNING.md) - How to create and manage projects
+- [Labels Guide](docs/LABELS.md) - Our issue categorization system
+
 ## Big Thanks to our Sponsors
 
 MLOX is proudly funded by the following organizations:
