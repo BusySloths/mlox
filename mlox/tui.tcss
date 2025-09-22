@@ -1,7 +1,13 @@
 LoginScreen {
-  background: #0e1320;
+  background: #021c1dff;
   color: #e6edf7;
   margin: 4 4;
+}
+
+.app-header {
+  background: #0e9455ff;
+  color: #e6edf7;
+  text-style: bold;
 }
 
 #login-form {
@@ -9,8 +15,8 @@ LoginScreen {
   height: auto;
   margin: 10;
   padding: 1 2;
-  background: #121a2b;
-  border: round #2b3c5f;
+  background: #291488ff;
+  border: round #c420bbff;
   color: #ffffff;
   layer: 1;
 }
@@ -23,17 +29,17 @@ LoginScreen {
 }
 
 Input {
-  background: #121a2b;
+  background: #042c07ff;
   color: #e6edf7;
-  border: round #2b3c5f;  
+  border: round #e65516ff;  
 }
 
 #project {
   width: 32;
   min-height: 3;
   height: 3;
-  padding: 0 1;
-  margin: 0 0 1 0;
+  padding: 0 0;
+  margin: 0 0 0 0;
   color: #e6edf7;
 }
 
@@ -47,9 +53,9 @@ Input {
 }
 
 Button {
-  background: #121a2b;
+  background: #cc19aeff;
   color: #e6edf7;
-  border: round #2b3c5f;
+  border: round #f4e223ff;
   text-style: bold;
 }
 
@@ -73,36 +79,37 @@ Button {
 
 #sidebar {
   width: 30;
-  border: round #2b3c5f;
-  padding: 0 1;
+  border: round #eccf2eff;
+  padding: 0 0;
 }
 
 #content {
   width: 1fr;
   layout: vertical;
-  padding-left: 1;
+  padding-left: 0;
 }
 
 Tree {
   height: 100%;
+  background: #052628ff;
 }
 
 #main-panel {
-  border: round #2b3c5f;
-  padding: 1;
+  border: round #c21cbfff;
+  padding: 0;
   height: 1fr;
-  background: #121a2b;
+  background: #1f2503ff;
 }
 
 #home-content {
-  margin-top: 1;
+  margin-top: 0;
 }
 
 #detail-panel {
-  border: round #2b3c5f;
-  padding: 1;
+  border: round #1bd6f3ff;
+  padding: 0;
   min-height: 5;
-  background: #121a2b;
+  background: #062c19ff;
 }
 
 #selection-title {

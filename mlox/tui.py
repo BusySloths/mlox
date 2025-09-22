@@ -30,7 +30,7 @@ class LoginScreen(Screen):
     """Simple login screen that collects project and password."""
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield Header(show_clock=True, classes="app-header")
         with CenterMiddle(id="login-form"):
             yield Static("MLOX Login", id="login-title")
             yield Input(
@@ -46,7 +46,7 @@ class LoginScreen(Screen):
             )
             yield Button("Login", id="login-btn")
             yield Static("", id="message")
-        yield Footer()
+        yield Footer(classes="app-footer")
 
     def on_button_pressed(
         self, event: Button.Pressed
@@ -68,7 +68,7 @@ class MainScreen(Screen):
     """Main application screen shown after login."""
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield Header(show_clock=True, classes="app-header")
         with Container(id="main-area"):
             with Container(id="sidebar"):
                 tree: Tree = Tree("Infrastructure", id="infra-tree")
@@ -83,7 +83,8 @@ class MainScreen(Screen):
                     yield Static(WELCOME_TEXT, id="home-content")
                 with Container(id="detail-panel"):
                     yield Static("State: -", id="selection-state")
-        yield Footer()
+                    yield Button("Refresh", id="refresh-btn", name="refresh")
+        yield Footer(classes="app-footer")
 
     def on_mount(self) -> None:
         self.populate_tree()
