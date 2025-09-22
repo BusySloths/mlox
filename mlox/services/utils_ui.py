@@ -26,7 +26,7 @@ def save_to_secret_store(infra: Infrastructure, secret_name: str, secrets: Dict 
         "Select Secret Manager",
         sms,
         format_func=lambda s: f"{s.name}",
-        key="secret_manager",
+        key=f"secret_manager-select-{secret_name}",
     )
     if not select_sms:
         return
@@ -41,7 +41,7 @@ def save_to_secret_store(infra: Infrastructure, secret_name: str, secrets: Dict 
         return
 
     st_hack_align(c2)
-    if c2.button("Save Secrets"):
+    if c2.button("Save Secrets", key=f"save-secret-{secret_name}"):
         with st.spinner(f"Saving '{secret_name}' to secret store..."):
             sm.save_secret(secret_name, secrets)
             st.success(f"Secrets '{secret_name}' saved successfully.")

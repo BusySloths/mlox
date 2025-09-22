@@ -9,14 +9,104 @@ from mlox.secret_manager import AbstractSecretManagerService
 from mlox.view.utils import plot_config_nicely, st_hack_align
 
 
+# Lightweight CSS for badges, chips, and custom tables
+st.markdown(
+    """
+    <style>
+    .svc-badge {display:inline-block;padding:2px 8px;border-radius:999px;color:#fff;font-size:12px}
+    .svc-chip {display:inline-block;padding:2px 8px;border-radius:999px;background:#111827;color:#e5e7eb;margin-right:6px;margin-bottom:4px;font-size:12px;border:1px solid #374151}
+    .svc-table {width:100%;border-collapse:separate;border-spacing:0 6px}
+    .svc-table th {text-align:left;padding:8px 10px;color:#94a3b8;font-size:13px}
+    .svc-table td {background:#0b1220;padding:10px;border-top:1px solid #1f2937;border-bottom:1px solid #1f2937}
+    .svc-pill {display:inline-block;padding:2px 6px;border:1px solid #334155;border-radius:6px;color:#cbd5e1;font-size:12px}
+    .link-btn {display:inline-block;padding:6px 10px;background:#0ea5e9;color:#fff;border-radius:6px;text-decoration:none;margin-right:6px;margin-bottom:6px}
+    .link-btn:hover {background:#0284c7}
+    /* Style Streamlit metric blocks to match highlight color (#2E8B57) */
+    div[data-testid="stMetric"] {
+      background: rgba(56, 149, 97, 0.12); /* subtle SeaGreen tint */
+      border: 1px solid rgba(46, 139, 87, 0.6);
+      border-radius: 16px;
+      padding: 10px;
+    }
+    div[data-testid="stMetric"] label {color:#cbd5e1}
+    div[data-testid="stMetricValue"] {color:#2E8B57}
+    div[data-testid="stMetricValue"] * {color:#2E8B57 !important}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 def save_infra():
     with st.spinner("Saving infrastructure..."):
         st.session_state.mlox.save_infrastructure()
 
 
+def _state_badge(state: str) -> str:
+    colors = {
+        "running": "#16a34a",
+        "stopped": "#ef4444",
+        "un-initialized": "#64748b",
+        "unknown": "#f59e0b",
+    }
+    return f"<span class='svc-badge' style='background:{colors.get(state, '#64748b')}'>{state}</span>"
+
+
+def _chip(text: str, color: str | None = None) -> str:
+    style = f"background:{color};color:#0b1220;border:0;" if color else ""
+    return f"<span class='svc-chip' style='{style}'>{text}</span>"
+
+
+def _color_for(label: str) -> str:
+    palette = [
+        "#d8b4fe",
+        "#fde68a",
+        "#a7f3d0",
+        "#93c5fd",
+        "#fca5a5",
+        "#c7d2fe",
+        "#fdba74",
+        "#86efac",
+        "#f9a8d4",
+        "#bfdbfe",
+    ]
+    return palette[sum(ord(c) for c in label) % len(palette)]
+
+
+def _render_service_table(rows: list[dict]) -> None:
+    html = [
+        "<table class='svc-table'>",
+        "<thead><tr><th>Name</th><th>Version</th><th>Server</th><th>State</th><th>Groups</th><th>Links</th></tr></thead>",
+        "<tbody>",
+    ]
+    for r in rows:
+        chips = "".join(_chip(g, _color_for(g)) for g in r.get("groups", []))
+        links = " ".join(
+            f"<a class='link-btn' href='{url}' target='_blank' rel='noopener'>{label}</a>"
+            for label, url in (r.get("links", {}) or {}).items()
+        )
+        html.append(
+            "<tr>"
+            f"<td><strong>{r['name']}</strong></td>"
+            f"<td>v{r['version']}</td>"
+            f"<td><span class='svc-pill'>{r['ip']}</span></td>"
+            f"<td>{_state_badge(r['state'])}</td>"
+            f"<td>{chips}</td>"
+            f"<td>{links}</td>"
+            "</tr>"
+        )
+    html.append("</tbody></table>")
+    st.markdown("\n".join(html), unsafe_allow_html=True)
+
+
 def installed_services():
-    st.markdown("""
-    This is where you can manage your services.""")
+    # Header: concise, visually clear intro + legend and guide
+    # st.markdown("## Installed Services 🧭")
+    st.caption(
+        """Browse, filter, and manage your installed services. Select a row for actions and settings.
+            A service is a deployable component (e.g., MLflow, Airflow, Redis) that runs on or is associated with one of your servers.
+            Add new services in the “Templates” tab: choose a backend and server, tweak settings, then click “Add Service”."""
+    )
     infra = None
     try:
         session = cast(MloxSession, st.session_state.mlox)
@@ -28,112 +118,189 @@ def installed_services():
     services = []
     for bundle in infra.bundles:
         for s in bundle.services:
+            cfg = infra.get_service_config(s)
             services.append(
                 {
+                    "bundle": bundle,
+                    "service": s,
                     "ip": bundle.server.ip,
                     "name": s.name,
-                    "version": infra.get_service_config(s).version,
-                    "links": [f"{k}:{v}" for k, v in s.service_urls.items()],
+                    "version": getattr(cfg, "version", ""),
+                    "links": s.service_urls or {},
                     "state": s.state,
                     "uuid": s.uuid,
-                    # "tags": bundle.tags,
-                    # "services": [s.name for s in bundle.services],
-                    # "specs": f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, {info['storage_gb']} GB Storage, {info['pretty_name']}",
+                    "groups": list(getattr(cfg, "groups", {}).keys()) if cfg else [],
                 }
             )
 
-    if len(services) == 0:
-        st.info(
-            "No services installed yet. Please add a service from the templates tab."
-        )
+    if not services:
+        st.info("No services installed yet. Switch to the Templates tab to add one.")
         return
 
-    df = pd.DataFrame(
-        services, columns=["name", "ip", "version", "state", "links", "uuid"]
+    # Summary + filters
+    running = sum(1 for s in services if s["state"] == "running")
+    stopped = sum(1 for s in services if s["state"] == "stopped")
+    pending = sum(1 for s in services if s["state"] == "un-initialized")
+    unknown = sum(1 for s in services if s["state"] == "unknown")
+    total = len(services)
+    sm1, sm2, sm3, sm4, sm5 = st.columns(5)
+    sm1.metric("Total", total)
+    sm2.metric("Running", running)
+    sm3.metric("Stopped", stopped)
+    sm4.metric("Pending", pending)
+    sm5.metric("Unknown", unknown)
+
+    f1, f2, f3 = st.columns([2, 1, 1])
+    q = f1.text_input("Search services", value="", placeholder="Search by name or IP…")
+    state_options = ["all", "running", "stopped", "un-initialized", "unknown"]
+    state_sel = f2.selectbox("State", state_options, index=0)
+    srv_sel = f3.selectbox(
+        "Server",
+        ["all"] + sorted({s["ip"] for s in services}),
+        index=0,
     )
-    select_server = st.dataframe(
+
+    filtered = services
+    if q:
+        ql = q.lower()
+        filtered = [s for s in filtered if ql in s["name"].lower() or ql in s["ip"]]
+    if state_sel != "all":
+        filtered = [s for s in filtered if s["state"] == state_sel]
+    if srv_sel != "all":
+        filtered = [s for s in filtered if s["ip"] == srv_sel]
+
+    if not filtered:
+        st.caption("No services match your filters.")
+        return
+
+    # Build a dataframe view with colorful elements using emojis and LinkColumn
+    def _state_emoji(s: str) -> str:
+        return {
+            "running": "🟢 Running",
+            "stopped": "🔴 Stopped",
+            "un-initialized": "⚪ Pending",
+            "unknown": "🟠 Unknown",
+        }.get(s, s)
+
+    df_rows = []
+    for ent in filtered:
+        links_dict = ent.get("links", {}) or {}
+        # pick a primary link if available
+        primary_url = ""
+        if links_dict:
+            prefs = ["UI", "Dashboard", "Service", "Repository"]
+            for p in prefs:
+                if p in links_dict:
+                    primary_url = links_dict[p]
+                    break
+            if not primary_url:
+                primary_url = next(iter(links_dict.values()))
+        df_rows.append(
+            {
+                "Name": ent["name"],
+                "Version": ent["version"],
+                "Server": ent["ip"],
+                "State": _state_emoji(ent["state"]),
+                "Groups": ", ".join(ent.get("groups", [])),
+                "Open": primary_url,
+            }
+        )
+
+    df = pd.DataFrame(df_rows)
+    sel = st.dataframe(
         df,
-        width="stretch",
-        selection_mode="single-row",
+        use_container_width=True,
         hide_index=True,
+        selection_mode="single-row",
         on_select="rerun",
-        key="service-select",
+        column_config={
+            "Open": st.column_config.LinkColumn(display_text="Open"),
+            "Name": st.column_config.TextColumn(help="Service name"),
+            "Version": st.column_config.TextColumn(
+                help="Service version", width="small"
+            ),
+            "Server": st.column_config.TextColumn(help="Server IP"),
+            "State": st.column_config.TextColumn(help="Current state"),
+            "Groups": st.column_config.TextColumn(help="Service groups/tags"),
+        },
     )
 
-    if len(select_server["selection"].get("rows", [])) == 1:
-        idx = select_server["selection"]["rows"][0]
-        ip = services[idx]["ip"]
-        service_name = services[idx]["name"]
-        service = infra.get_service(service_name)
-        bundle = infra.get_bundle_by_ip(ip)
-        config = infra.get_service_config(service)
+    # Details + actions for selected row
+    rows = sel.get("selection", {}).get("rows", [])
+    if rows:
+        idx = rows[0]
+        entry = filtered[idx]
+        svc = entry["service"]
+        bndl = entry["bundle"]
+        cfg = infra.get_service_config(svc)
 
-        state = service.state
-        c1, c2, cf, _, c3, c4 = st.columns([10, 15, 10, 20, 30, 15])
-        if c1.button("Setup", disabled=state != "un-initialized"):
-            with st.spinner(f"Setting up service {service_name}...", show_time=True):
-                infra.setup_service(service)
-            save_infra()
-            st.rerun()
-
-        if c2.button("Teardown"):
-            with st.spinner(f"Deleting service {service_name}...", show_time=True):
-                infra.teardown_service(service)
-            save_infra()
-            st.rerun()
-
-        if cf.button("Check"):
-            status = {}
-            with bundle.server.get_server_connection() as conn:
-                status = service.check(conn)
-            st.write(status)
-        # if cf.button(
-        #     "Focus", disabled=state != "running" or service.uuid in infra.focus
-        # ):
-        #     infra.focus_service(service)
-        #     save_infra()
-        #     st.rerun()
-
-        new_service_name = c3.text_input("Unique service name", service_name)
-        # Add vertical space to align the button with the text input field.
-        # c4.write('<div style="height: 28px;"></div>', unsafe_allow_html=True)
-        st_hack_align(c4)
-        if (
-            c4.button("Update", icon=":material/update:")
-            and new_service_name != service_name
+        st.markdown("---")
+        st.markdown(f"#### {svc.name}")
+        b1, b2, b3, b4, b5 = st.columns(5)
+        if b1.button(
+            "Setup", key=f"setup-{svc.uuid}", disabled=svc.state != "un-initialized"
         ):
-            if new_service_name in infra.list_service_names():
-                st.error("Service name must be unqiue.")
+            with st.spinner(f"Setting up {svc.name}…", show_time=True):
+                infra.setup_service(svc)
+            save_infra()
+            st.rerun()
+        if b2.button("Start", key=f"start-{svc.uuid}", disabled=svc.state == "running"):
+            with bndl.server.get_server_connection() as conn:
+                svc.spin_up(conn)
+            save_infra()
+            st.rerun()
+        if b3.button("Stop", key=f"stop-{svc.uuid}", disabled=svc.state != "running"):
+            with bndl.server.get_server_connection() as conn:
+                svc.spin_down(conn)
+            save_infra()
+            st.rerun()
+        if b4.button("Check", key=f"check-{svc.uuid}"):
+            with bndl.server.get_server_connection() as conn:
+                status = svc.check(conn)
+            st.toast(f"{svc.name} status: {status}")
+        if b5.button("Teardown", key=f"teardown-{svc.uuid}"):
+            with st.spinner(f"Deleting {svc.name}…", show_time=True):
+                infra.teardown_service(svc)
+            save_infra()
+            st.rerun()
+
+        r1, r2 = st.columns([3, 1])
+        new_name = r1.text_input("Rename", value=svc.name, key=f"rename-{svc.uuid}")
+        st_hack_align(r2)
+        if r2.button("Apply", key=f"apply-{svc.uuid}") and new_name != svc.name:
+            if new_name in infra.list_service_names():
+                st.error("Service name must be unique.")
             else:
-                service.name = new_service_name
+                svc.name = new_name
                 save_infra()
                 st.rerun()
 
-        with st.container(border=True):
-            plot_config_nicely(config)
+        # Helpful links
+        links = entry.get("links", {}) or {}
+        if links:
+            st.caption("Links")
+            lcols = st.columns(4)
+            i = 0
+            for label, url in links.items():
+                lcols[i % 4].link_button(label, url, use_container_width=True)
+                i += 1
 
-            # st.divider()
-            callable_settings_func = config.instantiate_ui("settings")
-            if callable_settings_func:
-                if state == "running":
-                    if isinstance(service, AbstractSecretManagerService) and st.button(
-                        "Set as default secret manager", icon=":material/key:"
-                    ):
-                        session.set_secret_manager(service.get_secret_manager(infra))
-                        save_infra()
-                        st.success(f"Set {service.name} as default secret manager.")
-
-                    callable_settings_func(infra, bundle, service)
-                    # save_infra()
-                elif state == "un-initialized":
-                    st.markdown(
-                        "#### The service is not running. Please set it up first to access the settings."
-                    )
+        callable_settings_func = cfg.instantiate_ui("settings") if cfg else None
+        if callable_settings_func and svc.state == "running":
+            with st.expander("Settings"):
+                if isinstance(svc, AbstractSecretManagerService) and st.button(
+                    "Set as default secret manager",
+                    icon=":material/key:",
+                    key=f"set-sm-{svc.uuid}",
+                ):
+                    session.set_secret_manager(svc.get_secret_manager(infra))
+                    save_infra()
+                    st.success(f"Set {svc.name} as default secret manager.")
+                callable_settings_func(infra, bndl, svc)
 
 
 def available_services():
-    st.markdown("""
-    Add services to your infrastructure.""")
+    st.markdown("### Templates")
     infra = None
     try:
         session = cast(MloxSession, st.session_state.mlox)
@@ -142,7 +309,6 @@ def available_services():
         st.error("Could not load infrastructure configuration.")
         st.stop()
 
-    # with st.expander("Add Server"):
     configs = load_all_service_configs()
 
     services = []
@@ -154,17 +320,13 @@ def available_services():
                 "maintainer": service.maintainer,
                 "description": service.description,
                 "description_short": service.description_short,
-                "links": [f"{k}: {v}" for k, v in service.links.items()],
-                "requirements": [f"{k}: {v}" for k, v in service.requirements.items()],
-                "ui": [f"{k}" for k, v in service.ui.items()],
+                "links": service.links,
+                "requirements": service.requirements,
+                "ui": list(service.ui.keys()),
                 "groups": [
-                    f"{k}"
-                    for k, v in service.groups.items()
-                    if k != "backend" and k != "service"
+                    k for k in service.groups.keys() if k not in {"backend", "service"}
                 ],
-                "backend": [
-                    f"{k}" for k, v in service.groups.get("backend", {}).items()
-                ],
+                "backend": list(service.groups.get("backend", {}).keys()),
                 "config": service,
             }
         )
@@ -177,7 +339,7 @@ def available_services():
         label_visibility="collapsed",
         placeholder="Search for services...",
     )
-    if len(search_filter) > 0:
+    if search_filter:
         services = [s for s in services if search_filter.lower() in s["name"].lower()]
 
     option_map = {0: "Docker only", 1: "Kubernetes only"}
@@ -195,73 +357,62 @@ def available_services():
         elif selection == 1:
             services = [s for s in services if "kubernetes" in s["backend"]]
 
-    df = pd.DataFrame(services)
-    select = st.dataframe(
-        df[
-            [
-                "name",
-                "version",
-                # "maintainer",
-                # "description",
-                # "links",
-                # "requirements",
-                "backend",
-                "groups",
-                "description_short",
-            ]
-        ],
-        width="stretch",
-        selection_mode="single-row",
-        hide_index=True,
-        on_select="rerun",
-        key="avail-service-select",
-    )
+    grid_cols = st.columns(3)
+    for i, svc in enumerate(services):
+        col = grid_cols[i % 3]
+        with col.container(border=True):
+            st.markdown(f"**{svc['name']}** · v{svc['version']}")
+            if svc.get("description_short"):
+                st.caption(svc["description_short"])
+            chips = "".join(_chip(g, _color_for(g)) for g in svc.get("groups", []))
+            st.markdown(chips, unsafe_allow_html=True)
 
-    if len(select["selection"].get("rows", [])) == 1:
-        selected = select["selection"]["rows"][0]
-
-        config = services[selected]["config"]
-        supported_backends = list(config.groups.get("backend", {}).keys())
-
-        # with st.form("Add Service"):
-        with st.container(border=True):
-            plot_config_nicely(config)
-
-            c2, c3, c4, _ = st.columns([25, 25, 15, 35])
-            select_backend = c2.selectbox(
+            config = svc["config"]
+            supported_backends = list(config.groups.get("backend", {}).keys())
+            sb1, sb2 = st.columns(2)
+            select_backend = sb1.selectbox(
                 "Backend",
                 supported_backends,
                 disabled=len(supported_backends) <= 1,
+                key=f"bk-{i}",
             )
-
             bundle_candidates = infra.list_bundles_with_backend(backend=select_backend)
-            bundle = c3.selectbox(
-                "Server",
-                [b for b in bundle_candidates if b.server.state == "running"],
-                format_func=lambda x: f"{x.name}",
+            running_bundles = [
+                b for b in bundle_candidates if b.server.state == "running"
+            ]
+            bundle = (
+                sb2.selectbox(
+                    "Server",
+                    running_bundles,
+                    format_func=lambda x: f"{x.name}",
+                    key=f"bd-{i}",
+                )
+                if running_bundles
+                else None
             )
 
             params = {}
             callable_setup_func = config.instantiate_ui("setup")
-            if callable_setup_func:
-                params = callable_setup_func(infra, bundle)
+            if callable_setup_func and bundle:
+                with st.expander("Configure"):
+                    params = callable_setup_func(infra, bundle)
 
-            # if st.form_submit_button("Add Service", type="primary"):
             if st.button(
-                "Add Service", type="primary", disabled=params is None or not bundle
+                "Add Service",
+                type="primary",
+                key=f"add-{i}",
+                disabled=(params is None) or (bundle is None),
             ):
                 st.info(
                     f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
                 )
-                ret = infra.add_service(bundle.server.ip, config, params)
+                ret = infra.add_service(bundle.server.ip, config, params or {})
                 if not ret:
                     st.error("Failed to add service")
                 save_infra()
 
-        # st.write(services[selected])
 
-
-# tab_avail, tab_installed = st.tabs(["Templates", "Installed"])
+# Tabs layout
 tab_installed, tab_avail = st.tabs(["Installed", "Templates"])
 with tab_avail:
     available_services()

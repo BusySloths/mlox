@@ -1,3 +1,4 @@
+import random
 import streamlit as st
 
 from typing import Dict
@@ -8,11 +9,13 @@ from mlox.servers.ubuntu.native import UbuntuNativeServer
 
 
 def form_add_server():
+    id = f"form-add-server-{random.randint(1000, 9999)}"
     c1, c2 = st.columns(2)
     ip = c1.text_input(
         "IP Address",
         placeholder="Enter the server IP address",
         help="The IP address of the server you want to add.",
+        key=f"{id}-ip",
     )
     port = c2.number_input(
         "SSH Port",
@@ -22,18 +25,21 @@ def form_add_server():
         step=1,
         placeholder="Enter the server SSH port",
         help="The SSH port for the server.",
+        key=f"{id}-port",
     )
     root = c1.text_input(
         "Root Account Name",
         value="root",
         placeholder="Enter the server root account name",
         help="Enter the server root account name.",
+        key=f"{id}-root",
     )
     pw = c2.text_input(
         "Root Account Password",
         placeholder="Enter the server password",
         help="The password for the server.",
         type="password",
+        key=f"{id}-pw",
     )
     return ip, port, root, pw
 

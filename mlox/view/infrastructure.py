@@ -16,6 +16,62 @@ def save_infra():
         st.session_state.mlox.save_infrastructure()
 
 
+# Lightweight chips styling to match Services templates
+st.markdown(
+    """
+    <style>
+    .svc-chip {display:inline-block;padding:2px 8px;border-radius:999px;background:#111827;color:#e5e7eb;margin-right:6px;margin-bottom:4px;font-size:12px;border:1px solid #374151}
+    .svc-table {width:100%;border-collapse:separate;border-spacing:0 6px}
+    .svc-table th {text-align:left;padding:8px 10px;color:#94a3b8;font-size:13px}
+    .svc-table td {background:#0b1220;padding:10px;border-top:1px solid #1f2937;border-bottom:1px solid #1f2937}
+    .svc-pill {display:inline-block;padding:2px 6px;border:1px solid #334155;border-radius:6px;color:#cbd5e1;font-size:12px}
+    /* Style Streamlit metric blocks to match highlight color (#2E8B57) */
+    div[data-testid="stMetric"] {
+      background: rgba(56, 149, 97, 0.12); /* subtle SeaGreen tint */
+      border: 1px solid rgba(46, 139, 87, 0.6);
+      border-radius: 16px;
+      padding: 10px;
+    }
+    div[data-testid="stMetric"] label {color:#cbd5e1}
+    div[data-testid="stMetricValue"] {color:#2E8B57}
+    div[data-testid="stMetricValue"] * {color:#2E8B57 !important}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+def _chip(text: str, color: str | None = None) -> str:
+    style = f"background:{color};color:#0b1220;border:0;" if color else ""
+    return f"<span class='svc-chip' style='{style}'>{text}</span>"
+
+
+def _color_for(label: str) -> str:
+    palette = [
+        "#d8b4fe",
+        "#fde68a",
+        "#a7f3d0",
+        "#93c5fd",
+        "#fca5a5",
+        "#c7d2fe",
+        "#fdba74",
+        "#86efac",
+        "#f9a8d4",
+        "#bfdbfe",
+    ]
+    return palette[sum(ord(c) for c in label) % len(palette)]
+
+
+def _state_emoji(state: str) -> str:
+    mapping = {
+        "running": "🟢 Running",
+        "stopped": "🔴 Stopped",
+        "un-initialized": "⚪ Pending",
+        "unknown": "🟠 Unknown",
+    }
+    return mapping.get(state, state)
+
+
 def format_groups(groups: Dict[str, Any]) -> List[str]:
     group_list: List[str] = list()
     for k, v in groups.items():
@@ -62,40 +118,106 @@ def get_server_infos(infra: Infrastructure) -> List[Dict[str, Any]]:
 
 
 def tab_server_management(infra: Infrastructure):
-    st.markdown("### Server List")
-
-    srv = []
+    # st.markdown("### Server List")
+    st.caption(
+        """Manage your servers and view their status. Select a server row to see details and perform actions.
+        A server is a physical or virtual machine (e.g., Ubuntu VM, Kubernetes cluster) that can host one or more services.
+        Add new servers in the “Templates” tab: choose a backend, tweak settings, then click “Add Server”."""
+    )
+    # Build rows + metrics
+    rows = []
+    running = stopped = pending = unknown = 0
+    total_services = 0
+    cpu_sum = 0
+    ram_sum = 0.0
+    storage_sum = 0.0
     for bundle in infra.bundles:
         state = bundle.server.state
         info = bundle.server.get_server_info()
-        srv.append(
+        total_services += len(bundle.services)
+        try:
+            cpu_sum += int(info.get("cpu_count", 0) or 0)
+            ram_sum += float(info.get("ram_gb", 0) or 0)
+            storage_sum += float(info.get("storage_gb", 0) or 0)
+        except Exception:
+            pass
+        if state == "running":
+            running += 1
+        elif state == "stopped":
+            stopped += 1
+        elif state == "un-initialized":
+            pending += 1
+        else:
+            unknown += 1
+        rows.append(
             {
                 "ip": bundle.server.ip,
                 "name": bundle.name,
                 "backend": bundle.server.backend,
-                "status": [state],
+                "status": state,
                 "tags": bundle.tags,
                 "discovered": bundle.server.discovered,
                 "services": [s.name for s in bundle.services],
-                "hostname": info["host"],
+                "hostname": info.get("host", ""),
                 "specs": (
-                    f"{info['cpu_count']} CPUs, {info['ram_gb']} GB RAM, "
-                    f"{info['storage_gb']} GB Storage, {info['pretty_name']}"
+                    f"{info.get('cpu_count', '?')} CPUs, {info.get('ram_gb', '?')} GB RAM, "
+                    f"{info.get('storage_gb', '?')} GB Storage, {info.get('pretty_name', '')}"
                 ),
             }
         )
 
+    # Summary metrics
+    total_servers = len(infra.bundles)
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Servers", total_servers)
+    m2.metric("Running", running)
+    m3.metric("Stopped", stopped)
+    m4.metric("Pending", pending)
+    m5.metric("Services", total_services)
+    m6.metric("CPU/RAM/Storage", f"{cpu_sum} • {ram_sum:.0f}GB • {storage_sum:.0f}GB")
+
+    # Colorful dataframe using emojis; Tags rendered as plain text with emoji pills
+    df_rows = []
+    for r in rows:
+        tags = r.get("tags", []) or []
+        df_rows.append(
+            {
+                "Name": r["name"],
+                "IP": r["ip"],
+                "Backend": ", ".join(r.get("backend", []))
+                if isinstance(r.get("backend"), list)
+                else r.get("backend", ""),
+                "State": _state_emoji(r["status"]),
+                "Tags": r.get("tags", []),
+                "Services": len(r.get("services", [])),
+                "Host": r.get("hostname", ""),
+                "Specs": r.get("specs", ""),
+            }
+        )
+    df = pd.DataFrame(df_rows)
     select_server = st.dataframe(
-        srv,
+        df,
         use_container_width=True,
         selection_mode="single-row",
         hide_index=True,
         on_select="rerun",
         key="server-select",
+        column_config={
+            "Name": st.column_config.TextColumn(help="Server display name"),
+            "IP": st.column_config.TextColumn(help="Server address"),
+            "Backend": st.column_config.TextColumn(help="Enabled backends"),
+            "State": st.column_config.TextColumn(help="Current status"),
+            # "Tags": st.column_config.TextColumn(help="Server tags", width="medium"),
+            "Services": st.column_config.NumberColumn(
+                help="# of services", width="small"
+            ),
+            "Host": st.column_config.TextColumn(help="Hostname"),
+            "Specs": st.column_config.TextColumn(help="CPU, RAM, Storage, OS"),
+        },
     )
 
     if len(select_server["selection"].get("rows", [])) == 1:
-        selected_server = srv[select_server["selection"]["rows"][0]]["ip"]
+        selected_server = rows[select_server["selection"]["rows"][0]]["ip"]
         bundle_tmp = infra.get_bundle_by_ip(str(selected_server))
         if not bundle_tmp:
             st.error(f"Could not find bundle for server {selected_server}.")
@@ -186,21 +308,24 @@ def tab_server_management(infra: Infrastructure):
 
 
 def tab_server_templates(infra: Infrastructure):
-    st.markdown("""
-    ### Available Server Templates
-    This is where you can manage your server.""")
-    server = get_server_infos(infra)
+    st.caption(
+        """ Browse and add server templates. Select a backend, configure settings, then click "Add Server".
+        A server is a physical or virtual machine (e.g., Ubuntu VM, Kubernetes cluster) that can host one or more services.
+        After adding, manage servers and their services in the "Server Management" tab.
+    """
+    )
+    servers = get_server_infos(infra)
 
     c1, c2, _ = st.columns(3)
     search_filter = c1.text_input(
         "Search",
         value="",
-        key="search_filter",
+        key="server_search_filter",
         label_visibility="collapsed",
-        placeholder="Search for services...",
+        placeholder="Search for servers...",
     )
-    if len(search_filter) > 0:
-        server = [s for s in server if search_filter.lower() in s["name"].lower()]
+    if search_filter:
+        servers = [s for s in servers if search_filter.lower() in s["name"].lower()]
 
     option_map = {0: "Docker only", 1: "Kubernetes only"}
     selection = c2.pills(
@@ -213,57 +338,41 @@ def tab_server_templates(infra: Infrastructure):
     )
     if selection is not None:
         if selection == 0:
-            server = [s for s in server if "docker" in s["backend"]]
+            servers = [s for s in servers if "docker" in s["backend"]]
         elif selection == 1:
-            server = [s for s in server if "kubernetes" in s["backend"]]
+            servers = [s for s in servers if "kubernetes" in s["backend"]]
 
-    df = pd.DataFrame(server)
-    select = st.dataframe(
-        df[
-            [
-                "name",
-                "version",
-                # "maintainer",
-                # "description",
-                # "links",
-                # "requirements",
-                "backend",
-                "groups",
-                "description_short",
-            ]
-        ],
-        # width="stretch",
-        selection_mode="single-row",
-        hide_index=True,
-        on_select="rerun",
-        key="avail-server-select",
-    )
+    # Cards grid similar to Services templates
+    cols = st.columns(3)
+    for i, srv in enumerate(servers):
+        col = cols[i % 3]
+        with col.container(border=True):
+            st.markdown(f"**{srv['name']}** · v{srv['version']}")
+            if srv.get("description_short"):
+                st.caption(srv["description_short"])
+            chips = "".join(_chip(g, _color_for(g)) for g in srv.get("groups", []))
+            st.markdown(chips, unsafe_allow_html=True)
 
-    if len(select["selection"].get("rows", [])) == 1:
-        selected = select["selection"]["rows"][0]
+            config = srv["config"]
 
-        config = server[selected]["config"]
-        c2, c3, c4, _ = st.columns([25, 25, 15, 35])
-
-        with st.container(border=True):
-            plot_config_nicely(config)
-
-            params = {}
+            params: Dict[str, Any] | None = {}
             callable_setup_func = config.instantiate_ui("setup")
             if callable_setup_func:
-                params = callable_setup_func(infra, config)
+                with st.expander("Configure"):
+                    params = callable_setup_func(infra, config)
 
-            if st.button("Add Server", icon=":material/computer:", type="primary"):
-                # if st.form_submit_button(
-                #     "Add Server", type="primary", icon=":material/computer:"
-                # ):
+            if st.button(
+                "Add Server",
+                icon=":material/computer:",
+                type="primary",
+                key=f"add-server-{i}",
+                disabled=params is None,
+            ):
                 st.info(f"Adding server {config.name} {config.version}.")
-                ret = infra.add_server(config, params)
+                ret = infra.add_server(config, params or {})
                 if not ret:
                     st.error("Failed to add server")
                 save_infra()
-
-        # st.write(server[selected])
 
 
 # tab_avail, tab_installed = st.tabs(["Templates", "Server Management"])
@@ -280,8 +389,4 @@ with tab_avail:
     tab_server_templates(infra)
 
 with tab_installed:
-    st.header("Server Management")
-    st.write(
-        "This is a simple server management interface. You can add servers, manage services, and view server information."
-    )
     tab_server_management(infra)

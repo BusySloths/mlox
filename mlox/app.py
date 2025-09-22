@@ -40,26 +40,68 @@ def news():
 
 
 def welcome():
-    st.markdown("# BusySloths presents")
-    st.image(get_resource_path("mlox_logo_wide.png"))
-    st.markdown("""
-    ### Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
+    # Header with logo + tagline
+    c1, c2 = st.columns([1, 2], vertical_alignment="center")
+    with c1:
+        st.image(get_resource_path("mlox_logo_wide.png"))
+    with c2:
+        st.markdown("## Calm MLOps, at a sloth’s pace 🦥")
+        st.markdown(
+            "Deploy, monitor, and maintain production‑ready MLOps — without rushing."
+        )
 
-    
-    MLOX helps individuals and small teams deploy, configure, and monitor full MLOps stacks with minimal effort. 
-    Through this interface, you can:
-    - Install MLOps tools like MLFlow, Airflow, and Feast with one click
-    - Customize infrastructure using simple forms
-    - Monitor your metrics, logs, and traces in one place
-    - Secure deployments via built-in user management and secret handling
-    - Easily integrate your applications using a simple API
-    - Everything runs on your servers or hybrid setups fully open-source, fully yours.    
-                
-    ### Get Started
+    # Quick overview points
+    st.markdown("---")
+    st.markdown("#### What you can do here")
+    c3, c4, c5 = st.columns(3)
+    with c3:
+        st.markdown("- Install services like MLflow, Airflow, Redis")
+        st.markdown("- Import public/private GitHub repos")
+    with c4:
+        st.markdown("- Manage servers and Kubernetes clusters")
+        st.markdown("- Centralize secrets and configuration")
+    with c5:
+        st.markdown("- Monitor metrics, logs, and traces")
+        st.markdown("- Use friendly APIs in your apps")
 
-    Explore the different sections of the application in the menu on the left.
-    If you are not already logged in, you can do so under "Your Account".
-    """)
+    # Project snapshot (if logged in)
+    if "mlox" in st.session_state:
+        try:
+            infra = cast(Infrastructure, st.session_state.mlox.infra)
+            bundles = infra.bundles
+            server_count = len(bundles)
+            service_count = sum(len(b.services) for b in bundles)
+            st.markdown("---")
+            st.markdown("#### Project snapshot")
+            m1, m2 = st.columns(2)
+            m1.metric("Servers", server_count)
+            m2.metric("Services", service_count)
+        except Exception:
+            pass
+
+    # Helpful next steps
+    st.markdown("---")
+    st.markdown("#### Get started")
+    st.markdown(
+        "- Use the sidebar to open Infrastructure, Services, and Docs.\n"
+        "- Not logged in yet? Open ‘Open Project’ to connect.\n"
+        "- Prefer reading first? Explore the docs and repo below."
+    )
+
+    # External links
+    l1, l2, l3 = st.columns(3)
+    with l1:
+        st.link_button("Project Site", "https://mlox.org", use_container_width=True)
+    with l2:
+        st.link_button(
+            "Documentation",
+            "https://github.com/BusySloths/mlox#readme",
+            use_container_width=True,
+        )
+    with l3:
+        st.link_button(
+            "GitHub", "https://github.com/BusySloths/mlox", use_container_width=True
+        )
 
 
 st.set_page_config(

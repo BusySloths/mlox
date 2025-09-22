@@ -52,7 +52,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: GithubRepoService):
 """)
 
     if info.get("cloned", False):
-        if st.button("Pull", type="primary"):
+        if st.button("Pull", type="primary", key=f"service-github-pull-{service.name}"):
             with st.spinner("Pulling repo...", show_time=True):
                 with bundle.server.get_server_connection() as conn:
                     service.git_pull(conn)
@@ -77,7 +77,9 @@ def settings(infra: Infrastructure, bundle: Bundle, service: GithubRepoService):
         )
         tree_df = tree_df[~tree_df["path"].str.startswith("/.git/")]
 
-        show_path = st.text_input("Filter Path", value="/")
+        show_path = st.text_input(
+            "Filter Path", value="/", key=f"service-github-filter-path-{service.name}"
+        )
         st.dataframe(
             tree_df[tree_df["path"].str.startswith(show_path)], hide_index=True
         )
