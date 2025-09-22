@@ -92,6 +92,13 @@ Button {
 Tree {
   height: 100%;
   background: #052628ff;
+  scrollbar_color: #c21cbfff;              /* thumb color */
+  scrollbar_color_hover: #2fa527ff;        /* thumb on hover */
+  scrollbar_color_active: #f0e55cff; 
+  scrollbar_background: #052628ff;         /* track background */ 
+  scrollbar_background_hover: #05241bff;   /* track on hover */
+  scrollbar_background_active: #0c2116ff;  /* track while dragging */
+  scrollbar_size_horizontal: 1; 
 }
 
 #main-panel {
