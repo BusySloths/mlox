@@ -2,7 +2,6 @@ import json
 import logging
 import uuid
 
-from importlib import resources
 from typing import Dict, Literal, Protocol, TypeVar, runtime_checkable
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -69,6 +68,9 @@ def tls_setup(conn, ip, path) -> None:
     exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/key.pem")
 
 
+ServiceState = Literal["un-initialized", "running", "stopped", "unknown"]
+
+
 @dataclass
 class AbstractService(ABC):
     name: str
@@ -79,14 +81,12 @@ class AbstractService(ABC):
 
     target_docker_script: str = field(default="docker-compose.yaml", init=False)
     target_docker_env: str = field(default="service.env", init=False)
+    compose_service_names: Dict[str, str] = field(default_factory=dict, init=False)
 
     service_urls: Dict[str, str] = field(default_factory=dict, init=False)
     service_ports: Dict[str, int] = field(default_factory=dict, init=False)
-    compose_service_names: Dict[str, str] = field(default_factory=dict, init=False)
 
-    state: Literal["un-initialized", "running", "stopped", "unknown"] = field(
-        default="un-initialized", init=False
-    )
+    state: ServiceState = field(default="un-initialized", init=False)
 
     certificate: str = field(default="", init=False)
 
@@ -117,7 +117,7 @@ class DockerServiceLike(Protocol):
     target_docker_script: str
     target_docker_env: str
     compose_service_names: Dict[str, str]
-    state: str
+    state: ServiceState
 
 
 T = TypeVar("T", bound=DockerServiceLike)
@@ -125,12 +125,6 @@ T = TypeVar("T", bound=DockerServiceLike)
 
 class DockerMixin:
     """Helper mixin providing docker-compose operations for services."""
-
-    compose_service_names: Dict[str, str]
-    target_path: str
-    target_docker_script: str
-    target_docker_env: str
-    state: str
 
     def compose_up(self: T, conn) -> bool:
         """Bring up the docker compose stack for this service."""
