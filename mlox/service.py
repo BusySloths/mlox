@@ -113,29 +113,7 @@ class AbstractService(ABC):
         return True
 
 
-# SKETCH of a mixin for Docker services
-# This mixin can be used to provide common Docker functionality to services
-# that need to run in Docker containers, such as Airflow or MLFlow.
-# @dataclass
-# class DockerMixin:
-#     target_docker_script: str = field(default="docker-compose.yaml", init=False)
-#     target_docker_env: str = field(default="service.env", init=False)
-
-#     def spin_up(self, conn, target_path: str) -> bool:
-#         docker_up(
-#             conn,
-#             f"{target_path}/{self.target_docker_script}",
-#             f"{target_path}/{self.target_docker_env}",
-#         )
-#         self.state = "running"
-#         return True
-
-#     def spin_down(self, conn, target_path: str) -> bool:
-#         docker_down(conn, f"{target_path}/{self.target_docker_script}")
-#         self.state = "stopped"
-#         return True
-
-# SKETCH 2 of a mixin for Docker services using Protocols
+# SKETCH of a mixin for Docker services using Protocols
 # from typing import Protocol, TypeVar, runtime_checkable
 
 
@@ -158,10 +136,10 @@ class AbstractService(ABC):
 #     the concrete class implements the protocol.
 #     """
 
-#     def spin_up(self: T, conn) -> bool:
+#     def compose_up(self: T, conn) -> bool:
 
-#     def spin_down(self: T, conn) -> bool:
+#     def compose_down(self: T, conn) -> bool:
 
 #     def check_services(self: T, conn) -> Dict:
 
-#     def get_logs(self: T, conn) -> Dict:
+#     def get_log_tails(self: T, conn) -> Dict:
