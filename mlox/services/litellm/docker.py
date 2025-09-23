@@ -35,6 +35,15 @@ class LiteLLMDockerService(AbstractService):
     service_port: str | int
     slack_webhook: str
     api_key: str
+    compose_service_names: Dict[str, str] = field(
+        init=False,
+        default_factory=lambda: {
+            "LiteLLM": "litellm",
+            "LiteLLM Database": "postgres",
+            "LiteLLM Redis": "redis",
+            "Ollama": "ollama",
+        },
+    )
 
     def setup(self, conn) -> None:
         # copy files to target
@@ -69,6 +78,12 @@ class LiteLLMDockerService(AbstractService):
         )
         fs_delete_dir(conn, self.target_path)
         self.state = "un-initialized"
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         return dict()
