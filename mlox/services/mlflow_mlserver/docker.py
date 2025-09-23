@@ -4,7 +4,7 @@ from typing import Dict
 from passlib.hash import apr_md5_crypt  # type: ignore
 from dataclasses import dataclass, field
 
-from mlox.service import AbstractService
+from mlox.service import AbstractService, DockerMixin
 from mlox.remote import (
     fs_copy,
     fs_create_dir,
@@ -24,7 +24,7 @@ logging.basicConfig(
 
 
 @dataclass
-class MLFlowMLServerDockerService(AbstractService):
+class MLFlowMLServerDockerService(DockerMixin, AbstractService):
     dockerfile: str
     port: str | int
     model: str
@@ -35,12 +35,17 @@ class MLFlowMLServerDockerService(AbstractService):
     pw: str = "s3cr3t"
     hashed_pw: str = field(default="", init=False)
     service_url: str = field(init=False, default="")
+    compose_service_names: Dict[str, str] = field(init=False, default_factory=dict)
 
     def __post_init__(self):
         if not self.name.startswith(f"{self.model}@"):
             self.name = f"{self.model}@{self.name}"
         if not self.target_path.endswith(f"-{self.port}"):
             self.target_path = f"{self.target_path}-{self.port}"
+        self.compose_service_names = {
+            "Traefik": f"traefik_reverse_proxy_mlserver_{self.port}",
+            "MLServer": f"mlflow_mlserver_{self.port}",
+        }
 
     def _generate_htpasswd_entry(self) -> None:
         """Generates an APR1-MD5 htpasswd entry, escaped for Traefik."""
@@ -83,6 +88,12 @@ class MLFlowMLServerDockerService(AbstractService):
             remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         return {}

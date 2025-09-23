@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, Any
 
-from mlox.service import AbstractService, tls_setup
+from mlox.service import AbstractService, DockerMixin, tls_setup
 from mlox.remote import (
     fs_copy,
     fs_read_file,
@@ -27,7 +27,7 @@ logging.basicConfig(
 
 
 @dataclass
-class OtelDockerService(AbstractService):
+class OtelDockerService(DockerMixin, AbstractService):
     relic_endpoint: str
     relic_key: str
     config: str
@@ -35,6 +35,10 @@ class OtelDockerService(AbstractService):
     port_http: str | int
     port_health: str | int
     service_url: str = field(init=False, default="")
+    compose_service_names: Dict[str, str] = field(
+        init=False,
+        default_factory=lambda: {"OpenTelemetry Collector": "otel-collector"},
+    )
 
     def get_telemetry_data(self, bundle) -> Any:
         with bundle.server.get_server_connection() as conn:
@@ -96,6 +100,12 @@ class OtelDockerService(AbstractService):
         )
         fs_delete_dir(conn, self.target_path)
         self.state = "un-initialized"
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         docker_state = docker_service_state(conn, "otel-collector")

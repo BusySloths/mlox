@@ -1,12 +1,15 @@
+import json
+import logging
 import uuid
 
 from importlib import resources
-from typing import Dict, Literal
+from typing import Dict, Literal, Protocol, TypeVar, runtime_checkable
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from mlox.remote import (
     docker_down,
+    docker_service_state,
     docker_up,
     exec_command,
     fs_copy,
@@ -79,6 +82,7 @@ class AbstractService(ABC):
 
     service_urls: Dict[str, str] = field(default_factory=dict, init=False)
     service_ports: Dict[str, int] = field(default_factory=dict, init=False)
+    compose_service_names: Dict[str, str] = field(default_factory=dict, init=False)
 
     state: Literal["un-initialized", "running", "stopped", "unknown"] = field(
         default="un-initialized", init=False
@@ -98,7 +102,39 @@ class AbstractService(ABC):
     def check(self, conn) -> Dict:
         pass
 
+    @abstractmethod
     def spin_up(self, conn) -> bool:
+        """Start the service."""
+
+    @abstractmethod
+    def spin_down(self, conn) -> bool:
+        """Stop the service."""
+
+
+@runtime_checkable
+class DockerServiceLike(Protocol):
+    target_path: str
+    target_docker_script: str
+    target_docker_env: str
+    compose_service_names: Dict[str, str]
+    state: str
+
+
+T = TypeVar("T", bound=DockerServiceLike)
+
+
+class DockerMixin:
+    """Helper mixin providing docker-compose operations for services."""
+
+    compose_service_names: Dict[str, str]
+    target_path: str
+    target_docker_script: str
+    target_docker_env: str
+    state: str
+
+    def compose_up(self: T, conn) -> bool:
+        """Bring up the docker compose stack for this service."""
+
         docker_up(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
@@ -107,39 +143,56 @@ class AbstractService(ABC):
         self.state = "running"
         return True
 
-    def spin_down(self, conn) -> bool:
-        docker_down(conn, f"{self.target_path}/{self.target_docker_script}")
+    def compose_down(self: T, conn, *, remove_volumes: bool = False) -> bool:
+        """Tear down the docker compose stack for this service."""
+
+        docker_down(
+            conn,
+            f"{self.target_path}/{self.target_docker_script}",
+            remove_volumes=remove_volumes,
+        )
         self.state = "stopped"
         return True
 
+    def compose_service_status(self: T, conn) -> Dict[str, str]:
+        """Return docker compose state for tracked services.
 
-# SKETCH of a mixin for Docker services using Protocols
-# from typing import Protocol, TypeVar, runtime_checkable
+        Attempts to use ``docker compose ps`` to retrieve structured service state
+        information. Falls back to inspecting individual containers when the
+        structured output is unavailable.
+        """
+
+        compose_file = f"{self.target_path}/{self.target_docker_script}"
+        service_states: Dict[str, str] = {}
+
+        try:
+            output = exec_command(
+                conn,
+                f'docker compose -f "{compose_file}" ps --format json',
+                sudo=True,
+                pty=False,
+            )
+            if output:
+                parsed = json.loads(output)
+                for entry in parsed:
+                    service = entry.get("Service")
+                    state = entry.get("State") or entry.get("Status")
+                    if service:
+                        service_states[service] = state or "unknown"
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logging.debug("Failed to read compose service states: %s", exc)
+
+        results: Dict[str, str] = {}
+        for label, service in self.compose_service_names.items():
+            state = service_states.get(service)
+            if not state:
+                state = docker_service_state(conn, service)
+            results[label] = state or "unknown"
+        return results
 
 
-# @runtime_checkable
-# class DockerServiceLike(Protocol):
-#     target_path: str
-#     target_docker_script: str
-#     target_docker_env: str
-#     compose_service_names: Dict[str, str]
-#     state: str
+class KubernetesMixin:
+    """Placeholder mixin for upcoming Kubernetes support."""
 
-
-# T = TypeVar("T", bound=DockerServiceLike)
-
-
-# class ServiceDockerMixin:
-#     """
-#     Lightweight mixin that expects the concrete class to provide the
-#     attributes defined in DockerServiceLike. Use static typing to ensure
-#     the concrete class implements the protocol.
-#     """
-
-#     def compose_up(self: T, conn) -> bool:
-
-#     def compose_down(self: T, conn) -> bool:
-
-#     def check_services(self: T, conn) -> Dict:
-
-#     def get_log_tails(self: T, conn) -> Dict:
+    def deploy_to_kubernetes(self, *args, **kwargs):  # pragma: no cover - stub
+        raise NotImplementedError("Kubernetes orchestration is not implemented yet.")

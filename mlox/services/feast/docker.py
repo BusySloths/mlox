@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup
+from mlox.service import AbstractService, DockerMixin, tls_setup
 from mlox.remote import (
     fs_copy,
     fs_read_file,
@@ -24,7 +24,7 @@ logging.basicConfig(
 
 
 @dataclass
-class FeastDockerService(AbstractService):
+class FeastDockerService(DockerMixin, AbstractService):
     config: str
     dockerfile: str
     # user: str
@@ -33,6 +33,16 @@ class FeastDockerService(AbstractService):
     online_port: str | int
     offline_port: str | int
     service_url: str = field(init=False, default="")
+    compose_service_names: Dict[str, str] = field(
+        init=False,
+        default_factory=lambda: {
+            "Feast Redis": "feast-redis",
+            "Feast Init": "feast-init",
+            "Feast Registry": "feast-registry",
+            "Feast Offline": "feast-offline",
+            "Feast Online": "feast-online",
+        },
+    )
 
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
@@ -68,6 +78,12 @@ class FeastDockerService(AbstractService):
             remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         return {"status": "unknown"}

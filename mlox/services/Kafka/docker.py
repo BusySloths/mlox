@@ -4,7 +4,7 @@ import shlex
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup_no_config
+from mlox.service import AbstractService, DockerMixin, tls_setup_no_config
 from mlox.remote import (
     docker_down,
     docker_all_service_states,
@@ -27,13 +27,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class KafkaDockerService(AbstractService):
+class KafkaDockerService(DockerMixin, AbstractService):
     """Docker based deployment for a single-node Kafka broker."""
 
     ssl_password: str
     ssl_port: str | int
     service_url: str = field(init=False, default="")
     container_name: str = field(init=False, default="kafka")
+    compose_service_names: Dict[str, str] = field(
+        init=False,
+        default_factory=lambda: {"Kafka Broker": "kafka"},
+    )
 
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
@@ -86,6 +90,12 @@ class KafkaDockerService(AbstractService):
             remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         try:

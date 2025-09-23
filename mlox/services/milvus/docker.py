@@ -5,7 +5,7 @@ import base64
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup
+from mlox.service import AbstractService, DockerMixin, tls_setup
 from mlox.remote import (
     fs_copy,
     fs_read_file,
@@ -33,12 +33,20 @@ def _generate_htpasswd_sha1(user: str, password: str) -> str:
 
 
 @dataclass
-class MilvusDockerService(AbstractService):
+class MilvusDockerService(DockerMixin, AbstractService):
     config: str
     user: str
     pw: str
     port: str | int
     service_url: str = field(init=False, default="")
+    compose_service_names: Dict[str, str] = field(
+        init=False,
+        default_factory=lambda: {
+            "Milvus": "milvus",
+            "Milvus MinIO": "milvus-minio",
+            "Milvus Etcd": "milvus-etcd",
+        },
+    )
 
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
@@ -66,6 +74,12 @@ class MilvusDockerService(AbstractService):
             remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         return {"status": "unknown"}
