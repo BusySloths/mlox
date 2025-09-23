@@ -134,3 +134,34 @@ class AbstractService(ABC):
 #         docker_down(conn, f"{target_path}/{self.target_docker_script}")
 #         self.state = "stopped"
 #         return True
+
+# SKETCH 2 of a mixin for Docker services using Protocols
+# from typing import Protocol, TypeVar, runtime_checkable
+
+
+# @runtime_checkable
+# class DockerServiceLike(Protocol):
+#     target_path: str
+#     target_docker_script: str
+#     target_docker_env: str
+#     compose_service_names: Dict[str, str]
+#     state: str
+
+
+# T = TypeVar("T", bound=DockerServiceLike)
+
+
+# class ServiceDockerMixin:
+#     """
+#     Lightweight mixin that expects the concrete class to provide the
+#     attributes defined in DockerServiceLike. Use static typing to ensure
+#     the concrete class implements the protocol.
+#     """
+
+#     def spin_up(self: T, conn) -> bool:
+
+#     def spin_down(self: T, conn) -> bool:
+
+#     def check_services(self: T, conn) -> Dict:
+
+#     def get_logs(self: T, conn) -> Dict:
