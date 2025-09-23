@@ -2,7 +2,6 @@ import json
 import logging
 import uuid
 
-from importlib import resources
 from typing import Dict, Literal
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field

@@ -76,7 +76,7 @@ class MLFlowMLServerDockerService(AbstractService):
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_URI={self.tracking_uri}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_USER={self.tracking_user}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_PW={self.tracking_pw}")
-        fs_append_line(conn, env_path, f"MLFLOW_REMOTE_INSECURE=true")
+        fs_append_line(conn, env_path, "MLFLOW_REMOTE_INSECURE=true")
         self.service_ports["MLServer REST API"] = int(self.port)
         self.service_urls["MLServer REST API"] = f"https://{conn.host}:{self.port}"
         self.service_url = f"https://{conn.host}:{self.port}"
