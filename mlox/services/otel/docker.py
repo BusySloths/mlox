@@ -35,6 +35,10 @@ class OtelDockerService(AbstractService):
     port_http: str | int
     port_health: str | int
     service_url: str = field(init=False, default="")
+    compose_service_names: Dict[str, str] = field(
+        init=False,
+        default_factory=lambda: {"OpenTelemetry Collector": "otel-collector"},
+    )
 
     def get_telemetry_data(self, bundle) -> Any:
         with bundle.server.get_server_connection() as conn:
@@ -85,7 +89,9 @@ class OtelDockerService(AbstractService):
         self.service_urls["OTLP HTTP receiver"] = (
             f"https://{conn.host}:{self.port_http}"
         )
-        self.service_urls["OTLP health"] = f"https://{conn.host}:{self.port_health}/health/status"
+        self.service_urls["OTLP health"] = (
+            f"https://{conn.host}:{self.port_health}/health/status"
+        )
         self.state = "running"
 
     def teardown(self, conn):
@@ -96,6 +102,12 @@ class OtelDockerService(AbstractService):
         )
         fs_delete_dir(conn, self.target_path)
         self.state = "un-initialized"
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         docker_state = docker_service_state(conn, "otel-collector")

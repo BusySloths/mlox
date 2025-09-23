@@ -35,12 +35,17 @@ class MLFlowMLServerDockerService(AbstractService):
     pw: str = "s3cr3t"
     hashed_pw: str = field(default="", init=False)
     service_url: str = field(init=False, default="")
+    compose_service_names: Dict[str, str] = field(init=False, default_factory=dict)
 
     def __post_init__(self):
         if not self.name.startswith(f"{self.model}@"):
             self.name = f"{self.model}@{self.name}"
         if not self.target_path.endswith(f"-{self.port}"):
             self.target_path = f"{self.target_path}-{self.port}"
+        self.compose_service_names = {
+            "Traefik": f"traefik_reverse_proxy_mlserver_{self.port}",
+            "MLServer": f"mlflow_mlserver_{self.port}",
+        }
 
     def _generate_htpasswd_entry(self) -> None:
         """Generates an APR1-MD5 htpasswd entry, escaped for Traefik."""
@@ -71,7 +76,7 @@ class MLFlowMLServerDockerService(AbstractService):
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_URI={self.tracking_uri}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_USER={self.tracking_user}")
         fs_append_line(conn, env_path, f"MLFLOW_REMOTE_PW={self.tracking_pw}")
-        fs_append_line(conn, env_path, f"MLFLOW_REMOTE_INSECURE=true")
+        fs_append_line(conn, env_path, "MLFLOW_REMOTE_INSECURE=true")
         self.service_ports["MLServer REST API"] = int(self.port)
         self.service_urls["MLServer REST API"] = f"https://{conn.host}:{self.port}"
         self.service_url = f"https://{conn.host}:{self.port}"
@@ -83,6 +88,12 @@ class MLFlowMLServerDockerService(AbstractService):
             remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         return {}

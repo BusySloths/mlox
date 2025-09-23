@@ -29,6 +29,10 @@ class PostgresDockerService(AbstractService):
     pw: str
     db: str
     port: str | int
+    compose_service_names: Dict[str, str] = field(
+        init=False,
+        default_factory=lambda: {"Postgres": "postgres"},
+    )
 
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
@@ -55,6 +59,12 @@ class PostgresDockerService(AbstractService):
             remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         try:

@@ -66,6 +66,8 @@ def test_minio_basic_read_write(install_minio_service, bucket):
     # Use boto3 S3 client to interact with MinIO
     bundle, service = install_minio_service
 
+    _ = wait_for_service_ready(service, bundle, retries=3, interval=10, no_checks=True)
+
     # service.service_url is like https://<host>:<port>
     # boto3 expects endpoint_url without scheme when using signature_version, so pass full URL
     endpoint = service.service_url

@@ -5,7 +5,7 @@ import logging
 import urllib.request
 
 from typing import Dict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mlox.service import AbstractService, tls_setup
 from mlox.remote import (
@@ -29,6 +29,20 @@ class AirflowDockerService(AbstractService):
     ui_pw: str
     port: str
     secret_path: str = ""
+    compose_service_names: Dict[str, str] = field(
+        init=False,
+        default_factory=lambda: {
+            "Airflow Webserver": "airflow-webserver",
+            "Airflow Scheduler": "airflow-scheduler",
+            "Airflow Worker": "airflow-worker",
+            "Airflow Triggerer": "airflow-triggerer",
+            "Airflow DAG Processor": "airflow-dag-processor",
+            "Airflow Initializer": "airflow-init",
+            "Airflow CLI": "airflow-cli",
+            "Postgres": "postgres",
+            "Redis": "redis",
+        },
+    )
 
     def __str__(self):
         return f"AirflowDockerService(path_dags={self.path_dags}, path_output={self.path_output}, ui_user={self.ui_user}, ui_pw={self.ui_pw}, port={self.port}, secret_path={self.secret_path})"
@@ -72,6 +86,12 @@ class AirflowDockerService(AbstractService):
             remove_volumes=True,
         )
         fs_delete_dir(conn, self.target_path)
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         """
