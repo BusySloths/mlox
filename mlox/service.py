@@ -1,5 +1,3 @@
-import json
-import logging
 import uuid
 
 from typing import Dict, Literal
@@ -9,7 +7,9 @@ from dataclasses import dataclass, field
 from mlox.remote import (
     docker_down,
     docker_service_state,
+    docker_all_service_states,
     docker_up,
+    docker_service_log_tails,
     exec_command,
     fs_copy,
     fs_create_dir,
@@ -61,10 +61,12 @@ def tls_setup(conn, ip, path) -> None:
         conn,
         f"cd {path}; openssl req -new -key key.pem -out server.csr -config openssl-san.cnf",
     )
-    exec_command(
-        conn,
-        f"cd {path}; openssl x509 -req -in server.csr -signkey key.pem -out cert.pem -days 365 -extensions req_ext -extfile openssl-san.cnf",
+    cmd = (
+        f"cd {path}; "
+        "openssl x509 -req -in server.csr -signkey key.pem "
+        "-out cert.pem -days 365 -extensions req_ext -extfile openssl-san.cnf"
     )
+    exec_command(conn, cmd)
     exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/key.pem")
 
 
@@ -148,30 +150,67 @@ class AbstractService(ABC):
         structured output is unavailable.
         """
 
-        compose_file = f"{self.target_path}/{self.target_docker_script}"
-        service_states: Dict[str, str] = {}
-
-        try:
-            output = exec_command(
-                conn,
-                f'docker compose -f "{compose_file}" ps --format json',
-                sudo=True,
-                pty=False,
-            )
-            if output:
-                parsed = json.loads(output)
-                for entry in parsed:
-                    service = entry.get("Service")
-                    state = entry.get("State") or entry.get("Status")
-                    if service:
-                        service_states[service] = state or "unknown"
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logging.debug("Failed to read compose service states: %s", exc)
+        # Prefer to gather container state via docker inspect helper which is
+        # generally more reliable than parsing `docker compose ps` output and
+        # avoids running compose in environments where it's not available.
+        all_states = docker_all_service_states(conn)
 
         results: Dict[str, str] = {}
         for label, service in self.compose_service_names.items():
-            state = service_states.get(service)
-            if not state:
-                state = docker_service_state(conn, service)
-            results[label] = state or "unknown"
+            state_val: str | None = None
+
+            # Direct match: the compose service may already be the container name
+            if service in all_states:
+                s = all_states[service]
+                if isinstance(s, dict):
+                    state_val = s.get("Status") or s.get("State") or None
+
+            # Heuristic: container names created by compose often contain the
+            # service name as part of '<project>_<service>_<replica>'. Try to
+            # find a container name that contains the compose service name.
+            if state_val is None and all_states:
+                for cname, sdict in all_states.items():
+                    if f"_{service}_" in cname or cname.endswith(f"_{service}_1"):
+                        if isinstance(sdict, dict):
+                            state_val = (
+                                sdict.get("Status") or sdict.get("State") or None
+                            )
+                            break
+
+            # Last-resort: ask Docker for the state of the named service/container
+            if not state_val:
+                state_val = docker_service_state(conn, service)
+
+            results[label] = state_val or "unknown"
         return results
+
+    def compose_service_log_tail(self, conn, label: str, tail: int = 200) -> str:
+        """Return the recent log tail for a tracked compose service label.
+
+        Resolves the compose service name to a container name using the same
+        heuristics as `compose_service_status` and then returns the last
+        `tail` lines using the remote helper.
+        """
+        if label not in self.compose_service_names:
+            return "Not found"
+
+        service = self.compose_service_names[label]
+
+        # Try to resolve container name from current docker state
+        all_states = docker_all_service_states(conn)
+
+        # direct match
+        if service in all_states:
+            return docker_service_log_tails(conn, service, tail=tail)
+
+        # heuristic match
+        for cname in all_states:
+            if f"_{service}_" in cname or cname.endswith(f"_{service}_1"):
+                return docker_service_log_tails(conn, cname, tail=tail)
+
+        # last resort: try service name directly (may be a container id)
+        state = docker_service_state(conn, service)
+        if state:
+            return docker_service_log_tails(conn, service, tail=tail)
+
+        return f"Service with label {label} ({service}) not found"

@@ -177,13 +177,31 @@ def docker_all_service_states(conn) -> dict[str, dict]:
         return {}
 
     id_list = " ".join(ids.split())
-    inspect_output = exec_command(conn, f"docker inspect {id_list}", sudo=True, pty=False)
+    inspect_output = exec_command(
+        conn, f"docker inspect {id_list}", sudo=True, pty=False
+    )
     try:
         containers = json.loads(inspect_output)
         return {c.get("Name", "").lstrip("/"): c.get("State", {}) for c in containers}
     except Exception as e:
         logger.warning(f"Failed to parse docker state info: {e}")
         return {}
+
+
+def docker_service_log_tails(conn, service_name: str, tail: int = 200) -> str:
+    """Return the last `tail` lines of logs for a docker container/service.
+
+    Uses `docker logs --tail` under the hood and returns the raw log string.
+    This helper is intentionally simple: callers can map compose service names
+    to container names before calling it (or pass the container name directly).
+    """
+    try:
+        cmd = f"docker logs --tail {int(tail)} {service_name}"
+        res = exec_command(conn, cmd, sudo=True, pty=False)
+        return res or "No docker logs found"
+    except Exception as e:
+        logger.warning(f"Failed to fetch logs for {service_name}: {e}")
+        return "Failed to fetch logs"
 
 
 def git_clone(conn, repo_url, install_path):

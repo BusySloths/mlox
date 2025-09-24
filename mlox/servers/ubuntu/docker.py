@@ -57,7 +57,7 @@ class UbuntuDockerServer(UbuntuNativeServer):
                 "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
                 sudo=True,
             )
-            print("Done installing docker")
+            # print("Done installing docker")
             exec_command(conn, "docker --version", sudo=True)
             self.state = "running"
 

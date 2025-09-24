@@ -8,8 +8,9 @@ from mlox.infra import Infrastructure, Bundle
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 
 
-def form_add_server():
-    id = f"form-add-server-{random.randint(1000, 9999)}"
+def form_add_server(sid: str):
+    id = f"form-add-server-{sid}"
+    # id = f"form-add-server-{random.randint(1000, 9999)}"
     c1, c2 = st.columns(2)
     ip = c1.text_input(
         "IP Address",
@@ -28,14 +29,14 @@ def form_add_server():
         key=f"{id}-port",
     )
     root = c1.text_input(
-        "Root Account Name",
+        "Root",
         value="root",
         placeholder="Enter the server root account name",
         help="Enter the server root account name.",
         key=f"{id}-root",
     )
     pw = c2.text_input(
-        "Root Account Password",
+        "Password",
         placeholder="Enter the server password",
         help="The password for the server.",
         type="password",
@@ -47,7 +48,7 @@ def form_add_server():
 def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
     params = dict()
 
-    ip, port, root, pw = form_add_server()
+    ip, port, root, pw = form_add_server(f"{len(infra.bundles) + 1}-{config.id}")
 
     params["${MLOX_IP}"] = ip
     params["${MLOX_PORT}"] = str(port)

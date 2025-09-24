@@ -22,10 +22,10 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict | None:
         "Select Secret Manager Service",
         my_secret_manager_services,
         format_func=lambda x: x.name,
-        key="secret_manager_service",
+        key="sheets_secret_manager_service",
     )
     secret_name = c2.text_input(
-        "Secret Name", value="MLOX_GCP_SHEETS_KEY", key="secret_name"
+        "Secret Name", value="MLOX_GCP_SHEETS_KEY", key="sheets_secret_name"
     )
 
     st.markdown("""
@@ -36,19 +36,25 @@ To access Google Spreadsheets do the following:
 4. JSON key is automatically downloaded to your computer
     """)
     keyfile_dict = st.text_area(
-        "Add the contents of your service account keyfile.json here"
+        "Add the contents of your service account keyfile.json here",
+        key="sheets_keyfile_json",
     )
     is_keyfile_dict = False
     try:
         keyfile_dict = json.loads(keyfile_dict)
         is_keyfile_dict = True
-    except Exception as e:  # noqa: BLE001
-        st.info(f"Invalid JSON format. Please provide a valid JSON object. ")
+    except Exception:  # noqa: BLE001
+        st.info("Invalid JSON format. Please provide a valid JSON object. ")
 
     if hasattr(select_secret_manager_service, "get_secret_manager"):
         sms = cast(AbstractSecretManagerService, select_secret_manager_service)
         sm = sms.get_secret_manager(infra)
-        if st.button("Save Secret", type="primary", disabled=not is_keyfile_dict):
+        if st.button(
+            "Save Secret",
+            type="primary",
+            disabled=not is_keyfile_dict,
+            key="sheets_save_secret",
+        ):
             sm.save_secret(secret_name, keyfile_dict)
 
     params["${SECRET_MANAGER_UUID}"] = select_secret_manager_service.uuid

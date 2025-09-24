@@ -358,7 +358,7 @@ def tab_server_templates(infra: Infrastructure):
             params: Dict[str, Any] | None = {}
             callable_setup_func = config.instantiate_ui("setup")
             if callable_setup_func:
-                with st.expander("Configure"):
+                with st.expander("", icon=":material/settings:"):
                     params = callable_setup_func(infra, config)
 
             if st.button(

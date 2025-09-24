@@ -6,7 +6,7 @@ from typing import cast
 from mlox.session import MloxSession
 from mlox.config import load_all_service_configs
 from mlox.secret_manager import AbstractSecretManagerService
-from mlox.view.utils import plot_config_nicely, st_hack_align
+from mlox.view.logs import show_service_logs_ui
 
 
 # Lightweight CSS for badges, chips, and custom tables
@@ -73,39 +73,17 @@ def _color_for(label: str) -> str:
     return palette[sum(ord(c) for c in label) % len(palette)]
 
 
-def _render_service_table(rows: list[dict]) -> None:
-    html = [
-        "<table class='svc-table'>",
-        "<thead><tr><th>Name</th><th>Version</th><th>Server</th><th>State</th><th>Groups</th><th>Links</th></tr></thead>",
-        "<tbody>",
-    ]
-    for r in rows:
-        chips = "".join(_chip(g, _color_for(g)) for g in r.get("groups", []))
-        links = " ".join(
-            f"<a class='link-btn' href='{url}' target='_blank' rel='noopener'>{label}</a>"
-            for label, url in (r.get("links", {}) or {}).items()
-        )
-        html.append(
-            "<tr>"
-            f"<td><strong>{r['name']}</strong></td>"
-            f"<td>v{r['version']}</td>"
-            f"<td><span class='svc-pill'>{r['ip']}</span></td>"
-            f"<td>{_state_badge(r['state'])}</td>"
-            f"<td>{chips}</td>"
-            f"<td>{links}</td>"
-            "</tr>"
-        )
-    html.append("</tbody></table>")
-    st.markdown("\n".join(html), unsafe_allow_html=True)
-
-
 def installed_services():
     # Header: concise, visually clear intro + legend and guide
     # st.markdown("## Installed Services 🧭")
     st.caption(
-        """Browse, filter, and manage your installed services. Select a row for actions and settings.
-            A service is a deployable component (e.g., MLflow, Airflow, Redis) that runs on or is associated with one of your servers.
-            Add new services in the “Templates” tab: choose a backend and server, tweak settings, then click “Add Service”."""
+        (
+            "Browse, filter, and manage your installed services. Select a row for actions and settings.\n"
+            "A service is a deployable component (e.g., MLflow, Airflow, Redis) that runs on or is associated "
+            "with one of your servers.\n"
+            "Add new services in the “Templates” tab: choose a backend and server, tweak settings, "
+            "then click “Add Service”."
+        )
     )
     infra = None
     try:
@@ -236,38 +214,44 @@ def installed_services():
 
         st.markdown("---")
         st.markdown(f"#### {svc.name}")
-        b1, b2, b3, b4, b5 = st.columns(5)
-        if b1.button(
-            "Setup", key=f"setup-{svc.uuid}", disabled=svc.state != "un-initialized"
+        b1, b2, b3, b4, b5, _, b6, b7 = st.columns(
+            [1, 1, 1, 3, 1, 0.5, 1, 1], gap="small", vertical_alignment="bottom"
+        )
+        if b6.button(
+            "Setup",
+            key=f"setup-{svc.uuid}",
+            disabled=svc.state != "un-initialized",
+            type="primary",
         ):
             with st.spinner(f"Setting up {svc.name}…", show_time=True):
                 infra.setup_service(svc)
             save_infra()
             st.rerun()
-        if b2.button("Start", key=f"start-{svc.uuid}", disabled=svc.state == "running"):
+        if b1.button(
+            "Resume", key=f"start-{svc.uuid}", disabled=svc.state == "running"
+        ):
             with bndl.server.get_server_connection() as conn:
                 svc.spin_up(conn)
             save_infra()
             st.rerun()
-        if b3.button("Stop", key=f"stop-{svc.uuid}", disabled=svc.state != "running"):
+        if b2.button("Pause", key=f"stop-{svc.uuid}", disabled=svc.state != "running"):
             with bndl.server.get_server_connection() as conn:
                 svc.spin_down(conn)
             save_infra()
             st.rerun()
-        if b4.button("Check", key=f"check-{svc.uuid}"):
+        if b3.button("Check", key=f"check-{svc.uuid}"):
             with bndl.server.get_server_connection() as conn:
                 status = svc.check(conn)
             st.toast(f"{svc.name} status: {status}")
-        if b5.button("Teardown", key=f"teardown-{svc.uuid}"):
+        if b7.button("Teardown", key=f"teardown-{svc.uuid}", type="primary"):
             with st.spinner(f"Deleting {svc.name}…", show_time=True):
                 infra.teardown_service(svc)
             save_infra()
             st.rerun()
 
-        r1, r2 = st.columns([3, 1])
-        new_name = r1.text_input("Rename", value=svc.name, key=f"rename-{svc.uuid}")
-        st_hack_align(r2)
-        if r2.button("Apply", key=f"apply-{svc.uuid}") and new_name != svc.name:
+        new_name = b4.text_input("Rename", value=svc.name, key=f"rename-{svc.uuid}")
+        # st_hack_align(r2)
+        if b5.button("Apply", key=f"apply-{svc.uuid}") and new_name != svc.name:
             if new_name in infra.list_service_names():
                 st.error("Service name must be unique.")
             else:
@@ -297,6 +281,20 @@ def installed_services():
                     save_infra()
                     st.success(f"Set {svc.name} as default secret manager.")
                 callable_settings_func(infra, bndl, svc)
+
+        # Show logs UI when the service is running and the service template
+        # supports a Docker backend. We prefer configuration-based detection
+        # (service config groups) but also accept server-backed Docker deployments.
+        backend_keys = []
+        if cfg:
+            backend_keys = list(cfg.groups.get("backend", {}).keys())
+        server_backends = getattr(bndl.server, "backend", []) or []
+
+        if svc.state == "running" and (
+            "docker" in backend_keys or "docker" in server_backends
+        ):
+            with st.expander("Logs"):
+                show_service_logs_ui(session, svc.name)
 
 
 def available_services():

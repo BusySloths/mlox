@@ -347,6 +347,49 @@ def service_teardown(
     typer.echo(f"Service {name} removed")
 
 
+@service_app.command("logs")
+def service_logs(
+    project: str = typer.Argument(..., help="Project name"),
+    password: str = typer.Option(
+        ..., prompt=True, hide_input=True, help="Password for the session"
+    ),
+    name: str = typer.Argument(..., help="Service name"),
+    label: str = typer.Option(None, help="Compose service label to fetch logs for"),
+    tail: int = typer.Option(200, help="Number of log lines to return"),
+):
+    """Show recent logs for a service (compose service label).
+
+    If `label` is not provided the command will attempt to use the service's
+    default compose service mapping.
+    """
+
+    session = get_session(project, password)
+    svc = session.infra.get_service(name)
+    if not svc:
+        typer.echo("[ERROR] Service not found", err=True)
+        raise typer.Exit(code=1)
+
+    if label is None:
+        # pick the first label if available
+        if svc.compose_service_names:
+            label = next(iter(svc.compose_service_names.keys()))
+        else:
+            typer.echo(
+                "[ERROR] No compose service labels configured for this service",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
+    bundle = session.infra.get_bundle_by_service(svc)
+    if not bundle:
+        typer.echo("[ERROR] Could not find server bundle for service", err=True)
+        raise typer.Exit(code=1)
+
+    with bundle.server.get_server_connection() as conn:
+        logs = svc.compose_service_log_tail(conn, label=label, tail=tail)
+    typer.echo(logs)
+
+
 # ---------------------------------------------------------------------------
 # Configs commands (nested under server and service)
 # ---------------------------------------------------------------------------

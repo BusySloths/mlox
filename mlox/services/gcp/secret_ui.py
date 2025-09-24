@@ -25,10 +25,10 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict | None:
         "Select Secret Manager Service",
         my_secret_manager_services,
         format_func=lambda x: x.name,
-        key="secret_manager_service",
+        key="gcp_secret_manager_service",
     )
     secret_name = c2.text_input(
-        "Secret Name", value="MLOX_GCP_SECRET_MANAGER_KEY", key="secret_name"
+        "Secret Name", value="MLOX_GCP_SECRET_MANAGER_KEY", key="gcp_secret_name"
     )
 
     st.markdown("""
@@ -38,7 +38,8 @@ To access the secret manager, a service account with the following roles are nec
 3. secret manager admin (create and update secrets and versions)
             """)
     keyfile_dict = st.text_area(
-        "Add the contents of your service account keyfile.json here"
+        "Add the contents of your service account keyfile.json here",
+        key="gcp_keyfile_json",
     )
     is_keyfile_dict = False
     try:
@@ -51,7 +52,12 @@ To access the secret manager, a service account with the following roles are nec
     if hasattr(select_secret_manager_service, "get_secret_manager"):
         sms = cast(AbstractSecretManagerService, select_secret_manager_service)
         sm = sms.get_secret_manager(infra)
-        if st.button("Save Secret", type="primary", disabled=not is_keyfile_dict):
+        if st.button(
+            "Save Secret",
+            type="primary",
+            disabled=not is_keyfile_dict,
+            key="gcp_save_secret",
+        ):
             sm.save_secret(secret_name, keyfile_dict)
 
     params["${SECRET_MANAGER_UUID}"] = select_secret_manager_service.uuid
