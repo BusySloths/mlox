@@ -50,5 +50,8 @@ class GCPBigQueryService(AbstractService):
     def spin_up(self, conn):
         return None
 
+    def spin_down(self, conn):
+        return None
+
     def check(self, conn) -> Dict:
         return dict()

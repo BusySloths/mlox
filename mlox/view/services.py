@@ -367,47 +367,108 @@ def available_services():
 
             config = svc["config"]
             supported_backends = list(config.groups.get("backend", {}).keys())
-            sb1, sb2 = st.columns(2)
-            select_backend = sb1.selectbox(
-                "Backend",
-                supported_backends,
-                disabled=len(supported_backends) <= 1,
-                key=f"bk-{i}",
-            )
-            bundle_candidates = infra.list_bundles_with_backend(backend=select_backend)
-            running_bundles = [
-                b for b in bundle_candidates if b.server.state == "running"
-            ]
-            bundle = (
-                sb2.selectbox(
-                    "Server",
-                    running_bundles,
-                    format_func=lambda x: f"{x.name}",
-                    key=f"bd-{i}",
-                )
-                if running_bundles
-                else None
-            )
 
-            params = {}
-            callable_setup_func = config.instantiate_ui("setup")
-            if callable_setup_func and bundle:
-                with st.expander("Configure"):
-                    params = callable_setup_func(infra, bundle)
+            # Show supported backends as info
+            if supported_backends:
+                st.caption(f"Backends: {', '.join(supported_backends)}")
 
             if st.button(
                 "Add Service",
                 type="primary",
                 key=f"add-{i}",
-                disabled=(params is None) or (bundle is None),
+                use_container_width=True,
             ):
-                st.info(
-                    f"Adding service {config.name} {config.version} with backend {select_backend} to {bundle.name}"
-                )
-                ret = infra.add_service(bundle.server.ip, config, params or {})
-                if not ret:
-                    st.error("Failed to add service")
-                save_infra()
+                _show_add_service_dialog(infra, config, supported_backends)
+
+    # Handle the add service dialog
+    if "show_add_dialog" in st.session_state and st.session_state.show_add_dialog:
+        _render_add_service_dialog()
+
+
+def _show_add_service_dialog(infra, config, supported_backends):
+    """Store dialog state and trigger dialog display."""
+    st.session_state.show_add_dialog = True
+    st.session_state.dialog_config = config
+    st.session_state.dialog_backends = supported_backends
+    st.session_state.dialog_infra = infra
+    st.rerun()
+
+
+@st.dialog("Add Service")
+def _render_add_service_dialog():
+    """Render the add service dialog with backend/server selection and configuration."""
+    if not st.session_state.get("show_add_dialog", False):
+        return
+
+    config = st.session_state.get("dialog_config")
+    supported_backends = st.session_state.get("dialog_backends", [])
+    infra = st.session_state.get("dialog_infra")
+
+    if not config or not infra:
+        st.error("Dialog configuration error")
+        return
+
+    st.markdown(f"**{config.name}** · v{config.version}")
+    if config.description:
+        st.markdown(config.description)
+
+    # Backend selection
+    selected_backend = st.selectbox(
+        "Backend",
+        supported_backends,
+        disabled=len(supported_backends) <= 1,
+        key="dialog_backend",
+    )
+
+    # Server selection
+    bundle_candidates = infra.list_bundles_with_backend(backend=selected_backend)
+    running_bundles = [b for b in bundle_candidates if b.server.state == "running"]
+
+    if not running_bundles:
+        st.warning(f"No running servers found with {selected_backend} backend")
+        if st.button("Cancel"):
+            st.session_state.show_add_dialog = False
+            st.rerun()
+        return
+
+    selected_bundle = st.selectbox(
+        "Server",
+        running_bundles,
+        format_func=lambda x: f"{x.name} ({x.server.ip})",
+        key="dialog_server",
+    )
+
+    # Configuration parameters
+    params = {}
+    callable_setup_func = config.instantiate_ui("setup")
+    if callable_setup_func and selected_bundle:
+        st.markdown("**Configuration**")
+        params = callable_setup_func(infra, selected_bundle)
+
+    # Action buttons
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Add Service", type="primary", use_container_width=True):
+            if selected_bundle:
+                with st.spinner(f"Adding {config.name}..."):
+                    ret = infra.add_service(
+                        selected_bundle.server.ip, config, params or {}
+                    )
+                    if ret:
+                        st.success(
+                            f"Successfully added {config.name} to {selected_bundle.name}"
+                        )
+                        save_infra()
+                        st.session_state.show_add_dialog = False
+                        st.rerun()
+                    else:
+                        st.error("Failed to add service")
+
+    with col2:
+        if st.button("Cancel", use_container_width=True):
+            st.session_state.show_add_dialog = False
+            st.rerun()
 
 
 # Tabs layout
