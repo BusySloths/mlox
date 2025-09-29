@@ -7,7 +7,7 @@ import importlib
 from datetime import datetime
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import Dict, Optional, List, Literal, Any
+from typing import Dict, Optional, List, Literal, Any, TYPE_CHECKING
 
 from fabric import Connection  # type: ignore
 from paramiko.ssh_exception import (  # type: ignore
@@ -19,6 +19,9 @@ import socket
 
 from mlox.utils import generate_password
 from mlox.remote import open_connection, close_connection, exec_command, fs_read_file
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    from mlox.service import AbstractService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -300,6 +303,17 @@ class AbstractServer(ABC):
     @abstractmethod
     def stop_backend_runtime(self) -> None:
         pass
+
+    # Optional hooks -----------------------------------------------------
+    def customize_service(self, service: "AbstractService") -> None:
+        """Allow servers to adjust service instances before provisioning.
+
+        The default implementation is a no-op. Concrete server
+        implementations can override this hook to apply server specific
+        adjustments such as changing target paths or injecting metadata.
+        """
+
+        return None
 
 
 def sys_get_distro_info(conn) -> Optional[Dict[str, str]]:
