@@ -19,6 +19,9 @@ It’s for engineers who prefer thoughtful systems over chaos. Powered by sloths
 <img alt="GitHub Issues or Pull Requests" src="https://img.shields.io/github/issues/busysloths/mlox"></a>
 <a href="https://github.com/BusySloths/mlox/discussions" target="_blank">
 <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox"></a>
+<a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing">
+  <img src="https://img.shields.io/badge/Slides-State_of_the_Union-9cf" alt="Slides: State of the Union" />
+</a>
 </p>
 
 ## ATTENTION
