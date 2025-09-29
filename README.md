@@ -27,6 +27,11 @@ MLOX is still in a very early development phase. If you like to contribute in an
 
 ## What can you do with MLOX?
 
+### 📑 Want the big picture?  
+
+Check out our **[MLOX – State of the Union (Sept 2025)](docs/slides/MLOX_State_of_the_Union_09-2025.pdf)** —  
+a short slide overview of what MLOX is, what problem it solves, and where it’s heading.
+
 ### Infrastructure
 
 - Manage servers: add, remove, tag, and name.
