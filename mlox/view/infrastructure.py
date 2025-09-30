@@ -66,8 +66,9 @@ def _state_emoji(state: str) -> str:
     mapping = {
         "running": "🟢 Running",
         "stopped": "🔴 Stopped",
+        "starting": "🔵 Starting",
         "un-initialized": "⚪ Pending",
-        "unknown": "🟠 Unknown",
+        "unknown": "🟠 Unknown",  # Blue for unknown state
     }
     return mapping.get(state, state)
 

@@ -24,7 +24,7 @@ groups:
   app-management:
   backend:
     kubernetes:
-ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
   web_ui: 5432
 ui:
   settings: mlox.services.kubeapps.ui.settings
@@ -33,4 +33,4 @@ build:
   params:
     name: kubeapps
     template: ${MLOX_STACKS_PATH}/kubeapps/kubeapps.yaml
-    target_path: /home/${MLOX_USER}/kubeapps
+    target_path: ${MLOX_USER_HOME}/kubeapps

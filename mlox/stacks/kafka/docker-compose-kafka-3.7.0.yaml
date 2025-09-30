@@ -2,11 +2,11 @@ version: "3.8"
 
 services:
   kafka:
-    image: bitnami/kafka:3.7.0
+    image: bitnamilegacy/kafka:3.7.0
     container_name: kafka
     restart: unless-stopped
     ports:
-      - ${KAFKA_SSL_PORT:-9094}:9094
+      - ${MY_KAFKA_SSL_PORT:-9094}:9094
     environment:
       - BITNAMI_DEBUG=true
       - KAFKA_ENABLE_KRAFT=yes
@@ -14,7 +14,7 @@ services:
       - KAFKA_CFG_PROCESS_ROLES=broker,controller
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
       - KAFKA_CFG_LISTENERS=CONTROLLER://:9093,INTERNAL://:9092,EXTERNAL://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,EXTERNAL://${KAFKA_PUBLIC_HOST}:${KAFKA_SSL_PORT}
+      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,EXTERNAL://${MY_KAFKA_PUBLIC_HOST}:${MY_KAFKA_SSL_PORT}
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:SSL
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
@@ -31,7 +31,13 @@ services:
       - ./kafka.keystore.pem:/bitnami/kafka/config/certs/kafka.keystore.pem:ro
       - ./kafka.truststore.pem:/bitnami/kafka/config/certs/kafka.truststore.pem:ro
     healthcheck:
-      test: ["CMD", "bash", "-c", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "kafka-topics.sh --bootstrap-server localhost:9092 --list",
+        ]
       interval: 10s
       timeout: 10s
       retries: 6

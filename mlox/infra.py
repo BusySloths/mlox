@@ -141,9 +141,7 @@ class Infrastructure:
             mlox_params = {
                 "${MLOX_STACKS_PATH}": get_stacks_path(),
                 "${MLOX_USER}": bundle.server.mlox_user.name,
-                "${MLOX_USER_HOME}": getattr(
-                    bundle.server.mlox_user, "home", ""
-                ),
+                "${MLOX_USER_HOME}": bundle.server.mlox_user.home,
                 "${MLOX_AUTO_USER}": generate_username(),
                 "${MLOX_AUTO_PW}": generate_pw(),
                 "${MLOX_AUTO_API_KEY}": generate_pw(),
@@ -187,15 +185,6 @@ class Infrastructure:
             service.name = service.name + "_" + str(cntr)
             cntr += 1
 
-        try:
-            bundle.server.customize_service(service)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning(
-                "Server %s failed to customize service %s: %s",
-                bundle.server.ip,
-                service.name,
-                exc,
-            )
         bundle.services.append(service)
         return bundle
 

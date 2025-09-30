@@ -30,4 +30,4 @@ build:
   params:
     name: headlamp
     template: ${MLOX_STACKS_PATH}/k8s_headlamp/mlox.headlamp.yaml
-    target_path: /home/${MLOX_USER}/headlamp
+    target_path: ${MLOX_USER_HOME}/headlamp

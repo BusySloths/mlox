@@ -23,6 +23,7 @@ from mlox.server import (
     AbstractGitServer,
     AbstractServer,
     MloxUser,
+    ServerConnection,
 )
 
 
@@ -65,10 +66,14 @@ class LocalConnection:
         self.close()
 
     # Command helpers ----------------------------------------------------
-    def run(self, command: str, hide: bool = True, pty: bool = False) -> _LocalCommandResult:
+    def run(
+        self, command: str, hide: bool = True, pty: bool = False
+    ) -> _LocalCommandResult:
         return self._execute(command)
 
-    def sudo(self, command: str, hide: bool = True, pty: bool = False) -> _LocalCommandResult:
+    def sudo(
+        self, command: str, hide: bool = True, pty: bool = False
+    ) -> _LocalCommandResult:
         sudo_path = shutil.which("sudo")
         if sudo_path:
             sudo_command = f"{sudo_path} -n {command}"
@@ -98,6 +103,10 @@ class LocalConnection:
                 completed.returncode,
                 completed.stderr.strip(),
             )
+            # Match Fabric semantics: raise on failure
+            raise RuntimeError(
+                f"Local command '{command}' failed with exit code {completed.returncode}: {completed.stderr.strip()}"
+            )
         return _LocalCommandResult(command, completed)
 
     # File transfer helpers ---------------------------------------------
@@ -118,7 +127,9 @@ class LocalConnection:
 
         return destination
 
-    def get(self, remote: str, local: str | os.PathLike[str] | IO[bytes]) -> str | IO[bytes]:
+    def get(
+        self, remote: str, local: str | os.PathLike[str] | IO[bytes]
+    ) -> str | IO[bytes]:
         source = Path(remote)
         if hasattr(local, "write"):
             local.write(source.read_bytes())
@@ -132,7 +143,7 @@ class LocalConnection:
         return str(destination)
 
 
-class LocalServerConnection:
+class LocalServerConnection(ServerConnection):
     """Context manager returning a :class:`LocalConnection`."""
 
     def __init__(self, connection: LocalConnection):
@@ -150,7 +161,7 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
     """A server representation that targets the local machine."""
 
     docker_available: bool = field(default=False, init=False)
-    base_path: Path = field(default_factory=lambda: Path.cwd(), init=False)
+    base_path: str = field(default_factory=lambda: str(Path.cwd()), init=False)
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -173,7 +184,11 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
 
     # Connection helpers -------------------------------------------------
     def get_server_connection(self, force_root: bool = False) -> LocalServerConnection:
-        connection = LocalConnection(self.base_path, host=self.ip, user=self.mlox_user.name)
+        if not self.mlox_user:
+            raise ValueError("Mlox user must be defined to establish a connection.")
+        connection = LocalConnection(
+            self.base_path, host=self.ip, user=self.mlox_user.name
+        )
         return LocalServerConnection(connection)
 
     def test_connection(self) -> bool:  # pragma: no cover - exercised indirectly
@@ -210,7 +225,9 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
     def setup_backend(self) -> None:
         self.state = "running"
         self.docker_available = self._detect_docker()
-        logger.info("Localhost backend ready (docker available=%s)", self.docker_available)
+        logger.info(
+            "Localhost backend ready (docker available=%s)", self.docker_available
+        )
 
     def teardown_backend(self) -> None:
         self.state = "no-backend"
@@ -254,17 +271,6 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
             "pretty_name": pretty_name,
         }
 
-    def customize_service(self, service: "AbstractService") -> None:  # type: ignore[override]
-        if not hasattr(service, "target_path"):
-            return
-
-        original = Path(service.target_path)
-        if original.is_absolute():
-            new_target = self.base_path / original.name
-        else:
-            new_target = self.base_path / original
-        service.target_path = str(new_target)
-
     # Helpers -----------------------------------------------------------
     def _detect_docker(self) -> bool:
         docker_path = shutil.which("docker")
@@ -279,11 +285,13 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
 
     def _get_memory_gb(self) -> float:
         if hasattr(os, "sysconf"):
-            if "SC_PAGE_SIZE" in os.sysconf_names and "SC_PHYS_PAGES" in os.sysconf_names:
+            if (
+                "SC_PAGE_SIZE" in os.sysconf_names
+                and "SC_PHYS_PAGES" in os.sysconf_names
+            ):
                 page_size = os.sysconf("SC_PAGE_SIZE")
                 phys_pages = os.sysconf("SC_PHYS_PAGES")
                 if page_size > 0 and phys_pages > 0:
                     return round(page_size * phys_pages / (1024**3), 2)
         logger.debug("Falling back to 0 for memory detection on unsupported platform.")
         return 0.0
-

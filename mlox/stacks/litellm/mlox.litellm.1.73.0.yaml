@@ -24,7 +24,7 @@ groups:
   service:
   backend:
     docker:
-ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
   web_ui: 5222
 ui:
   setup: mlox.services.litellm.ui.setup
@@ -33,8 +33,8 @@ build:
   class_name: mlox.services.litellm.docker.LiteLLMDockerService
   params:
     name: litellm-ollama-1.73.0
-    template: ${MLOX_STACKS_PATH}/litellm/docker-compose-litellm-ollama-1.73.0.yaml 
-    target_path: /home/${MLOX_USER}/litellm-1.73.0
+    template: ${MLOX_STACKS_PATH}/litellm/docker-compose-litellm-ollama-1.73.0.yaml
+    target_path: ${MLOX_USER_HOME}/litellm-1.73.0
     ollama_script: ${MLOX_STACKS_PATH}/litellm/entrypoint.sh
     litellm_config: ${MLOX_STACKS_PATH}/litellm/litellm-config.yaml
     ui_user: ${MLOX_AUTO_USER}
@@ -43,4 +43,3 @@ build:
     service_port: "4000"
     slack_webhook: ""
     api_key: ${MLOX_AUTO_API_KEY}
-

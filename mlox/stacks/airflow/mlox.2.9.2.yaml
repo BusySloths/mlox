@@ -2,7 +2,8 @@ id: airflow-2.9.2-docker
 name: Airflow
 version: 2.9.2
 maintainer: Your Name
-description_short: Apache Airflow is a workflow orchestrator used to schedule and monitor 
+description_short:
+  Apache Airflow is a workflow orchestrator used to schedule and monitor
   machine learning pipelines.
 description: |
   Apache Airflow is an open-source workflow orchestrator used to schedule and monitor 
@@ -33,10 +34,10 @@ build:
   class_name: mlox.services.airflow.docker.AirflowDockerService
   params:
     name: airflow-2.9.2
-    template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-2.9.2.yaml 
-    target_path: /home/${MLOX_USER}/airflow-2.9.2
-    path_output: /home/${MLOX_USER}/airflow-2.9.2/output
-    path_dags: /home/${MLOX_USER}/airflow-2.9.2/dags
+    template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-2.9.2.yaml
+    target_path: ${MLOX_USER_HOME}/airflow-2.9.2
+    path_output: ${MLOX_USER_HOME}/airflow-2.9.2/output
+    path_dags: ${MLOX_USER_HOME}/airflow-2.9.2/dags
     port: ${MLOX_AUTO_PORT_WEB_UI}
     ui_user: ${MLOX_AUTO_USER}
     ui_pw: ${MLOX_AUTO_PW}

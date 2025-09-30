@@ -1,7 +1,24 @@
+from dataclasses import dataclass
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from mlox.servers.local import LocalhostServer, LocalConnection
+from fabric import Connection  # type: ignore
+from mlox.service import AbstractService
+from mlox.infra import Infrastructure
+from mlox.config import ServiceConfig, BuildConfig, get_stacks_path, load_config
+from mlox.servers.local.local import LocalhostServer, LocalConnection
+
+
+@dataclass
+class ExampleService(AbstractService):
+    def setup(self, conn: Connection) -> None:
+        pass
+
+    def teardown(self, conn: Connection) -> None:
+        pass
+
+    def check(self, conn: Connection) -> dict:
+        return {"status": "running"}
 
 
 def test_local_connection_executes_commands(tmp_path):
@@ -21,7 +38,7 @@ def test_local_connection_sudo_falls_back(tmp_path):
     assert "hi" in result.stdout
 
 
-def test_localhost_server_customizes_service(monkeypatch):
+def test_localhost_server_adds_custom_service():
     server = LocalhostServer(
         ip="127.0.0.1",
         root="tester",
@@ -29,9 +46,34 @@ def test_localhost_server_customizes_service(monkeypatch):
         service_config_id="svc",
     )
 
-    fake_service = SimpleNamespace(target_path="/tmp/example", name="svc")
-    server.customize_service(fake_service)
-    assert fake_service.target_path == str(server.base_path / "example")
+    infra = Infrastructure()
+
+    server_config = load_config(get_stacks_path(), "/local", "mlox-server.local.yaml")
+    bundle = infra.add_server(server_config, {})
+
+    build_config = BuildConfig(
+        class_name="tests.unit.test_local_server.ExampleService",
+        params={
+            "target_path": "${MLOX_USER_HOME}/tmp/example",
+            "service_config_id": "example",
+            "template": "example_template",
+            "name": "example_service",
+        },
+    )
+    service_config = ServiceConfig(
+        id="example",
+        name="Example Service",
+        maintainer="tester",
+        description_short="An example",
+        description="An example service",
+        links={},
+        version="0.1.0",
+        build=build_config,
+    )
+    bundle = infra.add_service(server.ip, service_config, params={})
+    assert bundle is not None
+    assert len(bundle.services) == 1
+    assert bundle.services[0].target_path == f"{server.mlox_user.home}/tmp/example"
 
 
 def test_localhost_server_reports_docker_status(monkeypatch):
@@ -42,8 +84,11 @@ def test_localhost_server_reports_docker_status(monkeypatch):
         service_config_id="svc",
     )
 
-    with patch("mlox.servers.local.shutil.which", return_value="/usr/bin/docker"):
-        with patch("mlox.servers.local.subprocess.run", return_value=SimpleNamespace(returncode=0)):
+    with patch("mlox.servers.local.local.shutil.which", return_value="/usr/bin/docker"):
+        with patch(
+            "mlox.servers.local.local.subprocess.run",
+            return_value=SimpleNamespace(returncode=0),
+        ):
             server.setup_backend()
 
     status = server.get_backend_status()
