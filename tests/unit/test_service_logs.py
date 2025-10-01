@@ -13,6 +13,9 @@ class DummyService(AbstractService):
     def check(self, conn):
         return {}
 
+    def get_secrets(self) -> dict:
+        return {}
+
 
 def test_compose_service_log_tail_direct_match():
     svc = DummyService(
@@ -26,7 +29,9 @@ def test_compose_service_log_tail_direct_match():
         "mlox.service.docker_all_service_states",
         return_value={"web_service": {"Status": "running"}},
     ):
-        with patch("mlox.service.docker_service_log_tails", return_value="line1\nline2"):
+        with patch(
+            "mlox.service.docker_service_log_tails", return_value="line1\nline2"
+        ):
             out = svc.compose_service_log_tail(conn, "web", tail=2)
             assert "line1" in out
 

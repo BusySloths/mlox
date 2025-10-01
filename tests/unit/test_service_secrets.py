@@ -1,6 +1,6 @@
 import pytest
 
-from mlox.services.Kafka.docker import KafkaDockerService
+from mlox.services.kafka.docker import KafkaDockerService
 from mlox.services.airflow.docker import AirflowDockerService
 from mlox.services.feast.docker import FeastDockerService
 from mlox.services.gcp.bq_service import GCPBigQueryService

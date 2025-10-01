@@ -107,7 +107,7 @@ def help():
                         primary_url = e["service"].service_urls[p]
                         break
 
-            btn_cols = st.columns(3)
+            btn_cols = st.columns([3, 2, 1])
             with btn_cols[0]:
                 url = links.get("documentation") or links.get("docs") or ""
                 if url:

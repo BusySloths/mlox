@@ -1,6 +1,5 @@
 import os
 import json
-import sys
 import platform
 import logging
 import streamlit as st

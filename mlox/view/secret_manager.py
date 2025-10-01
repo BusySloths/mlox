@@ -1,74 +1,161 @@
-import pandas as pd
+from typing import Any, cast
 
+import pandas as pd
 import streamlit as st
 
-from typing import cast
-
 from mlox.infra import Infrastructure
-# from mlox.secret_manager import AbstractSecretManagerService, AbstractSecretManager
+
+# Lightweight CSS for badges, chips, and custom tables
+st.markdown(
+    """
+    <style>
+    .svc-badge {display:inline-block;padding:2px 8px;border-radius:999px;color:#fff;font-size:12px}
+    .svc-chip {display:inline-block;padding:2px 8px;border-radius:999px;background:#111827;color:#e5e7eb;margin-right:6px;margin-bottom:4px;font-size:12px;border:1px solid #374151}
+    .svc-table {width:100%;border-collapse:separate;border-spacing:0 6px}
+    .svc-table th {text-align:left;padding:8px 10px;color:#94a3b8;font-size:13px}
+    .svc-table td {background:#0b1220;padding:10px;border-top:1px solid #1f2937;border-bottom:1px solid #1f2937}
+    .svc-pill {display:inline-block;padding:2px 6px;border:1px solid #334155;border-radius:6px;color:#cbd5e1;font-size:12px}
+    .link-btn {display:inline-block;padding:6px 10px;background:#0ea5e9;color:#fff;border-radius:6px;text-decoration:none;margin-right:6px;margin-bottom:6px}
+    .link-btn:hover {background:#0284c7}
+    /* Style Streamlit metric blocks to match highlight color (#2E8B57) */
+    div[data-testid="stMetric"] {
+      background: rgba(56, 149, 97, 0.12); /* subtle SeaGreen tint */
+      border: 1px solid rgba(46, 139, 87, 0.6);
+      border-radius: 16px;
+      padding: 10px;
+    }
+    div[data-testid="stMetric"] label {color:#cbd5e1}
+    div[data-testid="stMetricValue"] {color:#2E8B57}
+    div[data-testid="stMetricValue"] * {color:#2E8B57 !important}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
-def save_infra():
+def save_infra() -> None:
     with st.spinner("Saving infrastructure..."):
         st.session_state.mlox.save_infrastructure()
 
 
-def secrets():
-    st.markdown("""
-    # Secret Manager
-    - Keys and secrets
-    - Configurations
-    """)
-
-    infra = None
-    try:
-        infra = cast(Infrastructure, st.session_state.mlox.infra)
-    except BaseException:
-        st.error("Could not load infrastructure configuration.")
-        st.stop()
-
-    secret_manager_service_list = []
-    for sms in infra.filter_by_group("secret-manager"):
-        bundle = infra.get_bundle_by_service(sms)
+def _collect_secret_manager_rows(infra: Infrastructure) -> list[dict[str, Any]]:
+    secret_manager_rows: list[dict[str, Any]] = []
+    for service in infra.filter_by_group("secret-manager"):
+        bundle = infra.get_bundle_by_service(service)
         if not bundle:
             continue
-        secret_manager_service_list.append(
+        secret_manager_rows.append(
             {
                 "ip": bundle.server.ip,
                 "server": bundle.name,
-                "name": sms.name,
-                "path": sms.target_path,
-                "service": sms,
+                "name": service.name,
+                "path": service.target_path,
+                "service": service,
                 "bundle": bundle,
             }
         )
+    return secret_manager_rows
 
-    df = pd.DataFrame(
-        secret_manager_service_list,
+
+def _render_overview(secret_manager_rows: list[dict[str, Any]]) -> None:
+    total_servers = {row["server"] for row in secret_manager_rows}
+    with st.container():
+        col_left, col_right = st.columns(2)
+        col_left.metric("Secret Manager Services", len(secret_manager_rows))
+        col_right.metric("Servers", len(total_servers) if secret_manager_rows else 0)
+        st.caption(
+            "Select a secret manager below to sync secrets or adjust its settings."
+        )
+
+
+def secrets() -> None:
+    st.title("Secret Manager")
+    st.caption("Manage secret stores across your infrastructure bundles.")
+    st.divider()
+
+    try:
+        infra = cast(Infrastructure, st.session_state.mlox.infra)
+    except Exception:  # pragma: no cover - defensive path for UI runtime
+        st.error("Could not load infrastructure configuration.")
+        st.stop()
+
+    secret_manager_rows = _collect_secret_manager_rows(infra)
+    if not secret_manager_rows:
+        st.info(
+            "No secret manager services found. Deploy one to manage secrets centrally."
+        )
+        return
+
+    _render_overview(secret_manager_rows)
+    st.subheader("Available Secret Managers")
+
+    table = pd.DataFrame(
+        secret_manager_rows,
         columns=["ip", "server", "name", "path", "service", "bundle"],
     )
     selection = st.dataframe(
-        df[["server", "name", "path"]],
+        table[["server", "name", "path"]],
         hide_index=True,
         selection_mode="single-row",
         width="stretch",
         on_select="rerun",
+        use_container_width=True,
     )
-    if len(selection["selection"]["rows"]) > 0:
-        idx = selection["selection"]["rows"][0]
-        bundle = secret_manager_service_list[idx]["bundle"]
-        secret_manager_service = secret_manager_service_list[idx]["service"]
 
-        # if st.button("Delete"):
-        #     with st.spinner(f"Deleting {name}..."):
-        #         infra.teardown_service(secret_manager_service)
-        #     save_infra()
-        #     st.rerun()
+    selected_rows = selection.get("selection", {}).get("rows", [])
+    if not selected_rows:
+        st.info("Select a secret manager from the table to see details.")
+        return
 
-        config = infra.get_service_config(secret_manager_service)
-        callable_settings_func = config.instantiate_ui("settings")
-        if callable_settings_func and secret_manager_service.state == "running":
-            callable_settings_func(infra, bundle, secret_manager_service)
+    selected_idx = selected_rows[0]
+    selected = secret_manager_rows[selected_idx]
+    bundle = selected["bundle"]
+    secret_manager_service = selected["service"]
+
+    st.divider()
+    st.subheader("Selected Secret Manager")
+    col_details, col_path = st.columns((2, 1))
+    with col_details:
+        st.markdown(f"**Server**: {selected['server']}")
+        st.markdown(f"**Service**: {secret_manager_service.name}")
+        st.markdown(f"**Status**: {secret_manager_service.state.title()}")
+    with col_path:
+        st.markdown("**Path**")
+        st.code(selected["path"], language="bash")
+
+    secret_manager = secret_manager_service.get_secret_manager(infra)
+
+    with st.container():
+        st.markdown("#### Sync Secrets from Active Services")
+        st.caption(
+            "Collect secrets from all running services and store them in this secret manager."
+        )
+        if st.button(
+            "Collect service secrets",
+            type="primary",
+            use_container_width=True,
+            key=f"collect-secrets-{secret_manager_service.uuid}",
+        ):
+            secrets_cnt = 0
+            service_cnt = 0
+            with st.spinner("Collecting secrets from running services..."):
+                for service in infra.services():
+                    if service.state != "running":
+                        continue
+                    service_cnt += 1
+                    for key, value in service.get_secrets().items():
+                        secret_manager.save_secret(f"{service.uuid}_{key}", value)
+                        secrets_cnt += 1
+            st.success(
+                f"Collected {secrets_cnt} secrets from {service_cnt} active services."
+            )
+
+    config = infra.get_service_config(secret_manager_service)
+    callable_settings_func = config.instantiate_ui("settings")
+    if callable_settings_func and secret_manager_service.state == "running":
+        st.divider()
+        st.subheader("Service Settings")
+        callable_settings_func(infra, bundle, secret_manager_service)
 
 
 secrets()

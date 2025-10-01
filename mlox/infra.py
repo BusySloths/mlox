@@ -1,3 +1,4 @@
+from collections.abc import Generator
 import logging
 
 from datetime import datetime
@@ -20,11 +21,6 @@ from mlox.utils import (
     generate_username,
 )
 
-# Configure logging (optional, but recommended)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -50,14 +46,9 @@ class Bundle:
 class Infrastructure:
     bundles: List[Bundle] = field(default_factory=list, init=False)
     configs: Dict[str, ServiceConfig] = field(default_factory=dict, init=False)
-    focus: List[str] = field(default_factory=list, init=False)
 
     def __post_init__(self):
         self.populate_configs()
-
-    def focus_service(self, service: AbstractService) -> None:
-        if service.uuid not in self.focus:
-            self.focus.append(service.uuid)
 
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
@@ -90,9 +81,6 @@ class Infrastructure:
     def remove_bundle(self, bundle: Bundle) -> None:
         try:
             self.bundles.remove(bundle)
-            for s in bundle.services:
-                if s.uuid in self.focus:
-                    self.focus.remove(s.uuid)
         except ValueError:
             logging.warning(f"Could not find bundle {bundle.server.ip}")
         return None
@@ -115,8 +103,6 @@ class Infrastructure:
             service.spin_down(conn)
             service.teardown(conn)
         bundle.services.remove(service)
-        if service.uuid in self.focus:
-            self.focus.remove(service.uuid)
 
     def add_service(
         self,
@@ -191,6 +177,11 @@ class Infrastructure:
     def list_service_names(self) -> List[str]:
         return [s.name for bundle in self.bundles for s in bundle.services]
 
+    def services(self) -> Generator[AbstractService]:
+        for bundle in self.bundles:
+            for s in bundle.services:
+                yield s
+
     def get_service(self, service_name: str) -> AbstractService | None:
         for bundle in self.bundles:
             for s in bundle.services:
@@ -256,7 +247,7 @@ class Infrastructure:
             and bundle.server.state == "running"
         ]
 
-    def list_bundles_with_backend(
+    def filter_bundles_by_backend(
         self, backend: Literal["docker", "kubernetes"]
     ) -> List[Bundle]:
         return [b for b in self.bundles if backend in b.server.backend]

@@ -42,6 +42,9 @@ class DummyService(AbstractService):
     def check(self, conn):
         return {}
 
+    def get_secrets(self) -> dict:
+        return {"dummy_secret": {"key": "value"}}
+
 
 # Dummy UI functions for testing
 def dummy_settings_func(
