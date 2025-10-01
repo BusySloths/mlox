@@ -97,3 +97,16 @@ class MLFlowDockerService(AbstractService):
             "status": "unknown",
             "message": "MLflow API not reachable",
         }
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        credentials = {
+            key: value
+            for key, value in {
+                "username": self.ui_user,
+                "password": self.ui_pw,
+            }.items()
+            if value
+        }
+        if not credentials:
+            return {}
+        return {"mlflow_ui_credentials": credentials}

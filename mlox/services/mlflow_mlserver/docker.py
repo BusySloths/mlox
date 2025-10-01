@@ -97,3 +97,30 @@ class MLFlowMLServerDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         return {}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        secrets: Dict[str, Dict] = {}
+
+        basic_auth = {
+            key: value
+            for key, value in {
+                "username": self.user,
+                "password": self.pw,
+            }.items()
+            if value
+        }
+        if basic_auth:
+            secrets["mlserver_basic_auth"] = basic_auth
+
+        tracking_auth = {
+            key: value
+            for key, value in {
+                "username": self.tracking_user,
+                "password": self.tracking_pw,
+            }.items()
+            if value
+        }
+        if tracking_auth:
+            secrets["mlflow_tracking_credentials"] = tracking_auth
+
+        return secrets

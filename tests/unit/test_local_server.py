@@ -20,6 +20,9 @@ class ExampleService(AbstractService):
     def check(self, conn: Connection) -> dict:
         return {"status": "running"}
 
+    def get_secrets(self) -> dict:
+        return {"example_service": {"secret_key": "secret_value"}}
+
 
 def test_local_connection_executes_commands(tmp_path):
     conn = LocalConnection(base_path=tmp_path, host="127.0.0.1", user="tester")

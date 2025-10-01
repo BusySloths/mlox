@@ -103,6 +103,11 @@ class AbstractService(ABC):
     def check(self, conn) -> Dict:
         pass
 
+    @abstractmethod
+    def get_secrets(self) -> Dict[str, Dict]:
+        """Return a mapping of secret identifiers to structured secret payloads."""
+        raise NotImplementedError
+
     def spin_up(self, conn) -> bool:
         """Start the service.
 

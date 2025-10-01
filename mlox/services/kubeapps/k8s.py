@@ -231,3 +231,6 @@ class KubeAppsService(AbstractService):
 
         # return {"status": "unknown", "details": "Could not determine KubeApps status."}
         return {"status": helm_result}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        return {}

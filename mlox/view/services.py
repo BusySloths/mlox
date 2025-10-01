@@ -1,4 +1,4 @@
-import pandas as pd
+import pandas as pd  # type: ignore
 import streamlit as st
 
 from typing import cast
@@ -421,7 +421,7 @@ def _render_add_service_dialog():
     )
 
     # Server selection
-    bundle_candidates = infra.list_bundles_with_backend(backend=selected_backend)
+    bundle_candidates = infra.filter_bundles_by_backend(backend=selected_backend)
     running_bundles = [b for b in bundle_candidates if b.server.state == "running"]
 
     if not running_bundles:

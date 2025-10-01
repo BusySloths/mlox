@@ -130,3 +130,8 @@ class KafkaDockerService(AbstractService):
             logger.error("Error checking Kafka service status: %s", exc)
             self.state = "unknown"
             return {"status": "unknown", "error": str(exc)}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        if not self.ssl_password:
+            return {}
+        return {"kafka_ssl_credentials": {"password": self.ssl_password}}

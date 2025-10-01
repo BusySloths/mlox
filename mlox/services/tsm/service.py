@@ -81,6 +81,11 @@ class TSMService(AbstractService, AbstractSecretManagerService):
     def check(self, conn) -> Dict:
         return dict()
 
+    def get_secrets(self) -> Dict[str, Dict]:
+        if not self.pw:
+            return {}
+        return {"tsm_secrets_vault": {"password": self.pw}}
+
 
 def load_secret_manager_from_keyfile(path: str, pw: str) -> AbstractSecretManager:
     """

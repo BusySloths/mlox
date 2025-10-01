@@ -118,3 +118,16 @@ class OtelDockerService(AbstractService):
             status = "starting"
 
         return {"status": status, "docker_state": docker_state}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        payload = {
+            key: value
+            for key, value in {
+                "license_key": self.relic_key,
+                "endpoint": self.relic_endpoint,
+            }.items()
+            if value
+        }
+        if not payload:
+            return {}
+        return {"new_relic_exporter": payload}
