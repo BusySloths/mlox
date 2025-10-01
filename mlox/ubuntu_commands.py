@@ -1,0 +1,631 @@
+"""Ubuntu-specific remote command helpers with execution history support."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+import secrets
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from io import BytesIO
+from typing import Any, Deque, Dict, Iterable, Optional
+
+import yaml
+from fabric import Connection  # type: ignore
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ExecutionRecorder:
+    """Base class providing chronological execution history recording."""
+
+    history_limit: int = 200
+    _history: Deque[dict[str, Any]] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._history = deque(maxlen=self.history_limit)
+
+    def _record_history(
+        self,
+        *,
+        action: str,
+        status: str,
+        command: str | None = None,
+        exit_code: int | None = None,
+        output: str | None = None,
+        error: str | None = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "action": action,
+            "status": status,
+        }
+
+        if command is not None:
+            entry["command"] = command
+        if exit_code is not None:
+            entry["exit_code"] = exit_code
+        if output is not None:
+            entry["output"] = output
+        if error is not None:
+            entry["error"] = error
+        if metadata:
+            entry["metadata"] = metadata
+
+        self._history.append(entry)
+        logger.debug("Recorded history entry: %s", entry)
+
+    @property
+    def history(self) -> Iterable[dict[str, Any]]:
+        """Return a snapshot of the execution history."""
+
+        return list(self._history)
+
+
+@dataclass
+class UbuntuCommandExecutor(ExecutionRecorder):
+    """Execute Ubuntu-specific remote commands while recording history."""
+
+    def close(self, connection: Connection) -> None:
+        """Close the remote connection."""
+
+        try:
+            connection.close()
+            self._record_history(action="close_connection", status="success")
+        except Exception as exc:  # pragma: no cover - defensive
+            self._record_history(
+                action="close_connection", status="error", error=str(exc)
+            )
+            raise
+
+    def exec_command(
+        self, connection: Connection, cmd: str, sudo: bool = False, pty: bool = False
+    ) -> str | None:
+        """Execute a command on the remote host and log the outcome."""
+
+        hide = "stderr" if sudo else True
+        try:
+            if sudo:
+                result = connection.sudo(cmd, hide=hide, pty=pty)
+            else:
+                result = connection.run(cmd, hide=hide)
+
+            stdout = result.stdout.strip()
+            self._record_history(
+                action="exec_command",
+                status="success",
+                command=cmd,
+                exit_code=getattr(result, "exited", None),
+                output=stdout,
+                metadata={"sudo": sudo, "pty": pty},
+            )
+            return stdout
+        except Exception as exc:
+            self._record_history(
+                action="exec_command",
+                status="error",
+                command=cmd,
+                error=str(exc),
+                metadata={"sudo": sudo, "pty": pty},
+            )
+            if sudo:
+                logger.error("Command failed: %s", exc)
+                return None
+            raise
+
+    def sys_disk_free(self, connection: Connection) -> int:
+        uname = self.exec_command(connection, "uname -s") or ""
+        if "Linux" in uname:
+            perc = (
+                self.exec_command(
+                    connection, "df -h / | tail -n1 | awk '{print $5}'"
+                )
+                or "0%"
+            )
+            value = int(perc[:-1])
+            self._record_history(
+                action="sys_disk_free", status="success", output=str(value)
+            )
+            return value
+        self._record_history(
+            action="sys_disk_free", status="error", output=uname
+        )
+        logger.error("No idea how to get disk space on %s!", uname)
+        return 0
+
+    def sys_root_apt_install(
+        self, connection: Connection, param: str, upgrade: bool = False
+    ) -> str | None:
+        cmd = "apt upgrade" if upgrade else f"apt install {param}"
+        self.exec_command(connection, "dpkg --configure -a")
+        result = self.exec_command(connection, cmd)
+        self._record_history(
+            action="sys_root_apt_install",
+            status="success",
+            command=cmd,
+            output=result,
+            metadata={"upgrade": upgrade},
+        )
+        return result
+
+    def sys_user_id(self, connection: Connection) -> str | None:
+        result = self.exec_command(connection, "id -u")
+        self._record_history(action="sys_user_id", status="success", output=result)
+        return result
+
+    def sys_list_user(self, connection: Connection) -> str | None:
+        result = self.exec_command(
+            connection, "ls -l /home | awk '{print $4}'"
+        )
+        self._record_history(action="sys_list_user", status="success", output=result)
+        return result
+
+    def sys_add_user(
+        self,
+        connection: Connection,
+        user_name: str,
+        passwd: str,
+        with_home_dir: bool = False,
+        sudoer: bool = False,
+    ) -> str | None:
+        p_home_dir = "-m " if with_home_dir else ""
+        command = (
+            f"useradd -p `openssl passwd {passwd}` {p_home_dir}-d /home/{user_name} {user_name}"
+        )
+        result = self.exec_command(connection, command, sudo=True)
+        if sudoer:
+            self.exec_command(connection, f"usermod -aG sudo {user_name}", sudo=True)
+
+            if os.environ.get("MLOX_DEBUG", False):
+                logger.warning(
+                    "[DEBUG ENABLED] sudoer group member do not need to pw anymore."
+                )
+                sudoer_file_content = f"{user_name} ALL=(ALL) NOPASSWD: ALL"
+                sudoer_file_path = f"/etc/sudoers.d/90-mlox-{user_name}"
+                self.exec_command(
+                    connection,
+                    f"echo '{sudoer_file_content}' | tee {sudoer_file_path}",
+                    sudo=True,
+                )
+                self.exec_command(connection, f"chmod 440 {sudoer_file_path}", sudo=True)
+
+        self._record_history(
+            action="sys_add_user",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "user_name": user_name,
+                "with_home_dir": with_home_dir,
+                "sudoer": sudoer,
+            },
+        )
+        return result
+
+    def docker_list_container(self, connection: Connection) -> list[list[str]]:
+        res = self.exec_command(connection, "docker container ls", sudo=True) or ""
+        dl = str(res).split("\n")
+        dlist = [re.sub(r"\ {2,}", "    ", dl[i]).split("   ") for i in range(len(dl))]
+        self._record_history(
+            action="docker_list_container", status="success", output=str(dlist)
+        )
+        return dlist
+
+    def docker_down(
+        self,
+        connection: Connection,
+        config_yaml: str,
+        remove_volumes: bool = False,
+    ) -> str | None:
+        volumes = "--volumes " if remove_volumes else ""
+        command = f'docker compose -f "{config_yaml}" down {volumes}--remove-orphans'
+        result = self.exec_command(connection, command, sudo=True)
+        self._record_history(
+            action="docker_down",
+            status="success",
+            command=command,
+            output=result,
+            metadata={"remove_volumes": remove_volumes},
+        )
+        return result
+
+    def docker_up(
+        self,
+        connection: Connection,
+        config_yaml: str,
+        env_file: str | None = None,
+    ) -> str | None:
+        command = f'docker compose -f "{config_yaml}" up -d --build'
+        if env_file is not None:
+            command = (
+                f'docker compose --env-file {env_file} -f "{config_yaml}" up -d --build'
+            )
+        result = self.exec_command(connection, command, sudo=True)
+        self._record_history(
+            action="docker_up",
+            status="success",
+            command=command,
+            output=result,
+            metadata={"env_file": env_file},
+        )
+        return result
+
+    def docker_service_state(self, connection: Connection, service_name: str) -> str:
+        cmd = f"docker inspect --format '{{{{.State.Status}}}}' {service_name}"
+        res = self.exec_command(connection, cmd, sudo=True, pty=False) or ""
+        self._record_history(
+            action="docker_service_state",
+            status="success",
+            command=cmd,
+            output=res,
+            metadata={"service_name": service_name},
+        )
+        return res
+
+    def docker_all_service_states(
+        self, connection: Connection
+    ) -> dict[str, dict[Any, Any]]:
+        ids = self.exec_command(connection, "docker ps -aq", sudo=True, pty=False)
+        if not ids:
+            self._record_history(
+                action="docker_all_service_states", status="success", output="{}"
+            )
+            return {}
+
+        id_list = " ".join(ids.split())
+        inspect_output = self.exec_command(
+            connection, f"docker inspect {id_list}", sudo=True, pty=False
+        )
+        try:
+            containers = json.loads(inspect_output or "[]")
+            result = {
+                c.get("Name", "").lstrip("/"): c.get("State", {}) for c in containers
+            }
+            self._record_history(
+                action="docker_all_service_states",
+                status="success",
+                output=json.dumps(result),
+            )
+            return result
+        except Exception as exc:  # pragma: no cover - defensive
+            self._record_history(
+                action="docker_all_service_states",
+                status="error",
+                error=str(exc),
+            )
+            logger.warning("Failed to parse docker state info: %s", exc)
+            return {}
+
+    def docker_service_log_tails(
+        self, connection: Connection, service_name: str, tail: int = 200
+    ) -> str:
+        try:
+            cmd = f"docker logs --tail {int(tail)} {service_name}"
+            res = (
+                self.exec_command(connection, cmd, sudo=True, pty=False)
+                or "No docker logs found"
+            )
+            self._record_history(
+                action="docker_service_log_tails",
+                status="success",
+                command=cmd,
+                output=res,
+                metadata={"tail": tail, "service_name": service_name},
+            )
+            return res
+        except Exception as exc:  # pragma: no cover - defensive
+            self._record_history(
+                action="docker_service_log_tails",
+                status="error",
+                error=str(exc),
+                metadata={"tail": tail, "service_name": service_name},
+            )
+            logger.warning("Failed to fetch logs for %s: %s", service_name, exc)
+            return "Failed to fetch logs"
+
+    def git_clone(self, connection: Connection, repo_url: str, install_path: str) -> None:
+        try:
+            self.exec_command(connection, f"mkdir -p {install_path}")
+            self.exec_command(
+                connection, f"cd {install_path}; git clone {repo_url}"
+            )
+            self._record_history(
+                action="git_clone",
+                status="success",
+                metadata={"repo_url": repo_url, "install_path": install_path},
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            self._record_history(
+                action="git_clone",
+                status="error",
+                error=str(exc),
+                metadata={"repo_url": repo_url, "install_path": install_path},
+            )
+            raise
+
+    def fs_copy(self, connection: Connection, src_file: str, dst_path: str) -> None:
+        try:
+            connection.put(src_file, dst_path)
+            self._record_history(
+                action="fs_copy",
+                status="success",
+                metadata={"src_file": src_file, "dst_path": dst_path},
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            self._record_history(
+                action="fs_copy",
+                status="error",
+                error=str(exc),
+                metadata={"src_file": src_file, "dst_path": dst_path},
+            )
+            raise
+
+    def fs_create_dir(self, connection: Connection, path: str) -> None:
+        self.exec_command(connection, f"mkdir -p {path}")
+        self._record_history(
+            action="fs_create_dir", status="success", metadata={"path": path}
+        )
+
+    def fs_delete_dir(self, connection: Connection, path: str) -> None:
+        self.exec_command(connection, f"rm -rf {path}", sudo=True)
+        self._record_history(
+            action="fs_delete_dir", status="success", metadata={"path": path}
+        )
+
+    def fs_copy_dir(
+        self,
+        connection: Connection,
+        src_path: str,
+        dst_path: str,
+        sudo: bool = False,
+    ) -> None:
+        self.exec_command(connection, f"cp -r {src_path} {dst_path}", sudo=sudo)
+        self._record_history(
+            action="fs_copy_dir",
+            status="success",
+            metadata={"src_path": src_path, "dst_path": dst_path, "sudo": sudo},
+        )
+
+    def fs_exists_dir(self, connection: Connection, path: str) -> bool:
+        try:
+            res = self.exec_command(
+                connection, f"test -d {path} && echo exists || echo missing"
+            )
+            exists = str(res).strip() == "exists"
+            self._record_history(
+                action="fs_exists_dir",
+                status="success",
+                metadata={"path": path, "exists": exists},
+            )
+            return exists
+        except Exception as exc:  # pragma: no cover - defensive
+            self._record_history(
+                action="fs_exists_dir",
+                status="error",
+                error=str(exc),
+                metadata={"path": path},
+            )
+            return False
+
+    def fs_create_symlink(
+        self,
+        connection: Connection,
+        target_path: str,
+        link_path: str,
+        sudo: bool = False,
+    ) -> None:
+        self.exec_command(connection, f"ln -s {target_path} {link_path}", sudo=sudo)
+        self._record_history(
+            action="fs_create_symlink",
+            status="success",
+            metadata={
+                "target_path": target_path,
+                "link_path": link_path,
+                "sudo": sudo,
+            },
+        )
+
+    def fs_remove_symlink(
+        self, connection: Connection, link_path: str, sudo: bool = False
+    ) -> None:
+        self.exec_command(connection, f"rm {link_path}", sudo=sudo)
+        self._record_history(
+            action="fs_remove_symlink",
+            status="success",
+            metadata={"link_path": link_path, "sudo": sudo},
+        )
+
+    def fs_touch(self, connection: Connection, fname: str) -> None:
+        self.exec_command(connection, f"touch {fname}")
+        self._record_history(action="fs_touch", status="success", metadata={"file": fname})
+
+    def fs_append_line(self, connection: Connection, fname: str, line: str) -> None:
+        self.exec_command(connection, f"touch {fname}")
+        self.exec_command(connection, f"echo '{line}' >> {fname}")
+        self._record_history(
+            action="fs_append_line",
+            status="success",
+            metadata={"file": fname, "line": line},
+        )
+
+    def fs_create_empty_file(self, connection: Connection, fname: str) -> None:
+        self.exec_command(connection, f"echo -n >| {fname}")
+        self._record_history(
+            action="fs_create_empty_file", status="success", metadata={"file": fname}
+        )
+
+    def fs_find_and_replace(
+        self,
+        connection: Connection,
+        fname: str,
+        old: str,
+        new: str,
+        *,
+        separator: str = "!",
+        sudo: bool = False,
+    ) -> None:
+        self.exec_command(
+            connection,
+            f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}",
+            sudo=sudo,
+        )
+        self._record_history(
+            action="fs_find_and_replace",
+            status="success",
+            metadata={
+                "file": fname,
+                "old": old,
+                "new": new,
+                "separator": separator,
+                "sudo": sudo,
+            },
+        )
+
+    def fs_write_file(
+        self,
+        connection: Connection,
+        file_path: str,
+        content: str | bytes,
+        *,
+        sudo: bool = False,
+        encoding: str = "utf-8",
+    ) -> None:
+        if isinstance(content, str):
+            content_bytes = content.encode(encoding)
+        elif isinstance(content, bytes):
+            content_bytes = content
+        else:
+            raise TypeError("Content must be str or bytes")
+
+        file_like_object = BytesIO(content_bytes)
+
+        if not sudo:
+            connection.put(file_like_object, remote=file_path)
+            logger.info("Wrote content to %s as user %s", file_path, connection.user)
+        else:
+            random_suffix = secrets.token_hex(8)
+            remote_tmp_path = os.path.join("/tmp", f"mlox_tmp_{random_suffix}")
+
+            try:
+                connection.put(file_like_object, remote=remote_tmp_path)
+                logger.info(
+                    "Uploaded content to temporary remote path: %s", remote_tmp_path
+                )
+                self.exec_command(
+                    connection, f"mv {remote_tmp_path} {file_path}", sudo=True
+                )
+                logger.info(
+                    "Moved temporary file from %s to %s using sudo.",
+                    remote_tmp_path,
+                    file_path,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Error writing file %s with sudo: %s", file_path, exc)
+                if connection.is_connected:
+                    self.exec_command(
+                        connection,
+                        f"rm -f {remote_tmp_path}",
+                        sudo=True,
+                        pty=False,
+                    )
+                self._record_history(
+                    action="fs_write_file",
+                    status="error",
+                    metadata={
+                        "file_path": file_path,
+                        "sudo": sudo,
+                        "encoding": encoding,
+                    },
+                    error=str(exc),
+                )
+                raise
+
+        self._record_history(
+            action="fs_write_file",
+            status="success",
+            metadata={
+                "file_path": file_path,
+                "sudo": sudo,
+                "encoding": encoding,
+            },
+        )
+
+    def fs_read_file(
+        self,
+        connection: Connection,
+        file_path: str,
+        *,
+        encoding: str = "utf-8",
+        format: str = "yaml",
+    ) -> Any:
+        io_obj = BytesIO()
+        connection.get(file_path, io_obj)
+        data: Any
+        if format == "yaml":
+            data = yaml.safe_load(io_obj.getvalue())
+        else:
+            data = io_obj.getvalue().decode(encoding)
+        self._record_history(
+            action="fs_read_file",
+            status="success",
+            metadata={"file_path": file_path, "format": format, "encoding": encoding},
+        )
+        return data
+
+    def fs_list_files(
+        self, connection: Connection, path: str, sudo: bool = False
+    ) -> list[str]:
+        command = f"ls -A1 {path}"
+        output = (
+            self.exec_command(connection, command, sudo=sudo, pty=False) or ""
+        )
+        entries = output.splitlines() if output else []
+        self._record_history(
+            action="fs_list_files",
+            status="success",
+            command=command,
+            metadata={"path": path, "sudo": sudo},
+            output="\n".join(entries),
+        )
+        return entries
+
+    def fs_list_file_tree(
+        self, connection: Connection, path: str, sudo: bool = False
+    ) -> list[dict[str, Any]]:
+        command = (
+            f"find {path} -printf '%p|%y|%s|%TY-%Tm-%Td %TH:%TM:%TS\\n'"
+        )
+        output = (
+            self.exec_command(connection, command, sudo=sudo, pty=False) or ""
+        )
+        entries: list[dict[str, Any]] = []
+        if output:
+            for line in output.splitlines():
+                try:
+                    p, y, s, mdt = line.split("|", 3)
+                    entry = {
+                        "name": os.path.basename(p),
+                        "path": p,
+                        "is_file": y == "f",
+                        "is_dir": y == "d",
+                        "size": int(s),
+                        "modification_datetime": mdt.split(".")[0],
+                    }
+                    entries.append(entry)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("Error parsing file tree line: %s (%s)", line, exc)
+
+        self._record_history(
+            action="fs_list_file_tree",
+            status="success",
+            command=command,
+            metadata={"path": path, "sudo": sudo},
+            output=json.dumps(entries),
+        )
+        return entries
+
