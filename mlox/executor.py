@@ -71,18 +71,6 @@ class ExecutionRecorder:
 class UbuntuCommandExecutor(ExecutionRecorder):
     """Execute Ubuntu-specific remote commands while recording history."""
 
-    def close(self, connection: Connection) -> None:
-        """Close the remote connection."""
-
-        try:
-            connection.close()
-            self._record_history(action="close_connection", status="success")
-        except Exception as exc:  # pragma: no cover - defensive
-            self._record_history(
-                action="close_connection", status="error", error=str(exc)
-            )
-            raise
-
     def exec_command(
         self, connection: Connection, cmd: str, sudo: bool = False, pty: bool = False
     ) -> str | None:
@@ -122,9 +110,7 @@ class UbuntuCommandExecutor(ExecutionRecorder):
         uname = self.exec_command(connection, "uname -s") or ""
         if "Linux" in uname:
             perc = (
-                self.exec_command(
-                    connection, "df -h / | tail -n1 | awk '{print $5}'"
-                )
+                self.exec_command(connection, "df -h / | tail -n1 | awk '{print $5}'")
                 or "0%"
             )
             value = int(perc[:-1])
@@ -132,9 +118,7 @@ class UbuntuCommandExecutor(ExecutionRecorder):
                 action="sys_disk_free", status="success", output=str(value)
             )
             return value
-        self._record_history(
-            action="sys_disk_free", status="error", output=uname
-        )
+        self._record_history(action="sys_disk_free", status="error", output=uname)
         logger.error("No idea how to get disk space on %s!", uname)
         return 0
 
@@ -159,9 +143,7 @@ class UbuntuCommandExecutor(ExecutionRecorder):
         return result
 
     def sys_list_user(self, connection: Connection) -> str | None:
-        result = self.exec_command(
-            connection, "ls -l /home | awk '{print $4}'"
-        )
+        result = self.exec_command(connection, "ls -l /home | awk '{print $4}'")
         self._record_history(action="sys_list_user", status="success", output=result)
         return result
 
@@ -174,9 +156,7 @@ class UbuntuCommandExecutor(ExecutionRecorder):
         sudoer: bool = False,
     ) -> str | None:
         p_home_dir = "-m " if with_home_dir else ""
-        command = (
-            f"useradd -p `openssl passwd {passwd}` {p_home_dir}-d /home/{user_name} {user_name}"
-        )
+        command = f"useradd -p `openssl passwd {passwd}` {p_home_dir}-d /home/{user_name} {user_name}"
         result = self.exec_command(connection, command, sudo=True)
         if sudoer:
             self.exec_command(connection, f"usermod -aG sudo {user_name}", sudo=True)
@@ -192,7 +172,9 @@ class UbuntuCommandExecutor(ExecutionRecorder):
                     f"echo '{sudoer_file_content}' | tee {sudoer_file_path}",
                     sudo=True,
                 )
-                self.exec_command(connection, f"chmod 440 {sudoer_file_path}", sudo=True)
+                self.exec_command(
+                    connection, f"chmod 440 {sudoer_file_path}", sudo=True
+                )
 
         self._record_history(
             action="sys_add_user",
@@ -328,12 +310,12 @@ class UbuntuCommandExecutor(ExecutionRecorder):
             logger.warning("Failed to fetch logs for %s: %s", service_name, exc)
             return "Failed to fetch logs"
 
-    def git_clone(self, connection: Connection, repo_url: str, install_path: str) -> None:
+    def git_clone(
+        self, connection: Connection, repo_url: str, install_path: str
+    ) -> None:
         try:
             self.exec_command(connection, f"mkdir -p {install_path}")
-            self.exec_command(
-                connection, f"cd {install_path}; git clone {repo_url}"
-            )
+            self.exec_command(connection, f"cd {install_path}; git clone {repo_url}")
             self._record_history(
                 action="git_clone",
                 status="success",
@@ -442,7 +424,9 @@ class UbuntuCommandExecutor(ExecutionRecorder):
 
     def fs_touch(self, connection: Connection, fname: str) -> None:
         self.exec_command(connection, f"touch {fname}")
-        self._record_history(action="fs_touch", status="success", metadata={"file": fname})
+        self._record_history(
+            action="fs_touch", status="success", metadata={"file": fname}
+        )
 
     def fs_append_line(self, connection: Connection, fname: str, line: str) -> None:
         self.exec_command(connection, f"touch {fname}")
@@ -581,9 +565,7 @@ class UbuntuCommandExecutor(ExecutionRecorder):
         self, connection: Connection, path: str, sudo: bool = False
     ) -> list[str]:
         command = f"ls -A1 {path}"
-        output = (
-            self.exec_command(connection, command, sudo=sudo, pty=False) or ""
-        )
+        output = self.exec_command(connection, command, sudo=sudo, pty=False) or ""
         entries = output.splitlines() if output else []
         self._record_history(
             action="fs_list_files",
@@ -597,12 +579,8 @@ class UbuntuCommandExecutor(ExecutionRecorder):
     def fs_list_file_tree(
         self, connection: Connection, path: str, sudo: bool = False
     ) -> list[dict[str, Any]]:
-        command = (
-            f"find {path} -printf '%p|%y|%s|%TY-%Tm-%Td %TH:%TM:%TS\\n'"
-        )
-        output = (
-            self.exec_command(connection, command, sudo=sudo, pty=False) or ""
-        )
+        command = f"find {path} -printf '%p|%y|%s|%TY-%Tm-%Td %TH:%TM:%TS\\n'"
+        output = self.exec_command(connection, command, sudo=sudo, pty=False) or ""
         entries: list[dict[str, Any]] = []
         if output:
             for line in output.splitlines():
@@ -628,4 +606,3 @@ class UbuntuCommandExecutor(ExecutionRecorder):
             output=json.dumps(entries),
         )
         return entries
-
