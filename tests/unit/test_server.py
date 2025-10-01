@@ -9,7 +9,6 @@ from mlox.server import (
     MloxUser,
     RemoteUser,
     sys_get_distro_info,
-    execute_command,
 )
 
 
@@ -81,29 +80,6 @@ def test_sys_get_distro_info_failure(mock_exec, mock_fs):
     conn = DummyConn()
     info = sys_get_distro_info(conn)
     assert info is None
-
-
-@patch("mlox.server.exec_command")
-def test_execute_command_str(mock_exec):
-    conn = DummyConn()
-    execute_command(conn, "ls")
-    mock_exec.assert_called_with(conn, "ls", sudo=True)
-
-
-@patch("mlox.server.exec_command")
-def test_execute_command_list_sudo(mock_exec):
-    conn = DummyConn()
-    execute_command(conn, [True, "ls", "desc"])
-    mock_exec.assert_called_with(conn, "ls", sudo=True)
-
-
-@patch("importlib.import_module")
-def test_execute_command_list_func(mock_import):
-    conn = DummyConn()
-    dummy_func = MagicMock()
-    mock_import.return_value = MagicMock(**{"dummy_func": dummy_func})
-    execute_command(conn, ["dummy_func", "arg1", "arg2"])
-    dummy_func.assert_called_with(conn, "arg1", "arg2")
 
 
 # AbstractServer cannot be instantiated directly, but we can test its templates

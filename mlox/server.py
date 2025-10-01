@@ -19,7 +19,7 @@ import socket
 
 from mlox.utils import generate_password
 from mlox.remote import open_connection, close_connection, exec_command, fs_read_file
-
+from mlox.executor import UbuntuCommandExecutor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -197,6 +197,10 @@ class AbstractServer(ABC):
     ] = "un-initialized"
     discovered: str | None = field(default=None, init=False)
 
+    exec: UbuntuCommandExecutor = field(
+        default_factory=UbuntuCommandExecutor, init=False
+    )
+
     def __post_init__(self):
         if not self.discovered:
             self.discovered = datetime.now().isoformat()
@@ -368,25 +372,3 @@ def sys_get_distro_info(conn) -> Optional[Dict[str, str]]:
 
     logger.error("Unable to determine Linux distribution info.")
     return None
-
-
-def execute_command(conn, cmd: List | str):
-    if isinstance(cmd, str):
-        # Type 1: single CMD executed as sudo
-        exec_command(conn, cmd, sudo=True)
-    if isinstance(cmd, list):
-        if isinstance(cmd[0], bool):
-            # Type 2: [Sudo True/False, CMD, Descr]
-            exec_command(conn, cmd[1], sudo=cmd[0])
-        else:
-            # Type 3: Function call with arguments
-            func_name = cmd[0]
-            module_name = "mlox.remote"
-            module = importlib.import_module(module_name)
-            func = getattr(module, func_name)
-            args = cmd[1:]
-            logger.debug(f"Execute CMD: {func_name} with args: {args}")
-            if args:
-                func(conn, *args)
-            else:
-                func(conn)
