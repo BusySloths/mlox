@@ -27,6 +27,7 @@ groups:
     kubernetes:
     docker:
     native:
+    connector:
 ui:
   setup: mlox.services.gcp.storage_ui.setup
   settings: mlox.services.gcp.storage_ui.settings

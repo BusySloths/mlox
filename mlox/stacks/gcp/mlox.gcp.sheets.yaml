@@ -29,6 +29,7 @@ groups:
     kubernetes:
     docker:
     native:
+    connector:
 ui:
   setup: mlox.services.gcp.sheet_ui.setup
   settings: mlox.services.gcp.sheet_ui.settings
