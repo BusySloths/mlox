@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  kafka:
+    image: apache/kafka:4.1.0
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - ${MY_KAFKA_SSL_PORT:-9094}:9094
+    environment:
+      CLUSTER_ID: ${MY_KAFKA_CLUSTER_ID}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL_SSL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL_SSL://${MY_KAFKA_PUBLIC_HOST}:${MY_KAFKA_SSL_PORT}
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL_SSL:SSL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_SSL_KEYSTORE_TYPE: PEM
+      KAFKA_SSL_KEYSTORE_CERTIFICATE_CHAIN: /etc/kafka/secrets/kafka.keystore.pem
+      KAFKA_SSL_KEYSTORE_KEY: /etc/kafka/secrets/kafka.keystore.key
+      KAFKA_SSL_KEYSTORE_PASSWORD: ${MY_KAFKA_SSL_KEY_PASSWORD}
+      KAFKA_SSL_KEY_PASSWORD: ${MY_KAFKA_SSL_KEY_PASSWORD}
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_CERTIFICATES: /etc/kafka/secrets/kafka.truststore.pem
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: ${MY_KAFKA_SSL_KEY_PASSWORD}
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
+    volumes:
+      - ./kafka.keystore.pem:/etc/kafka/secrets/kafka.keystore.pem:ro
+      - ./kafka.keystore.key:/etc/kafka/secrets/kafka.keystore.key:ro
+      - ./kafka.truststore.pem:/etc/kafka/secrets/kafka.truststore.pem:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks: {}

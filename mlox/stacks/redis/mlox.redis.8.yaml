@@ -36,6 +36,6 @@ build:
   params:
     name: redis-8-bookworm
     template: ${MLOX_STACKS_PATH}/redis/docker-compose-redis-8-bookworm.yaml
-    target_path: /home/${MLOX_USER}/redis-8-bookworm
+    target_path: ${MLOX_USER_HOME}/redis-8-bookworm
     pw: ${MLOX_AUTO_PW}
     port: ${MLOX_AUTO_PORT_SERVICE}

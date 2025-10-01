@@ -35,9 +35,9 @@ build:
   params:
     name: airflow-3.0.1
     template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.1.yaml
-    target_path: /home/${MLOX_USER}/airflow-3.0.1
-    path_output: /home/${MLOX_USER}/airflow-3.0.1/output
-    path_dags: /home/${MLOX_USER}/airflow-3.0.1/dags
+    target_path: ${MLOX_USER_HOME}/airflow-3.0.1
+    path_output: ${MLOX_USER_HOME}/airflow-3.0.1/output
+    path_dags: ${MLOX_USER_HOME}/airflow-3.0.1/dags
     port: ${MLOX_AUTO_PORT_WEB_UI}
     ui_user: ${MLOX_AUTO_USER}
     ui_pw: ${MLOX_AUTO_PW}

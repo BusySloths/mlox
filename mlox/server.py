@@ -20,6 +20,7 @@ import socket
 from mlox.utils import generate_password
 from mlox.remote import open_connection, close_connection, exec_command, fs_read_file
 
+
 logging.basicConfig(
     level=logging.INFO,
     format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",

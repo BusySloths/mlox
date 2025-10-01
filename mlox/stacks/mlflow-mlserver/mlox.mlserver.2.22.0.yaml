@@ -4,10 +4,10 @@ version: "2.22.0"
 maintainer: Your Name
 description_short: MLServer is an open-source Python library for building production-ready asynchronous APIs for machine learning models.
 description: |
-    MLServer aims to provide an easy way to start serving your machine learning models through a REST and gRPC interface, 
-    fully compliant with KFServing’s V2 Dataplane spec. MLServer supports multi-model serving, the ability to run inference in parallel for vertical scaling across multiple models through a 
-    sharedpool of inference workers, and more. This service uses MLFlow MLServer integration to deploy single
-    models. The version of this service refers to MLFlow.
+  MLServer aims to provide an easy way to start serving your machine learning models through a REST and gRPC interface, 
+  fully compliant with KFServing’s V2 Dataplane spec. MLServer supports multi-model serving, the ability to run inference in parallel for vertical scaling across multiple models through a 
+  sharedpool of inference workers, and more. This service uses MLFlow MLServer integration to deploy single
+  models. The version of this service refers to MLFlow.
 links:
   project: https://mlserver.readthedocs.io/en/stable/
   news: https://mlserver.readthedocs.io/en/stable/
@@ -23,7 +23,7 @@ groups:
   model-server:
   backend:
     docker:
-ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
   rest: 6432
 ui:
   setup: mlox.services.mlflow_mlserver.ui.setup
@@ -32,9 +32,9 @@ build:
   class_name: mlox.services.mlflow_mlserver.docker.MLFlowMLServerDockerService
   params:
     name: mlflow-mlserver-2.22.0
-    template: ${MLOX_STACKS_PATH}/mlflow-mlserver/docker-compose-mlflow-mlserver-2.22.0.yaml 
-    dockerfile: ${MLOX_STACKS_PATH}/mlflow-mlserver/dockerfile-mlflow-mlserver 
-    target_path: /home/${MLOX_USER}/mlflow-mlserver-2.22.0
+    template: ${MLOX_STACKS_PATH}/mlflow-mlserver/docker-compose-mlflow-mlserver-2.22.0.yaml
+    dockerfile: ${MLOX_STACKS_PATH}/mlflow-mlserver/dockerfile-mlflow-mlserver
+    target_path: ${MLOX_USER_HOME}/mlflow-mlserver-2.22.0
     port: ${MLOX_AUTO_PORT_REST}
     model: ${MODEL_NAME}
     tracking_uri: ${TRACKING_URI}

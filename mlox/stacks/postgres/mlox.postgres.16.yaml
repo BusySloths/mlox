@@ -22,11 +22,11 @@ requirements:
   disk_gb: 10.0
 groups:
   service:
-  database: 
+  database:
     relational:
   backend:
     docker:
-ports:  # These are 'preferred' ports, they can and possibly will be changed by automation
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
   service: 5432
 ui:
   setup: mlox.services.postgres.ui.setup
@@ -35,8 +35,8 @@ build:
   class_name: mlox.services.postgres.docker.PostgresDockerService
   params:
     name: postgres-16-bullseye
-    template: ${MLOX_STACKS_PATH}/postgres/docker-compose-postgres-16.yaml 
-    target_path: /home/${MLOX_USER}/postgres-16-bullseye
+    template: ${MLOX_STACKS_PATH}/postgres/docker-compose-postgres-16.yaml
+    target_path: ${MLOX_USER_HOME}/postgres-16-bullseye
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}
     db: ${POSTGRES_DB}

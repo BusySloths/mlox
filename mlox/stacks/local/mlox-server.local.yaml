@@ -1,0 +1,23 @@
+id: local-server
+name: Localhost
+version: 0.1.0
+maintainer: Your Name
+description_short: Localhost server for development and testing.
+description: |
+  Localhost server configuration for development and testing purposes. 
+  This stack assumes that the MLOX user already exists on the local machine 
+  and has the necessary permissions to run services. It is ideal for local 
+  development environments where you want to test MLOX services without deploying to a remote server.
+links:
+  project: https://github.com/busysloths/mlox
+  news: https://mlox.org/
+groups:
+  server:
+  backend:
+    local:
+build:
+  class_name: mlox.servers.local.local.LocalhostServer
+  params:
+    ip: "127.0.0.1"
+    root: ${MLOX_USER}
+    root_pw: ${MLOX_USER_PW}

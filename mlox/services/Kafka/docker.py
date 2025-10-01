@@ -1,4 +1,6 @@
+import base64
 import logging
+import secrets
 import shlex
 
 from dataclasses import dataclass, field
@@ -26,6 +28,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _generate_cluster_id() -> str:
+    """Return a valid Kafka cluster id (base64-url, no padding)."""
+
+    raw = secrets.token_bytes(16)
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
 @dataclass
 class KafkaDockerService(AbstractService):
     """Docker based deployment for a single-node Kafka broker."""
@@ -38,6 +47,7 @@ class KafkaDockerService(AbstractService):
         init=False,
         default_factory=lambda: {"Kafka Broker": "kafka"},
     )
+    cluster_id: str = field(default_factory=_generate_cluster_id, init=False)
 
     def setup(self, conn) -> None:
         fs_create_dir(conn, self.target_path)
@@ -61,18 +71,14 @@ class KafkaDockerService(AbstractService):
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         fs_create_empty_file(conn, env_path)
-        fs_append_line(conn, env_path, f"KAFKA_SSL_PORT={self.ssl_port}")
-        fs_append_line(conn, env_path, f"KAFKA_PUBLIC_HOST={conn.host}")
+        fs_append_line(conn, env_path, f"MY_KAFKA_CLUSTER_ID={self.cluster_id}")
+        fs_append_line(conn, env_path, f"MY_KAFKA_SSL_PORT={self.ssl_port}")
+        fs_append_line(conn, env_path, f"MY_KAFKA_PUBLIC_HOST={conn.host}")
         # PEM mode: compose file supplies the SSL_* PEM config and mounts certs
         fs_append_line(
             conn,
             env_path,
-            f"KAFKA_CFG_SSL_KEYSTORE_PASSWORD={self.ssl_password}",
-        )
-        fs_append_line(
-            conn,
-            env_path,
-            f"KAFKA_CFG_SSL_TRUSTSTORE_PASSWORD={self.ssl_password}",
+            f"MY_KAFKA_SSL_KEY_PASSWORD={self.ssl_password}",
         )
 
         self.certificate = fs_read_file(

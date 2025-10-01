@@ -32,4 +32,4 @@ build:
   params:
     name: k8s-dashboard
     template: ${MLOX_STACKS_PATH}/k8s_dashboard/service-account.yaml
-    target_path: /home/${MLOX_USER}/k8s_dashboard-7.13.0
+    target_path: ${MLOX_USER_HOME}/k8s_dashboard-7.13.0

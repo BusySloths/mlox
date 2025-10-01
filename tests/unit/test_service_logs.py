@@ -23,10 +23,10 @@ def test_compose_service_log_tail_direct_match():
     conn = MagicMock()
 
     with patch(
-        "mlox.remote.docker_all_service_states",
+        "mlox.service.docker_all_service_states",
         return_value={"web_service": {"Status": "running"}},
     ):
-        with patch("mlox.remote.docker_service_log_tails", return_value="line1\nline2"):
+        with patch("mlox.service.docker_service_log_tails", return_value="line1\nline2"):
             out = svc.compose_service_log_tail(conn, "web", tail=2)
             assert "line1" in out
 
@@ -41,10 +41,10 @@ def test_compose_service_log_tail_heuristic_match():
 
     # container name contains _postgres_ as in compose naming
     with patch(
-        "mlox.remote.docker_all_service_states",
+        "mlox.service.docker_all_service_states",
         return_value={"proj_postgres_1": {"Status": "running"}},
     ):
-        with patch("mlox.remote.docker_service_log_tails", return_value="ok"):
+        with patch("mlox.service.docker_service_log_tails", return_value="ok"):
             out = svc.compose_service_log_tail(conn, "db", tail=10)
             assert out == "ok"
 
@@ -57,7 +57,7 @@ def test_compose_service_log_tail_no_match():
 
     conn = MagicMock()
 
-    with patch("mlox.remote.docker_all_service_states", return_value={}):
-        with patch("mlox.remote.docker_service_state", return_value=""):
+    with patch("mlox.service.docker_all_service_states", return_value={}):
+        with patch("mlox.service.docker_service_state", return_value=""):
             out = svc.compose_service_log_tail(conn, "x", tail=5)
-            assert out == ""
+            assert out == "Service with label x (nope) not found"

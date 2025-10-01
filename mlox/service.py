@@ -207,6 +207,8 @@ class AbstractService(ABC):
         for cname in all_states:
             if f"_{service}_" in cname or cname.endswith(f"_{service}_1"):
                 return docker_service_log_tails(conn, cname, tail=tail)
+            elif f"{service}/" in cname:
+                return docker_service_log_tails(conn, cname, tail=tail)
 
         # last resort: try service name directly (may be a container id)
         state = docker_service_state(conn, service)

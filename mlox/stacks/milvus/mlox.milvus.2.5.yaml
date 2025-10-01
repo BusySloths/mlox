@@ -35,7 +35,7 @@ build:
     name: milvus-2.5
     template: ${MLOX_STACKS_PATH}/milvus/docker-compose-milvus-2.5.yaml
     config: ${MLOX_STACKS_PATH}/milvus/milvus.yaml
-    target_path: /home/${MLOX_USER}/milvus-2.5
+    target_path: ${MLOX_USER_HOME}/milvus-2.5
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}
     port: ${MLOX_AUTO_PORT_SERVICE}

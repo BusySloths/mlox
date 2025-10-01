@@ -1,14 +1,11 @@
+import pytest
 import types
 from unittest import mock
 
-import pytest
-
-typer = pytest.importorskip("typer")
+from mlox import cli
 from typer.testing import CliRunner
 
-from mlox import cli
-
-
+typer = pytest.importorskip("typer")
 runner = CliRunner()
 
 

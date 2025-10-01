@@ -36,6 +36,6 @@ build:
   params:
     name: gcp-bigquery-0.1.0
     template: ${MLOX_STACKS_PATH}/gcp/mlox.gcp.bigquery.yaml
-    target_path: /home/${MLOX_USER}/gcp_bigquery
+    target_path: ${MLOX_USER_HOME}/gcp_bigquery
     secret_manager_uuid: ${SECRET_MANAGER_UUID}
     secret_name: ${SECRET_NAME}

@@ -37,7 +37,7 @@ build:
     name: feast-latest
     template: ${MLOX_STACKS_PATH}/feast/docker-compose-feast.yaml
     dockerfile: ${MLOX_STACKS_PATH}/feast/Dockerfile
-    target_path: /home/${MLOX_USER}/feast-latest
+    target_path: ${MLOX_USER_HOME}/feast-latest
     config: ${MLOX_STACKS_PATH}/feast/feature_store.yaml
     registry_port: ${MLOX_AUTO_PORT_REGISTRY}
     online_port: ${MLOX_AUTO_PORT_ONLINE_STORE}
