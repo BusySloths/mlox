@@ -139,3 +139,16 @@ class AirflowDockerService(AbstractService):
                 f"An unexpected error occurred during Airflow health check for {url}: {e}"
             )
             return {"status": "unknown", "message": f"Error: {e}"}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        credentials = {
+            key: value
+            for key, value in {
+                "username": self.ui_user,
+                "password": self.ui_pw,
+            }.items()
+            if value
+        }
+        if not credentials:
+            return {}
+        return {"airflow_ui_credentials": credentials}

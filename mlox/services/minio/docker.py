@@ -97,3 +97,16 @@ class MinioDockerService(AbstractService):
             logging.error("Error checking MinIO service status: %s", exc)
             self.state = "unknown"
         return {"status": "unknown"}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        credentials = {
+            key: value
+            for key, value in {
+                "username": self.root_user,
+                "password": self.root_password,
+            }.items()
+            if value
+        }
+        if not credentials:
+            return {}
+        return {"minio_root_credentials": credentials}

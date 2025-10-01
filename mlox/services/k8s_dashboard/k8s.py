@@ -214,3 +214,6 @@ class K8sDashboardService(AbstractService):
 
     def check(self, conn) -> Dict:
         return dict()
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        return {}

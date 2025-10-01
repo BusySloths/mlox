@@ -87,3 +87,25 @@ class LiteLLMDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         return dict()
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        secrets: Dict[str, Dict] = {}
+
+        if self.api_key:
+            secrets["litellm_api_access"] = {"api_key": self.api_key}
+
+        if self.slack_webhook:
+            secrets["litellm_slack_alerting"] = {"webhook_url": self.slack_webhook}
+
+        credentials = {
+            key: value
+            for key, value in {
+                "username": self.ui_user,
+                "password": self.ui_pw,
+            }.items()
+            if value
+        }
+        if credentials:
+            secrets["litellm_ui_credentials"] = credentials
+
+        return secrets

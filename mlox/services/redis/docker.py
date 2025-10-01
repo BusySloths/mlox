@@ -88,3 +88,8 @@ class RedisDockerService(AbstractService):
             logging.error(f"Error checking Redis service status: {e}")
             self.state = "unknown"
         return {"status": "unknown"}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        if not self.pw:
+            return {}
+        return {"redis_auth": {"password": self.pw}}

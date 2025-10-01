@@ -87,3 +87,6 @@ class FeastDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         return {"status": "unknown"}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        return {}

@@ -83,3 +83,16 @@ class MilvusDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         return {"status": "unknown"}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        credentials = {
+            key: value
+            for key, value in {
+                "username": self.user,
+                "password": self.pw,
+            }.items()
+            if value
+        }
+        if not credentials:
+            return {}
+        return {"milvus_credentials": credentials}

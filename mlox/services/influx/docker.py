@@ -85,3 +85,17 @@ class InfluxDockerService(AbstractService):
             logging.error(f"Error checking InfluxDB service status: {e}")
             self.state = "unknown"
         return {"status": "unknown"}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        credentials = {
+            key: value
+            for key, value in {
+                "username": self.user,
+                "password": self.pw,
+                "token": self.token,
+            }.items()
+            if value
+        }
+        if not credentials:
+            return {}
+        return {"influx_admin_credentials": credentials}

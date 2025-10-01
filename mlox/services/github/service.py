@@ -110,6 +110,11 @@ class GithubRepoService(AbstractService, Repo):
             "tree": repo_tree,
         }
 
+    def get_secrets(self) -> Dict[str, Dict]:
+        if not self.deploy_key:
+            return {}
+        return {"github_deploy_key": {"key": self.deploy_key}}
+
     def _generate_deploy_ssh_key(
         self,
         conn,
