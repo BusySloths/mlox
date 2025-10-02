@@ -1,8 +1,10 @@
 import uuid
+import logging
 
 from typing import Dict, Literal
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from mlox.executors import UbuntuTaskExecutor
 
 from mlox.remote import (
     docker_down,
@@ -15,6 +17,8 @@ from mlox.remote import (
     fs_create_dir,
     fs_find_and_replace,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def tls_setup_no_config(conn, ip, path) -> None:
@@ -90,6 +94,14 @@ class AbstractService(ABC):
     )
 
     certificate: str = field(default="", init=False)
+
+    exec: UbuntuTaskExecutor = field(default_factory=UbuntuTaskExecutor, init=False)
+
+    def set_task_executor(self, exec: UbuntuTaskExecutor) -> None:
+        logger.info(
+            f"Setting task executor for service {self.name} supporting {exec.supported_os_ids}"
+        )
+        self.exec = exec
 
     @abstractmethod
     def setup(self, conn) -> None:

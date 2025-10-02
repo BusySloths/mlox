@@ -171,6 +171,9 @@ class Infrastructure:
             service.name = service.name + "_" + str(cntr)
             cntr += 1
 
+        # SET TASK EXECUTOR
+        service.set_task_executor(bundle.server.create_new_task_executor())
+
         bundle.services.append(service)
         return bundle
 

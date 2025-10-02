@@ -155,7 +155,7 @@ def _load_hook(data_item: Any) -> Any:
 
 
 def load_from_json(path: str, password: str, encrypted: bool = True) -> Any:
-    print(os.getcwd() + path)
+    # print(os.getcwd() + path)
     with open(os.getcwd() + path, "rb") as f:
         encrypted_data = f.read()
     if encrypted:

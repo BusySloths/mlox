@@ -2,7 +2,6 @@ import time  # Added for retry delay
 import uuid
 import logging
 import tempfile
-import importlib
 
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -19,7 +18,7 @@ import socket
 
 from mlox.utils import generate_password
 from mlox.remote import open_connection, close_connection, exec_command, fs_read_file
-
+from mlox.executors import UbuntuTaskExecutor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -197,9 +196,23 @@ class AbstractServer(ABC):
     ] = "un-initialized"
     discovered: str | None = field(default=None, init=False)
 
+    exec: UbuntuTaskExecutor = field(default_factory=UbuntuTaskExecutor, init=False)
+
     def __post_init__(self):
         if not self.discovered:
             self.discovered = datetime.now().isoformat()
+
+    def create_new_task_executor(self) -> UbuntuTaskExecutor:
+        new_task_exec = UbuntuTaskExecutor()
+        if self.exec.supported_os_ids != new_task_exec.supported_os_ids:
+            logger.warning(
+                (
+                    f"Task executor OS ID mismatch: {self.exec.supported_os_ids} != "
+                    f"{new_task_exec.supported_os_ids}. Forget to override the supported OS IDs "
+                    f"or relevant server methods?"
+                )
+            )
+        return new_task_exec
 
     def get_server_connection(self, force_root: bool = False) -> ServerConnection:
         # 3 ways to connect:
@@ -368,25 +381,3 @@ def sys_get_distro_info(conn) -> Optional[Dict[str, str]]:
 
     logger.error("Unable to determine Linux distribution info.")
     return None
-
-
-def execute_command(conn, cmd: List | str):
-    if isinstance(cmd, str):
-        # Type 1: single CMD executed as sudo
-        exec_command(conn, cmd, sudo=True)
-    if isinstance(cmd, list):
-        if isinstance(cmd[0], bool):
-            # Type 2: [Sudo True/False, CMD, Descr]
-            exec_command(conn, cmd[1], sudo=cmd[0])
-        else:
-            # Type 3: Function call with arguments
-            func_name = cmd[0]
-            module_name = "mlox.remote"
-            module = importlib.import_module(module_name)
-            func = getattr(module, func_name)
-            args = cmd[1:]
-            logger.debug(f"Execute CMD: {func_name} with args: {args}")
-            if args:
-                func(conn, *args)
-            else:
-                func(conn)
