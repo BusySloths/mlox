@@ -293,8 +293,30 @@ def installed_services():
         if svc.state == "running" and (
             "docker" in backend_keys or "docker" in server_backends
         ):
-            with st.expander("Logs"):
-                show_service_logs_ui(session, svc.name)
+            with st.expander("Logs & History", expanded=False):
+                tab_logs, tab_history = st.tabs(["Logs", "History"])
+                with tab_history:
+                    df_hist = pd.DataFrame(bndl.server.exec.history)
+                    if df_hist.empty:
+                        st.info("No history available yet.")
+                    else:
+                        st.dataframe(
+                            df_hist,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "timestamp": st.column_config.TextColumn(
+                                    "Timestamp", width="small"
+                                ),
+                                "action": st.column_config.TextColumn("Action"),
+                                "status": st.column_config.TextColumn(
+                                    "Status", width="small"
+                                ),
+                                "metadata": st.column_config.TextColumn("Metadata"),
+                            },
+                        )
+                with tab_logs:
+                    show_service_logs_ui(session, svc.name)
 
 
 def available_services():

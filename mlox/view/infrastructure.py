@@ -297,6 +297,8 @@ def tab_server_management(infra: Infrastructure):
                         f"service:{s.name}": None for s in bundle.services
                     },
                 )
+
+                st.write(bundle.server.exec.history)
                 callable_settings_func = config.instantiate_ui("settings")
                 if callable_settings_func:
                     callable_settings_func(infra, bundle, bundle.server)

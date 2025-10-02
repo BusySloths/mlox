@@ -211,7 +211,7 @@ def resource_files():
     # The .files() API returns a traversable object for your package's data
     # This is the modern way (Python 3.9+) to access package resources.
     airflow_stack_path_obj = resources.files("mlox.stacks")
-    print(str(airflow_stack_path_obj))
+    # print(str(airflow_stack_path_obj))
 
     # You can join paths to get to a specific file
     compose_file_ref = airflow_stack_path_obj.joinpath(

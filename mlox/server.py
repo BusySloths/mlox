@@ -2,7 +2,6 @@ import time  # Added for retry delay
 import uuid
 import logging
 import tempfile
-import importlib
 
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -19,7 +18,7 @@ import socket
 
 from mlox.utils import generate_password
 from mlox.remote import open_connection, close_connection, exec_command, fs_read_file
-from mlox.executor import UbuntuCommandExecutor
+from mlox.executors import UbuntuTaskExecutor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -197,13 +196,23 @@ class AbstractServer(ABC):
     ] = "un-initialized"
     discovered: str | None = field(default=None, init=False)
 
-    exec: UbuntuCommandExecutor = field(
-        default_factory=UbuntuCommandExecutor, init=False
-    )
+    exec: UbuntuTaskExecutor = field(default_factory=UbuntuTaskExecutor, init=False)
 
     def __post_init__(self):
         if not self.discovered:
             self.discovered = datetime.now().isoformat()
+
+    def create_new_task_executor(self) -> UbuntuTaskExecutor:
+        new_task_exec = UbuntuTaskExecutor()
+        if self.exec.supported_os_ids != new_task_exec.supported_os_ids:
+            logger.warning(
+                (
+                    f"Task executor OS ID mismatch: {self.exec.supported_os_ids} != "
+                    f"{new_task_exec.supported_os_ids}. Forget to override the supported OS IDs "
+                    f"or relevant server methods?"
+                )
+            )
+        return new_task_exec
 
     def get_server_connection(self, force_root: bool = False) -> ServerConnection:
         # 3 ways to connect:

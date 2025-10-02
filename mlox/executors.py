@@ -24,10 +24,15 @@ class ExecutionRecorder:
     """Base class providing chronological execution history recording."""
 
     history_limit: int = 200
-    _history: Deque[dict[str, Any]] = field(init=False, repr=False)
+    history_data: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
     def __post_init__(self) -> None:
-        self._history = deque(maxlen=self.history_limit)
+        # keep a deque for fast append/pop operations during runtime
+        # but store as list for serialization (deque is not json serializable)
+        history_deque: Deque[dict[str, Any]] = deque(
+            self.history_data, maxlen=self.history_limit
+        )
+        object.__setattr__(self, "_history", history_deque)
 
     def _record_history(
         self,
@@ -58,18 +63,20 @@ class ExecutionRecorder:
             entry["metadata"] = metadata
 
         self._history.append(entry)
-        logger.debug("Recorded history entry: %s", entry)
+        self.history_data = list(self._history)
+        # logger.debug("Recorded history entry: %s", entry)
 
     @property
     def history(self) -> Iterable[dict[str, Any]]:
         """Return a snapshot of the execution history."""
-
         return list(self._history)
 
 
 @dataclass
-class UbuntuCommandExecutor(ExecutionRecorder):
+class UbuntuTaskExecutor(ExecutionRecorder):
     """Execute Ubuntu-specific remote commands while recording history."""
+
+    supported_os_ids: str = "Ubuntu"
 
     def exec_command(
         self, connection: Connection, cmd: str, sudo: bool = False, pty: bool = False
