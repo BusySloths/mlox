@@ -2,7 +2,6 @@ import os
 from mlox.session import MloxSession
 from mlox.secret_manager import TinySecretManager
 from mlox.infra import Infrastructure, Bundle
-from mlox.remote import exec_command
 from mlox.utils import dataclass_to_dict
 
 if __name__ == "__main__":

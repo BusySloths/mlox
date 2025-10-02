@@ -6,18 +6,8 @@ import shlex
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup_no_config
-from mlox.remote import (
-    docker_down,
-    docker_all_service_states,
-    exec_command,
-    fs_append_line,
-    fs_copy,
-    fs_create_dir,
-    fs_create_empty_file,
-    fs_delete_dir,
-    fs_read_file,
-)
+from mlox.service import AbstractService
+
 
 
 logging.basicConfig(
@@ -50,15 +40,15 @@ class KafkaDockerService(AbstractService):
     cluster_id: str = field(default_factory=_generate_cluster_id, init=False)
 
     def setup(self, conn) -> None:
-        fs_create_dir(conn, self.target_path)
-        fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
 
         # Generate self-signed TLS assets for the broker
-        tls_setup_no_config(conn, conn.host, self.target_path)
+        self.exec.tls_setup_no_config(conn, conn.host, self.target_path)
 
         # For PEM setup, cert.pem and key.pem already exist from tls_setup_no_config
         # Create files with names expected by Bitnami entrypoint
-        exec_command(
+        self.exec.exec_command(
             conn,
             (
                 f"cd {self.target_path}; "
@@ -70,18 +60,18 @@ class KafkaDockerService(AbstractService):
         )
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
-        fs_create_empty_file(conn, env_path)
-        fs_append_line(conn, env_path, f"MY_KAFKA_CLUSTER_ID={self.cluster_id}")
-        fs_append_line(conn, env_path, f"MY_KAFKA_SSL_PORT={self.ssl_port}")
-        fs_append_line(conn, env_path, f"MY_KAFKA_PUBLIC_HOST={conn.host}")
+        self.exec.fs_create_empty_file(conn, env_path)
+        self.exec.fs_append_line(conn, env_path, f"MY_KAFKA_CLUSTER_ID={self.cluster_id}")
+        self.exec.fs_append_line(conn, env_path, f"MY_KAFKA_SSL_PORT={self.ssl_port}")
+        self.exec.fs_append_line(conn, env_path, f"MY_KAFKA_PUBLIC_HOST={conn.host}")
         # PEM mode: compose file supplies the SSL_* PEM config and mounts certs
-        fs_append_line(
+        self.exec.fs_append_line(
             conn,
             env_path,
             f"MY_KAFKA_SSL_KEY_PASSWORD={self.ssl_password}",
         )
 
-        self.certificate = fs_read_file(
+        self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
         )
 
@@ -90,12 +80,12 @@ class KafkaDockerService(AbstractService):
         self.service_urls["Kafka Broker"] = self.service_url
 
     def teardown(self, conn) -> None:
-        docker_down(
+        self.exec.docker_down(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
             remove_volumes=True,
         )
-        fs_delete_dir(conn, self.target_path)
+        self.exec.fs_delete_dir(conn, self.target_path)
 
     def spin_up(self, conn) -> bool:
         return self.compose_up(conn)
@@ -105,7 +95,7 @@ class KafkaDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         try:
-            states = docker_all_service_states(conn)
+            states = self.exec.docker_all_service_states(conn)
             if not states:
                 self.state = "stopped"
                 return {"status": "stopped"}

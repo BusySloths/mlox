@@ -1,7 +1,7 @@
 import os
+import os
 
 from mlox.session import MloxSession
-from mlox.remote import fs_find_and_replace, exec_command
 
 
 def enable_password_authentication(bundle_name: str):
@@ -33,16 +33,17 @@ def enable_password_authentication(bundle_name: str):
         print(f"Could not find bundle with name {bundle_name}")
         return
 
+    executor = server.exec
     with server.get_server_connection() as conn:
         # 1. uncomment if comment out
-        fs_find_and_replace(
+        executor.fs_find_and_replace(
             conn,
             "/etc/ssh/sshd_config",
             "#PasswordAuthentication",
             "PasswordAuthentication",
             sudo=True,
         )
-        fs_find_and_replace(
+        executor.fs_find_and_replace(
             conn,
             "/etc/ssh/sshd_config",
             "PasswordAuthentication no",
@@ -63,8 +64,8 @@ def enable_password_authentication(bundle_name: str):
         #     "PubkeyAuthentication yes",
         #     sudo=True,
         # )
-        exec_command(conn, "systemctl restart ssh", sudo=True)
-        exec_command(conn, "systemctl reload ssh", sudo=True)
+        executor.exec_command(conn, "systemctl restart ssh", sudo=True)
+        executor.exec_command(conn, "systemctl reload ssh", sudo=True)
 
     print(f"IP: ", server.ip)
     print(f"USER: ", server.mlox_user.name)

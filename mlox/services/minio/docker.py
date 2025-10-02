@@ -1,18 +1,11 @@
 import logging
 
+import logging
+
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup
-from mlox.remote import (
-    docker_down,
-    fs_append_line,
-    fs_copy,
-    fs_create_dir,
-    fs_delete_dir,
-    fs_read_file,
-)
-from mlox.remote import docker_all_service_states
+from mlox.service import AbstractService
 
 
 logging.basicConfig(
@@ -36,20 +29,20 @@ class MinioDockerService(AbstractService):
     )
 
     def setup(self, conn) -> None:
-        fs_create_dir(conn, self.target_path)
-        fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
 
-        tls_setup(conn, conn.host, self.target_path)
-        self.certificate = fs_read_file(
+        self.exec.tls_setup(conn, conn.host, self.target_path)
+        self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
         )
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
-        fs_append_line(conn, env_path, f"MINIO_ROOT_USER={self.root_user}")
-        fs_append_line(conn, env_path, f"MINIO_ROOT_PASSWORD={self.root_password}")
-        fs_append_line(conn, env_path, f"MINIO_PUBLIC_URL={conn.host}")
-        fs_append_line(conn, env_path, f"MINIO_API_PORT={self.api_port}")
-        fs_append_line(conn, env_path, f"MINIO_CONSOLE_PORT={self.console_port}")
+        self.exec.fs_append_line(conn, env_path, f"MINIO_ROOT_USER={self.root_user}")
+        self.exec.fs_append_line(conn, env_path, f"MINIO_ROOT_PASSWORD={self.root_password}")
+        self.exec.fs_append_line(conn, env_path, f"MINIO_PUBLIC_URL={conn.host}")
+        self.exec.fs_append_line(conn, env_path, f"MINIO_API_PORT={self.api_port}")
+        self.exec.fs_append_line(conn, env_path, f"MINIO_CONSOLE_PORT={self.console_port}")
 
         self.service_ports["MinIO API"] = int(self.api_port)
         self.service_ports["MinIO Console"] = int(self.console_port)
@@ -59,12 +52,12 @@ class MinioDockerService(AbstractService):
         self.service_urls["MinIO Console"] = self.console_url
 
     def teardown(self, conn):
-        docker_down(
+        self.exec.docker_down(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
             remove_volumes=True,
         )
-        fs_delete_dir(conn, self.target_path)
+        self.exec.fs_delete_dir(conn, self.target_path)
 
     def spin_up(self, conn) -> bool:
         return self.compose_up(conn)
@@ -74,7 +67,7 @@ class MinioDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         try:
-            states = docker_all_service_states(conn)
+            states = self.exec.docker_all_service_states(conn)
             if not states:
                 # no containers found
                 self.state = "stopped"

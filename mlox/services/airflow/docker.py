@@ -7,16 +7,8 @@ import urllib.request
 from typing import Dict
 from dataclasses import dataclass, field
 
-from mlox.service import AbstractService, tls_setup
-from mlox.remote import (
-    fs_copy,
-    fs_delete_dir,
-    fs_create_dir,
-    fs_create_empty_file,
-    fs_append_line,
-    sys_user_id,
-    docker_down,
-)
+from mlox.service import AbstractService
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,43 +41,43 @@ class AirflowDockerService(AbstractService):
 
     def setup(self, conn) -> None:
         # copy files to target
-        fs_create_dir(conn, self.target_path)
+        self.exec.fs_create_dir(conn, self.target_path)
         # Ensure host directories for DAGs and logs/outputs exist and are owned by mlox_user
         # This is crucial for volume mounts to have correct permissions for AIRFLOW_UID.
-        fs_create_dir(conn, self.path_dags)
-        fs_create_dir(conn, self.path_output)
-        # fs_create_dir(conn, self.target_path + "/logs")
-        # fs_create_dir(conn, self.target_path + "/plugins")
+        self.exec.fs_create_dir(conn, self.path_dags)
+        self.exec.fs_create_dir(conn, self.path_output)
+        # self.exec.fs_create_dir(conn, self.target_path + "/logs")
+        # self.exec.fs_create_dir(conn, self.target_path + "/plugins")
 
-        fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
-        tls_setup(conn, conn.host, self.target_path)
+        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.tls_setup(conn, conn.host, self.target_path)
         # setup environment
         base_url = f"https://{conn.host}:{self.port}"
         if len(self.secret_path) >= 1:
             base_url = f"https://{conn.host}:{self.port}/{self.secret_path}"
         env_path = f"{self.target_path}/{self.target_docker_env}"
-        fs_create_empty_file(conn, env_path)
-        fs_append_line(conn, env_path, "_AIRFLOW_SSL_CERT_NAME=cert.pem")
-        fs_append_line(conn, env_path, "_AIRFLOW_SSL_KEY_NAME=key.pem")
-        fs_append_line(conn, env_path, f"AIRFLOW_UID={sys_user_id(conn)}")
-        fs_append_line(conn, env_path, f"_AIRFLOW_SSL_FILE_PATH={self.target_path}/")
-        fs_append_line(conn, env_path, f"_AIRFLOW_OUT_PORT={self.port}")
-        fs_append_line(conn, env_path, f"_AIRFLOW_BASE_URL={base_url}")
-        fs_append_line(conn, env_path, f"_AIRFLOW_WWW_USER_USERNAME={self.ui_user}")
-        fs_append_line(conn, env_path, f"_AIRFLOW_WWW_USER_PASSWORD={self.ui_pw}")
-        fs_append_line(conn, env_path, f"_AIRFLOW_OUT_FILE_PATH={self.path_output}")
-        fs_append_line(conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}")
-        fs_append_line(conn, env_path, "_AIRFLOW_LOAD_EXAMPLES=false")
+        self.exec.fs_create_empty_file(conn, env_path)
+        self.exec.fs_append_line(conn, env_path, "_AIRFLOW_SSL_CERT_NAME=cert.pem")
+        self.exec.fs_append_line(conn, env_path, "_AIRFLOW_SSL_KEY_NAME=key.pem")
+        self.exec.fs_append_line(conn, env_path, f"AIRFLOW_UID={self.exec.sys_user_id(conn)}")
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_SSL_FILE_PATH={self.target_path}/")
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_OUT_PORT={self.port}")
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_BASE_URL={base_url}")
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_WWW_USER_USERNAME={self.ui_user}")
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_WWW_USER_PASSWORD={self.ui_pw}")
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_OUT_FILE_PATH={self.path_output}")
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}")
+        self.exec.fs_append_line(conn, env_path, "_AIRFLOW_LOAD_EXAMPLES=false")
         self.service_urls["Airflow UI"] = base_url
         self.service_ports["Airflow Webserver"] = int(self.port)
 
     def teardown(self, conn):
-        docker_down(
+        self.exec.docker_down(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
             remove_volumes=True,
         )
-        fs_delete_dir(conn, self.target_path)
+        self.exec.fs_delete_dir(conn, self.target_path)
 
     def spin_up(self, conn) -> bool:
         return self.compose_up(conn)

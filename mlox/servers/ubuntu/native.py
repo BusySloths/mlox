@@ -4,16 +4,6 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, ClassVar
 
 from mlox.server import AbstractServer, AbstractGitServer, sys_get_distro_info
-from mlox.remote import (
-    exec_command,
-    fs_read_file,
-    fs_find_and_replace,
-    fs_append_line,
-    fs_create_dir,
-    fs_delete_dir,
-    sys_add_user,
-    sys_user_id,
-)
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -49,9 +39,9 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             'echo "[apt-wait] Waiting for other apt/dpkg processes..."; sleep 3; done\''
         )
         try:
-            exec_command(conn, wait_cmd, sudo=True, pty=False)
+            self.exec.exec_command(conn, wait_cmd, sudo=True, pty=False)
             # Fix partially configured packages if previous runs were interrupted
-            exec_command(
+            self.exec.exec_command(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
                 sudo=True,
@@ -91,19 +81,19 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     def update(self):
         with self.get_server_connection() as conn:
             # Clean up partial states and wait for apt locks to clear
-            exec_command(
+            self.exec.exec_command(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
                 sudo=True,
             )
             self._apt_wait(conn)
-            exec_command(
+            self.exec.exec_command(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 update",
                 sudo=True,
             )
             self._apt_wait(conn)
-            exec_command(
+            self.exec.exec_command(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 upgrade",
                 sudo=True,
@@ -112,20 +102,20 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
 
     def install_packages(self):
         with self.get_server_connection() as conn:
-            exec_command(
+            self.exec.exec_command(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
                 sudo=True,
             )
             self._apt_wait(conn)
             # Update package list before installing to avoid "package not found" errors
-            exec_command(
+            self.exec.exec_command(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 update",
                 sudo=True,
             )
             # Install common utilities in a single transaction to reduce lock contention
-            exec_command(
+            self.exec.exec_command(
                 conn,
                 (
                     "DEBIAN_FRONTEND=noninteractive apt-get -yq "
@@ -153,9 +143,9 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         system_info = None
         hardware_info = None
         with self.get_server_connection() as conn:
-            hardware_info = exec_command(conn, cmd, sudo=True)
-            system_info = sys_get_distro_info(conn)
-            host_info = exec_command(conn, f"host {conn.host}", sudo=False)
+            hardware_info = self.exec.exec_command(conn, cmd, sudo=True)
+            system_info = sys_get_distro_info(conn, self.exec)
+            host_info = self.exec.exec_command(conn, f"host {conn.host}", sudo=False)
 
         if len(host_info) > 3 and " " in host_info:
             if host_info[-1] == ".":
@@ -190,7 +180,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             logger.info(
                 f"Add user: {mlox_user.name}. Create home dir and add to sudo group."
             )
-            sys_add_user(
+            self.exec.sys_add_user(
                 conn, mlox_user.name, mlox_user.pw, with_home_dir=True, sudoer=True
             )
         self.mlox_user = mlox_user
@@ -212,7 +202,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             # 1. create .ssh dir
             logger.info(f"Create .ssh dir for user {self.mlox_user.name}.")
             command = "mkdir -p ~/.ssh; chmod 700 ~/.ssh"
-            exec_command(conn, command)
+            self.exec.exec_command(conn, command)
 
             # 2. generate rsa keys for remote user
             logger.info(f"Generate RSA keys for remote user on server {self.ip}.")
@@ -220,13 +210,13 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; "
                 f"ssh-keygen -b 4096 -t rsa -f id_rsa -N {remote_user.ssh_passphrase}"
             )
-            exec_command(conn, command, sudo=False)
+            self.exec.exec_command(conn, command, sudo=False)
 
             # 3. read pub and private keys and store to remote user
-            remote_user.ssh_pub_key = fs_read_file(
+            remote_user.ssh_pub_key = self.exec.fs_read_file(
                 conn, f"{self.mlox_user.home}/.ssh/id_rsa.pub", format="string"
             ).strip()
-            remote_user.ssh_key = fs_read_file(
+            remote_user.ssh_key = self.exec.fs_read_file(
                 conn, f"{self.mlox_user.home}/.ssh/id_rsa", format="string"
             ).strip()
 
@@ -238,22 +228,22 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; "
                 f"ssh-keygen -b 4096 -t rsa -f id_rsa -N {self.mlox_user.ssh_passphrase}"
             )
-            exec_command(conn, command, sudo=False)
+            self.exec.exec_command(conn, command, sudo=False)
 
             # 5. read pub and private keys and store to mlox user
-            self.mlox_user.ssh_pub_key = fs_read_file(
+            self.mlox_user.ssh_pub_key = self.exec.fs_read_file(
                 conn, f"{self.mlox_user.home}/.ssh/id_rsa.pub", format="string"
             ).strip()
 
             # 6. add remote user public key to authorized_keys
-            fs_append_line(
+            self.exec.fs_append_line(
                 conn,
                 f"{self.mlox_user.home}/.ssh/authorized_keys",
                 remote_user.ssh_pub_key,
             )
 
             # 7. get user system id
-            self.mlox_user.uid = sys_user_id(conn)
+            self.mlox_user.uid = self.exec.sys_user_id(conn)
 
         self.remote_user = remote_user
         if not self.test_connection():
@@ -264,21 +254,21 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     def disable_password_authentication(self):
         with self.get_server_connection() as conn:
             # 1. uncomment if comment out
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "#PasswordAuthentication",
                 "PasswordAuthentication",
                 sudo=True,
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "#PermitRootLogin",
                 "PermitRootLogin",
                 sudo=True,
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "#PubkeyAuthentication",
@@ -287,96 +277,96 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             )
 
             # 2. Disable includes
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn, "/etc/ssh/sshd_config", "Include", "#Include", sudo=True
             )
 
             # 2. change to desired value
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn, "/etc/ssh/sshd_config", "UsePAM yes", "UsePAM no", sudo=True
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "PasswordAuthentication yes",
                 "PasswordAuthentication no",
                 sudo=True,
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "KeyboardInteractiveAuthentication yes",
                 "KeyboardInteractiveAuthentication no",
                 sudo=True,
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "PubkeyAuthentication no",
                 "PubkeyAuthentication yes",
                 sudo=True,
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "X11Forwarding yes",
                 "X11Forwarding no",
                 sudo=True,
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "AllowTcpForwarding yes",
                 "AllowTcpForwarding no",
                 sudo=True,
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "PermitRootLogin yes",
                 "PermitRootLogin no",
                 sudo=True,
             )
-            exec_command(conn, "systemctl restart ssh", sudo=True)
-            exec_command(conn, "systemctl reload ssh", sudo=True)
+            self.exec.exec_command(conn, "systemctl restart ssh", sudo=True)
+            self.exec.exec_command(conn, "systemctl reload ssh", sudo=True)
             # Instead: Use kill -HUP to reload sshd config. It's portable and works in containers without systemd.
-            # exec_command(conn, "kill -HUP $(pidof sshd)", sudo=True)
+            # self.exec.exec_command(conn, "kill -HUP $(pidof sshd)", sudo=True)
 
     def enable_password_authentication(self):
         with self.get_server_connection() as conn:
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "#PasswordAuthentication",
                 "PasswordAuthentication",
                 sudo=True,
             )
-            fs_find_and_replace(
+            self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
                 "PasswordAuthentication no",
                 "PasswordAuthentication yes",
                 sudo=True,
             )
-            exec_command(conn, "systemctl restart ssh", sudo=True)
-            exec_command(conn, "systemctl reload ssh", sudo=True)
+            self.exec.exec_command(conn, "systemctl restart ssh", sudo=True)
+            self.exec.exec_command(conn, "systemctl reload ssh", sudo=True)
             # Instead: Use kill -HUP to reload sshd config. It's portable and works in containers without systemd.
-            # exec_command(conn, "kill -HUP $(pidof sshd)", sudo=True)
+            # self.exec.exec_command(conn, "kill -HUP $(pidof sshd)", sudo=True)
 
     # GIT
     def git_clone(self, repo_url: str, abs_path: str) -> None:
         with self.get_server_connection() as conn:
-            fs_create_dir(conn, abs_path)
-            exec_command(conn, f"cd {abs_path}; yes | git clone {repo_url}", sudo=False)
+            self.exec.fs_create_dir(conn, abs_path)
+            self.exec.exec_command(conn, f"cd {abs_path}; yes | git clone {repo_url}", sudo=False)
 
     def git_pull(self, abs_path: str) -> None:
         # TODO check if the path exists, rn we assume the path is valid
         with self.get_server_connection() as conn:
-            exec_command(conn, f"cd {abs_path}; git pull", sudo=False)
+            self.exec.exec_command(conn, f"cd {abs_path}; git pull", sudo=False)
 
     def git_remove(self, abs_path: str) -> None:
         with self.get_server_connection() as conn:
-            fs_delete_dir(conn, abs_path)
+            self.exec.fs_delete_dir(conn, abs_path)
 
     # NATIVE BACKEND
     def setup_backend(self) -> None:

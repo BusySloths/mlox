@@ -3,7 +3,6 @@ import pytest
 
 from mlox.secret_manager import TinySecretManager
 from mlox.utils import dataclass_to_dict
-from mlox.remote import fs_read_file, exec_command
 
 pytestmark = pytest.mark.integration
 
@@ -29,7 +28,10 @@ def test_secret_roundtrip(ubuntu_docker_server):
 
     with ubuntu_docker_server.get_server_connection() as conn:
         file_path = f"{sm.path}/{secret_name}.json"
-        raw_contents = fs_read_file(conn, file_path, encoding="utf-8", format="json")
+        executor = ubuntu_docker_server.exec
+        raw_contents = executor.fs_read_file(
+            conn, file_path, encoding="utf-8", format="json"
+        )
         with pytest.raises(json.JSONDecodeError):
             json.loads(raw_contents)
-        exec_command(conn, f"rm -f {file_path}")
+        executor.exec_command(conn, f"rm -f {file_path}")

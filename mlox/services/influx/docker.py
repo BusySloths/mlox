@@ -3,17 +3,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup
-from mlox.remote import (
-    fs_copy,
-    fs_read_file,
-    fs_create_dir,
-    fs_append_line,
-    docker_down,
-    fs_delete_dir,
-    exec_command,
-    docker_service_state,
-)
+from mlox.service import AbstractService
+
 
 
 # Configure logging (optional, but recommended)
@@ -36,26 +27,26 @@ class InfluxDockerService(AbstractService):
     )
 
     def setup(self, conn) -> None:
-        fs_create_dir(conn, self.target_path)
+        self.exec.fs_create_dir(conn, self.target_path)
 
-        fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
-        tls_setup(conn, conn.host, self.target_path)
-        self.certificate = fs_read_file(
+        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.tls_setup(conn, conn.host, self.target_path)
+        self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
         )
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
-        fs_append_line(conn, env_path, f"INFLUXDB_PORT={self.port}")
+        self.exec.fs_append_line(conn, env_path, f"INFLUXDB_PORT={self.port}")
 
         env_admin_path = f"{self.target_path}/.env.influxdb2-admin-username"
         env_pw_path = f"{self.target_path}/.env.influxdb2-admin-password"
         env_token_path = f"{self.target_path}/.env.influxdb2-admin-token"
 
-        fs_append_line(conn, env_admin_path, self.user)
-        fs_append_line(conn, env_pw_path, self.pw)
-        fs_append_line(conn, env_token_path, self.token)
+        self.exec.fs_append_line(conn, env_admin_path, self.user)
+        self.exec.fs_append_line(conn, env_pw_path, self.pw)
+        self.exec.fs_append_line(conn, env_token_path, self.token)
 
-        exec_command(
+        self.exec.exec_command(
             conn,
             f"cat {self.target_path}/cert.pem {self.target_path}/key.pem > {self.target_path}/influxdb.pem",
         )
@@ -64,12 +55,12 @@ class InfluxDockerService(AbstractService):
         self.service_urls["InfluxDB"] = f"https://{conn.host}:{self.port}"
 
     def teardown(self, conn):
-        docker_down(
+        self.exec.docker_down(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
             remove_volumes=True,
         )
-        fs_delete_dir(conn, self.target_path)
+        self.exec.fs_delete_dir(conn, self.target_path)
 
     def spin_up(self, conn) -> bool:
         return self.compose_up(conn)
@@ -79,7 +70,7 @@ class InfluxDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         try:
-            state = docker_service_state(conn, "influxdbv2")
+            state = self.exec.docker_service_state(conn, "influxdbv2")
             return {"status": state}
         except Exception as e:
             logging.error(f"Error checking InfluxDB service status: {e}")

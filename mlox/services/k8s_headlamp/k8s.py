@@ -2,8 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup
-from mlox.remote import exec_command, fs_create_dir, fs_delete_dir, fs_copy
+from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ class K8sHeadlampService(AbstractService):
     def get_login_token(self, bundle) -> str:
         token = ""
         with bundle.server.get_server_connection() as conn:
-            token = exec_command(
+            token = self.exec.exec_command(
                 conn,
                 f"kubectl create token {self.service_name} --namespace {self.namespace}",
                 sudo=True,
@@ -30,13 +29,13 @@ class K8sHeadlampService(AbstractService):
         src_url = f"https://kubernetes-sigs.github.io/headlamp/"
 
         # Add kubernetes-dashboard repository
-        exec_command(
+        self.exec.exec_command(
             conn,
             f"helm repo add headlamp {src_url} --kubeconfig {kubeconfig}",
             sudo=True,
         )
         # Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
-        exec_command(
+        self.exec.exec_command(
             conn,
             f"helm upgrade --install {self.service_name} headlamp/headlamp --create-namespace --namespace {self.namespace} --kubeconfig {kubeconfig}",
             sudo=True,
@@ -61,7 +60,7 @@ class K8sHeadlampService(AbstractService):
             f'"name":"plain-http","port":8080,"targetPort":4466,"nodePort":{node_port}'
             f"}}]}}}}'"
         )
-        exec_command(conn, patch, sudo=True)
+        self.exec.exec_command(conn, patch, sudo=True)
         node_ip = conn.host
 
         logger.info(f"Dashboard exposed at http://{node_ip}:{node_port}")
@@ -88,7 +87,7 @@ class K8sHeadlampService(AbstractService):
 
         for cmd in cmds:
             logger.debug(f"Running: {cmd}")
-            exec_command(conn, cmd, sudo=True)
+            self.exec.exec_command(conn, cmd, sudo=True)
 
         logger.info("✅ Headlamp uninstall complete")
         self.state = "un-initialized"

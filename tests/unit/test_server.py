@@ -42,8 +42,8 @@ def test_server_connection_success(mock_close, mock_open):
         assert getattr(c, "host", "dummyhost") == "dummyhost"
 
 
-@patch("mlox.remote.open_connection", side_effect=Exception("fail"))
-@patch("mlox.remote.close_connection", return_value=None)
+@patch("mlox.server.open_connection", side_effect=Exception("fail"))
+@patch("mlox.server.close_connection", return_value=None)
 def test_server_connection_failure(mock_close, mock_open):
     creds = {"host": "dummyhost", "user": "user", "pw": "pw"}
     conn = ServerConnection(creds, retries=0, retry_delay=0)
@@ -52,33 +52,35 @@ def test_server_connection_failure(mock_close, mock_open):
             pass
 
 
-@patch("mlox.server.fs_read_file", return_value='NAME="Ubuntu"\nVERSION_ID="22.04"')
-def test_sys_get_distro_info_os_release(mock_fs):
+def test_sys_get_distro_info_os_release():
     conn = DummyConn()
-    info = sys_get_distro_info(conn)
+    executor = MagicMock()
+    executor.fs_read_file.return_value = 'NAME="Ubuntu"\nVERSION_ID="22.04"'
+    info = sys_get_distro_info(conn, executor)
     assert info["name"] == "Ubuntu"
     assert info["version"] == "22.04"
 
 
-@patch("mlox.server.fs_read_file", side_effect=Exception("fail"))
-@patch(
-    "mlox.server.exec_command",
-    return_value="Distributor ID: Ubuntu\nRelease: 22.04\nDescription: Ubuntu 22.04 LTS\nCodename: jammy",
-)
-def test_sys_get_distro_info_lsb_release(mock_exec, mock_fs):
+def test_sys_get_distro_info_lsb_release():
     conn = DummyConn()
-    info = sys_get_distro_info(conn)
+    executor = MagicMock()
+    executor.fs_read_file.side_effect = Exception("fail")
+    executor.exec_command.return_value = (
+        "Distributor ID: Ubuntu\nRelease: 22.04\nDescription: Ubuntu 22.04 LTS\nCodename: jammy"
+    )
+    info = sys_get_distro_info(conn, executor)
     assert info["name"] == "Ubuntu"
     assert info["version"] == "22.04"
     assert info["pretty_name"] == "Ubuntu 22.04 LTS"
     assert info["codename"] == "jammy"
 
 
-@patch("mlox.remote.fs_read_file", side_effect=Exception("fail"))
-@patch("mlox.remote.exec_command", side_effect=Exception("fail"))
-def test_sys_get_distro_info_failure(mock_exec, mock_fs):
+def test_sys_get_distro_info_failure():
     conn = DummyConn()
-    info = sys_get_distro_info(conn)
+    executor = MagicMock()
+    executor.fs_read_file.side_effect = Exception("fail")
+    executor.exec_command.side_effect = Exception("fail")
+    info = sys_get_distro_info(conn, executor)
     assert info is None
 
 

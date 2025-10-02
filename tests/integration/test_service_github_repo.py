@@ -5,7 +5,6 @@ import pytest
 
 from mlox.config import get_stacks_path, load_config
 from mlox.infra import Bundle, Infrastructure
-from mlox.remote import exec_command, fs_create_dir, fs_write_file
 
 pytestmark = pytest.mark.integration
 
@@ -28,18 +27,19 @@ def _normalize_key_material(key_material: str) -> str:
 def _install_preconfigured_deploy_keys(
     conn, server, service, public_key: str, private_key: str
 ) -> None:
+    executor = service.exec
     key_name = f"mlox_deploy_{service.repo_name}"
     ssh_dir = f"{service.target_path}/.ssh"
-    fs_create_dir(conn, ssh_dir)
-    exec_command(conn, f"chmod 700 {ssh_dir}")
+    executor.fs_create_dir(conn, ssh_dir)
+    executor.exec_command(conn, f"chmod 700 {ssh_dir}")
 
     private_key_path = f"{ssh_dir}/{key_name}"
     public_key_path = f"{private_key_path}.pub"
 
-    fs_write_file(conn, private_key_path, _normalize_key_material(private_key))
-    exec_command(conn, f"chmod 600 {private_key_path}")
-    fs_write_file(conn, public_key_path, _normalize_key_material(public_key))
-    exec_command(conn, f"chmod 644 {public_key_path}")
+    executor.fs_write_file(conn, private_key_path, _normalize_key_material(private_key))
+    executor.exec_command(conn, f"chmod 600 {private_key_path}")
+    executor.fs_write_file(conn, public_key_path, _normalize_key_material(public_key))
+    executor.exec_command(conn, f"chmod 644 {public_key_path}")
     service.deploy_key = public_key.strip()
 
     home_dir = getattr(server.mlox_user, "home", None)
@@ -47,9 +47,9 @@ def _install_preconfigured_deploy_keys(
         home_ssh_dir = f"{home_dir}/.ssh"
     else:
         home_ssh_dir = "~/.ssh"
-    fs_create_dir(conn, home_ssh_dir)
-    exec_command(conn, f"chmod 700 {home_ssh_dir}")
-    exec_command(
+    executor.fs_create_dir(conn, home_ssh_dir)
+    executor.exec_command(conn, f"chmod 700 {home_ssh_dir}")
+    executor.exec_command(
         conn,
         f"ssh-keyscan -t rsa github.com >> {home_ssh_dir}/known_hosts",
         sudo=False,
