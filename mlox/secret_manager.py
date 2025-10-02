@@ -16,13 +16,6 @@ from mlox.utils import (
     load_from_json,
     dataclass_to_dict,
 )
-from mlox.remote import (
-    fs_create_dir,
-    fs_touch,
-    fs_read_file,
-    fs_write_file,
-    fs_list_files,
-)
 
 
 @dataclass
@@ -111,7 +104,8 @@ class TinySecretManager(AbstractSecretManager):
         else:
             self.path = f"{server.mlox_user.home}/{secrets_relative_path}"
         with server.get_server_connection() as conn:
-            fs_create_dir(conn, self.path)
+            executor = server.exec
+            executor.fs_create_dir(conn, self.path)
             if conn.is_connected:
                 self._connection_works = True
         list_secrets = self.list_secrets(keys_only=False, use_cache=False)
@@ -128,8 +122,9 @@ class TinySecretManager(AbstractSecretManager):
                 return {k: None for k in self.cache.keys()}
             return self.cache
         secrets: Dict[str, Any] = {}
+        executor = self.server.exec
         with self.server.get_server_connection() as conn:
-            files = fs_list_files(conn, self.path)
+            files = executor.fs_list_files(conn, self.path)
             for file in files:
                 if file.endswith(".json"):
                     name = file[:-5]
@@ -139,7 +134,7 @@ class TinySecretManager(AbstractSecretManager):
                         secret_value = None
                         try:
                             file_path = f"{self.path}/{file}"
-                            encrypted_data = fs_read_file(
+                            encrypted_data = executor.fs_read_file(
                                 conn, file_path, encoding="utf-8", format="json"
                             )
                             # Decrypt the data
@@ -155,8 +150,9 @@ class TinySecretManager(AbstractSecretManager):
     def save_secret(self, name: str, my_secret: Dict | str) -> None:
         name += ".json"
         filepath = os.path.join(self.path, name)
+        executor = self.server.exec
         with self.server.get_server_connection() as conn:
-            fs_touch(conn, filepath)
+            executor.fs_touch(conn, filepath)
 
         """Saves a secret to a file."""
         if isinstance(my_secret, str):
@@ -172,8 +168,9 @@ class TinySecretManager(AbstractSecretManager):
         fernet = Fernet(key)
         encrypted_data = fernet.encrypt(json_string.encode("utf-8"))
 
+        executor = self.server.exec
         with self.server.get_server_connection() as conn:
-            fs_write_file(conn, filepath, encrypted_data)
+            executor.fs_write_file(conn, filepath, encrypted_data)
 
         self.cache[name] = my_secret
 
@@ -184,9 +181,10 @@ class TinySecretManager(AbstractSecretManager):
         filepath = os.path.join(self.path, name)
 
         encrypted_data = None
+        executor = self.server.exec
         with self.server.get_server_connection() as conn:
             try:
-                encrypted_data = fs_read_file(
+                encrypted_data = executor.fs_read_file(
                     conn, filepath, encoding="utf-8", format="json"
                 )
             except BaseException:

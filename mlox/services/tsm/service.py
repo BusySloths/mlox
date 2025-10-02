@@ -10,7 +10,6 @@ from mlox.secret_manager import (
     AbstractSecretManagerService,
 )
 from mlox.service import AbstractService
-from mlox.remote import fs_delete_dir
 from mlox.infra import Infrastructure, Bundle
 
 from mlox.server import AbstractServer
@@ -72,7 +71,7 @@ class TSMService(AbstractService, AbstractSecretManagerService):
         self.state = "running"
 
     def teardown(self, conn):
-        fs_delete_dir(conn, self.target_path)
+        self.exec.fs_delete_dir(conn, self.target_path)
         self.state = "un-initialized"
 
     def spin_up(self, conn):

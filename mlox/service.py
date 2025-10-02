@@ -6,72 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from mlox.executors import UbuntuTaskExecutor
 
-from mlox.remote import (
-    docker_down,
-    docker_service_state,
-    docker_all_service_states,
-    docker_up,
-    docker_service_log_tails,
-    exec_command,
-    fs_copy,
-    fs_create_dir,
-    fs_find_and_replace,
-)
-
 logger = logging.getLogger(__name__)
-
-
-def tls_setup_no_config(conn, ip, path) -> None:
-    # copy files to target
-    fs_create_dir(conn, path)
-
-    # Define the subject for the certificate.
-    # For a basic self-signed cert, CN (Common Name) is usually the hostname or IP.
-    # You can add more fields like /C=US/ST=California/L=City/O=Organization/OU=OrgUnit
-    # Ensure 'ip' is properly escaped if it contains special characters, though unlikely for an IP.
-    subject = f"/CN={ip}"
-
-    # certificates
-    exec_command(conn, f"cd {path}; openssl genrsa -out key.pem 2048")
-    # Generate CSR non-interactively using the -subj argument
-    exec_command(
-        conn,
-        f"cd {path}; openssl req -new -key key.pem -out server.csr -subj '{subject}'",
-    )
-    # Generate self-signed certificate from CSR
-    exec_command(
-        conn,
-        f"cd {path}; openssl x509 -req -in server.csr -signkey key.pem -out cert.pem -days 365",
-    )
-    exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/key.pem")
-    exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/cert.pem")
-
-
-def get_stacks_path() -> str:
-    # return str(resources.files("mlox.stacks.mlox"))
-    return "./mlox/stacks/mlox"
-
-
-def tls_setup(conn, ip, path) -> None:
-    # copy files to target
-    fs_create_dir(conn, path)
-
-    stacks_path = get_stacks_path()
-    fs_copy(conn, f"{stacks_path}/openssl-san.cnf", f"{path}/openssl-san.cnf")
-    fs_find_and_replace(conn, f"{path}/openssl-san.cnf", "<MY_IP>", f"{ip}")
-    # certificates
-    exec_command(conn, f"cd {path}; openssl genrsa -out key.pem 2048")
-    exec_command(
-        conn,
-        f"cd {path}; openssl req -new -key key.pem -out server.csr -config openssl-san.cnf",
-    )
-    cmd = (
-        f"cd {path}; "
-        "openssl x509 -req -in server.csr -signkey key.pem "
-        "-out cert.pem -days 365 -extensions req_ext -extfile openssl-san.cnf"
-    )
-    exec_command(conn, cmd)
-    exec_command(conn, f"chmod u=rw,g=rw,o=rw {path}/key.pem")
 
 
 @dataclass
@@ -140,7 +75,7 @@ class AbstractService(ABC):
     def compose_up(self, conn) -> bool:
         """Bring up the docker compose stack for this service."""
 
-        docker_up(
+        self.exec.docker_up(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
             f"{self.target_path}/{self.target_docker_env}",
@@ -151,7 +86,7 @@ class AbstractService(ABC):
     def compose_down(self, conn, *, remove_volumes: bool = False) -> bool:
         """Tear down the docker compose stack for this service."""
 
-        docker_down(
+        self.exec.docker_down(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
             remove_volumes=remove_volumes,
@@ -170,7 +105,7 @@ class AbstractService(ABC):
         # Prefer to gather container state via docker inspect helper which is
         # generally more reliable than parsing `docker compose ps` output and
         # avoids running compose in environments where it's not available.
-        all_states = docker_all_service_states(conn)
+        all_states = self.exec.docker_all_service_states(conn)
 
         results: Dict[str, str] = {}
         for label, service in self.compose_service_names.items():
@@ -196,9 +131,9 @@ class AbstractService(ABC):
 
             # Last-resort: ask Docker for the state of the named service/container
             if not state_val:
-                state_val = docker_service_state(conn, service)
-
-            results[label] = state_val or "unknown"
+                state_val = self.exec.docker_service_state(conn, service)
+        
+        results[label] = state_val or "unknown"
         return results
 
     def compose_service_log_tail(self, conn, label: str, tail: int = 200) -> str:
@@ -214,22 +149,22 @@ class AbstractService(ABC):
         service = self.compose_service_names[label]
 
         # Try to resolve container name from current docker state
-        all_states = docker_all_service_states(conn)
+        all_states = self.exec.docker_all_service_states(conn)
 
         # direct match
         if service in all_states:
-            return docker_service_log_tails(conn, service, tail=tail)
+            return self.exec.docker_service_log_tails(conn, service, tail=tail)
 
         # heuristic match
         for cname in all_states:
             if f"_{service}_" in cname or cname.endswith(f"_{service}_1"):
-                return docker_service_log_tails(conn, cname, tail=tail)
+                return self.exec.docker_service_log_tails(conn, cname, tail=tail)
             elif f"{service}/" in cname:
-                return docker_service_log_tails(conn, cname, tail=tail)
+                return self.exec.docker_service_log_tails(conn, cname, tail=tail)
 
         # last resort: try service name directly (may be a container id)
-        state = docker_service_state(conn, service)
+        state = self.exec.docker_service_state(conn, service)
         if state:
-            return docker_service_log_tails(conn, service, tail=tail)
+            return self.exec.docker_service_log_tails(conn, service, tail=tail)
 
         return f"Service with label {label} ({service}) not found"

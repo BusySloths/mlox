@@ -1,5 +1,7 @@
 import logging
 
+import logging
+
 from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Dict, Literal
@@ -7,15 +9,7 @@ from typing import Dict, Literal
 from mlox.infra import Bundle, Repo
 from mlox.service import AbstractService
 from mlox.server import AbstractGitServer
-from mlox.remote import (
-    fs_delete_dir,
-    fs_exists_dir,
-    exec_command,
-    fs_read_file,
-    fs_create_dir,
-    fs_list_files,
-    fs_list_file_tree,
-)
+
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -71,7 +65,7 @@ class GithubRepoService(AbstractService, Repo):
     def setup(self, conn) -> None:
         self.service_urls = {"Repository": self.get_url()}
         self.service_ports = dict()
-        fs_create_dir(conn, self.target_path)
+        self.exec.fs_create_dir(conn, self.target_path)
 
         if self.is_private:
             logging.info(f"Generate deploy keys for {self.repo_name}.")
@@ -81,7 +75,7 @@ class GithubRepoService(AbstractService, Repo):
             self.git_clone(conn)
 
     def teardown(self, conn):
-        fs_delete_dir(conn, self.target_path + "/" + self.repo_name)
+        self.exec.fs_delete_dir(conn, self.target_path + "/" + self.repo_name)
         self.state = "un-initialized"
 
     def spin_up(self, conn):
@@ -97,9 +91,9 @@ class GithubRepoService(AbstractService, Repo):
         repo_files = list()
         repo_tree = list()
         try:
-            exists = fs_exists_dir(conn, repo_path)
-            repo_files = fs_list_files(conn, repo_path)
-            repo_tree = fs_list_file_tree(conn, repo_path)
+            exists = self.exec.fs_exists_dir(conn, repo_path)
+            repo_files = self.exec.fs_list_files(conn, repo_path)
+            repo_tree = self.exec.fs_list_file_tree(conn, repo_path)
         except Exception as e:
             logging.warning(f"Could not check repo directory existence: {e}")
         return {
@@ -126,22 +120,22 @@ class GithubRepoService(AbstractService, Repo):
         """
         key_name = f"mlox_deploy_{self.repo_name}"
         ssh_dir = self.target_path + "/.ssh"
-        fs_create_dir(conn, ssh_dir)
+        self.exec.fs_create_dir(conn, ssh_dir)
         private_key_path = f"{ssh_dir}/{key_name}"
         public_key_path = private_key_path + ".pub"
         # Generate key pair using ssh-keygen on remote
-        exec_command(
+        self.exec.exec_command(
             conn,
             f"yes | ssh-keygen -t {key_type} -b {key_bits} -N '' -f {private_key_path}",
             sudo=False,
         )
-        self.deploy_key = fs_read_file(conn, public_key_path, format="string")
+        self.deploy_key = self.exec.fs_read_file(conn, public_key_path, format="string")
 
     def _repo_public(self, conn, clone_or_pull: Literal["clone", "pull"]) -> None:
         full_cmd = f"cd {self.target_path} && git clone {self.link}"
         if clone_or_pull == "pull":
             full_cmd = f"cd {self.target_path}/{self.repo_name} && git pull"
-        exec_command(conn, f"bash -c '{full_cmd}'", sudo=False, pty=False)
+        self.exec.exec_command(conn, f"bash -c '{full_cmd}'", sudo=False, pty=False)
 
     def _repo_with_deploy_key(
         self, conn, clone_or_pull: Literal["clone", "pull"]
@@ -172,7 +166,7 @@ class GithubRepoService(AbstractService, Repo):
 
         err_code = 0
         try:
-            exec_command(conn, f"bash -c '{full_cmd}'", sudo=False, pty=False)
+            self.exec.exec_command(conn, f"bash -c '{full_cmd}'", sudo=False, pty=False)
         except Exception as exc:  # noqa: BLE001 - propagate command failure info
             logging.error(
                 "Failed to execute git command with deploy key for %s: %s",
@@ -193,7 +187,7 @@ class GithubRepoService(AbstractService, Repo):
             self._repo_with_deploy_key(conn, "clone")
         else:
             self._repo_public(conn, "clone")
-        if fs_exists_dir(conn, self.target_path + "/" + self.repo_name):
+        if self.exec.fs_exists_dir(conn, self.target_path + "/" + self.repo_name):
             self.modified_timestamp = datetime.now().isoformat()
             self.created_timestamp = datetime.now().isoformat()
             self.cloned = True

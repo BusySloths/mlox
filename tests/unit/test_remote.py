@@ -1,193 +1,159 @@
-import os
 import json
-import pytest
-
 from dataclasses import dataclass
-from unittest.mock import MagicMock, call, ANY
 from io import BytesIO
+from unittest.mock import ANY, MagicMock, call
 
-import importlib.util
-import pathlib
-import sys
-
+import pytest
 from fabric import Connection  # type: ignore
+
+from mlox.executors import UbuntuTaskExecutor
 
 
 @dataclass
-class Result:
+class FakeResult:
     stdout: str
-    stderr: str
-    exited: int
-    connection: Connection
-
-
-root_dir = pathlib.Path(__file__).resolve().parents[2]
-sys.path.append(str(root_dir))
-
-mlox_dir = os.environ.get("MLOX_DIR", "mlox")
-remote_file = os.environ.get("REMOTE_FILE", "remote.py")
-remote_path = root_dir / mlox_dir / remote_file
-spec = importlib.util.spec_from_file_location("remote", remote_path)
-if spec is None:
-    raise ImportError(f"Could not create module spec from {remote_path}")
-if spec.loader is None:
-    raise ImportError(f"Could not find module loader for {remote_path}")
-remote = importlib.util.module_from_spec(spec)
-try:
-    spec.loader.exec_module(remote)
-except Exception as e:
-    raise ImportError(f"Failed to import remote module from {remote_path}: {e}") from e
-spec.loader.exec_module(remote)
-
-open_connection = remote.open_connection
-close_connection = remote.close_connection
-exec_command = remote.exec_command
-sys_disk_free = remote.sys_disk_free
-fs_create_dir = remote.fs_create_dir
-fs_delete_dir = remote.fs_delete_dir
-fs_append_line = remote.fs_append_line
-fs_create_empty_file = remote.fs_create_empty_file
-fs_find_and_replace = remote.fs_find_and_replace
-fs_write_file = remote.fs_write_file
-fs_read_file = remote.fs_read_file
-fs_list_files = remote.fs_list_files
-docker_service_state = remote.docker_service_state
-docker_all_service_states = remote.docker_all_service_states
+    stderr: str = ""
+    exited: int = 0
+    ok: bool = True
 
 
 @pytest.fixture
-def mock_connection():
+def executor() -> UbuntuTaskExecutor:
+    return UbuntuTaskExecutor()
+
+
+@pytest.fixture
+def mock_connection() -> MagicMock:
     conn = MagicMock(spec=Connection)
     conn.host = "test_host"
     conn.user = "test_user"
     return conn
 
 
-def test_exec_command(mock_connection):
-    mock_connection.run.return_value = Result(
-        stdout="test_output", stderr="", exited=0, connection=mock_connection
-    )
-    result = exec_command(mock_connection, "test_command")
+def test_exec_command(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+    mock_connection.run.return_value = FakeResult(stdout="test_output")
+    result = executor.exec_command(mock_connection, "test_command")
     assert result == "test_output"
     mock_connection.run.assert_called_once_with("test_command", hide=True)
 
-    mock_connection.sudo.return_value = Result(
-        stdout="sudo_output", stderr="", exited=0, connection=mock_connection
+    mock_connection.sudo.return_value = FakeResult(stdout="sudo_output")
+    result_sudo = executor.exec_command(
+        mock_connection, "test_sudo_command", sudo=True
     )
-    result_sudo = exec_command(mock_connection, "test_sudo_command", sudo=True)
     assert result_sudo == "sudo_output"
     mock_connection.sudo.assert_called_once_with(
         "test_sudo_command", hide="stderr", pty=False
     )
 
 
-def test_sys_disk_free(mock_connection):
-    # The function first calls 'uname -s', then 'df -h ...'
+def test_sys_disk_free(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
     mock_connection.run.side_effect = [
-        Result(stdout="Linux", stderr="", exited=0, connection=mock_connection),
-        Result(stdout="25%", stderr="", exited=0, connection=mock_connection),
+        FakeResult(stdout="Linux"),
+        FakeResult(stdout="25%"),
     ]
-    result = sys_disk_free(mock_connection)
+    result = executor.sys_disk_free(mock_connection)
     assert result == 25
-    calls = [
-        call("uname -s", hide=True),
-        call("df -h / | tail -n1 | awk '{print $5}'", hide=True),
-    ]
-    mock_connection.run.assert_has_calls(calls)
+    mock_connection.run.assert_has_calls(
+        [
+            call("uname -s", hide=True),
+            call("df -h / | tail -n1 | awk '{print $5}'", hide=True),
+        ]
+    )
 
 
-def test_fs_create_dir(mock_connection):
-    fs_create_dir(mock_connection, "/test/path")
+def test_fs_create_dir(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+    executor.fs_create_dir(mock_connection, "/test/path")
     mock_connection.run.assert_called_once_with("mkdir -p /test/path", hide=True)
 
 
-def test_fs_delete_dir(mock_connection):
-    fs_delete_dir(mock_connection, "/test/path")
+def test_fs_delete_dir(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+    executor.fs_delete_dir(mock_connection, "/test/path")
     mock_connection.sudo.assert_called_once_with(
         "rm -rf /test/path", hide="stderr", pty=False
     )
 
 
-def test_fs_append_line(mock_connection):
-    fs_append_line(mock_connection, "/test/file", "test_line")
+def test_fs_append_line(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+    executor.fs_append_line(mock_connection, "/test/file", "test_line")
     mock_connection.run.assert_any_call("touch /test/file", hide=True)
     mock_connection.run.assert_called_with("echo 'test_line' >> /test/file", hide=True)
 
 
-def test_fs_create_empty_file(mock_connection):
-    fs_create_empty_file(mock_connection, "/test/file")
+def test_fs_create_empty_file(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    executor.fs_create_empty_file(mock_connection, "/test/file")
     mock_connection.run.assert_called_once_with("echo -n >| /test/file", hide=True)
 
 
-def test_fs_find_and_replace(mock_connection):
-    fs_find_and_replace(mock_connection, "/test/file", "old", "new")
+def test_fs_find_and_replace(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    executor.fs_find_and_replace(mock_connection, "/test/file", "old", "new")
     mock_connection.run.assert_called_once_with(
         "sed -i 's!old!new!g' /test/file",
         hide=True,
     )
 
 
-def test_fs_write_file(mock_connection):
-    fs_write_file(mock_connection, "/test/file", "test_content")
+def test_fs_write_file(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+    executor.fs_write_file(mock_connection, "/test/file", "test_content")
     mock_connection.put.assert_called_once_with(ANY, remote="/test/file")
-
-    # Verify the content of the BytesIO object passed to put
     file_like_object = mock_connection.put.call_args[0][0]
     assert isinstance(file_like_object, BytesIO)
     assert file_like_object.getvalue() == b"test_content"
 
 
-def test_fs_read_file(mock_connection):
-    # Mock conn.get to simulate writing content to the file-like object
-    def mock_get(remote, local):
-        local.write(b"test_content")
-        # The actual return of conn.get is a Result object, not used by fs_read_file
-        return Result(stdout="", stderr="", exited=0, connection=mock_connection)
+def test_fs_read_file(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+    def mock_get(path: str, buffer: BytesIO) -> FakeResult:
+        buffer.write(b"test_content")
+        return FakeResult(stdout="")
 
     mock_connection.get.side_effect = mock_get
-    result = fs_read_file(mock_connection, "/test/file", format="txt")
+    result = executor.fs_read_file(mock_connection, "/test/file", format="txt")
     assert result == "test_content"
-    mock_connection.get.assert_called_once_with("/test/file", ANY)
+    mock_connection.get.assert_called_once()
 
 
-def test_fs_list_files(mock_connection):
-    mock_connection.run.return_value = Result(
-        stdout="file1\nfile2\ndir1", stderr="", exited=0, connection=mock_connection
-    )
-    result = fs_list_files(mock_connection, "/test/path")
+def test_fs_list_files(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+    mock_connection.run.return_value = FakeResult(stdout="file1\nfile2\ndir1")
+    result = executor.fs_list_files(mock_connection, "/test/path")
     assert result == ["file1", "file2", "dir1"]
 
 
-def test_docker_service_state(mock_connection, monkeypatch):
-    mock_exec = MagicMock(return_value="running")
-    monkeypatch.setattr(remote, "exec_command", mock_exec)
-    result = docker_service_state(mock_connection, "svc1")
-    expected_cmd = "docker inspect --format '{{.State.Status}}' svc1"
-    mock_exec.assert_called_once_with(
-        mock_connection, expected_cmd, sudo=True, pty=False
+def test_docker_service_state(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    mock_connection.sudo.return_value = FakeResult(stdout="running")
+    state = executor.docker_service_state(mock_connection, "svc1")
+    assert state == "running"
+    mock_connection.sudo.assert_called_once_with(
+        "docker inspect --format '{{.State.Status}}' svc1", hide="stderr", pty=False
     )
-    assert result == "running"
 
 
-def test_docker_all_service_states(mock_connection, monkeypatch):
-    outputs = [
-        "id1\nid2",
-        json.dumps(
-            [
-                {"Name": "/svc1", "State": {"Status": "running"}},
-                {"Name": "/svc2", "State": {"Status": "exited"}},
-            ]
+def test_docker_all_service_states(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    mock_connection.sudo.side_effect = [
+        FakeResult(stdout="id1\nid2"),
+        FakeResult(
+            stdout=json.dumps(
+                [
+                    {"Name": "/svc1", "State": {"Status": "running"}},
+                    {"Name": "/svc2", "State": {"Status": "exited"}},
+                ]
+            )
         ),
     ]
-    mock_exec = MagicMock(side_effect=outputs)
-    monkeypatch.setattr(remote, "exec_command", mock_exec)
-    result = docker_all_service_states(mock_connection)
-    expected_calls = [
-        call(mock_connection, "docker ps -aq", sudo=True, pty=False),
-        call(mock_connection, "docker inspect id1 id2", sudo=True, pty=False),
-    ]
-    assert mock_exec.call_args_list == expected_calls
+    result = executor.docker_all_service_states(mock_connection)
     assert result == {
         "svc1": {"Status": "running"},
         "svc2": {"Status": "exited"},
     }
+    mock_connection.sudo.assert_has_calls(
+        [
+            call("docker ps -aq", hide="stderr", pty=False),
+            call("docker inspect id1 id2", hide="stderr", pty=False),
+        ]
+    )

@@ -2,8 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.service import AbstractService, tls_setup
-from mlox.remote import exec_command, fs_create_dir, fs_delete_dir, fs_copy
+from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ class K8sDashboardService(AbstractService):
     def get_login_token(self, bundle) -> str:
         token = ""
         with bundle.server.get_server_connection() as conn:
-            token = exec_command(
+            token = self.exec.exec_command(
                 conn,
                 f"kubectl -n kubernetes-dashboard create token admin-user",
                 sudo=True,
@@ -25,13 +24,13 @@ class K8sDashboardService(AbstractService):
 
     def setup(self, conn) -> None:
         logger.info("🔧 Installing K8s Dashboard")
-        fs_create_dir(conn, self.target_path)
-        fs_copy(conn, self.template, f"{self.target_path}/service_account.yaml")
-        # tls_setup(conn, conn.host, self.target_path)
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_copy(conn, self.template, f"{self.target_path}/service_account.yaml")
+        # self.exec.tls_setup(conn, conn.host, self.target_path)
 
         kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
 
-        # exec_command(
+        # self.exec.exec_command(
         #     conn,
         #     "kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml",
         #     sudo=True,
@@ -42,28 +41,28 @@ class K8sDashboardService(AbstractService):
         src_url = f"https://github.com/kubernetes/dashboard/tree/release/{version}/"
 
         # Add kubernetes-dashboard repository
-        exec_command(
+        self.exec.exec_command(
             conn,
             f"helm repo add kubernetes-dashboard {src_url} --kubeconfig {kubeconfig}",
             sudo=True,
         )
-        # exec_command(
+        # self.exec.exec_command(
         #     conn,
         #     f"helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/ --kubeconfig {kubeconfig}",
         #     sudo=True,
         # )
         # Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
-        exec_command(
+        self.exec.exec_command(
             conn,
             f"helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard --kubeconfig {kubeconfig}",
             sudo=True,
         )
-        exec_command(
+        self.exec.exec_command(
             conn, f"kubectl apply -f {self.target_path}/service_account.yaml", sudo=True
         )
         # node_ip, service_port = self.setup_k8s_dashboard_traefik_ingress(conn)
         node_ip, service_port = self.expose_dashboard_nodeport(conn)
-        # self.service_ports["Kubernetes Dashboard"] = exec_command(
+        # self.service_ports["Kubernetes Dashboard"] = self.exec.exec_command(
         #     conn,
         #     "kubectl -n kubernetes-dashboard get svc kubernetes-dashboard -o jsonpath='{.spec.ports[0].port}{\"\\n\"}'",
         #     sudo=True,
@@ -91,7 +90,7 @@ class K8sDashboardService(AbstractService):
             f"}}]}}}}'"
         )
 
-        exec_command(conn, patch, sudo=True)
+        self.exec.exec_command(conn, patch, sudo=True)
         node_ip = conn.host
 
         logger.info(f"Dashboard exposed at https://{node_ip}:{node_port}")
@@ -136,7 +135,7 @@ class K8sDashboardService(AbstractService):
     #         # run secret + patch
     #         for cmd in cmds:
     #             logger.debug(f"Running: {cmd}")
-    #             exec_command(conn, cmd, sudo=True)
+    #             self.exec.exec_command(conn, cmd, sudo=True)
 
     #         # 3) discover the node's IP
     #         # ip_cmd = "hostname -I | awk '{print $1}'"
@@ -169,7 +168,7 @@ class K8sDashboardService(AbstractService):
     #         """
     #         ingress_cmd = f"""cat <<EOF | kubectl apply -f -{ingress_yaml} EOF"""
     #         logger.debug("Applying Dashboard Ingress")
-    #         exec_command(conn, ingress_cmd, sudo=True)
+    #         self.exec.exec_command(conn, ingress_cmd, sudo=True)
 
     #         logger.info(f"✅ Traefik Ingress ready at https://{node_ip}:{node_port}")
     #         return node_ip, node_port
@@ -206,9 +205,9 @@ class K8sDashboardService(AbstractService):
 
         for cmd in cmds:
             logger.debug(f"Running: {cmd}")
-            exec_command(conn, cmd, sudo=True)
+            self.exec.exec_command(conn, cmd, sudo=True)
 
-        fs_delete_dir(conn, self.target_path)
+        self.exec.fs_delete_dir(conn, self.target_path)
         logger.info("✅ K8s Dashboard uninstall complete")
         self.state = "un-initialized"
 

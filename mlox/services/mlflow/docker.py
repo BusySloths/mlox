@@ -6,14 +6,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from mlox.service import AbstractService
-from mlox.remote import (
-    fs_copy,
-    fs_create_dir,
-    fs_create_empty_file,
-    fs_append_line,
-    docker_down,
-    fs_delete_dir,
-)
+
 
 
 # Configure logging (optional, but recommended)
@@ -37,34 +30,34 @@ class MLFlowDockerService(AbstractService):
     )
 
     def setup(self, conn) -> None:
-        fs_create_dir(conn, self.target_path)
-        fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         env_path = f"{self.target_path}/{self.target_docker_env}"
-        fs_create_empty_file(conn, env_path)
-        fs_append_line(conn, env_path, f"MLFLOW_PORT={self.port}")
-        fs_append_line(conn, env_path, f"MLFLOW_URL={conn.host}")
-        fs_append_line(conn, env_path, f"MLFLOW_USERNAME={self.ui_user}")
-        fs_append_line(conn, env_path, f"MLFLOW_PASSWORD={self.ui_pw}")
-        # fs_append_line(conn, env_path, f"MLFLOW_TRACKING_USERNAME={self.ui_user}")
-        # fs_append_line(conn, env_path, f"MLFLOW_TRACKING_PASSWORD={self.ui_pw}")
+        self.exec.fs_create_empty_file(conn, env_path)
+        self.exec.fs_append_line(conn, env_path, f"MLFLOW_PORT={self.port}")
+        self.exec.fs_append_line(conn, env_path, f"MLFLOW_URL={conn.host}")
+        self.exec.fs_append_line(conn, env_path, f"MLFLOW_USERNAME={self.ui_user}")
+        self.exec.fs_append_line(conn, env_path, f"MLFLOW_PASSWORD={self.ui_pw}")
+        # self.exec.fs_append_line(conn, env_path, f"MLFLOW_TRACKING_USERNAME={self.ui_user}")
+        # self.exec.fs_append_line(conn, env_path, f"MLFLOW_TRACKING_PASSWORD={self.ui_pw}")
         ini_path = f"{self.target_path}/basic-auth.ini"
-        fs_create_empty_file(conn, ini_path)
-        fs_append_line(conn, ini_path, "[mlflow]")
-        fs_append_line(conn, ini_path, "default_permission = READ")
-        fs_append_line(conn, ini_path, "database_uri = sqlite:///basic_auth.db")
-        fs_append_line(conn, ini_path, f"admin_username = {self.ui_user}")
-        fs_append_line(conn, ini_path, f"admin_password = {self.ui_pw}")
+        self.exec.fs_create_empty_file(conn, ini_path)
+        self.exec.fs_append_line(conn, ini_path, "[mlflow]")
+        self.exec.fs_append_line(conn, ini_path, "default_permission = READ")
+        self.exec.fs_append_line(conn, ini_path, "database_uri = sqlite:///basic_auth.db")
+        self.exec.fs_append_line(conn, ini_path, f"admin_username = {self.ui_user}")
+        self.exec.fs_append_line(conn, ini_path, f"admin_password = {self.ui_pw}")
         self.service_ports["MLFlow Webserver"] = int(self.port)
         self.service_urls["MLFlow UI"] = f"https://{conn.host}:{self.port}"
         self.service_url = f"https://{conn.host}:{self.port}"
 
     def teardown(self, conn):
-        docker_down(
+        self.exec.docker_down(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
             remove_volumes=True,
         )
-        fs_delete_dir(conn, self.target_path)
+        self.exec.fs_delete_dir(conn, self.target_path)
 
     def spin_up(self, conn) -> bool:
         return self.compose_up(conn)

@@ -196,6 +196,74 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         )
         return result
 
+    def _get_stacks_path(self) -> str:
+        """Return the default path containing stack configuration files."""
+
+        # This preserves the historical behaviour of referencing the local
+        # stacks directory without relying on importlib.resources which may
+        # not always be available in runtime environments (e.g. when running
+        # from a source checkout during development).
+        return "./mlox/stacks/mlox"
+
+    def tls_setup_no_config(self, connection: Connection, ip: str, path: str) -> None:
+        """Create TLS assets on the remote host without using a custom config."""
+
+        self.fs_create_dir(connection, path)
+
+        subject = f"/CN={ip}"
+
+        self.exec_command(connection, f"cd {path}; openssl genrsa -out key.pem 2048")
+        self.exec_command(
+            connection,
+            f"cd {path}; openssl req -new -key key.pem -out server.csr -subj '{subject}'",
+        )
+        self.exec_command(
+            connection,
+            (
+                f"cd {path}; "
+                "openssl x509 -req -in server.csr -signkey key.pem -out cert.pem "
+                "-days 365"
+            ),
+        )
+        self.exec_command(connection, f"chmod u=rw,g=rw,o=rw {path}/key.pem")
+        self.exec_command(connection, f"chmod u=rw,g=rw,o=rw {path}/cert.pem")
+
+        self._record_history(
+            action="tls_setup_no_config",
+            status="success",
+            metadata={"ip": ip, "path": path},
+        )
+
+    def tls_setup(self, connection: Connection, ip: str, path: str) -> None:
+        """Create TLS assets on the remote host using an OpenSSL config."""
+
+        self.fs_create_dir(connection, path)
+
+        stacks_path = self._get_stacks_path()
+        self.fs_copy(connection, f"{stacks_path}/openssl-san.cnf", f"{path}/openssl-san.cnf")
+        self.fs_find_and_replace(
+            connection, f"{path}/openssl-san.cnf", "<MY_IP>", f"{ip}"
+        )
+
+        self.exec_command(connection, f"cd {path}; openssl genrsa -out key.pem 2048")
+        self.exec_command(
+            connection,
+            f"cd {path}; openssl req -new -key key.pem -out server.csr -config openssl-san.cnf",
+        )
+        cmd = (
+            f"cd {path}; "
+            "openssl x509 -req -in server.csr -signkey key.pem "
+            "-out cert.pem -days 365 -extensions req_ext -extfile openssl-san.cnf"
+        )
+        self.exec_command(connection, cmd)
+        self.exec_command(connection, f"chmod u=rw,g=rw,o=rw {path}/key.pem")
+
+        self._record_history(
+            action="tls_setup",
+            status="success",
+            metadata={"ip": ip, "path": path},
+        )
+
     def docker_list_container(self, connection: Connection) -> list[list[str]]:
         res = self.exec_command(connection, "docker container ls", sudo=True) or ""
         dl = str(res).split("\n")

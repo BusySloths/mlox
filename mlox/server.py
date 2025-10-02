@@ -1,3 +1,4 @@
+import os
 import time  # Added for retry delay
 import uuid
 import logging
@@ -6,9 +7,9 @@ import tempfile
 from datetime import datetime
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import Dict, Optional, List, Literal, Any
+from typing import Dict, Optional, List, Literal, Any, Tuple
 
-from fabric import Connection  # type: ignore
+from fabric import Connection, Config  # type: ignore
 from paramiko.ssh_exception import (  # type: ignore
     SSHException,
     AuthenticationException,
@@ -17,7 +18,6 @@ from paramiko.ssh_exception import (  # type: ignore
 import socket
 
 from mlox.utils import generate_password
-from mlox.remote import open_connection, close_connection, exec_command, fs_read_file
 from mlox.executors import UbuntuTaskExecutor
 
 logging.basicConfig(
@@ -26,6 +26,55 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+def open_connection(
+    config: Dict, timeout: int = 10
+) -> Tuple[Connection, Optional[tempfile.TemporaryDirectory]]:
+    """Create a Fabric connection using password or key based auth."""
+
+    connect_kwargs: Dict[str, Any] = {"password": config["pw"]}
+    tmpdir: Optional[tempfile.TemporaryDirectory] = None
+
+    if "private_key" in config and "passphrase" in config:
+        tmpdir = tempfile.TemporaryDirectory()
+        tmpdirname = tmpdir.name
+        logger.debug("Created temporary directory at %s", tmpdirname)
+
+        private_key_path = os.path.join(tmpdirname, "id_rsa")
+        with open(private_key_path, "w", encoding="utf-8") as priv_file:
+            priv_file.write(config["private_key"])
+        os.chmod(private_key_path, 0o600)
+
+        connect_kwargs = {
+            "key_filename": private_key_path,
+            "passphrase": config["passphrase"],
+        }
+
+    conn = Connection(
+        host=config["host"],
+        user=config["user"],
+        port=config["port"],
+        connect_kwargs=connect_kwargs,
+        config=Config(overrides={"sudo": {"password": config["pw"]}}),
+        connect_timeout=timeout,
+    )
+
+    return conn, tmpdir
+
+
+def close_connection(
+    conn: Connection | None, tmp_dir: Optional[tempfile.TemporaryDirectory] = None
+) -> None:
+    """Close the Fabric connection and clean up any temporary key material."""
+
+    if conn is not None:
+        conn.close()
+    if tmp_dir is not None:
+        tmp_dir_name = tmp_dir.name
+        tmp_dir.cleanup()
+        logger.debug("Temporary directory %s deleted.", tmp_dir_name)
+    logger.debug("SSH connection closed and tmp dir deleted.")
 
 
 @dataclass
@@ -316,7 +365,9 @@ class AbstractServer(ABC):
         pass
 
 
-def sys_get_distro_info(conn) -> Optional[Dict[str, str]]:
+def sys_get_distro_info(
+    conn: Connection, executor: UbuntuTaskExecutor
+) -> Optional[Dict[str, str]]:
     """
     Attempts to get the Linux distribution name and version.
 
@@ -329,7 +380,7 @@ def sys_get_distro_info(conn) -> Optional[Dict[str, str]]:
     info = {}
     try:
         # Try /etc/os-release first using fs_read_file
-        content = fs_read_file(conn, "/etc/os-release", format="string")
+        content = executor.fs_read_file(conn, "/etc/os-release", format="string")
         # Parse the key="value" or key=value format
         for line in content.strip().split("\n"):
             if "=" in line:
@@ -355,7 +406,7 @@ def sys_get_distro_info(conn) -> Optional[Dict[str, str]]:
     # Fallback to lsb_release if /etc/os-release didn't work
     try:
         # Use lsb_release -a and parse common fields
-        lsb_output = exec_command(conn, "lsb_release -a", sudo=False, pty=False)
+        lsb_output = executor.exec_command(conn, "lsb_release -a", sudo=False, pty=False)
         if lsb_output:
             for line in lsb_output.strip().split("\n"):
                 if ":" in line:

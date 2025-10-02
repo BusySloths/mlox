@@ -25,15 +25,14 @@ def test_compose_service_log_tail_direct_match():
 
     conn = MagicMock()
 
-    with patch(
-        "mlox.service.docker_all_service_states",
-        return_value={"web_service": {"Status": "running"}},
-    ):
-        with patch(
-            "mlox.service.docker_service_log_tails", return_value="line1\nline2"
-        ):
-            out = svc.compose_service_log_tail(conn, "web", tail=2)
-            assert "line1" in out
+    svc.exec = MagicMock()
+    svc.exec.docker_all_service_states.return_value = {
+        "web_service": {"Status": "running"}
+    }
+    svc.exec.docker_service_log_tails.return_value = "line1\nline2"
+
+    out = AbstractService.compose_service_log_tail(svc, conn, "web", tail=2)
+    assert "line1" in out
 
 
 def test_compose_service_log_tail_heuristic_match():
@@ -44,14 +43,14 @@ def test_compose_service_log_tail_heuristic_match():
 
     conn = MagicMock()
 
-    # container name contains _postgres_ as in compose naming
-    with patch(
-        "mlox.service.docker_all_service_states",
-        return_value={"proj_postgres_1": {"Status": "running"}},
-    ):
-        with patch("mlox.service.docker_service_log_tails", return_value="ok"):
-            out = svc.compose_service_log_tail(conn, "db", tail=10)
-            assert out == "ok"
+    svc.exec = MagicMock()
+    svc.exec.docker_all_service_states.return_value = {
+        "proj_postgres_1": {"Status": "running"}
+    }
+    svc.exec.docker_service_log_tails.return_value = "ok"
+
+    out = AbstractService.compose_service_log_tail(svc, conn, "db", tail=10)
+    assert out == "ok"
 
 
 def test_compose_service_log_tail_no_match():
@@ -62,7 +61,9 @@ def test_compose_service_log_tail_no_match():
 
     conn = MagicMock()
 
-    with patch("mlox.service.docker_all_service_states", return_value={}):
-        with patch("mlox.service.docker_service_state", return_value=""):
-            out = svc.compose_service_log_tail(conn, "x", tail=5)
-            assert out == "Service with label x (nope) not found"
+    svc.exec = MagicMock()
+    svc.exec.docker_all_service_states.return_value = {}
+    svc.exec.docker_service_state.return_value = ""
+
+    out = AbstractService.compose_service_log_tail(svc, conn, "x", tail=5)
+    assert out == "Service with label x (nope) not found"

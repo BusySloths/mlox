@@ -296,7 +296,7 @@ def installed_services():
             with st.expander("Logs & History", expanded=False):
                 tab_logs, tab_history = st.tabs(["Logs", "History"])
                 with tab_history:
-                    df_hist = pd.DataFrame(bndl.server.exec.history)
+                    df_hist = pd.DataFrame(svc.exec.history)
                     if df_hist.empty:
                         st.info("No history available yet.")
                     else:
