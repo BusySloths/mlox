@@ -298,10 +298,28 @@ def tab_server_management(infra: Infrastructure):
                     },
                 )
 
-                st.write(bundle.server.exec.history)
                 callable_settings_func = config.instantiate_ui("settings")
                 if callable_settings_func:
                     callable_settings_func(infra, bundle, bundle.server)
+
+        with st.expander("History", expanded=True):
+            df_hist = pd.DataFrame(bundle.server.exec.history)
+            if df_hist.empty:
+                st.info("No history available yet.")
+            else:
+                st.dataframe(
+                    df_hist,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "timestamp": st.column_config.TextColumn(
+                            "Timestamp", width="small"
+                        ),
+                        "action": st.column_config.TextColumn("Action"),
+                        "status": st.column_config.TextColumn("Status", width="small"),
+                        "metadata": st.column_config.TextColumn("Metadata"),
+                    },
+                )
 
             # with st.expander("Terminal"):
             #     from mlox.view.terminal import emulate_basic_terminal
