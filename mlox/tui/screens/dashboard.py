@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Optional
 
 from rich.panel import Panel
 from rich.table import Table
@@ -11,11 +11,27 @@ from rich.text import Text
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, VerticalScroll
+from textual.containers import Container, Horizontal
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Static, TextLog, Tree
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Select,
+    Static,
+    TabPane,
+    TabbedContent,
+    Tree,
+)
+
+try:
+    from textual.widgets import Log as LogWidget
+except ImportError:  # pragma: no cover - fallback for older textual releases
+    from textual.widgets import TextLog as LogWidget  # type: ignore
 
 from mlox.config import load_all_server_configs, load_all_service_configs
 from mlox.session import MloxSession
@@ -58,14 +74,16 @@ class InfraTree(Tree[SelectionInfo]):
     def populate_tree(self) -> None:
         """Populate the tree with bundles, servers and services."""
 
-        self.root.clear()
+        self.clear()
         self.root.label = "Infrastructure"
         self.root.data = SelectionInfo(type="root")
 
         session: Optional[MloxSession] = getattr(self.app, "session", None)
         infra = getattr(session, "infra", None)
         if not infra or not infra.bundles:
-            self.root.add("No infrastructure available", data=SelectionInfo(type="empty"))
+            self.root.add(
+                "No infrastructure available", data=SelectionInfo(type="empty")
+            )
             self.root.expand()
             return
 
@@ -97,7 +115,9 @@ class InfraTree(Tree[SelectionInfo]):
                 )
         self.root.expand()
 
-    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:  # pragma: no cover - UI callback
+    def on_tree_node_selected(
+        self, event: Tree.NodeSelected
+    ) -> None:  # pragma: no cover - UI callback
         data = event.node.data
         selection = data if isinstance(data, SelectionInfo) else None
         self.post_message(SelectionChanged(selection))
@@ -118,14 +138,20 @@ class OverviewPanel(Static):
         if selection.type == "service" and selection.service and selection.bundle:
             self.show_service(selection)
             return
-        if selection.type in {"server", "bundle"} and selection.server and selection.bundle:
+        if (
+            selection.type in {"server", "bundle"}
+            and selection.server
+            and selection.bundle
+        ):
             self.show_server(selection)
             return
         self.show_default()
 
     def show_default(self) -> None:
         self.update(
-            Panel(Text(WELCOME_TEXT, style="bold"), title="Overview", border_style="green")
+            Panel(
+                Text(WELCOME_TEXT, style="bold"), title="Overview", border_style="green"
+            )
         )
 
     def show_server(self, selection: SelectionInfo) -> None:
@@ -254,7 +280,7 @@ class HistoryPanel(Container):
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
     def compose(self) -> ComposeResult:
-        yield Static("History", classes="section-title")
+        # yield Static("History", classes="section-title")
         table = DataTable(id="history-table")
         table.add_columns("Timestamp", "Action", "Status", "Details")
         yield table
@@ -269,31 +295,84 @@ class HistoryPanel(Container):
         return self.query_one("#history-status", Static)
 
     def on_mount(self) -> None:
-        self.status.update("Select a server or service to view the latest history entries.")
+        self.status.update(
+            "Select a server or service to view the latest history entries."
+        )
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         self.table.clear(columns=False)
         if not selection or selection.type in {"root", "empty"}:
-            self.status.update("Select a server or service to view the latest history entries.")
+            self.status.update(
+                "Select a server or service to view the latest history entries."
+            )
             return
-        history: Iterable[Dict[str, Any]] = []
-        if selection.type in {"server", "bundle"} and selection.server:
-            history = getattr(getattr(selection.server, "exec", None), "history", [])
-        elif selection.type == "service" and selection.service:
+        entries = []
+        label = "selection"
+
+        if selection.type == "service" and selection.service:
             history = getattr(getattr(selection.service, "exec", None), "history", [])
-        if not history:
+            entries = self._prepare_entries(
+                history, getattr(selection.service, "name", "service")
+            )
+            label = getattr(selection.service, "name", "service")
+        else:
+            history = getattr(getattr(selection.server, "exec", None), "history", [])
+            entries = self._prepare_entries(
+                history, getattr(selection.server, "ip", "server")
+            )
+
+        if not entries:
             self.status.update("No history available yet.")
             return
-        entries = list(history)[-15:]
+
         for entry in entries:
-            timestamp = str(entry.get("timestamp", ""))
-            action = str(entry.get("action", ""))
-            status = str(entry.get("status", ""))
-            metadata = entry.get("metadata") or entry.get("output") or ""
-            if isinstance(metadata, dict):
-                metadata = ", ".join(f"{k}={v}" for k, v in metadata.items())
-            self.table.add_row(timestamp, action, status, str(metadata))
-        self.status.update(f"Showing {len(entries)} most recent entries.")
+            timestamp = entry["timestamp"]
+            action = entry["action"]
+            status = entry["status"]
+            details = entry["details"]
+            self.table.add_row(timestamp, action, status, details)
+
+        self.status.update(f"Showing {len(entries)} most recent entries for {label}.")
+
+    def _prepare_entries(
+        self, history: Iterable[dict[str, Any]], source: str
+    ) -> list[dict[str, str]]:
+        entries: list[dict[str, str]] = []
+        if not history:
+            return entries
+        for item in history:
+            if not isinstance(item, dict):
+                continue
+            timestamp = str(item.get("timestamp", ""))
+            action = str(item.get("action", ""))
+            status = str(item.get("status", ""))
+            details = self._format_history_details(item)
+            entries.append(
+                {
+                    "timestamp": timestamp,
+                    "action": f"{action} [{source}]" if source else action,
+                    "status": status,
+                    "details": details,
+                }
+            )
+        entries.sort(key=lambda entry: entry["timestamp"], reverse=True)
+        return entries[:25]
+
+    def _format_history_details(self, entry: dict[str, Any]) -> str:
+        parts: list[str] = []
+        for key in ("command", "output", "error"):
+            value = entry.get(key)
+            if not value:
+                continue
+            text = str(value)
+            if key == "output" and len(text) > 120:
+                text = text[:117] + "…"
+            parts.append(f"{key}: {text}")
+        metadata = entry.get("metadata")
+        if isinstance(metadata, dict) and metadata:
+            meta_text = ", ".join(f"{k}={v}" for k, v in metadata.items())
+            parts.append(f"meta[{meta_text}]")
+        return " | ".join(parts) if parts else ""
 
 
 class LogPanel(Container):
@@ -302,45 +381,57 @@ class LogPanel(Container):
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
     def compose(self) -> ComposeResult:
-        yield Static("Logs", classes="section-title")
+        # yield Static("Logs", classes="section-title")
         with Horizontal(id="log-controls"):
-            yield Input(placeholder="Compose label", id="log-label")
+            yield Select(options=[], prompt="Compose label", id="log-label")
             yield Input(placeholder="Lines", id="log-tail", value="200")
             yield Button("Fetch", id="log-fetch")
-        yield TextLog(id="log-output", highlight=True)
+        yield LogWidget(id="log-output", highlight=True)
         yield Static("", id="log-status")
 
     @property
-    def label_input(self) -> Input:
-        return self.query_one("#log-label", Input)
+    def label_input(self) -> Select:
+        return self.query_one("#log-label", Select)
 
     @property
     def tail_input(self) -> Input:
         return self.query_one("#log-tail", Input)
 
     @property
-    def log_output(self) -> TextLog:
-        return self.query_one(TextLog)
+    def log_output(self) -> LogWidget:
+        return self.query_one(LogWidget)
 
     @property
     def status(self) -> Static:
         return self.query_one("#log-status", Static)
 
     def on_mount(self) -> None:
-        self.status.update("Select a service to fetch logs. Logs are retrieved on demand.")
+        self.status.update(
+            "Select a service to fetch logs. Logs are retrieved on demand."
+        )
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         if selection and selection.type == "service" and selection.service:
-            labels = list(getattr(selection.service, "compose_service_names", {}).keys())
+            labels = list(
+                getattr(selection.service, "compose_service_names", {}).keys()
+            )
             if labels:
+                options = [(label, label) for label in labels]
+                self.label_input.set_options(options)
                 self.label_input.value = labels[0]
-                self.status.update("Ready to fetch logs for the selected service.")
+                if not self._show_cached_logs(selection, labels[0]):
+                    self.log_output.clear()
+                    self.status.update("Ready to fetch logs for the selected service.")
             else:
-                self.label_input.value = ""
+                self.label_input.set_options([])
+                self.label_input.clear()
                 self.status.update("Selected service does not expose compose labels.")
         else:
-            self.label_input.value = ""
-            self.status.update("Select a service to fetch logs. Logs are retrieved on demand.")
+            self.label_input.set_options([])
+            self.label_input.clear()
+            self.status.update(
+                "Select a service to fetch logs. Logs are retrieved on demand."
+            )
             self.log_output.clear()
 
     @on(Button.Pressed, "#log-fetch")
@@ -354,7 +445,8 @@ class LogPanel(Container):
         if not bundle or not server:
             self.status.update("Associated server information is missing.")
             return
-        label = self.label_input.value.strip()
+        raw_label = self.label_input.value
+        label = raw_label.strip() if isinstance(raw_label, str) else ""
         labels = list(getattr(selection.service, "compose_service_names", {}).keys())
         if not label:
             if labels:
@@ -374,22 +466,57 @@ class LogPanel(Container):
         def fetch_logs() -> None:
             try:
                 with server.get_server_connection() as conn:
-                    logs = service.compose_service_log_tail(conn, label=label, tail=tail)
+                    logs = service.compose_service_log_tail(
+                        conn, label=label, tail=tail
+                    )
             except Exception as exc:  # pragma: no cover - network/IO heavy
-                self.app.call_from_thread(self._show_logs, "", f"Failed to fetch logs: {exc}")
+                self.app.call_from_thread(
+                    self._show_logs, "", f"Failed to fetch logs: {exc}"
+                )
                 return
             self.app.call_from_thread(self._show_logs, logs, None)
 
-        self.app.call_in_thread(fetch_logs)
+        self.app.run_worker(fetch_logs, thread=True, exclusive=True, group="log-fetch")
 
     def _show_logs(self, logs: str, error: str | None) -> None:
         self.log_output.clear()
         if error:
             self.status.update(error)
             return
-        for line in logs.splitlines():
-            self.log_output.write(line)
+        for line in logs.splitlines() or [""]:
+            self.log_output.write_line(line)
         self.status.update("Logs updated.")
+
+    def _show_cached_logs(self, selection: SelectionInfo, label: str) -> bool:
+        service = selection.service
+        if not service:
+            return False
+        compose_map = getattr(service, "compose_service_names", {}) or {}
+        container = compose_map.get(label)
+        if not container:
+            return False
+        executor = getattr(service, "exec", None)
+        if not executor:
+            return False
+        history = getattr(executor, "history", [])
+        records = history if isinstance(history, list) else list(history)
+        for entry in reversed(records):
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("action") != "docker_service_log_tails":
+                continue
+            metadata = entry.get("metadata") or {}
+            if metadata.get("service_name") != container:
+                continue
+            logs = str(entry.get("output", ""))
+            self.log_output.clear()
+            for line in logs.splitlines() or [""]:
+                self.log_output.write_line(line)
+            timestamp = entry.get("timestamp")
+            suffix = f" from {timestamp}" if timestamp else ""
+            self.status.update(f"Showing cached logs{suffix}. Use Fetch to refresh.")
+            return True
+        return False
 
 
 class TemplatePanel(Static):
@@ -399,7 +526,9 @@ class TemplatePanel(Static):
         self.update(self._build_panel())
 
     def _build_panel(self) -> Panel:
-        server_table = Table(title="Server Templates", show_header=True, header_style="bold")
+        server_table = Table(
+            title="Server Templates", show_header=True, header_style="bold"
+        )
         server_table.add_column("Name", style="cyan")
         server_table.add_column("Version")
         server_table.add_column("Maintainer")
@@ -410,7 +539,9 @@ class TemplatePanel(Static):
         else:
             server_table.add_row("-", "-", "-")
 
-        service_table = Table(title="Service Templates", show_header=True, header_style="bold")
+        service_table = Table(
+            title="Service Templates", show_header=True, header_style="bold"
+        )
         service_table.add_column("Name", style="cyan")
         service_table.add_column("Version")
         service_table.add_column("Maintainer")
@@ -433,13 +564,19 @@ class DashboardScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, classes="app-header")
         with Container(id="main-area"):
-            yield InfraTree()
-            with VerticalScroll(id="content"):
-                yield OverviewPanel(id="selection-overview")
-                yield StatsPanel(id="selection-stats")
-                yield LogPanel(id="selection-logs")
-                yield HistoryPanel(id="selection-history")
-                yield TemplatePanel(id="templates")
+            with Container(id="sidebar"):
+                yield InfraTree()
+            with Container(id="detail-panel"):
+                with Container(id="upper-pane"):
+                    with Horizontal(id="summary-pane"):
+                        yield OverviewPanel(id="selection-overview")
+                        yield StatsPanel(id="selection-stats")
+                with Container(id="activity-container"):
+                    with TabbedContent(id="activity-tabs"):
+                        with TabPane("Logs", id="logs-tab"):
+                            yield LogPanel(id="selection-logs")
+                        with TabPane("History", id="history-tab"):
+                            yield HistoryPanel(id="selection-history")
         yield Footer(classes="app-footer")
 
     def on_mount(self) -> None:
