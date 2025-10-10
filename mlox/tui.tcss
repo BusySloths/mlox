@@ -89,6 +89,49 @@ Button {
   padding-left: 0;
 }
 
+#selection-overview,
+#selection-stats,
+#selection-logs,
+#selection-history,
+#templates {
+  margin: 1 0;
+}
+
+#selection-logs,
+#selection-history {
+  layout: vertical;
+  gap: 1;
+}
+
+.section-title {
+  text-style: bold;
+  color: #e6edf7;
+  margin-bottom: 1;
+}
+
+#log-controls {
+  layout: horizontal;
+  gap: 1;
+  margin-bottom: 1;
+}
+
+#log-output {
+  height: 18;
+  border: round #1bd6f3ff;
+  background: #031410ff;
+}
+
+#history-table {
+  height: 12;
+  border: round #1bd6f3ff;
+}
+
+#log-status,
+#history-status {
+  color: #94a3b8;
+  margin-top: 1;
+}
+
 Tree {
   height: 100%;
   background: #052628ff;
