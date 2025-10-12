@@ -64,8 +64,8 @@ def enable_password_authentication(bundle_name: str):
         #     "PubkeyAuthentication yes",
         #     sudo=True,
         # )
-        executor.exec_command(conn, "systemctl restart ssh", sudo=True)
-        executor.exec_command(conn, "systemctl reload ssh", sudo=True)
+        executor.run_service_task(conn, "systemctl restart ssh", sudo=True)
+        executor.run_service_task(conn, "systemctl reload ssh", sudo=True)
 
     print(f"IP: ", server.ip)
     print(f"USER: ", server.mlox_user.name)

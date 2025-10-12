@@ -34,4 +34,4 @@ def test_secret_roundtrip(ubuntu_docker_server):
         )
         with pytest.raises(json.JSONDecodeError):
             json.loads(raw_contents)
-        executor.exec_command(conn, f"rm -f {file_path}")
+        executor.run_filesystem_task(conn, f"rm -f {file_path}")

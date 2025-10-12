@@ -65,7 +65,7 @@ def test_sys_get_distro_info_lsb_release():
     conn = DummyConn()
     executor = MagicMock()
     executor.fs_read_file.side_effect = Exception("fail")
-    executor.exec_command.return_value = (
+    executor.run_network_task.return_value = (
         "Distributor ID: Ubuntu\nRelease: 22.04\nDescription: Ubuntu 22.04 LTS\nCodename: jammy"
     )
     info = sys_get_distro_info(conn, executor)
@@ -79,7 +79,7 @@ def test_sys_get_distro_info_failure():
     conn = DummyConn()
     executor = MagicMock()
     executor.fs_read_file.side_effect = Exception("fail")
-    executor.exec_command.side_effect = Exception("fail")
+    executor.run_network_task.side_effect = Exception("fail")
     info = sys_get_distro_info(conn, executor)
     assert info is None
 

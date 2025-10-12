@@ -30,14 +30,14 @@ def mock_connection() -> MagicMock:
     return conn
 
 
-def test_exec_command(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_run_ad_hoc_task(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
     mock_connection.run.return_value = FakeResult(stdout="test_output")
-    result = executor.exec_command(mock_connection, "test_command")
+    result = executor.run_ad_hoc_task(mock_connection, "test_command")
     assert result == "test_output"
     mock_connection.run.assert_called_once_with("test_command", hide=True)
 
     mock_connection.sudo.return_value = FakeResult(stdout="sudo_output")
-    result_sudo = executor.exec_command(
+    result_sudo = executor.run_ad_hoc_task(
         mock_connection, "test_sudo_command", sudo=True
     )
     assert result_sudo == "sudo_output"

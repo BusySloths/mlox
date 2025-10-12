@@ -31,15 +31,15 @@ def _install_preconfigured_deploy_keys(
     key_name = f"mlox_deploy_{service.repo_name}"
     ssh_dir = f"{service.target_path}/.ssh"
     executor.fs_create_dir(conn, ssh_dir)
-    executor.exec_command(conn, f"chmod 700 {ssh_dir}")
+    executor.run_filesystem_task(conn, f"chmod 700 {ssh_dir}")
 
     private_key_path = f"{ssh_dir}/{key_name}"
     public_key_path = f"{private_key_path}.pub"
 
     executor.fs_write_file(conn, private_key_path, _normalize_key_material(private_key))
-    executor.exec_command(conn, f"chmod 600 {private_key_path}")
+    executor.run_filesystem_task(conn, f"chmod 600 {private_key_path}")
     executor.fs_write_file(conn, public_key_path, _normalize_key_material(public_key))
-    executor.exec_command(conn, f"chmod 644 {public_key_path}")
+    executor.run_filesystem_task(conn, f"chmod 644 {public_key_path}")
     service.deploy_key = public_key.strip()
 
     home_dir = getattr(server.mlox_user, "home", None)
@@ -48,8 +48,8 @@ def _install_preconfigured_deploy_keys(
     else:
         home_ssh_dir = "~/.ssh"
     executor.fs_create_dir(conn, home_ssh_dir)
-    executor.exec_command(conn, f"chmod 700 {home_ssh_dir}")
-    executor.exec_command(
+    executor.run_filesystem_task(conn, f"chmod 700 {home_ssh_dir}")
+    executor.run_network_task(
         conn,
         f"ssh-keyscan -t rsa github.com >> {home_ssh_dir}/known_hosts",
         sudo=False,

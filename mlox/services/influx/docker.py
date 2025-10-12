@@ -46,7 +46,7 @@ class InfluxDockerService(AbstractService):
         self.exec.fs_append_line(conn, env_pw_path, self.pw)
         self.exec.fs_append_line(conn, env_token_path, self.token)
 
-        self.exec.exec_command(
+        self.exec.run_filesystem_task(
             conn,
             f"cat {self.target_path}/cert.pem {self.target_path}/key.pem > {self.target_path}/influxdb.pem",
         )

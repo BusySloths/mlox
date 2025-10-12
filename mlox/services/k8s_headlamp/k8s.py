@@ -15,7 +15,7 @@ class K8sHeadlampService(AbstractService):
     def get_login_token(self, bundle) -> str:
         token = ""
         with bundle.server.get_server_connection() as conn:
-            token = self.exec.exec_command(
+            token = self.exec.run_kubernetes_task(
                 conn,
                 f"kubectl create token {self.service_name} --namespace {self.namespace}",
                 sudo=True,
@@ -29,13 +29,13 @@ class K8sHeadlampService(AbstractService):
         src_url = f"https://kubernetes-sigs.github.io/headlamp/"
 
         # Add kubernetes-dashboard repository
-        self.exec.exec_command(
+        self.exec.run_kubernetes_task(
             conn,
             f"helm repo add headlamp {src_url} --kubeconfig {kubeconfig}",
             sudo=True,
         )
         # Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
-        self.exec.exec_command(
+        self.exec.run_kubernetes_task(
             conn,
             f"helm upgrade --install {self.service_name} headlamp/headlamp --create-namespace --namespace {self.namespace} --kubeconfig {kubeconfig}",
             sudo=True,
@@ -60,7 +60,7 @@ class K8sHeadlampService(AbstractService):
             f'"name":"plain-http","port":8080,"targetPort":4466,"nodePort":{node_port}'
             f"}}]}}}}'"
         )
-        self.exec.exec_command(conn, patch, sudo=True)
+        self.exec.run_kubernetes_task(conn, patch, sudo=True)
         node_ip = conn.host
 
         logger.info(f"Dashboard exposed at http://{node_ip}:{node_port}")
@@ -87,7 +87,7 @@ class K8sHeadlampService(AbstractService):
 
         for cmd in cmds:
             logger.debug(f"Running: {cmd}")
-            self.exec.exec_command(conn, cmd, sudo=True)
+            self.exec.run_kubernetes_task(conn, cmd, sudo=True)
 
         logger.info("✅ Headlamp uninstall complete")
         self.state = "un-initialized"

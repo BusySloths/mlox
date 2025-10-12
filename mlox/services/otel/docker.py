@@ -38,8 +38,10 @@ class OtelDockerService(AbstractService):
         self.exec.fs_create_dir(conn, self.target_path)
         self.exec.fs_create_dir(conn, f"{self.target_path}/otel-data")
         self.exec.fs_touch(conn, f"{self.target_path}/otel-data/telemetry.json")
-        self.exec.exec_command(conn, f"chmod 777 {self.target_path}/otel-data", sudo=True)
-        self.exec.exec_command(
+        self.exec.run_filesystem_task(
+            conn, f"chmod 777 {self.target_path}/otel-data", sudo=True
+        )
+        self.exec.run_filesystem_task(
             conn, f"chmod 777 {self.target_path}/otel-data/telemetry.json", sudo=True
         )
 

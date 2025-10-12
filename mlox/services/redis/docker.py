@@ -65,7 +65,7 @@ class RedisDockerService(AbstractService):
         # pong = client.ping()
         # assert pong is True
         try:
-            output = self.exec.exec_command(
+            output = self.exec.run_container_task(
                 conn,
                 f"docker ps --filter 'name=redis' --filter 'status=running' --format '{{{{.Names}}}}'",
                 sudo=True,

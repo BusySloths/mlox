@@ -67,7 +67,7 @@ def emulate_basic_terminal(conn: Connection):
 
         # For other commands, execute them
         # Using pty=True for more interactive-like behavior for most commands
-        result = executor.exec_command(conn, command_str, pty=False)
+        result = executor.run_ad_hoc_task(conn, command_str, pty=False)
 
         st.write(f"Command {command_str}: ")
         st.write(result)

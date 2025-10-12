@@ -59,7 +59,7 @@ class PostgresDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         try:
-            output = self.exec.exec_command(
+            output = self.exec.run_container_task(
                 conn,
                 f"docker ps --filter 'name=postgres' --filter 'status=running' --format '{{{{.Names}}}}'",
                 sudo=True,

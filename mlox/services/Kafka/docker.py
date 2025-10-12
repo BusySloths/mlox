@@ -48,7 +48,7 @@ class KafkaDockerService(AbstractService):
 
         # For PEM setup, cert.pem and key.pem already exist from tls_setup_no_config
         # Create files with names expected by Bitnami entrypoint
-        self.exec.exec_command(
+        self.exec.run_filesystem_task(
             conn,
             (
                 f"cd {self.target_path}; "

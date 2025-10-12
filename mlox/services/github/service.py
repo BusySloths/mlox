@@ -124,7 +124,7 @@ class GithubRepoService(AbstractService, Repo):
         private_key_path = f"{ssh_dir}/{key_name}"
         public_key_path = private_key_path + ".pub"
         # Generate key pair using ssh-keygen on remote
-        self.exec.exec_command(
+        self.exec.run_security_task(
             conn,
             f"yes | ssh-keygen -t {key_type} -b {key_bits} -N '' -f {private_key_path}",
             sudo=False,
@@ -135,7 +135,9 @@ class GithubRepoService(AbstractService, Repo):
         full_cmd = f"cd {self.target_path} && git clone {self.link}"
         if clone_or_pull == "pull":
             full_cmd = f"cd {self.target_path}/{self.repo_name} && git pull"
-        self.exec.exec_command(conn, f"bash -c '{full_cmd}'", sudo=False, pty=False)
+        self.exec.run_version_control_task(
+            conn, f"bash -c '{full_cmd}'", sudo=False, pty=False
+        )
 
     def _repo_with_deploy_key(
         self, conn, clone_or_pull: Literal["clone", "pull"]
@@ -166,7 +168,9 @@ class GithubRepoService(AbstractService, Repo):
 
         err_code = 0
         try:
-            self.exec.exec_command(conn, f"bash -c '{full_cmd}'", sudo=False, pty=False)
+            self.exec.run_version_control_task(
+                conn, f"bash -c '{full_cmd}'", sudo=False, pty=False
+            )
         except Exception as exc:  # noqa: BLE001 - propagate command failure info
             logging.error(
                 "Failed to execute git command with deploy key for %s: %s",
