@@ -228,7 +228,9 @@ def installed_services():
             save_infra()
             st.rerun()
         if b1.button(
-            "Resume", key=f"start-{svc.uuid}", disabled=svc.state == "running"
+            "Resume",
+            key=f"start-{svc.uuid}",
+            disabled=svc.state == "running" or svc.state == "un-initialized",
         ):
             with bndl.server.get_server_connection() as conn:
                 svc.spin_up(conn)
