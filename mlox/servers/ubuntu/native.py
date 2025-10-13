@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, Any, ClassVar
 
+from mlox.executors import TaskGroup
 from mlox.server import AbstractServer, AbstractGitServer, sys_get_distro_info
 
 # Configure logging (optional, but recommended)
@@ -39,13 +40,18 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
             'echo "[apt-wait] Waiting for other apt/dpkg processes..."; sleep 3; done\''
         )
         try:
-            self.exec.run_system_package_task(
-                conn, wait_cmd, sudo=True, pty=False
+            self.exec.execute(
+                conn,
+                wait_cmd,
+                group=TaskGroup.SYSTEM_PACKAGES,
+                sudo=True,
+                pty=False,
             )
             # Fix partially configured packages if previous runs were interrupted
-            self.exec.run_system_package_task(
+            self.exec.execute(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
                 pty=False,
             )
@@ -83,47 +89,62 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     def update(self):
         with self.get_server_connection() as conn:
             # Clean up partial states and wait for apt locks to clear
-            self.exec.run_system_package_task(
+            self.exec.execute(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
             )
             self._apt_wait(conn)
-            self.exec.run_system_package_task(
+            self.exec.execute(
                 conn,
-                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 update",
+                (
+                    "DEBIAN_FRONTEND=noninteractive apt-get -yq "
+                    "-o DPkg::Lock::Timeout=300 update"
+                ),
+                group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
             )
             self._apt_wait(conn)
-            self.exec.run_system_package_task(
+            self.exec.execute(
                 conn,
-                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 upgrade",
+                (
+                    "DEBIAN_FRONTEND=noninteractive apt-get -yq "
+                    "-o DPkg::Lock::Timeout=300 upgrade"
+                ),
+                group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
             )
             logger.info("Done updating")
 
     def install_packages(self):
         with self.get_server_connection() as conn:
-            self.exec.run_system_package_task(
+            self.exec.execute(
                 conn,
                 "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+                group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
             )
             self._apt_wait(conn)
             # Update package list before installing to avoid "package not found" errors
-            self.exec.run_system_package_task(
+            self.exec.execute(
                 conn,
-                "DEBIAN_FRONTEND=noninteractive apt-get -yq -o DPkg::Lock::Timeout=300 update",
+                (
+                    "DEBIAN_FRONTEND=noninteractive apt-get -yq "
+                    "-o DPkg::Lock::Timeout=300 update"
+                ),
+                group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
             )
             # Install common utilities in a single transaction to reduce lock contention
-            self.exec.run_system_package_task(
+            self.exec.execute(
                 conn,
                 (
                     "DEBIAN_FRONTEND=noninteractive apt-get -yq "
                     "-o DPkg::Lock::Timeout=300 install "
                     "mc git zsh host curl openssl || true"
                 ),
+                group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
             )
 
@@ -145,10 +166,18 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         system_info = None
         hardware_info = None
         with self.get_server_connection() as conn:
-            hardware_info = self.exec.run_network_task(conn, cmd, sudo=True)
+            hardware_info = self.exec.execute(
+                conn,
+                cmd,
+                group=TaskGroup.NETWORKING,
+                sudo=True,
+            )
             system_info = sys_get_distro_info(conn, self.exec)
-            host_info = self.exec.run_network_task(
-                conn, f"host {conn.host}", sudo=False
+            host_info = self.exec.execute(
+                conn,
+                f"host {conn.host}",
+                group=TaskGroup.NETWORKING,
+                sudo=False,
             )
 
         if len(host_info) > 3 and " " in host_info:
@@ -205,8 +234,8 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
         with self.get_server_connection() as conn:
             # 1. create .ssh dir
             logger.info(f"Create .ssh dir for user {self.mlox_user.name}.")
-            command = "mkdir -p ~/.ssh; chmod 700 ~/.ssh"
-            self.exec.run_filesystem_task(conn, command)
+            self.exec.fs_create_dir(conn, "~/.ssh")
+            self.exec.fs_set_permissions(conn, "~/.ssh", "700")
 
             # 2. generate rsa keys for remote user
             logger.info(f"Generate RSA keys for remote user on server {self.ip}.")
@@ -214,7 +243,11 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; "
                 f"ssh-keygen -b 4096 -t rsa -f id_rsa -N {remote_user.ssh_passphrase}"
             )
-            self.exec.run_security_task(conn, command)
+            self.exec.execute(
+                conn,
+                command,
+                group=TaskGroup.SECURITY_ASSETS,
+            )
 
             # 3. read pub and private keys and store to remote user
             remote_user.ssh_pub_key = self.exec.fs_read_file(
@@ -232,7 +265,11 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 f"cd {self.mlox_user.home}/.ssh; rm id_rsa*; "
                 f"ssh-keygen -b 4096 -t rsa -f id_rsa -N {self.mlox_user.ssh_passphrase}"
             )
-            self.exec.run_security_task(conn, command)
+            self.exec.execute(
+                conn,
+                command,
+                group=TaskGroup.SECURITY_ASSETS,
+            )
 
             # 5. read pub and private keys and store to mlox user
             self.mlox_user.ssh_pub_key = self.exec.fs_read_file(
@@ -331,8 +368,18 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 "PermitRootLogin no",
                 sudo=True,
             )
-            self.exec.run_service_task(conn, "systemctl restart ssh", sudo=True)
-            self.exec.run_service_task(conn, "systemctl reload ssh", sudo=True)
+            self.exec.execute(
+                conn,
+                "systemctl restart ssh",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+            )
+            self.exec.execute(
+                conn,
+                "systemctl reload ssh",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+            )
             # Instead: Use kill -HUP to reload sshd config. It's portable and works in containers without systemd.
             # self.exec.exec_command(conn, "kill -HUP $(pidof sshd)", sudo=True)
 
@@ -352,8 +399,18 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 "PasswordAuthentication yes",
                 sudo=True,
             )
-            self.exec.run_service_task(conn, "systemctl restart ssh", sudo=True)
-            self.exec.run_service_task(conn, "systemctl reload ssh", sudo=True)
+            self.exec.execute(
+                conn,
+                "systemctl restart ssh",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+            )
+            self.exec.execute(
+                conn,
+                "systemctl reload ssh",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+            )
             # Instead: Use kill -HUP to reload sshd config. It's portable and works in containers without systemd.
             # self.exec.exec_command(conn, "kill -HUP $(pidof sshd)", sudo=True)
 
@@ -361,17 +418,21 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     def git_clone(self, repo_url: str, abs_path: str) -> None:
         with self.get_server_connection() as conn:
             self.exec.fs_create_dir(conn, abs_path)
-            self.exec.run_version_control_task(
+            self.exec.execute(
                 conn,
                 f"cd {abs_path}; yes | git clone {repo_url}",
+                group=TaskGroup.VERSION_CONTROL,
                 sudo=False,
             )
 
     def git_pull(self, abs_path: str) -> None:
         # TODO check if the path exists, rn we assume the path is valid
         with self.get_server_connection() as conn:
-            self.exec.run_version_control_task(
-                conn, f"cd {abs_path}; git pull", sudo=False
+            self.exec.execute(
+                conn,
+                f"cd {abs_path}; git pull",
+                group=TaskGroup.VERSION_CONTROL,
+                sudo=False,
             )
 
     def git_remove(self, abs_path: str) -> None:

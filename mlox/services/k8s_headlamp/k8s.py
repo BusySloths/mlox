@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
+from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
@@ -15,9 +16,10 @@ class K8sHeadlampService(AbstractService):
     def get_login_token(self, bundle) -> str:
         token = ""
         with bundle.server.get_server_connection() as conn:
-            token = self.exec.run_kubernetes_task(
+            token = self.exec.execute(
                 conn,
                 f"kubectl create token {self.service_name} --namespace {self.namespace}",
+                group=TaskGroup.KUBERNETES,
                 sudo=True,
             )
         return token
@@ -29,15 +31,17 @@ class K8sHeadlampService(AbstractService):
         src_url = f"https://kubernetes-sigs.github.io/headlamp/"
 
         # Add kubernetes-dashboard repository
-        self.exec.run_kubernetes_task(
+        self.exec.execute(
             conn,
             f"helm repo add headlamp {src_url} --kubeconfig {kubeconfig}",
+            group=TaskGroup.KUBERNETES,
             sudo=True,
         )
         # Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
-        self.exec.run_kubernetes_task(
+        self.exec.execute(
             conn,
             f"helm upgrade --install {self.service_name} headlamp/headlamp --create-namespace --namespace {self.namespace} --kubeconfig {kubeconfig}",
+            group=TaskGroup.KUBERNETES,
             sudo=True,
         )
         node_ip, service_port = self.expose_dashboard_nodeport(conn)
@@ -60,7 +64,12 @@ class K8sHeadlampService(AbstractService):
             f'"name":"plain-http","port":8080,"targetPort":4466,"nodePort":{node_port}'
             f"}}]}}}}'"
         )
-        self.exec.run_kubernetes_task(conn, patch, sudo=True)
+        self.exec.execute(
+            conn,
+            patch,
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
+        )
         node_ip = conn.host
 
         logger.info(f"Dashboard exposed at http://{node_ip}:{node_port}")
@@ -87,7 +96,12 @@ class K8sHeadlampService(AbstractService):
 
         for cmd in cmds:
             logger.debug(f"Running: {cmd}")
-            self.exec.run_kubernetes_task(conn, cmd, sudo=True)
+            self.exec.execute(
+                conn,
+                cmd,
+                group=TaskGroup.KUBERNETES,
+                sudo=True,
+            )
 
         logger.info("✅ Headlamp uninstall complete")
         self.state = "un-initialized"

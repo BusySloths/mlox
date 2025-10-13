@@ -4,6 +4,7 @@ import json  # Added for parsing JSON output
 from dataclasses import dataclass, field
 from typing import Dict
 
+from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
@@ -29,9 +30,10 @@ class KubeAppsService(AbstractService):
         attempts = 0
         exists = True
         while exists:
-            name_exists = self.exec.run_kubernetes_task(
+            name_exists = self.exec.execute(
                 conn,
                 f"kubectl get namespace {self.namespace} --kubeconfig {self.kubeconfig}",
+                group=TaskGroup.KUBERNETES,
                 sudo=True,
             )
             exists = False
@@ -44,10 +46,18 @@ class KubeAppsService(AbstractService):
                 exists = True
 
         # add & update Helm repo
-        self.exec.run_kubernetes_task(
-            conn, f"helm repo add {self.chart_repo} {self.chart_repo_url}", sudo=True
+        self.exec.execute(
+            conn,
+            f"helm repo add {self.chart_repo} {self.chart_repo_url}",
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
         )
-        self.exec.run_kubernetes_task(conn, "helm repo update", sudo=True)
+        self.exec.execute(
+            conn,
+            "helm repo update",
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
+        )
 
         # self.exec.exec_command(
         #     conn,
@@ -61,13 +71,14 @@ class KubeAppsService(AbstractService):
         # TODO: can produce an error if the release already existed and is in the process of being terminated.
 
         # # install or upgrade KubeApps with NodePort
-        res = self.exec.run_kubernetes_task(
+        res = self.exec.execute(
             conn,
             f"helm upgrade --install {self.release_name} {self.chart_name} "
             f"--kubeconfig {self.kubeconfig} "
             f"--namespace {self.namespace} --create-namespace "
             f"--set frontend.service.type=NodePort "
             f"--set frontend.service.nodePort={self.node_port}",
+            group=TaskGroup.KUBERNETES,
             sudo=True,
         )
         if not res:
@@ -105,7 +116,12 @@ class KubeAppsService(AbstractService):
             f'"port":{port},"targetPort":{port},"nodePort":{node_port}'
             f"}}]}}}}'"
         )
-        self.exec.run_kubernetes_task(conn, patch, sudo=True)
+        self.exec.execute(
+            conn,
+            patch,
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
+        )
 
         node_ip = conn.host
         logger.info(f"KubeApps exposed at http://{node_ip}:{node_port}")
@@ -115,15 +131,17 @@ class KubeAppsService(AbstractService):
         logger.info("🗑️ Uninstalling KubeApps")
 
         # uninstall Helm release
-        self.exec.run_kubernetes_task(
+        self.exec.execute(
             conn,
             f"helm uninstall {self.release_name} --namespace {self.namespace} --no-hooks --kubeconfig {self.kubeconfig} || true",
+            group=TaskGroup.KUBERNETES,
             sudo=True,
         )
         # remove namespace
-        self.exec.run_kubernetes_task(
+        self.exec.execute(
             conn,
             f"kubectl delete namespace {self.namespace} --ignore-not-found --now=true --wait=false",
+            group=TaskGroup.KUBERNETES,
             sudo=True,
         )
         # clean up files
@@ -141,8 +159,11 @@ class KubeAppsService(AbstractService):
 
     def check(self, conn) -> Dict:
         helm_status_cmd = f"helm status {self.release_name} --kubeconfig {self.kubeconfig} --namespace {self.namespace} -o json"
-        helm_result = self.exec.run_kubernetes_task(
-            conn, helm_status_cmd, sudo=True
+        helm_result = self.exec.execute(
+            conn,
+            helm_status_cmd,
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
         )
 
         # if helm_result.ok:

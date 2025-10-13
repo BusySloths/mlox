@@ -1,6 +1,7 @@
 import json
 import pytest
 
+from mlox.executors import TaskGroup
 from mlox.secret_manager import TinySecretManager
 from mlox.utils import dataclass_to_dict
 
@@ -34,4 +35,8 @@ def test_secret_roundtrip(ubuntu_docker_server):
         )
         with pytest.raises(json.JSONDecodeError):
             json.loads(raw_contents)
-        executor.run_filesystem_task(conn, f"rm -f {file_path}")
+        executor.execute(
+            conn,
+            f"rm -f {file_path}",
+            group=TaskGroup.FILESYSTEM,
+        )

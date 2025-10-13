@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
+from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
@@ -15,9 +16,10 @@ class K8sDashboardService(AbstractService):
     def get_login_token(self, bundle) -> str:
         token = ""
         with bundle.server.get_server_connection() as conn:
-            token = self.exec.run_kubernetes_task(
+            token = self.exec.execute(
                 conn,
-                f"kubectl -n kubernetes-dashboard create token admin-user",
+                "kubectl -n kubernetes-dashboard create token admin-user",
+                group=TaskGroup.KUBERNETES,
                 sudo=True,
             )
         return token
@@ -41,9 +43,10 @@ class K8sDashboardService(AbstractService):
         src_url = f"https://github.com/kubernetes/dashboard/tree/release/{version}/"
 
         # Add kubernetes-dashboard repository
-        self.exec.run_kubernetes_task(
+        self.exec.execute(
             conn,
             f"helm repo add kubernetes-dashboard {src_url} --kubeconfig {kubeconfig}",
+            group=TaskGroup.KUBERNETES,
             sudo=True,
         )
         # self.exec.exec_command(
@@ -52,13 +55,17 @@ class K8sDashboardService(AbstractService):
         #     sudo=True,
         # )
         # Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
-        self.exec.run_kubernetes_task(
+        self.exec.execute(
             conn,
             f"helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard --kubeconfig {kubeconfig}",
+            group=TaskGroup.KUBERNETES,
             sudo=True,
         )
-        self.exec.run_kubernetes_task(
-            conn, f"kubectl apply -f {self.target_path}/service_account.yaml", sudo=True
+        self.exec.execute(
+            conn,
+            f"kubectl apply -f {self.target_path}/service_account.yaml",
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
         )
         # node_ip, service_port = self.setup_k8s_dashboard_traefik_ingress(conn)
         node_ip, service_port = self.expose_dashboard_nodeport(conn)
@@ -90,7 +97,12 @@ class K8sDashboardService(AbstractService):
             f"}}]}}}}'"
         )
 
-        self.exec.run_kubernetes_task(conn, patch, sudo=True)
+        self.exec.execute(
+            conn,
+            patch,
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
+        )
         node_ip = conn.host
 
         logger.info(f"Dashboard exposed at https://{node_ip}:{node_port}")
@@ -205,7 +217,12 @@ class K8sDashboardService(AbstractService):
 
         for cmd in cmds:
             logger.debug(f"Running: {cmd}")
-            self.exec.run_kubernetes_task(conn, cmd, sudo=True)
+            self.exec.execute(
+                conn,
+                cmd,
+                group=TaskGroup.KUBERNETES,
+                sudo=True,
+            )
 
         self.exec.fs_delete_dir(conn, self.target_path)
         logger.info("✅ K8s Dashboard uninstall complete")

@@ -4,6 +4,7 @@ from datetime import datetime
 import pytest
 
 from mlox.config import get_stacks_path, load_config
+from mlox.executors import TaskGroup
 from mlox.infra import Bundle, Infrastructure
 
 pytestmark = pytest.mark.integration
@@ -31,15 +32,15 @@ def _install_preconfigured_deploy_keys(
     key_name = f"mlox_deploy_{service.repo_name}"
     ssh_dir = f"{service.target_path}/.ssh"
     executor.fs_create_dir(conn, ssh_dir)
-    executor.run_filesystem_task(conn, f"chmod 700 {ssh_dir}")
+    executor.fs_set_permissions(conn, ssh_dir, "700")
 
     private_key_path = f"{ssh_dir}/{key_name}"
     public_key_path = f"{private_key_path}.pub"
 
     executor.fs_write_file(conn, private_key_path, _normalize_key_material(private_key))
-    executor.run_filesystem_task(conn, f"chmod 600 {private_key_path}")
+    executor.fs_set_permissions(conn, private_key_path, "600")
     executor.fs_write_file(conn, public_key_path, _normalize_key_material(public_key))
-    executor.run_filesystem_task(conn, f"chmod 644 {public_key_path}")
+    executor.fs_set_permissions(conn, public_key_path, "644")
     service.deploy_key = public_key.strip()
 
     home_dir = getattr(server.mlox_user, "home", None)
@@ -48,10 +49,11 @@ def _install_preconfigured_deploy_keys(
     else:
         home_ssh_dir = "~/.ssh"
     executor.fs_create_dir(conn, home_ssh_dir)
-    executor.run_filesystem_task(conn, f"chmod 700 {home_ssh_dir}")
-    executor.run_network_task(
+    executor.fs_set_permissions(conn, home_ssh_dir, "700")
+    executor.execute(
         conn,
         f"ssh-keyscan -t rsa github.com >> {home_ssh_dir}/known_hosts",
+        group=TaskGroup.NETWORKING,
         sudo=False,
     )
 

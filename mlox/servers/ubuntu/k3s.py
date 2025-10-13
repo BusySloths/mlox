@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, Any
 
+from mlox.executors import TaskGroup
 from mlox.servers.ubuntu.docker import UbuntuDockerServer
 
 # Configure logging (optional, but recommended)
@@ -48,28 +49,53 @@ class UbuntuK3sServer(UbuntuDockerServer):
             )
 
         with self.get_server_connection() as conn:
-            self.exec.run_network_task(
+            self.exec.execute(
                 conn,
                 f"curl -sfL https://get.k3s.io | {agent_str}sh -s -",
+                group=TaskGroup.NETWORKING,
                 sudo=True,
                 pty=True,
             )
-            self.exec.run_service_task(conn, "systemctl status k3s", sudo=True)
-            self.exec.run_kubernetes_task(conn, "kubectl get nodes", sudo=True)
-            self.exec.run_kubernetes_task(conn, "kubectl version", sudo=True)
+            self.exec.execute(
+                conn,
+                "systemctl status k3s",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+            )
+            self.exec.execute(
+                conn,
+                "kubectl get nodes",
+                group=TaskGroup.KUBERNETES,
+                sudo=True,
+            )
+            self.exec.execute(
+                conn,
+                "kubectl version",
+                group=TaskGroup.KUBERNETES,
+                sudo=True,
+            )
 
             # Install Helm CLI
             logger.info("Installing Helm CLI...")
-            self.exec.run_network_task(
+            self.exec.execute(
                 conn,
                 "curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3",
+                group=TaskGroup.NETWORKING,
                 sudo=False,
             )
-            self.exec.run_filesystem_task(conn, "chmod 700 get_helm.sh", sudo=False)
+            self.exec.fs_set_permissions(conn, "get_helm.sh", "700")
             # The get_helm.sh script typically installs to /usr/local/bin/helm, which might require sudo.
-            self.exec.run_system_package_task(conn, "./get_helm.sh", sudo=True)
-            self.exec.run_kubernetes_task(
-                conn, "helm version", sudo=True
+            self.exec.execute(
+                conn,
+                "./get_helm.sh",
+                group=TaskGroup.SYSTEM_PACKAGES,
+                sudo=True,
+            )
+            self.exec.execute(
+                conn,
+                "helm version",
+                group=TaskGroup.KUBERNETES,
+                sudo=True,
             )  # Verify helm installation, using sudo to match kubectl checks
             logger.info("Helm CLI installed successfully.")
             self.state = "running"
@@ -84,8 +110,12 @@ class UbuntuK3sServer(UbuntuDockerServer):
             try:
                 # Check if server uninstall script exists
                 if conn.run("test -f /usr/local/bin/k3s-uninstall.sh", warn=True).ok:
-                    self.exec.run_system_package_task(
-                        conn, "/usr/local/bin/k3s-uninstall.sh", sudo=True, pty=True
+                    self.exec.execute(
+                        conn,
+                        "/usr/local/bin/k3s-uninstall.sh",
+                        group=TaskGroup.SYSTEM_PACKAGES,
+                        sudo=True,
+                        pty=True,
                     )
                     logger.info("k3s server uninstalled successfully.")
                     uninstalled = True
@@ -103,9 +133,10 @@ class UbuntuK3sServer(UbuntuDockerServer):
                     if conn.run(
                         "test -f /usr/local/bin/k3s-agent-uninstall.sh", warn=True
                     ).ok:
-                        self.exec.run_system_package_task(
+                        self.exec.execute(
                             conn,
                             "/usr/local/bin/k3s-agent-uninstall.sh",
+                            group=TaskGroup.SYSTEM_PACKAGES,
                             sudo=True,
                             pty=True,
                         )
@@ -128,8 +159,12 @@ class UbuntuK3sServer(UbuntuDockerServer):
         backend_info: Dict[str, Any] = {}
         with self.get_server_connection() as conn:
             # Check k3s status
-            res = self.exec.run_service_task(
-                conn, "systemctl is-active k3s", sudo=True, pty=False
+            res = self.exec.execute(
+                conn,
+                "systemctl is-active k3s",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+                pty=False,
             )
             if res is None:
                 backend_info["k3s.is_running"] = False
@@ -138,8 +173,12 @@ class UbuntuK3sServer(UbuntuDockerServer):
             backend_info["backend.is_running"] = backend_info["k3s.is_running"]
 
             # Check k3s-agent status
-            res = self.exec.run_service_task(
-                conn, "systemctl is-active k3s-agent", sudo=True, pty=False
+            res = self.exec.execute(
+                conn,
+                "systemctl is-active k3s-agent",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+                pty=False,
             )
             if res is None:
                 backend_info["k3s-agent.is_running"] = False
@@ -147,15 +186,20 @@ class UbuntuK3sServer(UbuntuDockerServer):
                 backend_info["k3s-agent.is_running"] = True
             # If k3s is running, get node status
             try:
-                res = self.exec.run_filesystem_task(
+                res = self.exec.execute(
                     conn,
                     "cat /var/lib/rancher/k3s/server/node-token",
+                    group=TaskGroup.FILESYSTEM,
                     sudo=True,
                     pty=True,
                 )
                 backend_info["k3s.token"] = res.split("password: ")[1].strip()
-                node_output = self.exec.run_kubernetes_task(
-                    conn, "kubectl get nodes -o wide", sudo=True, pty=False
+                node_output = self.exec.execute(
+                    conn,
+                    "kubectl get nodes -o wide",
+                    group=TaskGroup.KUBERNETES,
+                    sudo=True,
+                    pty=False,
                 )
                 # Parse kubectl get nodes output (simple parsing assuming standard format)
                 nodes = []
@@ -177,8 +221,18 @@ class UbuntuK3sServer(UbuntuDockerServer):
 
     def start_backend_runtime(self) -> None:
         with self.get_server_connection() as conn:
-            self.exec.run_service_task(conn, "systemctl start k3s", sudo=True)
+            self.exec.execute(
+                conn,
+                "systemctl start k3s",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+            )
 
     def stop_backend_runtime(self) -> None:
         with self.get_server_connection() as conn:
-            self.exec.run_service_task(conn, "systemctl stop k3s", sudo=True)
+            self.exec.execute(
+                conn,
+                "systemctl stop k3s",
+                group=TaskGroup.SERVICE_CONTROL,
+                sudo=True,
+            )

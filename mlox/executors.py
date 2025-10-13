@@ -138,6 +138,29 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 return None
             raise
 
+    def execute(
+        self,
+        connection: Connection,
+        command: str,
+        *,
+        group: TaskGroup,
+        sudo: bool = False,
+        pty: bool = False,
+        description: str | None = None,
+        extra_metadata: Optional[Dict[str, Any]] = None,
+    ) -> str | None:
+        """Public entry point to execute a grouped remote command."""
+
+        return self._run_task(
+            connection,
+            group=group,
+            command=command,
+            sudo=sudo,
+            pty=pty,
+            description=description,
+            extra_metadata=extra_metadata,
+        )
+
     def _run_task(
         self,
         connection: Connection,
@@ -163,214 +186,18 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             metadata=metadata,
         )
 
-    # Task helpers ------------------------------------------------------
-
-    def run_system_package_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = True,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.SYSTEM_PACKAGES,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_service_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = True,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.SERVICE_CONTROL,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_container_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = True,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.CONTAINER_RUNTIME,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_kubernetes_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = True,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.KUBERNETES,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_filesystem_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = False,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.FILESYSTEM,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_user_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = True,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.USER_ACCESS,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_security_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = False,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.SECURITY_ASSETS,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_version_control_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = False,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.VERSION_CONTROL,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_network_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = False,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
+    def sys_disk_free(self, connection: Connection) -> int:
+        uname = self._run_task(
             connection,
             group=TaskGroup.NETWORKING,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def run_ad_hoc_task(
-        self,
-        connection: Connection,
-        command: str,
-        *,
-        sudo: bool = False,
-        pty: bool = False,
-        description: str | None = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
-    ) -> str | None:
-        return self._run_task(
-            connection,
-            group=TaskGroup.AD_HOC,
-            command=command,
-            sudo=sudo,
-            pty=pty,
-            description=description,
-            extra_metadata=extra_metadata,
-        )
-
-    def sys_disk_free(self, connection: Connection) -> int:
-        uname = self.run_network_task(connection, "uname -s") or ""
+            command="uname -s",
+        ) or ""
         if "Linux" in uname:
             perc = (
-                self.run_network_task(
-                    connection, "df -h / | tail -n1 | awk '{print $5}'"
+                self._run_task(
+                    connection,
+                    group=TaskGroup.NETWORKING,
+                    command="df -h / | tail -n1 | awk '{print $5}'",
                 )
                 or "0%"
             )
@@ -387,8 +214,16 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         self, connection: Connection, param: str, upgrade: bool = False
     ) -> str | None:
         cmd = "apt upgrade" if upgrade else f"apt install {param}"
-        self.run_system_package_task(connection, "dpkg --configure -a")
-        result = self.run_system_package_task(connection, cmd)
+        self._run_task(
+            connection,
+            group=TaskGroup.SYSTEM_PACKAGES,
+            command="dpkg --configure -a",
+        )
+        result = self._run_task(
+            connection,
+            group=TaskGroup.SYSTEM_PACKAGES,
+            command=cmd,
+        )
         self._record_history(
             action="sys_root_apt_install",
             status="success",
@@ -399,14 +234,20 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         return result
 
     def sys_user_id(self, connection: Connection) -> str | None:
-        result = self.run_user_task(connection, "id -u", sudo=False)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.USER_ACCESS,
+            command="id -u",
+            sudo=False,
+        )
         self._record_history(action="sys_user_id", status="success", output=result)
         return result
 
     def sys_list_user(self, connection: Connection) -> str | None:
-        result = self.run_user_task(
+        result = self._run_task(
             connection,
-            "ls -l /home | awk '{print $4}'",
+            group=TaskGroup.USER_ACCESS,
+            command="ls -l /home | awk '{print $4}'",
             sudo=False,
         )
         self._record_history(action="sys_list_user", status="success", output=result)
@@ -422,10 +263,18 @@ class UbuntuTaskExecutor(ExecutionRecorder):
     ) -> str | None:
         p_home_dir = "-m " if with_home_dir else ""
         command = f"useradd -p `openssl passwd {passwd}` {p_home_dir}-d /home/{user_name} {user_name}"
-        result = self.run_user_task(connection, command, sudo=True)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.USER_ACCESS,
+            command=command,
+            sudo=True,
+        )
         if sudoer:
-            self.run_user_task(
-                connection, f"usermod -aG sudo {user_name}", sudo=True
+            self._run_task(
+                connection,
+                group=TaskGroup.USER_ACCESS,
+                command=f"usermod -aG sudo {user_name}",
+                sudo=True,
             )
 
             if os.environ.get("MLOX_DEBUG", False):
@@ -434,13 +283,17 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 )
                 sudoer_file_content = f"{user_name} ALL=(ALL) NOPASSWD: ALL"
                 sudoer_file_path = f"/etc/sudoers.d/90-mlox-{user_name}"
-                self.run_user_task(
+                self._run_task(
                     connection,
-                    f"echo '{sudoer_file_content}' | tee {sudoer_file_path}",
+                    group=TaskGroup.USER_ACCESS,
+                    command=f"echo '{sudoer_file_content}' | tee {sudoer_file_path}",
                     sudo=True,
                 )
-                self.run_user_task(
-                    connection, f"chmod 440 {sudoer_file_path}", sudo=True
+                self._run_task(
+                    connection,
+                    group=TaskGroup.USER_ACCESS,
+                    command=f"chmod 440 {sudoer_file_path}",
+                    sudo=True,
                 )
 
         self._record_history(
@@ -472,26 +325,36 @@ class UbuntuTaskExecutor(ExecutionRecorder):
 
         subject = f"/CN={ip}"
 
-        self.run_security_task(
-            connection, f"cd {path}; openssl genrsa -out key.pem 2048"
-        )
-        self.run_security_task(
+        self._run_task(
             connection,
-            f"cd {path}; openssl req -new -key key.pem -out server.csr -subj '{subject}'",
+            group=TaskGroup.SECURITY_ASSETS,
+            command=f"cd {path}; openssl genrsa -out key.pem 2048",
         )
-        self.run_security_task(
+        self._run_task(
             connection,
-            (
+            group=TaskGroup.SECURITY_ASSETS,
+            command=(
+                f"cd {path}; openssl req -new -key key.pem -out server.csr -subj '{subject}'"
+            ),
+        )
+        self._run_task(
+            connection,
+            group=TaskGroup.SECURITY_ASSETS,
+            command=(
                 f"cd {path}; "
                 "openssl x509 -req -in server.csr -signkey key.pem -out cert.pem "
                 "-days 365"
             ),
         )
-        self.run_security_task(
-            connection, f"chmod u=rw,g=rw,o=rw {path}/key.pem"
+        self._run_task(
+            connection,
+            group=TaskGroup.SECURITY_ASSETS,
+            command=f"chmod u=rw,g=rw,o=rw {path}/key.pem",
         )
-        self.run_security_task(
-            connection, f"chmod u=rw,g=rw,o=rw {path}/cert.pem"
+        self._run_task(
+            connection,
+            group=TaskGroup.SECURITY_ASSETS,
+            command=f"chmod u=rw,g=rw,o=rw {path}/cert.pem",
         )
 
         self._record_history(
@@ -511,21 +374,32 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             connection, f"{path}/openssl-san.cnf", "<MY_IP>", f"{ip}"
         )
 
-        self.run_security_task(
-            connection, f"cd {path}; openssl genrsa -out key.pem 2048"
-        )
-        self.run_security_task(
+        self._run_task(
             connection,
-            f"cd {path}; openssl req -new -key key.pem -out server.csr -config openssl-san.cnf",
+            group=TaskGroup.SECURITY_ASSETS,
+            command=f"cd {path}; openssl genrsa -out key.pem 2048",
+        )
+        self._run_task(
+            connection,
+            group=TaskGroup.SECURITY_ASSETS,
+            command=(
+                f"cd {path}; openssl req -new -key key.pem -out server.csr -config openssl-san.cnf"
+            ),
         )
         cmd = (
             f"cd {path}; "
             "openssl x509 -req -in server.csr -signkey key.pem "
             "-out cert.pem -days 365 -extensions req_ext -extfile openssl-san.cnf"
         )
-        self.run_security_task(connection, cmd)
-        self.run_security_task(
-            connection, f"chmod u=rw,g=rw,o=rw {path}/key.pem"
+        self._run_task(
+            connection,
+            group=TaskGroup.SECURITY_ASSETS,
+            command=cmd,
+        )
+        self._run_task(
+            connection,
+            group=TaskGroup.SECURITY_ASSETS,
+            command=f"chmod u=rw,g=rw,o=rw {path}/key.pem",
         )
 
         self._record_history(
@@ -536,7 +410,13 @@ class UbuntuTaskExecutor(ExecutionRecorder):
 
     def docker_list_container(self, connection: Connection) -> list[list[str]]:
         res = (
-            self.run_container_task(connection, "docker container ls", sudo=True) or ""
+            self._run_task(
+                connection,
+                group=TaskGroup.CONTAINER_RUNTIME,
+                command="docker container ls",
+                sudo=True,
+            )
+            or ""
         )
         dl = str(res).split("\n")
         dlist = [re.sub(r"\ {2,}", "    ", dl[i]).split("   ") for i in range(len(dl))]
@@ -553,7 +433,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
     ) -> str | None:
         volumes = "--volumes " if remove_volumes else ""
         command = f'docker compose -f "{config_yaml}" down {volumes}--remove-orphans'
-        result = self.run_container_task(connection, command, sudo=True)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            command=command,
+            sudo=True,
+        )
         self._record_history(
             action="docker_down",
             status="success",
@@ -574,7 +459,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command = (
                 f'docker compose --env-file {env_file} -f "{config_yaml}" up -d --build'
             )
-        result = self.run_container_task(connection, command, sudo=True)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            command=command,
+            sudo=True,
+        )
         self._record_history(
             action="docker_up",
             status="success",
@@ -587,7 +477,14 @@ class UbuntuTaskExecutor(ExecutionRecorder):
     def docker_service_state(self, connection: Connection, service_name: str) -> str:
         cmd = f"docker inspect --format '{{{{.State.Status}}}}' {service_name}"
         res = (
-            self.run_container_task(connection, cmd, sudo=True, pty=False) or ""
+            self._run_task(
+                connection,
+                group=TaskGroup.CONTAINER_RUNTIME,
+                command=cmd,
+                sudo=True,
+                pty=False,
+            )
+            or ""
         )
         self._record_history(
             action="docker_service_state",
@@ -601,8 +498,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
     def docker_all_service_states(
         self, connection: Connection
     ) -> dict[str, dict[Any, Any]]:
-        ids = self.run_container_task(
-            connection, "docker ps -aq", sudo=True, pty=False
+        ids = self._run_task(
+            connection,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            command="docker ps -aq",
+            sudo=True,
+            pty=False,
         )
         if not ids:
             self._record_history(
@@ -611,8 +512,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             return {}
 
         id_list = " ".join(ids.split())
-        inspect_output = self.run_container_task(
-            connection, f"docker inspect {id_list}", sudo=True, pty=False
+        inspect_output = self._run_task(
+            connection,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            command=f"docker inspect {id_list}",
+            sudo=True,
+            pty=False,
         )
         try:
             containers = json.loads(inspect_output or "[]")
@@ -640,7 +545,13 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         try:
             cmd = f"docker logs --tail {int(tail)} {service_name}"
             res = (
-                self.run_container_task(connection, cmd, sudo=True, pty=False)
+                self._run_task(
+                    connection,
+                    group=TaskGroup.CONTAINER_RUNTIME,
+                    command=cmd,
+                    sudo=True,
+                    pty=False,
+                )
                 or "No docker logs found"
             )
             self._record_history(
@@ -665,9 +576,15 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         self, connection: Connection, repo_url: str, install_path: str
     ) -> None:
         try:
-            self.run_filesystem_task(connection, f"mkdir -p {install_path}")
-            self.run_version_control_task(
-                connection, f"cd {install_path}; git clone {repo_url}"
+            self._run_task(
+                connection,
+                group=TaskGroup.FILESYSTEM,
+                command=f"mkdir -p {install_path}",
+            )
+            self._run_task(
+                connection,
+                group=TaskGroup.VERSION_CONTROL,
+                command=f"cd {install_path}; git clone {repo_url}",
             )
             self._record_history(
                 action="git_clone",
@@ -701,13 +618,22 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             raise
 
     def fs_create_dir(self, connection: Connection, path: str) -> None:
-        self.run_filesystem_task(connection, f"mkdir -p {path}")
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"mkdir -p {path}",
+        )
         self._record_history(
             action="fs_create_dir", status="success", metadata={"path": path}
         )
 
     def fs_delete_dir(self, connection: Connection, path: str) -> None:
-        self.run_filesystem_task(connection, f"rm -rf {path}", sudo=True)
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"rm -rf {path}",
+            sudo=True,
+        )
         self._record_history(
             action="fs_delete_dir", status="success", metadata={"path": path}
         )
@@ -719,8 +645,11 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         dst_path: str,
         sudo: bool = False,
     ) -> None:
-        self.run_filesystem_task(
-            connection, f"cp -r {src_path} {dst_path}", sudo=sudo
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"cp -r {src_path} {dst_path}",
+            sudo=sudo,
         )
         self._record_history(
             action="fs_copy_dir",
@@ -728,10 +657,67 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             metadata={"src_path": src_path, "dst_path": dst_path, "sudo": sudo},
         )
 
+    def fs_copy_remote_file(
+        self,
+        connection: Connection,
+        source: str,
+        destination: str,
+        *,
+        sudo: bool = False,
+    ) -> None:
+        """Copy a file on the remote host."""
+
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"cp {source} {destination}",
+            sudo=sudo,
+        )
+        self._record_history(
+            action="fs_copy_remote_file",
+            status="success",
+            metadata={
+                "source": source,
+                "destination": destination,
+                "sudo": sudo,
+            },
+        )
+
+    def fs_set_permissions(
+        self,
+        connection: Connection,
+        path: str,
+        mode: str,
+        *,
+        recursive: bool = False,
+        sudo: bool = False,
+    ) -> None:
+        """Update permissions on the remote host."""
+
+        recursive_flag = " -R" if recursive else ""
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"chmod{recursive_flag} {mode} {path}",
+            sudo=sudo,
+        )
+        self._record_history(
+            action="fs_set_permissions",
+            status="success",
+            metadata={
+                "path": path,
+                "mode": mode,
+                "recursive": recursive,
+                "sudo": sudo,
+            },
+        )
+
     def fs_exists_dir(self, connection: Connection, path: str) -> bool:
         try:
-            res = self.run_filesystem_task(
-                connection, f"test -d {path} && echo exists || echo missing"
+            res = self._run_task(
+                connection,
+                group=TaskGroup.FILESYSTEM,
+                command=f"test -d {path} && echo exists || echo missing",
             )
             exists = str(res).strip() == "exists"
             self._record_history(
@@ -756,8 +742,11 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         link_path: str,
         sudo: bool = False,
     ) -> None:
-        self.run_filesystem_task(
-            connection, f"ln -s {target_path} {link_path}", sudo=sudo
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"ln -s {target_path} {link_path}",
+            sudo=sudo,
         )
         self._record_history(
             action="fs_create_symlink",
@@ -772,7 +761,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
     def fs_remove_symlink(
         self, connection: Connection, link_path: str, sudo: bool = False
     ) -> None:
-        self.run_filesystem_task(connection, f"rm {link_path}", sudo=sudo)
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"rm {link_path}",
+            sudo=sudo,
+        )
         self._record_history(
             action="fs_remove_symlink",
             status="success",
@@ -780,14 +774,26 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         )
 
     def fs_touch(self, connection: Connection, fname: str) -> None:
-        self.run_filesystem_task(connection, f"touch {fname}")
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"touch {fname}",
+        )
         self._record_history(
             action="fs_touch", status="success", metadata={"file": fname}
         )
 
     def fs_append_line(self, connection: Connection, fname: str, line: str) -> None:
-        self.run_filesystem_task(connection, f"touch {fname}")
-        self.run_filesystem_task(connection, f"echo '{line}' >> {fname}")
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"touch {fname}",
+        )
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"echo '{line}' >> {fname}",
+        )
         self._record_history(
             action="fs_append_line",
             status="success",
@@ -795,7 +801,11 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         )
 
     def fs_create_empty_file(self, connection: Connection, fname: str) -> None:
-        self.run_filesystem_task(connection, f"echo -n >| {fname}")
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=f"echo -n >| {fname}",
+        )
         self._record_history(
             action="fs_create_empty_file", status="success", metadata={"file": fname}
         )
@@ -810,9 +820,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         separator: str = "!",
         sudo: bool = False,
     ) -> None:
-        self.run_filesystem_task(
+        self._run_task(
             connection,
-            f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}",
+            group=TaskGroup.FILESYSTEM,
+            command=(
+                f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}"
+            ),
             sudo=sudo,
         )
         self._record_history(
@@ -857,8 +870,11 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 logger.info(
                     "Uploaded content to temporary remote path: %s", remote_tmp_path
                 )
-                self.run_filesystem_task(
-                    connection, f"mv {remote_tmp_path} {file_path}", sudo=True
+                self._run_task(
+                    connection,
+                    group=TaskGroup.FILESYSTEM,
+                    command=f"mv {remote_tmp_path} {file_path}",
+                    sudo=True,
                 )
                 logger.info(
                     "Moved temporary file from %s to %s using sudo.",
@@ -868,9 +884,10 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Error writing file %s with sudo: %s", file_path, exc)
                 if connection.is_connected:
-                    self.run_filesystem_task(
+                    self._run_task(
                         connection,
-                        f"rm -f {remote_tmp_path}",
+                        group=TaskGroup.FILESYSTEM,
+                        command=f"rm -f {remote_tmp_path}",
                         sudo=True,
                         pty=False,
                     )
@@ -923,7 +940,14 @@ class UbuntuTaskExecutor(ExecutionRecorder):
     ) -> list[str]:
         command = f"ls -A1 {path}"
         output = (
-            self.run_filesystem_task(connection, command, sudo=sudo, pty=False) or ""
+            self._run_task(
+                connection,
+                group=TaskGroup.FILESYSTEM,
+                command=command,
+                sudo=sudo,
+                pty=False,
+            )
+            or ""
         )
         entries = output.splitlines() if output else []
         self._record_history(
@@ -940,7 +964,14 @@ class UbuntuTaskExecutor(ExecutionRecorder):
     ) -> list[dict[str, Any]]:
         command = f"find {path} -printf '%p|%y|%s|%TY-%Tm-%Td %TH:%TM:%TS\\n'"
         output = (
-            self.run_filesystem_task(connection, command, sudo=sudo, pty=False) or ""
+            self._run_task(
+                connection,
+                group=TaskGroup.FILESYSTEM,
+                command=command,
+                sudo=sudo,
+                pty=False,
+            )
+            or ""
         )
         entries: list[dict[str, Any]] = []
         if output:

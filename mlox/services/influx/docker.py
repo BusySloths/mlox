@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
+from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 
@@ -46,9 +47,10 @@ class InfluxDockerService(AbstractService):
         self.exec.fs_append_line(conn, env_pw_path, self.pw)
         self.exec.fs_append_line(conn, env_token_path, self.token)
 
-        self.exec.run_filesystem_task(
+        self.exec.execute(
             conn,
             f"cat {self.target_path}/cert.pem {self.target_path}/key.pem > {self.target_path}/influxdb.pem",
+            group=TaskGroup.FILESYSTEM,
         )
 
         self.service_ports["InfluxDB"] = int(self.port)

@@ -6,7 +6,7 @@ from unittest.mock import ANY, MagicMock, call
 import pytest
 from fabric import Connection  # type: ignore
 
-from mlox.executors import UbuntuTaskExecutor
+from mlox.executors import TaskGroup, UbuntuTaskExecutor
 
 
 @dataclass
@@ -30,15 +30,22 @@ def mock_connection() -> MagicMock:
     return conn
 
 
-def test_run_ad_hoc_task(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_execute_ad_hoc_task(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
     mock_connection.run.return_value = FakeResult(stdout="test_output")
-    result = executor.run_ad_hoc_task(mock_connection, "test_command")
+    result = executor.execute(
+        mock_connection,
+        "test_command",
+        group=TaskGroup.AD_HOC,
+    )
     assert result == "test_output"
     mock_connection.run.assert_called_once_with("test_command", hide=True)
 
     mock_connection.sudo.return_value = FakeResult(stdout="sudo_output")
-    result_sudo = executor.run_ad_hoc_task(
-        mock_connection, "test_sudo_command", sudo=True
+    result_sudo = executor.execute(
+        mock_connection,
+        "test_sudo_command",
+        group=TaskGroup.AD_HOC,
+        sudo=True,
     )
     assert result_sudo == "sudo_output"
     mock_connection.sudo.assert_called_once_with(

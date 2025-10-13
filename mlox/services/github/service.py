@@ -6,6 +6,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Dict, Literal
 
+from mlox.executors import TaskGroup
 from mlox.infra import Bundle, Repo
 from mlox.service import AbstractService
 from mlox.server import AbstractGitServer
@@ -124,9 +125,10 @@ class GithubRepoService(AbstractService, Repo):
         private_key_path = f"{ssh_dir}/{key_name}"
         public_key_path = private_key_path + ".pub"
         # Generate key pair using ssh-keygen on remote
-        self.exec.run_security_task(
+        self.exec.execute(
             conn,
             f"yes | ssh-keygen -t {key_type} -b {key_bits} -N '' -f {private_key_path}",
+            group=TaskGroup.SECURITY_ASSETS,
             sudo=False,
         )
         self.deploy_key = self.exec.fs_read_file(conn, public_key_path, format="string")
@@ -135,8 +137,12 @@ class GithubRepoService(AbstractService, Repo):
         full_cmd = f"cd {self.target_path} && git clone {self.link}"
         if clone_or_pull == "pull":
             full_cmd = f"cd {self.target_path}/{self.repo_name} && git pull"
-        self.exec.run_version_control_task(
-            conn, f"bash -c '{full_cmd}'", sudo=False, pty=False
+        self.exec.execute(
+            conn,
+            f"bash -c '{full_cmd}'",
+            group=TaskGroup.VERSION_CONTROL,
+            sudo=False,
+            pty=False,
         )
 
     def _repo_with_deploy_key(
@@ -168,8 +174,12 @@ class GithubRepoService(AbstractService, Repo):
 
         err_code = 0
         try:
-            self.exec.run_version_control_task(
-                conn, f"bash -c '{full_cmd}'", sudo=False, pty=False
+            self.exec.execute(
+                conn,
+                f"bash -c '{full_cmd}'",
+                group=TaskGroup.VERSION_CONTROL,
+                sudo=False,
+                pty=False,
             )
         except Exception as exc:  # noqa: BLE001 - propagate command failure info
             logging.error(

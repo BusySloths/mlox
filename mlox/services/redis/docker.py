@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
+from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 
@@ -65,9 +66,10 @@ class RedisDockerService(AbstractService):
         # pong = client.ping()
         # assert pong is True
         try:
-            output = self.exec.run_container_task(
+            output = self.exec.execute(
                 conn,
-                f"docker ps --filter 'name=redis' --filter 'status=running' --format '{{{{.Names}}}}'",
+                "docker ps --filter 'name=redis' --filter 'status=running' --format '{{{{.Names}}}}'",
+                group=TaskGroup.CONTAINER_RUNTIME,
                 sudo=True,
             )
             if "redis" in output:
