@@ -7,17 +7,22 @@ import logging
 import os
 import re
 import secrets
+import shlex
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from io import BytesIO
-from typing import Any, Deque, Dict, Iterable, Optional
+from typing import Any, Deque, Dict, Iterable, Mapping, Optional, Sequence
 
 import yaml
 from fabric import Connection  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+def _quote_command(parts: Iterable[str]) -> str:
+    return " ".join(shlex.quote(part) for part in parts)
 
 
 class TaskGroup(Enum):
@@ -408,6 +413,491 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             metadata={"ip": ip, "path": path},
         )
 
+    def security_generate_ssh_key(
+        self,
+        connection: Connection,
+        *,
+        key_path: str,
+        key_type: str = "rsa",
+        bits: int = 4096,
+        comment: str | None = None,
+        sudo: bool = False,
+        overwrite: bool = True,
+    ) -> None:
+        if overwrite:
+            cleanup_cmd = _quote_command(
+                [
+                    "rm",
+                    "-f",
+                    key_path,
+                    f"{key_path}.pub",
+                ]
+            )
+            self._run_task(
+                connection,
+                group=TaskGroup.SECURITY_ASSETS,
+                command=cleanup_cmd,
+                sudo=sudo,
+            )
+        parts: list[str] = [
+            "ssh-keygen",
+            "-q",
+            "-t",
+            key_type,
+            "-b",
+            str(bits),
+            "-N",
+            "",
+            "-f",
+            key_path,
+        ]
+        if comment:
+            parts.extend(["-C", comment])
+        command = _quote_command(parts)
+        self._run_task(
+            connection,
+            group=TaskGroup.SECURITY_ASSETS,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="security_generate_ssh_key",
+            status="success",
+            command=command,
+            metadata={
+                "key_path": key_path,
+                "key_type": key_type,
+                "bits": bits,
+                "comment": comment,
+                "sudo": sudo,
+            },
+        )
+
+    def helm_repo_add(
+        self,
+        connection: Connection,
+        name: str,
+        url: str,
+        *,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+    ) -> str | None:
+        parts = ["helm", "repo", "add", name, url]
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="helm_repo_add",
+            status="success",
+            command=command,
+            output=result,
+            metadata={"name": name, "url": url, "kubeconfig": kubeconfig},
+        )
+        return result
+
+    def helm_repo_update(
+        self,
+        connection: Connection,
+        *,
+        repo: str | None = None,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+    ) -> str | None:
+        parts = ["helm", "repo", "update"]
+        if repo:
+            parts.append(repo)
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="helm_repo_update",
+            status="success",
+            command=command,
+            output=result,
+            metadata={"repo": repo, "kubeconfig": kubeconfig},
+        )
+        return result
+
+    def helm_upgrade_install(
+        self,
+        connection: Connection,
+        *,
+        release: str,
+        chart: str,
+        namespace: str,
+        kubeconfig: str | None = None,
+        create_namespace: bool = False,
+        values: Mapping[str, str] | None = None,
+        extra_args: Sequence[str] | None = None,
+        sudo: bool = True,
+    ) -> str | None:
+        parts: list[str] = ["helm", "upgrade", "--install", release, chart]
+        parts.extend(["--namespace", namespace])
+        if create_namespace:
+            parts.append("--create-namespace")
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        if values:
+            for key, value in values.items():
+                parts.extend(["--set", f"{key}={value}"])
+        if extra_args:
+            parts.extend(extra_args)
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="helm_upgrade_install",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "release": release,
+                "chart": chart,
+                "namespace": namespace,
+                "kubeconfig": kubeconfig,
+                "create_namespace": create_namespace,
+                "values": dict(values or {}),
+                "extra_args": list(extra_args or []),
+            },
+        )
+        return result
+
+    def helm_uninstall(
+        self,
+        connection: Connection,
+        *,
+        release: str,
+        namespace: str,
+        kubeconfig: str | None = None,
+        extra_args: Sequence[str] | None = None,
+        sudo: bool = True,
+        ignore_missing: bool = False,
+    ) -> str | None:
+        parts: list[str] = ["helm", "uninstall", release, "--namespace", namespace]
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        if extra_args:
+            parts.extend(extra_args)
+        command = _quote_command(parts)
+        try:
+            result = self._run_task(
+                connection,
+                group=TaskGroup.KUBERNETES,
+                command=command,
+                sudo=sudo,
+            )
+            status = "success"
+            error: str | None = None
+        except Exception as exc:
+            if not ignore_missing:
+                raise
+            result = None
+            status = "warning"
+            error = str(exc)
+        self._record_history(
+            action="helm_uninstall",
+            status=status,
+            command=command,
+            output=result,
+            metadata={
+                "release": release,
+                "namespace": namespace,
+                "kubeconfig": kubeconfig,
+                "extra_args": list(extra_args or []),
+                "ignore_missing": ignore_missing,
+            },
+            error=error,
+        )
+        return result
+
+    def helm_status(
+        self,
+        connection: Connection,
+        *,
+        release: str,
+        namespace: str,
+        kubeconfig: str | None = None,
+        output_format: str | None = None,
+        sudo: bool = True,
+    ) -> str | None:
+        parts: list[str] = ["helm", "status", release, "--namespace", namespace]
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        if output_format:
+            parts.extend(["-o", output_format])
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="helm_status",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "release": release,
+                "namespace": namespace,
+                "kubeconfig": kubeconfig,
+                "output_format": output_format,
+            },
+        )
+        return result
+
+    def k8s_create_token(
+        self,
+        connection: Connection,
+        *,
+        service_account: str,
+        namespace: str,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+    ) -> str | None:
+        parts: list[str] = ["kubectl", "create", "token", service_account, "--namespace", namespace]
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="k8s_create_token",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "service_account": service_account,
+                "namespace": namespace,
+                "kubeconfig": kubeconfig,
+            },
+        )
+        return result
+
+    def k8s_namespace_exists(
+        self,
+        connection: Connection,
+        namespace: str,
+        *,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+    ) -> bool:
+        parts: list[str] = [
+            "kubectl",
+            "get",
+            "namespace",
+            namespace,
+            "--ignore-not-found",
+            "--output",
+            "name",
+        ]
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        command = _quote_command(parts)
+        output = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        exists = bool(output and output.strip())
+        self._record_history(
+            action="k8s_namespace_exists",
+            status="success",
+            command=command,
+            output=str(exists),
+            metadata={"namespace": namespace, "kubeconfig": kubeconfig},
+        )
+        return exists
+
+    def k8s_apply_manifest(
+        self,
+        connection: Connection,
+        manifest: str,
+        *,
+        namespace: str | None = None,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+    ) -> str | None:
+        parts: list[str] = ["kubectl", "apply", "-f", manifest]
+        if namespace:
+            parts.extend(["--namespace", namespace])
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="k8s_apply_manifest",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "manifest": manifest,
+                "namespace": namespace,
+                "kubeconfig": kubeconfig,
+            },
+        )
+        return result
+
+    def k8s_patch_resource(
+        self,
+        connection: Connection,
+        resource_type: str,
+        name: str,
+        patch: Mapping[str, Any] | str,
+        *,
+        namespace: str | None = None,
+        kubeconfig: str | None = None,
+        patch_type: str = "merge",
+        sudo: bool = True,
+    ) -> str | None:
+        if isinstance(patch, Mapping):
+            patch_payload = json.dumps(patch)
+        else:
+            patch_payload = patch
+        parts: list[str] = [
+            "kubectl",
+            "patch",
+            resource_type,
+            name,
+            "--type",
+            patch_type,
+            "-p",
+            patch_payload,
+        ]
+        if namespace:
+            parts.extend(["--namespace", namespace])
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="k8s_patch_resource",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "resource_type": resource_type,
+                "name": name,
+                "namespace": namespace,
+                "kubeconfig": kubeconfig,
+                "patch_type": patch_type,
+            },
+        )
+        return result
+
+    def k8s_delete_manifest(
+        self,
+        connection: Connection,
+        manifest: str,
+        *,
+        namespace: str | None = None,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+        ignore_not_found: bool = True,
+    ) -> str | None:
+        parts: list[str] = ["kubectl", "delete", "-f", manifest]
+        if namespace:
+            parts.extend(["--namespace", namespace])
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        if ignore_not_found:
+            parts.append("--ignore-not-found")
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="k8s_delete_manifest",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "manifest": manifest,
+                "namespace": namespace,
+                "kubeconfig": kubeconfig,
+                "ignore_not_found": ignore_not_found,
+            },
+        )
+        return result
+
+    def k8s_delete_resource(
+        self,
+        connection: Connection,
+        resource_type: str,
+        name: str,
+        *,
+        namespace: str | None = None,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+        ignore_not_found: bool = True,
+        extra_args: Sequence[str] | None = None,
+    ) -> str | None:
+        parts: list[str] = ["kubectl", "delete", resource_type, name]
+        if namespace:
+            parts.extend(["--namespace", namespace])
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        if ignore_not_found:
+            parts.append("--ignore-not-found")
+        if extra_args:
+            parts.extend(extra_args)
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="k8s_delete_resource",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "resource_type": resource_type,
+                "name": name,
+                "namespace": namespace,
+                "kubeconfig": kubeconfig,
+                "ignore_not_found": ignore_not_found,
+                "extra_args": list(extra_args or []),
+            },
+        )
+        return result
+
     def docker_list_container(self, connection: Connection) -> list[list[str]]:
         res = (
             self._run_task(
@@ -600,6 +1090,49 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             )
             raise
 
+    def git_run(
+        self,
+        connection: Connection,
+        git_args: Sequence[str],
+        *,
+        working_dir: str,
+        env: Mapping[str, str] | None = None,
+        sudo: bool = False,
+        pty: bool = False,
+    ) -> str | None:
+        env_prefix = ""
+        if env:
+            env_prefix = " ".join(
+                f"{key}={shlex.quote(value)}" for key, value in env.items()
+            )
+            if env_prefix:
+                env_prefix += " "
+        command = (
+            f"cd {shlex.quote(working_dir)} && "
+            f"{env_prefix}{_quote_command(['git', *git_args])}"
+        )
+        result = self._run_task(
+            connection,
+            group=TaskGroup.VERSION_CONTROL,
+            command=command,
+            sudo=sudo,
+            pty=pty,
+        )
+        self._record_history(
+            action="git_run",
+            status="success",
+            command=command,
+            output=result,
+            metadata={
+                "git_args": list(git_args),
+                "working_dir": working_dir,
+                "env": dict(env or {}),
+                "sudo": sudo,
+                "pty": pty,
+            },
+        )
+        return result
+
     def fs_copy(self, connection: Connection, src_file: str, dst_path: str) -> None:
         try:
             connection.put(src_file, dst_path)
@@ -678,6 +1211,35 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             status="success",
             metadata={
                 "source": source,
+                "destination": destination,
+                "sudo": sudo,
+            },
+        )
+
+    def fs_concatenate_files(
+        self,
+        connection: Connection,
+        sources: Sequence[str],
+        destination: str,
+        *,
+        sudo: bool = False,
+    ) -> None:
+        if not sources:
+            raise ValueError("At least one source file is required")
+        sources_segment = " ".join(shlex.quote(src) for src in sources)
+        command = f"cat {sources_segment} > {shlex.quote(destination)}"
+        self._run_task(
+            connection,
+            group=TaskGroup.FILESYSTEM,
+            command=command,
+            sudo=sudo,
+        )
+        self._record_history(
+            action="fs_concatenate_files",
+            status="success",
+            command=command,
+            metadata={
+                "sources": list(sources),
                 "destination": destination,
                 "sudo": sudo,
             },

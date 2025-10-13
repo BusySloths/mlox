@@ -2,7 +2,6 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
@@ -16,11 +15,10 @@ class K8sDashboardService(AbstractService):
     def get_login_token(self, bundle) -> str:
         token = ""
         with bundle.server.get_server_connection() as conn:
-            token = self.exec.execute(
+            token = self.exec.k8s_create_token(
                 conn,
-                "kubectl -n kubernetes-dashboard create token admin-user",
-                group=TaskGroup.KUBERNETES,
-                sudo=True,
+                service_account="admin-user",
+                namespace=self.namespace,
             )
         return token
 
@@ -43,11 +41,11 @@ class K8sDashboardService(AbstractService):
         src_url = f"https://github.com/kubernetes/dashboard/tree/release/{version}/"
 
         # Add kubernetes-dashboard repository
-        self.exec.execute(
+        self.exec.helm_repo_add(
             conn,
-            f"helm repo add kubernetes-dashboard {src_url} --kubeconfig {kubeconfig}",
-            group=TaskGroup.KUBERNETES,
-            sudo=True,
+            "kubernetes-dashboard",
+            src_url,
+            kubeconfig=kubeconfig,
         )
         # self.exec.exec_command(
         #     conn,
@@ -55,17 +53,18 @@ class K8sDashboardService(AbstractService):
         #     sudo=True,
         # )
         # Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
-        self.exec.execute(
+        self.exec.helm_upgrade_install(
             conn,
-            f"helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard --create-namespace --namespace kubernetes-dashboard --kubeconfig {kubeconfig}",
-            group=TaskGroup.KUBERNETES,
-            sudo=True,
+            release="kubernetes-dashboard",
+            chart="kubernetes-dashboard/kubernetes-dashboard",
+            namespace=self.namespace,
+            kubeconfig=kubeconfig,
+            create_namespace=True,
         )
-        self.exec.execute(
+        self.exec.k8s_apply_manifest(
             conn,
-            f"kubectl apply -f {self.target_path}/service_account.yaml",
-            group=TaskGroup.KUBERNETES,
-            sudo=True,
+            f"{self.target_path}/service_account.yaml",
+            kubeconfig=kubeconfig,
         )
         # node_ip, service_port = self.setup_k8s_dashboard_traefik_ingress(conn)
         node_ip, service_port = self.expose_dashboard_nodeport(conn)
@@ -90,18 +89,26 @@ class K8sDashboardService(AbstractService):
         Converts the Dashboard Service to NodePort and returns (node_ip, node_port).
         """
         # 1) Patch the Service to add a name to the port, which is required.
-        patch = (
-            f"kubectl -n {namespace} patch svc {svc_name} "
-            f'-p \'{{"spec":{{"type":"NodePort","ports":[{{'
-            f'"name":"https","port":443,"targetPort":8443,"nodePort":{node_port}'
-            f"}}]}}}}'"
-        )
+        patch_body = {
+            "spec": {
+                "type": "NodePort",
+                "ports": [
+                    {
+                        "name": "https",
+                        "port": 443,
+                        "targetPort": 8443,
+                        "nodePort": node_port,
+                    }
+                ],
+            }
+        }
 
-        self.exec.execute(
+        self.exec.k8s_patch_resource(
             conn,
-            patch,
-            group=TaskGroup.KUBERNETES,
-            sudo=True,
+            "svc",
+            svc_name,
+            patch_body,
+            namespace=namespace,
         )
         node_ip = conn.host
 
@@ -202,27 +209,16 @@ class K8sDashboardService(AbstractService):
         manifest_url = "https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml"
         sa_file = f"{self.target_path}/service_account.yaml"
 
-        cmds = [
-            # delete the core dashboard objects
-            f"kubectl delete -f {manifest_url} --ignore-not-found",
-            # delete your custom SA + RBAC
-            f"kubectl delete -f {sa_file} --ignore-not-found",
-            # delete the ClusterRoleBinding you created
-            "kubectl delete clusterrolebinding admin-user --ignore-not-found",
-            # delete the ServiceAccount in the kubernetes-dashboard namespace
-            "kubectl delete serviceaccount admin-user -n kubernetes-dashboard --ignore-not-found",
-            # finally, delete the namespace itself
-            "kubectl delete namespace kubernetes-dashboard --ignore-not-found",
-        ]
-
-        for cmd in cmds:
-            logger.debug(f"Running: {cmd}")
-            self.exec.execute(
-                conn,
-                cmd,
-                group=TaskGroup.KUBERNETES,
-                sudo=True,
-            )
+        self.exec.k8s_delete_manifest(conn, manifest_url)
+        self.exec.k8s_delete_manifest(conn, sa_file)
+        self.exec.k8s_delete_resource(conn, "clusterrolebinding", "admin-user")
+        self.exec.k8s_delete_resource(
+            conn,
+            "serviceaccount",
+            "admin-user",
+            namespace=self.namespace,
+        )
+        self.exec.k8s_delete_resource(conn, "namespace", self.namespace)
 
         self.exec.fs_delete_dir(conn, self.target_path)
         logger.info("✅ K8s Dashboard uninstall complete")

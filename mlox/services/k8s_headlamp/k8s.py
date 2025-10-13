@@ -2,7 +2,6 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
@@ -16,11 +15,10 @@ class K8sHeadlampService(AbstractService):
     def get_login_token(self, bundle) -> str:
         token = ""
         with bundle.server.get_server_connection() as conn:
-            token = self.exec.execute(
+            token = self.exec.k8s_create_token(
                 conn,
-                f"kubectl create token {self.service_name} --namespace {self.namespace}",
-                group=TaskGroup.KUBERNETES,
-                sudo=True,
+                service_account=self.service_name,
+                namespace=self.namespace,
             )
         return token
 
@@ -31,18 +29,20 @@ class K8sHeadlampService(AbstractService):
         src_url = f"https://kubernetes-sigs.github.io/headlamp/"
 
         # Add kubernetes-dashboard repository
-        self.exec.execute(
+        self.exec.helm_repo_add(
             conn,
-            f"helm repo add headlamp {src_url} --kubeconfig {kubeconfig}",
-            group=TaskGroup.KUBERNETES,
-            sudo=True,
+            "headlamp",
+            src_url,
+            kubeconfig=kubeconfig,
         )
         # Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
-        self.exec.execute(
+        self.exec.helm_upgrade_install(
             conn,
-            f"helm upgrade --install {self.service_name} headlamp/headlamp --create-namespace --namespace {self.namespace} --kubeconfig {kubeconfig}",
-            group=TaskGroup.KUBERNETES,
-            sudo=True,
+            release=self.service_name,
+            chart="headlamp/headlamp",
+            namespace=self.namespace,
+            kubeconfig=kubeconfig,
+            create_namespace=True,
         )
         node_ip, service_port = self.expose_dashboard_nodeport(conn)
         self.service_urls["Headlamp"] = f"http://{node_ip}:{service_port}"
@@ -57,18 +57,25 @@ class K8sHeadlampService(AbstractService):
         Converts the Dashboard Service to NodePort and returns (node_ip, node_port).
         """
         # 1) Patch the Service to add a name to the port, which is required.
-        patch = (
-            f"kubectl -n {self.namespace} patch svc {self.service_name} "
-            # f"--type='merge'"
-            f'-p \'{{"spec":{{"type":"NodePort","ports":[{{'
-            f'"name":"plain-http","port":8080,"targetPort":4466,"nodePort":{node_port}'
-            f"}}]}}}}'"
-        )
-        self.exec.execute(
+        patch_body = {
+            "spec": {
+                "type": "NodePort",
+                "ports": [
+                    {
+                        "name": "plain-http",
+                        "port": 8080,
+                        "targetPort": 4466,
+                        "nodePort": node_port,
+                    }
+                ],
+            }
+        }
+        self.exec.k8s_patch_resource(
             conn,
-            patch,
-            group=TaskGroup.KUBERNETES,
-            sudo=True,
+            "svc",
+            self.service_name,
+            patch_body,
+            namespace=self.namespace,
         )
         node_ip = conn.host
 
@@ -88,20 +95,24 @@ class K8sHeadlampService(AbstractService):
         Tear down the Kubernetes Dashboard and all related RBAC/namespace.
         """
         logger.info("🗑️ Uninstalling Headlamp")
-        cmds = [
-            f"kubectl delete deployment {self.service_name} -n {self.namespace} --ignore-not-found || true",
-            f"kubectl delete service {self.service_name} -n {self.namespace} --ignore-not-found || true",
-            f"kubectl delete svc {self.service_name} -n {self.namespace} --ignore-not-found || true",
-        ]
-
-        for cmd in cmds:
-            logger.debug(f"Running: {cmd}")
-            self.exec.execute(
-                conn,
-                cmd,
-                group=TaskGroup.KUBERNETES,
-                sudo=True,
-            )
+        self.exec.k8s_delete_resource(
+            conn,
+            "deployment",
+            self.service_name,
+            namespace=self.namespace,
+        )
+        self.exec.k8s_delete_resource(
+            conn,
+            "service",
+            self.service_name,
+            namespace=self.namespace,
+        )
+        self.exec.k8s_delete_resource(
+            conn,
+            "svc",
+            self.service_name,
+            namespace=self.namespace,
+        )
 
         logger.info("✅ Headlamp uninstall complete")
         self.state = "un-initialized"

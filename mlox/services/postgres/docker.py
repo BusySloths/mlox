@@ -3,7 +3,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 
@@ -60,13 +59,8 @@ class PostgresDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         try:
-            output = self.exec.execute(
-                conn,
-                "docker ps --filter 'name=postgres' --filter 'status=running' --format '{{{{.Names}}}}'",
-                group=TaskGroup.CONTAINER_RUNTIME,
-                sudo=True,
-            )
-            if "postgres" in output:
+            state = self.exec.docker_service_state(conn, "postgres")
+            if state.strip() == "running":
                 self.state = "running"
                 return {"status": "running"}
             else:

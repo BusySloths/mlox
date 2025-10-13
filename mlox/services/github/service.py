@@ -6,7 +6,6 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Dict, Literal
 
-from mlox.executors import TaskGroup
 from mlox.infra import Bundle, Repo
 from mlox.service import AbstractService
 from mlox.server import AbstractGitServer
@@ -125,25 +124,28 @@ class GithubRepoService(AbstractService, Repo):
         private_key_path = f"{ssh_dir}/{key_name}"
         public_key_path = private_key_path + ".pub"
         # Generate key pair using ssh-keygen on remote
-        self.exec.execute(
+        self.exec.security_generate_ssh_key(
             conn,
-            f"yes | ssh-keygen -t {key_type} -b {key_bits} -N '' -f {private_key_path}",
-            group=TaskGroup.SECURITY_ASSETS,
-            sudo=False,
+            key_path=private_key_path,
+            key_type=key_type,
+            bits=key_bits,
+            comment=f"mlox-deploy-{self.repo_name}",
         )
         self.deploy_key = self.exec.fs_read_file(conn, public_key_path, format="string")
 
     def _repo_public(self, conn, clone_or_pull: Literal["clone", "pull"]) -> None:
-        full_cmd = f"cd {self.target_path} && git clone {self.link}"
-        if clone_or_pull == "pull":
-            full_cmd = f"cd {self.target_path}/{self.repo_name} && git pull"
-        self.exec.execute(
-            conn,
-            f"bash -c '{full_cmd}'",
-            group=TaskGroup.VERSION_CONTROL,
-            sudo=False,
-            pty=False,
-        )
+        if clone_or_pull == "clone":
+            self.exec.git_run(
+                conn,
+                ["clone", self.link],
+                working_dir=self.target_path,
+            )
+        else:
+            self.exec.git_run(
+                conn,
+                ["pull"],
+                working_dir=f"{self.target_path}/{self.repo_name}",
+            )
 
     def _repo_with_deploy_key(
         self, conn, clone_or_pull: Literal["clone", "pull"]
@@ -157,29 +159,29 @@ class GithubRepoService(AbstractService, Repo):
         system.
         """
         key_name = f"mlox_deploy_{self.repo_name}"
-        git_cmd = "pull"
-        trg_path = self.target_path + "/" + self.repo_name
+        git_args: list[str]
+        trg_path = f"{self.target_path}/{self.repo_name}"
         private_key_path = f"../.ssh/{key_name}"
         if clone_or_pull == "clone":
-            git_cmd = f"clone {self.link}"
+            git_args = ["clone", self.link]
             trg_path = self.target_path
             private_key_path = f".ssh/{key_name}"
+        else:
+            git_args = ["pull"]
         ssh_cmd = (
             f"ssh -i {private_key_path} -o IdentitiesOnly=yes "
             "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
             "-o BatchMode=yes"
         )
-        env_prefix = f'GIT_SSH_COMMAND="{ssh_cmd}" '
-        full_cmd = f"cd {trg_path} && {env_prefix}git {git_cmd}"
+        env = {"GIT_SSH_COMMAND": ssh_cmd}
 
         err_code = 0
         try:
-            self.exec.execute(
+            self.exec.git_run(
                 conn,
-                f"bash -c '{full_cmd}'",
-                group=TaskGroup.VERSION_CONTROL,
-                sudo=False,
-                pty=False,
+                git_args,
+                working_dir=trg_path,
+                env=env,
             )
         except Exception as exc:  # noqa: BLE001 - propagate command failure info
             logging.error(
