@@ -192,11 +192,14 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         )
 
     def sys_disk_free(self, connection: Connection) -> int:
-        uname = self._run_task(
-            connection,
-            group=TaskGroup.NETWORKING,
-            command="uname -s",
-        ) or ""
+        uname = (
+            self._run_task(
+                connection,
+                group=TaskGroup.NETWORKING,
+                command="uname -s",
+            )
+            or ""
+        )
         if "Linux" in uname:
             perc = (
                 self._run_task(
@@ -338,14 +341,15 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=f"chmod u=rw,g=rw,o=rw {path}/cert.pem",
         )
 
-
     def tls_setup(self, connection: Connection, ip: str, path: str) -> None:
         """Create TLS assets on the remote host using an OpenSSL config."""
 
         self.fs_create_dir(connection, path)
 
         stacks_path = self._get_stacks_path()
-        self.fs_copy(connection, f"{stacks_path}/openssl-san.cnf", f"{path}/openssl-san.cnf")
+        self.fs_copy(
+            connection, f"{stacks_path}/openssl-san.cnf", f"{path}/openssl-san.cnf"
+        )
         self.fs_find_and_replace(
             connection, f"{path}/openssl-san.cnf", "<MY_IP>", f"{ip}"
         )
@@ -377,7 +381,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.SECURITY_ASSETS,
             command=f"chmod u=rw,g=rw,o=rw {path}/key.pem",
         )
-
 
     def security_generate_ssh_key(
         self,
@@ -570,7 +573,14 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         kubeconfig: str | None = None,
         sudo: bool = True,
     ) -> str | None:
-        parts: list[str] = ["kubectl", "create", "token", service_account, "--namespace", namespace]
+        parts: list[str] = [
+            "kubectl",
+            "create",
+            "token",
+            service_account,
+            "--namespace",
+            namespace,
+        ]
         if kubeconfig:
             parts.extend(["--kubeconfig", kubeconfig])
         command = _quote_command(parts)
@@ -1055,9 +1065,7 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         self._run_task(
             connection,
             group=TaskGroup.FILESYSTEM,
-            command=(
-                f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}"
-            ),
+            command=(f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}"),
             sudo=sudo,
         )
 
@@ -1113,7 +1121,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                         pty=False,
                     )
                 raise
-
 
     def fs_read_file(
         self,

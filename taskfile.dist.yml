@@ -37,6 +37,21 @@ tasks:
       - '{{.PYTHON | default "python"}} -m pip install --upgrade pip-tools'
       - '{{.PYTHON | default "python"}} -m piptools compile pyproject.toml --extra {{.EXTRA}} --output-file requirements.gen.{{.EXTRA}}.txt'
 
+  deps:install:tools:
+    desc: Install tools like Multipass for integration tests
+    cmds:
+      - |
+        printf '\n\033[1;36m▶ Installing development tools...\033[0m\n'
+        if [[ "$OSTYPE" == "darwin"* ]]; then \
+          task vm:install:macos; \
+        elif [[ "$OSTYPE" == "linux-gnu"* ]]; then \
+          task vm:install:linux; \
+        else \
+          printf '\n\033[1;33m! Unsupported platform: %s\033[0m\n' "$OSTYPE"; \
+          printf 'Please install Multipass manually: https://multipass.run/docs/installing\n\n'; \
+          exit 1; \
+        fi
+
   dev:lint:
     silent: true
     desc: Lint Python sources with flake8
@@ -104,17 +119,23 @@ tasks:
           printf 'Install dev deps, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
           exit 1; \
         fi
-      - '{{.PYTHON | default "python"}} -m pytest -m "not integration" --cov=mlox --cov-report=term-missing'
+      - '{{.PYTHON | default "python"}} -m pytest tests/unit/ --cov=mlox --cov-report=term-missing'
 
   tests:unit:run:
     silent: true
+    desc: Run unit tests (excludes integration)
     cmds:
-      - python -m pytest -m "not integration" -v --cov=coverage-mlox --cov
-      - coverage report -m
-    desc: Run unit tests
+      - |
+        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
+          printf '\n\033[1;31m✖ pytest not installed.\033[0m\n'; \
+          printf 'Install dev deps, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - '{{.PYTHON | default "python"}} -m pytest tests/unit/ -v'
 
   tests:integration:run:
     silent: true
+    desc: Run integration tests (requires Multipass)
     cmds:
       - |
         if ! command -v multipass >/dev/null 2>&1; then \
@@ -122,8 +143,13 @@ tasks:
           printf 'Install it first. Run: \033[1mtask deps:install:tools\033[0m\n\n'; \
           exit 1; \
         fi
-      - pytest -m integration --run-integration
-    desc: Run integration tests
+      - |
+        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
+          printf '\n\033[1;31m✖ pytest not installed.\033[0m\n'; \
+          printf 'Install dev deps, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - '{{.PYTHON | default "python"}} -m pytest -m integration --run-integration'
 
   tests:integration:service:
     silent: true

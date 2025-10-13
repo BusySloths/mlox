@@ -28,7 +28,9 @@ class PostgresDockerService(AbstractService):
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
 
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
@@ -59,7 +61,9 @@ class PostgresDockerService(AbstractService):
 
     def check(self, conn) -> Dict:
         try:
-            state = self.exec.docker_service_state(conn, "postgres")
+            state = self.exec.docker_service_state(
+                conn, self.compose_service_names["Postgres"]
+            )
             if state.strip() == "running":
                 self.state = "running"
                 return {"status": "running"}
@@ -67,7 +71,7 @@ class PostgresDockerService(AbstractService):
                 self.state = "stopped"
                 return {"status": "stopped"}
         except Exception as e:
-            logging.error(f"Error checking Redis service status: {e}")
+            logging.error(f"Error checking Postgres service status: {e}")
             self.state = "unknown"
         return {"status": "unknown"}
 

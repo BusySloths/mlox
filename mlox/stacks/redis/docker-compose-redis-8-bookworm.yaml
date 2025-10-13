@@ -1,10 +1,10 @@
-version: '3.8'
+version: "3.8"
 services:
-
   redis:
     image: redis:bookworm
+    container_name: redis
     ports:
-      - "${MY_REDIS_PORT:-}:6379" 
+      - "${MY_REDIS_PORT:-}:6379"
     command:
       - sh
       - -c # this is to evaluate the $REDIS_PASSWORD from the env
@@ -15,7 +15,7 @@ services:
       - REDIS_TLS_KEY_FILE=/tls/redis.key
       - REDIS_TLS_CA_FILE=/tls/ca.crt
       - REDIS_TLS_ENABLED=yes
-      - REDIS_TLS_PORT=6379      
+      - REDIS_TLS_PORT=6379
     restart: always
     volumes:
       - redis_data:/bitnami/redis/data
