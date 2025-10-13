@@ -207,11 +207,7 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 or "0%"
             )
             value = int(perc[:-1])
-            self._record_history(
-                action="sys_disk_free", status="success", output=str(value)
-            )
             return value
-        self._record_history(action="sys_disk_free", status="error", output=uname)
         logger.error("No idea how to get disk space on %s!", uname)
         return 0
 
@@ -229,13 +225,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.SYSTEM_PACKAGES,
             command=cmd,
         )
-        self._record_history(
-            action="sys_root_apt_install",
-            status="success",
-            command=cmd,
-            output=result,
-            metadata={"upgrade": upgrade},
-        )
         return result
 
     def sys_user_id(self, connection: Connection) -> str | None:
@@ -245,7 +234,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command="id -u",
             sudo=False,
         )
-        self._record_history(action="sys_user_id", status="success", output=result)
         return result
 
     def sys_list_user(self, connection: Connection) -> str | None:
@@ -255,7 +243,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command="ls -l /home | awk '{print $4}'",
             sudo=False,
         )
-        self._record_history(action="sys_list_user", status="success", output=result)
         return result
 
     def sys_add_user(
@@ -301,17 +288,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                     sudo=True,
                 )
 
-        self._record_history(
-            action="sys_add_user",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "user_name": user_name,
-                "with_home_dir": with_home_dir,
-                "sudoer": sudoer,
-            },
-        )
         return result
 
     def _get_stacks_path(self) -> str:
@@ -362,11 +338,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=f"chmod u=rw,g=rw,o=rw {path}/cert.pem",
         )
 
-        self._record_history(
-            action="tls_setup_no_config",
-            status="success",
-            metadata={"ip": ip, "path": path},
-        )
 
     def tls_setup(self, connection: Connection, ip: str, path: str) -> None:
         """Create TLS assets on the remote host using an OpenSSL config."""
@@ -407,11 +378,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=f"chmod u=rw,g=rw,o=rw {path}/key.pem",
         )
 
-        self._record_history(
-            action="tls_setup",
-            status="success",
-            metadata={"ip": ip, "path": path},
-        )
 
     def security_generate_ssh_key(
         self,
@@ -460,18 +426,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=command,
             sudo=sudo,
         )
-        self._record_history(
-            action="security_generate_ssh_key",
-            status="success",
-            command=command,
-            metadata={
-                "key_path": key_path,
-                "key_type": key_type,
-                "bits": bits,
-                "comment": comment,
-                "sudo": sudo,
-            },
-        )
 
     def helm_repo_add(
         self,
@@ -491,13 +445,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.KUBERNETES,
             command=command,
             sudo=sudo,
-        )
-        self._record_history(
-            action="helm_repo_add",
-            status="success",
-            command=command,
-            output=result,
-            metadata={"name": name, "url": url, "kubeconfig": kubeconfig},
         )
         return result
 
@@ -520,13 +467,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.KUBERNETES,
             command=command,
             sudo=sudo,
-        )
-        self._record_history(
-            action="helm_repo_update",
-            status="success",
-            command=command,
-            output=result,
-            metadata={"repo": repo, "kubeconfig": kubeconfig},
         )
         return result
 
@@ -560,21 +500,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.KUBERNETES,
             command=command,
             sudo=sudo,
-        )
-        self._record_history(
-            action="helm_upgrade_install",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "release": release,
-                "chart": chart,
-                "namespace": namespace,
-                "kubeconfig": kubeconfig,
-                "create_namespace": create_namespace,
-                "values": dict(values or {}),
-                "extra_args": list(extra_args or []),
-            },
         )
         return result
 
@@ -610,20 +535,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             result = None
             status = "warning"
             error = str(exc)
-        self._record_history(
-            action="helm_uninstall",
-            status=status,
-            command=command,
-            output=result,
-            metadata={
-                "release": release,
-                "namespace": namespace,
-                "kubeconfig": kubeconfig,
-                "extra_args": list(extra_args or []),
-                "ignore_missing": ignore_missing,
-            },
-            error=error,
-        )
         return result
 
     def helm_status(
@@ -648,18 +559,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=command,
             sudo=sudo,
         )
-        self._record_history(
-            action="helm_status",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "release": release,
-                "namespace": namespace,
-                "kubeconfig": kubeconfig,
-                "output_format": output_format,
-            },
-        )
         return result
 
     def k8s_create_token(
@@ -680,17 +579,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.KUBERNETES,
             command=command,
             sudo=sudo,
-        )
-        self._record_history(
-            action="k8s_create_token",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "service_account": service_account,
-                "namespace": namespace,
-                "kubeconfig": kubeconfig,
-            },
         )
         return result
 
@@ -721,13 +609,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             sudo=sudo,
         )
         exists = bool(output and output.strip())
-        self._record_history(
-            action="k8s_namespace_exists",
-            status="success",
-            command=command,
-            output=str(exists),
-            metadata={"namespace": namespace, "kubeconfig": kubeconfig},
-        )
         return exists
 
     def k8s_apply_manifest(
@@ -750,17 +631,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.KUBERNETES,
             command=command,
             sudo=sudo,
-        )
-        self._record_history(
-            action="k8s_apply_manifest",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "manifest": manifest,
-                "namespace": namespace,
-                "kubeconfig": kubeconfig,
-            },
         )
         return result
 
@@ -801,19 +671,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=command,
             sudo=sudo,
         )
-        self._record_history(
-            action="k8s_patch_resource",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "resource_type": resource_type,
-                "name": name,
-                "namespace": namespace,
-                "kubeconfig": kubeconfig,
-                "patch_type": patch_type,
-            },
-        )
         return result
 
     def k8s_delete_manifest(
@@ -839,18 +696,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.KUBERNETES,
             command=command,
             sudo=sudo,
-        )
-        self._record_history(
-            action="k8s_delete_manifest",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "manifest": manifest,
-                "namespace": namespace,
-                "kubeconfig": kubeconfig,
-                "ignore_not_found": ignore_not_found,
-            },
         )
         return result
 
@@ -882,20 +727,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=command,
             sudo=sudo,
         )
-        self._record_history(
-            action="k8s_delete_resource",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "resource_type": resource_type,
-                "name": name,
-                "namespace": namespace,
-                "kubeconfig": kubeconfig,
-                "ignore_not_found": ignore_not_found,
-                "extra_args": list(extra_args or []),
-            },
-        )
         return result
 
     def docker_list_container(self, connection: Connection) -> list[list[str]]:
@@ -910,9 +741,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         )
         dl = str(res).split("\n")
         dlist = [re.sub(r"\ {2,}", "    ", dl[i]).split("   ") for i in range(len(dl))]
-        self._record_history(
-            action="docker_list_container", status="success", output=str(dlist)
-        )
         return dlist
 
     def docker_down(
@@ -928,13 +756,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.CONTAINER_RUNTIME,
             command=command,
             sudo=True,
-        )
-        self._record_history(
-            action="docker_down",
-            status="success",
-            command=command,
-            output=result,
-            metadata={"remove_volumes": remove_volumes},
         )
         return result
 
@@ -955,13 +776,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=command,
             sudo=True,
         )
-        self._record_history(
-            action="docker_up",
-            status="success",
-            command=command,
-            output=result,
-            metadata={"env_file": env_file},
-        )
         return result
 
     def docker_service_state(self, connection: Connection, service_name: str) -> str:
@@ -976,13 +790,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             )
             or ""
         )
-        self._record_history(
-            action="docker_service_state",
-            status="success",
-            command=cmd,
-            output=res,
-            metadata={"service_name": service_name},
-        )
         return res
 
     def docker_all_service_states(
@@ -996,9 +803,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             pty=False,
         )
         if not ids:
-            self._record_history(
-                action="docker_all_service_states", status="success", output="{}"
-            )
             return {}
 
         id_list = " ".join(ids.split())
@@ -1014,18 +818,8 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             result = {
                 c.get("Name", "").lstrip("/"): c.get("State", {}) for c in containers
             }
-            self._record_history(
-                action="docker_all_service_states",
-                status="success",
-                output=json.dumps(result),
-            )
             return result
         except Exception as exc:  # pragma: no cover - defensive
-            self._record_history(
-                action="docker_all_service_states",
-                status="error",
-                error=str(exc),
-            )
             logger.warning("Failed to parse docker state info: %s", exc)
             return {}
 
@@ -1044,21 +838,8 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 )
                 or "No docker logs found"
             )
-            self._record_history(
-                action="docker_service_log_tails",
-                status="success",
-                command=cmd,
-                output=res,
-                metadata={"tail": tail, "service_name": service_name},
-            )
             return res
         except Exception as exc:  # pragma: no cover - defensive
-            self._record_history(
-                action="docker_service_log_tails",
-                status="error",
-                error=str(exc),
-                metadata={"tail": tail, "service_name": service_name},
-            )
             logger.warning("Failed to fetch logs for %s: %s", service_name, exc)
             return "Failed to fetch logs"
 
@@ -1076,18 +857,7 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 group=TaskGroup.VERSION_CONTROL,
                 command=f"cd {install_path}; git clone {repo_url}",
             )
-            self._record_history(
-                action="git_clone",
-                status="success",
-                metadata={"repo_url": repo_url, "install_path": install_path},
-            )
         except Exception as exc:  # pragma: no cover - defensive
-            self._record_history(
-                action="git_clone",
-                status="error",
-                error=str(exc),
-                metadata={"repo_url": repo_url, "install_path": install_path},
-            )
             raise
 
     def git_run(
@@ -1118,36 +888,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             sudo=sudo,
             pty=pty,
         )
-        self._record_history(
-            action="git_run",
-            status="success",
-            command=command,
-            output=result,
-            metadata={
-                "git_args": list(git_args),
-                "working_dir": working_dir,
-                "env": dict(env or {}),
-                "sudo": sudo,
-                "pty": pty,
-            },
-        )
         return result
 
     def fs_copy(self, connection: Connection, src_file: str, dst_path: str) -> None:
         try:
             connection.put(src_file, dst_path)
-            self._record_history(
-                action="fs_copy",
-                status="success",
-                metadata={"src_file": src_file, "dst_path": dst_path},
-            )
         except Exception as exc:  # pragma: no cover - defensive
-            self._record_history(
-                action="fs_copy",
-                status="error",
-                error=str(exc),
-                metadata={"src_file": src_file, "dst_path": dst_path},
-            )
             raise
 
     def fs_create_dir(self, connection: Connection, path: str) -> None:
@@ -1156,9 +902,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.FILESYSTEM,
             command=f"mkdir -p {path}",
         )
-        self._record_history(
-            action="fs_create_dir", status="success", metadata={"path": path}
-        )
 
     def fs_delete_dir(self, connection: Connection, path: str) -> None:
         self._run_task(
@@ -1166,9 +909,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.FILESYSTEM,
             command=f"rm -rf {path}",
             sudo=True,
-        )
-        self._record_history(
-            action="fs_delete_dir", status="success", metadata={"path": path}
         )
 
     def fs_copy_dir(
@@ -1183,11 +923,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.FILESYSTEM,
             command=f"cp -r {src_path} {dst_path}",
             sudo=sudo,
-        )
-        self._record_history(
-            action="fs_copy_dir",
-            status="success",
-            metadata={"src_path": src_path, "dst_path": dst_path, "sudo": sudo},
         )
 
     def fs_copy_remote_file(
@@ -1205,15 +940,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.FILESYSTEM,
             command=f"cp {source} {destination}",
             sudo=sudo,
-        )
-        self._record_history(
-            action="fs_copy_remote_file",
-            status="success",
-            metadata={
-                "source": source,
-                "destination": destination,
-                "sudo": sudo,
-            },
         )
 
     def fs_concatenate_files(
@@ -1234,16 +960,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=command,
             sudo=sudo,
         )
-        self._record_history(
-            action="fs_concatenate_files",
-            status="success",
-            command=command,
-            metadata={
-                "sources": list(sources),
-                "destination": destination,
-                "sudo": sudo,
-            },
-        )
 
     def fs_set_permissions(
         self,
@@ -1263,16 +979,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=f"chmod{recursive_flag} {mode} {path}",
             sudo=sudo,
         )
-        self._record_history(
-            action="fs_set_permissions",
-            status="success",
-            metadata={
-                "path": path,
-                "mode": mode,
-                "recursive": recursive,
-                "sudo": sudo,
-            },
-        )
 
     def fs_exists_dir(self, connection: Connection, path: str) -> bool:
         try:
@@ -1282,19 +988,8 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 command=f"test -d {path} && echo exists || echo missing",
             )
             exists = str(res).strip() == "exists"
-            self._record_history(
-                action="fs_exists_dir",
-                status="success",
-                metadata={"path": path, "exists": exists},
-            )
             return exists
         except Exception as exc:  # pragma: no cover - defensive
-            self._record_history(
-                action="fs_exists_dir",
-                status="error",
-                error=str(exc),
-                metadata={"path": path},
-            )
             return False
 
     def fs_create_symlink(
@@ -1310,15 +1005,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=f"ln -s {target_path} {link_path}",
             sudo=sudo,
         )
-        self._record_history(
-            action="fs_create_symlink",
-            status="success",
-            metadata={
-                "target_path": target_path,
-                "link_path": link_path,
-                "sudo": sudo,
-            },
-        )
 
     def fs_remove_symlink(
         self, connection: Connection, link_path: str, sudo: bool = False
@@ -1329,20 +1015,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             command=f"rm {link_path}",
             sudo=sudo,
         )
-        self._record_history(
-            action="fs_remove_symlink",
-            status="success",
-            metadata={"link_path": link_path, "sudo": sudo},
-        )
 
     def fs_touch(self, connection: Connection, fname: str) -> None:
         self._run_task(
             connection,
             group=TaskGroup.FILESYSTEM,
             command=f"touch {fname}",
-        )
-        self._record_history(
-            action="fs_touch", status="success", metadata={"file": fname}
         )
 
     def fs_append_line(self, connection: Connection, fname: str, line: str) -> None:
@@ -1356,20 +1034,12 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             group=TaskGroup.FILESYSTEM,
             command=f"echo '{line}' >> {fname}",
         )
-        self._record_history(
-            action="fs_append_line",
-            status="success",
-            metadata={"file": fname, "line": line},
-        )
 
     def fs_create_empty_file(self, connection: Connection, fname: str) -> None:
         self._run_task(
             connection,
             group=TaskGroup.FILESYSTEM,
             command=f"echo -n >| {fname}",
-        )
-        self._record_history(
-            action="fs_create_empty_file", status="success", metadata={"file": fname}
         )
 
     def fs_find_and_replace(
@@ -1389,17 +1059,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}"
             ),
             sudo=sudo,
-        )
-        self._record_history(
-            action="fs_find_and_replace",
-            status="success",
-            metadata={
-                "file": fname,
-                "old": old,
-                "new": new,
-                "separator": separator,
-                "sudo": sudo,
-            },
         )
 
     def fs_write_file(
@@ -1453,27 +1112,8 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                         sudo=True,
                         pty=False,
                     )
-                self._record_history(
-                    action="fs_write_file",
-                    status="error",
-                    metadata={
-                        "file_path": file_path,
-                        "sudo": sudo,
-                        "encoding": encoding,
-                    },
-                    error=str(exc),
-                )
                 raise
 
-        self._record_history(
-            action="fs_write_file",
-            status="success",
-            metadata={
-                "file_path": file_path,
-                "sudo": sudo,
-                "encoding": encoding,
-            },
-        )
 
     def fs_read_file(
         self,
@@ -1490,11 +1130,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             data = yaml.safe_load(io_obj.getvalue())
         else:
             data = io_obj.getvalue().decode(encoding)
-        self._record_history(
-            action="fs_read_file",
-            status="success",
-            metadata={"file_path": file_path, "format": format, "encoding": encoding},
-        )
         return data
 
     def fs_list_files(
@@ -1512,13 +1147,6 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             or ""
         )
         entries = output.splitlines() if output else []
-        self._record_history(
-            action="fs_list_files",
-            status="success",
-            command=command,
-            metadata={"path": path, "sudo": sudo},
-            output="\n".join(entries),
-        )
         return entries
 
     def fs_list_file_tree(
@@ -1552,11 +1180,4 @@ class UbuntuTaskExecutor(ExecutionRecorder):
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.warning("Error parsing file tree line: %s (%s)", line, exc)
 
-        self._record_history(
-            action="fs_list_file_tree",
-            status="success",
-            command=command,
-            metadata={"path": path, "sudo": sudo},
-            output=json.dumps(entries),
-        )
         return entries
