@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, Any
 
+from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 # Configure logging (optional, but recommended)
@@ -37,11 +38,15 @@ class OtelDockerService(AbstractService):
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
         self.exec.fs_create_dir(conn, f"{self.target_path}/otel-data")
-        self.exec.fs_touch(conn, f"{self.target_path}/otel-data/telemetry.json")
-        self.exec.exec_command(conn, f"chmod 777 {self.target_path}/otel-data", sudo=True)
-        self.exec.exec_command(
-            conn, f"chmod 777 {self.target_path}/otel-data/telemetry.json", sudo=True
+        telemetry_file = f"{self.target_path}/otel-data/telemetry.json"
+        self.exec.fs_touch(conn, telemetry_file)
+        self.exec.fs_set_permissions(
+            conn,
+            f"{self.target_path}/otel-data",
+            "777",
+            sudo=True,
         )
+        self.exec.fs_set_permissions(conn, telemetry_file, "777", sudo=True)
 
         self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         self.exec.fs_copy(conn, self.config, f"{self.target_path}/otel-collector-config.yaml")

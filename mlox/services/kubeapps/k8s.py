@@ -25,29 +25,25 @@ class KubeAppsService(AbstractService):
         # ensure target path exists
         self.exec.fs_create_dir(conn, self.target_path)
 
-        name = self.namespace
+        base_namespace = self.namespace
         attempts = 0
-        exists = True
-        while exists:
-            name_exists = self.exec.exec_command(
-                conn,
-                f"kubectl get namespace {self.namespace} --kubeconfig {self.kubeconfig}",
-                sudo=True,
+        while self.exec.k8s_namespace_exists(
+            conn, self.namespace, kubeconfig=self.kubeconfig
+        ):
+            logger.info(
+                "Namespace %s already exists, selecting a new name.",
+                self.namespace,
             )
-            exists = False
-            if name_exists:
-                logger.info(
-                    f"Namespace {self.namespace} already exists, skipping creation."
-                )
-                self.namespace = name + f"-{attempts}"
-                attempts += 1
-                exists = True
+            attempts += 1
+            self.namespace = f"{base_namespace}-{attempts}"
 
         # add & update Helm repo
-        self.exec.exec_command(
-            conn, f"helm repo add {self.chart_repo} {self.chart_repo_url}", sudo=True
+        self.exec.helm_repo_add(
+            conn,
+            self.chart_repo,
+            self.chart_repo_url,
         )
-        self.exec.exec_command(conn, "helm repo update", sudo=True)
+        self.exec.helm_repo_update(conn)
 
         # self.exec.exec_command(
         #     conn,
@@ -61,14 +57,17 @@ class KubeAppsService(AbstractService):
         # TODO: can produce an error if the release already existed and is in the process of being terminated.
 
         # # install or upgrade KubeApps with NodePort
-        res = self.exec.exec_command(
+        res = self.exec.helm_upgrade_install(
             conn,
-            f"helm upgrade --install {self.release_name} {self.chart_name} "
-            f"--kubeconfig {self.kubeconfig} "
-            f"--namespace {self.namespace} --create-namespace "
-            f"--set frontend.service.type=NodePort "
-            f"--set frontend.service.nodePort={self.node_port}",
-            sudo=True,
+            release=self.release_name,
+            chart=self.chart_name,
+            namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
+            create_namespace=True,
+            values={
+                "frontend.service.type": "NodePort",
+                "frontend.service.nodePort": str(self.node_port),
+            },
         )
         if not res:
             logger.error("Failed to install or upgrade KubeApps.")
@@ -99,13 +98,25 @@ class KubeAppsService(AbstractService):
         port = port or 80
         node_port = node_port or self.node_port
 
-        patch = (
-            f"kubectl -n {namespace} patch svc {svc_name} "
-            f'-p \'{{"spec":{{"type":"NodePort","ports":[{{'
-            f'"port":{port},"targetPort":{port},"nodePort":{node_port}'
-            f"}}]}}}}'"
+        patch_body = {
+            "spec": {
+                "type": "NodePort",
+                "ports": [
+                    {
+                        "port": port,
+                        "targetPort": port,
+                        "nodePort": node_port,
+                    }
+                ],
+            }
+        }
+        self.exec.k8s_patch_resource(
+            conn,
+            "svc",
+            svc_name,
+            patch_body,
+            namespace=namespace,
         )
-        self.exec.exec_command(conn, patch, sudo=True)
 
         node_ip = conn.host
         logger.info(f"KubeApps exposed at http://{node_ip}:{node_port}")
@@ -115,16 +126,21 @@ class KubeAppsService(AbstractService):
         logger.info("🗑️ Uninstalling KubeApps")
 
         # uninstall Helm release
-        self.exec.exec_command(
+        self.exec.helm_uninstall(
             conn,
-            f"helm uninstall {self.release_name} --namespace {self.namespace} --no-hooks --kubeconfig {self.kubeconfig} || true",
-            sudo=True,
+            release=self.release_name,
+            namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
+            extra_args=["--no-hooks"],
+            ignore_missing=True,
         )
         # remove namespace
-        self.exec.exec_command(
+        self.exec.k8s_delete_resource(
             conn,
-            f"kubectl delete namespace {self.namespace} --ignore-not-found --now=true --wait=false",
-            sudo=True,
+            "namespace",
+            self.namespace,
+            kubeconfig=self.kubeconfig,
+            extra_args=["--now=true", "--wait=false"],
         )
         # clean up files
         self.exec.fs_delete_dir(conn, self.target_path)
@@ -140,8 +156,13 @@ class KubeAppsService(AbstractService):
         return True
 
     def check(self, conn) -> Dict:
-        helm_status_cmd = f"helm status {self.release_name} --kubeconfig {self.kubeconfig} --namespace {self.namespace} -o json"
-        helm_result = self.exec.exec_command(conn, helm_status_cmd, sudo=True)
+        helm_result = self.exec.helm_status(
+            conn,
+            release=self.release_name,
+            namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
+            output_format="json",
+        )
 
         # if helm_result.ok:
         #     try:

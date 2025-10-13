@@ -18,7 +18,7 @@ from paramiko.ssh_exception import (  # type: ignore
 import socket
 
 from mlox.utils import generate_password
-from mlox.executors import UbuntuTaskExecutor
+from mlox.executors import TaskGroup, UbuntuTaskExecutor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -406,7 +406,13 @@ def sys_get_distro_info(
     # Fallback to lsb_release if /etc/os-release didn't work
     try:
         # Use lsb_release -a and parse common fields
-        lsb_output = executor.exec_command(conn, "lsb_release -a", sudo=False, pty=False)
+        lsb_output = executor.execute(
+            conn,
+            "lsb_release -a",
+            group=TaskGroup.NETWORKING,
+            sudo=False,
+            pty=False,
+        )
         if lsb_output:
             for line in lsb_output.strip().split("\n"):
                 if ":" in line:

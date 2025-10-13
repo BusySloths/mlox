@@ -6,7 +6,6 @@ from typing import Dict
 from mlox.service import AbstractService
 
 
-
 # Configure logging (optional, but recommended)
 logging.basicConfig(
     level=logging.INFO,
@@ -27,7 +26,9 @@ class RedisDockerService(AbstractService):
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
 
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
@@ -65,12 +66,10 @@ class RedisDockerService(AbstractService):
         # pong = client.ping()
         # assert pong is True
         try:
-            output = self.exec.exec_command(
-                conn,
-                f"docker ps --filter 'name=redis' --filter 'status=running' --format '{{{{.Names}}}}'",
-                sudo=True,
+            state = self.exec.docker_service_state(
+                conn, self.compose_service_names["Redis"]
             )
-            if "redis" in output:
+            if state.strip() == "running":
                 self.state = "running"
                 return {"status": "running"}
             else:

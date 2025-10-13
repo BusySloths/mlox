@@ -1,6 +1,7 @@
 import os
 import os
 
+from mlox.executors import TaskGroup
 from mlox.session import MloxSession
 
 
@@ -64,8 +65,18 @@ def enable_password_authentication(bundle_name: str):
         #     "PubkeyAuthentication yes",
         #     sudo=True,
         # )
-        executor.exec_command(conn, "systemctl restart ssh", sudo=True)
-        executor.exec_command(conn, "systemctl reload ssh", sudo=True)
+        executor.execute(
+            conn,
+            "systemctl restart ssh",
+            group=TaskGroup.SERVICE_CONTROL,
+            sudo=True,
+        )
+        executor.execute(
+            conn,
+            "systemctl reload ssh",
+            group=TaskGroup.SERVICE_CONTROL,
+            sudo=True,
+        )
 
     print(f"IP: ", server.ip)
     print(f"USER: ", server.mlox_user.name)

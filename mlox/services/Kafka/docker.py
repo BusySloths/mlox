@@ -1,8 +1,6 @@
 import base64
 import logging
 import secrets
-import shlex
-
 from dataclasses import dataclass, field
 from typing import Dict
 
@@ -48,16 +46,18 @@ class KafkaDockerService(AbstractService):
 
         # For PEM setup, cert.pem and key.pem already exist from tls_setup_no_config
         # Create files with names expected by Bitnami entrypoint
-        self.exec.exec_command(
-            conn,
-            (
-                f"cd {self.target_path}; "
-                f"cp cert.pem kafka.keystore.pem && "
-                f"cp key.pem kafka.keystore.key && "
-                f"cp cert.pem kafka.truststore.pem && "
-                f"chmod 644 kafka.keystore.key && chmod 644 kafka.keystore.pem kafka.truststore.pem"
-            ),
-        )
+        cert_path = f"{self.target_path}/cert.pem"
+        key_path = f"{self.target_path}/key.pem"
+        keystore_pem = f"{self.target_path}/kafka.keystore.pem"
+        keystore_key = f"{self.target_path}/kafka.keystore.key"
+        truststore_pem = f"{self.target_path}/kafka.truststore.pem"
+
+        self.exec.fs_copy_remote_file(conn, cert_path, keystore_pem)
+        self.exec.fs_copy_remote_file(conn, key_path, keystore_key)
+        self.exec.fs_copy_remote_file(conn, cert_path, truststore_pem)
+        self.exec.fs_set_permissions(conn, keystore_key, "644")
+        self.exec.fs_set_permissions(conn, keystore_pem, "644")
+        self.exec.fs_set_permissions(conn, truststore_pem, "644")
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_create_empty_file(conn, env_path)

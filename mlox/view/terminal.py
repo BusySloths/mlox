@@ -6,7 +6,7 @@ import streamlit as st
 from fabric import Connection, Result  # type: ignore
 from invoke.exceptions import UnexpectedExit  # For catching command execution errors
 
-from mlox.executors import UbuntuTaskExecutor
+from mlox.executors import TaskGroup, UbuntuTaskExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,12 @@ def emulate_basic_terminal(conn: Connection):
 
         # For other commands, execute them
         # Using pty=True for more interactive-like behavior for most commands
-        result = executor.exec_command(conn, command_str, pty=False)
+        result = executor.execute(
+            conn,
+            command_str,
+            group=TaskGroup.AD_HOC,
+            pty=False,
+        )
 
         st.write(f"Command {command_str}: ")
         st.write(result)

@@ -1,10 +1,10 @@
-version: '3.8'
+version: "3.8"
 services:
-
   postgres:
     image: postgres:16-bullseye
+    container_name: postgres
     ports:
-      - "${MY_POSTGRES_PORT:-}:5432" 
+      - "${MY_POSTGRES_PORT:-}:5432"
     environment:
       POSTGRES_USER: ${MY_POSTGRES_USER}
       POSTGRES_PASSWORD: ${MY_POSTGRES_PW}
