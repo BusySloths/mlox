@@ -1,9 +1,10 @@
 import uuid
 import logging
 
-from typing import Dict, Literal
+from typing import Dict, Literal, Optional
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+
 from mlox.executors import UbuntuTaskExecutor
 
 logger = logging.getLogger(__name__)
@@ -132,7 +133,7 @@ class AbstractService(ABC):
             # Last-resort: ask Docker for the state of the named service/container
             if not state_val:
                 state_val = self.exec.docker_service_state(conn, service)
-        
+
         results[label] = state_val or "unknown"
         return results
 
@@ -168,3 +169,9 @@ class AbstractService(ABC):
             return self.exec.docker_service_log_tails(conn, service, tail=tail)
 
         return f"Service with label {label} ({service}) not found"
+
+    def get_dependent_service(self, service_uuid: str) -> Optional["AbstractService"]:
+        """Get a dependent service by UUID using singleton registry."""
+        from mlox.service_registry import get_dependent_service
+
+        return get_dependent_service(service_uuid)

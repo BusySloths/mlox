@@ -10,8 +10,6 @@ services:
     volumes:
       - ./feature_store.yaml:/app/${FEAST_PROJECT_NAME:-my_project}/feature_repo/feature_store_mlox.yaml
       - ./${FEAST_PROJECT_NAME:-my_project}:/app/${FEAST_PROJECT_NAME:-my_project}
-      - ./redis_ca.pem:/certs/redis_ca.pem:ro
-      - ./postgres_ca.pem:/certs/postgres_ca.pem:ro
     command: >
       bash -c "
       feast init ${FEAST_PROJECT_NAME:-my_project};
@@ -42,7 +40,7 @@ services:
     command: >
       bash -c "
       cd /app/${FEAST_PROJECT_NAME:-my_project}/;
-      feast -c feature_repo serve_registry -p 6564 -h 0.0.0.0"
+      feast -c feature_repo serve_registry -p 6564 -c /etc/ssl/certs/feast.crt -k /etc/ssl/private/feast.key"
     networks:
       - feast_network
 

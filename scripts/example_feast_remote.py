@@ -13,15 +13,18 @@ from mlox.services.feast.client import materialize_feature_store_config
 from mlox.session import MloxSession
 
 
-def run_demo(service_name: str = "feast-latest") -> None:
+def run_demo(service_name: str = "feast-0.54.0") -> None:
     password = os.environ.get("MLOX_CONFIG_PASSWORD")
     if not password:
         raise RuntimeError("MLOX_CONFIG_PASSWORD environment variable is not set.")
 
-    session = MloxSession("mlox", password)
+    session = MloxSession("mlox01", password)
     tmpdir = materialize_feature_store_config(session.infra, service_name)
     try:
         feature_store = FeatureStore(fs_yaml_file=tmpdir / "feature_store.yaml")
+        print("Feature store config loaded from:", tmpdir / "feature_store.yaml")
+        print("Project name:", feature_store.project)
+        # feature_store.get_project
         views = [view.name for view in feature_store.list_all_feature_views()]
         print("Available feature views:", views)
 
@@ -43,6 +46,7 @@ def run_demo(service_name: str = "feast-latest") -> None:
         ).to_df()
         print("Historical features:\n", historical.head())
     finally:
+        print("Cleaning up temporary directory:", tmpdir)
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 

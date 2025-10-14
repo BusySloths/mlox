@@ -1,6 +1,6 @@
-id: feast-latest
+id: feast-0.54.0
 name: Feast Feature Store
-version: latest
+version: "0.54.0"
 maintainer: Your Name
 description_short: Feast is an open-source feature store for managing and serving machine learning features.
 description: |
@@ -32,11 +32,11 @@ ui:
 build:
   class_name: mlox.services.feast.docker.FeastDockerService
   params:
-    name: feast-latest
+    name: feast-0.54.0
     template: ${MLOX_STACKS_PATH}/feast/docker-compose-feast.yaml
     dockerfile: ${MLOX_STACKS_PATH}/feast/Dockerfile
-    target_path: ${MLOX_USER_HOME}/feast-latest
+    target_path: ${MLOX_USER_HOME}/feast-0.54.0
     registry_port: ${MLOX_AUTO_PORT_REGISTRY}
     project_name: ${FEAST_PROJECT_NAME}
-    online_store_service: ${ONLINE_STORE_SERVICE}
-    offline_store_service: ${OFFLINE_STORE_SERVICE}
+    online_store_uuid: ${ONLINE_STORE_UUID}
+    offline_store_uuid: ${OFFLINE_STORE_UUID}

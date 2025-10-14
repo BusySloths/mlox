@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Feast with Redis and Postgres support
-RUN pip install --no-cache-dir pandas "feast[redis,postgres]" grpcio grpcio-health-checking grpcio-reflection psycopg2-binary
+RUN pip install --no-cache-dir pandas "feast[redis,postgres]==0.54.0" grpcio grpcio-health-checking grpcio-reflection psycopg2-binary
 
 # Set the working directory
 WORKDIR /app

@@ -16,7 +16,7 @@ def _format_service_label(service, infra: Infrastructure) -> str:
     return f"{service.name} ({host})"
 
 
-def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
+def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
     params: Dict[str, str] = {}
     st.write("Feast")
     st.caption(
@@ -59,8 +59,11 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict:
             format_func=lambda svc: _format_service_label(svc, infra),
         )
 
-    params["${ONLINE_STORE_SERVICE}"] = selected_redis
-    params["${OFFLINE_STORE_SERVICE}"] = selected_postgres
+    if selected_redis is None or selected_postgres is None:
+        return None
+
+    params["${ONLINE_STORE_UUID}"] = selected_redis.uuid
+    params["${OFFLINE_STORE_UUID}"] = selected_postgres.uuid
 
     return params
 

@@ -1,7 +1,5 @@
 import logging
 
-import logging
-
 from dataclasses import dataclass, field
 from typing import Dict
 
@@ -30,7 +28,9 @@ class MinioDockerService(AbstractService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
 
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
@@ -39,10 +39,14 @@ class MinioDockerService(AbstractService):
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_append_line(conn, env_path, f"MINIO_ROOT_USER={self.root_user}")
-        self.exec.fs_append_line(conn, env_path, f"MINIO_ROOT_PASSWORD={self.root_password}")
+        self.exec.fs_append_line(
+            conn, env_path, f"MINIO_ROOT_PASSWORD={self.root_password}"
+        )
         self.exec.fs_append_line(conn, env_path, f"MINIO_PUBLIC_URL={conn.host}")
         self.exec.fs_append_line(conn, env_path, f"MINIO_API_PORT={self.api_port}")
-        self.exec.fs_append_line(conn, env_path, f"MINIO_CONSOLE_PORT={self.console_port}")
+        self.exec.fs_append_line(
+            conn, env_path, f"MINIO_CONSOLE_PORT={self.console_port}"
+        )
 
         self.service_ports["MinIO API"] = int(self.api_port)
         self.service_ports["MinIO Console"] = int(self.console_port)
