@@ -56,7 +56,14 @@ SERVICE_CASES = [
     (
         RedisDockerService,
         {"pw": "redispass", "port": "6379"},
-        {"redis_auth": {"password": "redispass"}},
+        {
+            "redis_connection": {
+                "host": "",
+                "port": "6379",
+                "password": "redispass",
+                "certificate": "",
+            }
+        },
         None,
     ),
     (
@@ -71,18 +78,27 @@ SERVICE_CASES = [
         {},
         None,
     ),
-    (
-        FeastDockerService,
-        {
-            "config": "config.yaml",
-            "dockerfile": "Dockerfile",
-            "registry_port": "6565",
-            "online_port": "6566",
-            "offline_port": "6567",
-        },
-        {},
-        None,
-    ),
+        (
+            FeastDockerService,
+            {
+                "dockerfile": "Dockerfile",
+                "registry_port": "6565",
+                "project_name": "demo_project",
+                "online_store_service": None,
+                "offline_store_service": None,
+            },
+            {
+                "feast_registry": {
+                    "registry_host": "",
+                    "registry_port": "6565",
+                    "certificate": "",
+                    "project": "demo_project",
+                    "online_store_uuid": "",
+                    "offline_store_uuid": "",
+                }
+            },
+            None,
+        ),
     (
         LiteLLMDockerService,
         {
@@ -235,10 +251,14 @@ SERVICE_CASES = [
             "port": "5432",
         },
         {
-            "postgres_admin_credentials": {
+            "postgres_connection": {
+                "host": "",
+                "port": "5432",
+                "database": "postgres-db",
                 "username": "postgres",
                 "password": "postgres-pass",
-            },
+                "certificate": "",
+            }
         },
         None,
     ),

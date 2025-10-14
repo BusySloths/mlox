@@ -1,16 +1,13 @@
 FROM python:3.11-slim
 
-# Install necessary dependencies
+# Install necessary dependencies for building Feast extras
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Feast
-RUN pip install pandas
-RUN pip install feast[redis]
-RUN pip install grpcio
-RUN pip install grpcio-health-checking
-RUN pip install grpcio-reflection
+# Install Feast with Redis and Postgres support
+RUN pip install --no-cache-dir pandas "feast[redis,postgres]" grpcio grpcio-health-checking grpcio-reflection psycopg2-binary
 
 # Set the working directory
 WORKDIR /app

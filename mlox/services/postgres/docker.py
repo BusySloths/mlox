@@ -44,6 +44,7 @@ class PostgresDockerService(AbstractService):
 
         self.service_ports["Postgres"] = int(self.port)
         self.service_urls["Postgres"] = f"https://{conn.host}:{self.port}"
+        self.service_urls["Postgres IP"] = f"{conn.host}"
 
     def teardown(self, conn):
         self.exec.docker_down(
@@ -76,14 +77,20 @@ class PostgresDockerService(AbstractService):
         return {"status": "unknown"}
 
     def get_secrets(self) -> Dict[str, Dict]:
-        credentials = {
-            key: value
-            for key, value in {
-                "username": self.user,
-                "password": self.pw,
-            }.items()
-            if value
+        port_val = self.service_ports.get("Postgres") or int(self.port)
+        host_val = self.service_urls.get("Postgres IP", "")
+        connection = {
+            "host": host_val,
+            "port": str(port_val),
+            "database": self.db,
+            "username": self.user,
+            "password": self.pw,
+            "certificate": self.certificate,
         }
-        if not credentials:
-            return {}
-        return {"postgres_admin_credentials": credentials}
+        if host_val and self.db:
+            connection["dsn"] = (
+                f"postgresql://{self.user}:{self.pw}@{host_val}:{port_val}/{self.db}"
+                if self.user and self.pw
+                else f"postgresql://{host_val}:{port_val}/{self.db}"
+            )
+        return {"postgres_connection": connection}
