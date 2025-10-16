@@ -1,46 +1,16 @@
 import pandas as pd
 import streamlit as st
 
-from typing import Dict, Any
+from typing import Dict
 
 from mlox.infra import Infrastructure, Bundle
 from mlox.services.tsm.service import TSMService
 from mlox.services.utils_ui import save_to_secret_store
 
-from mlox.utils import generate_pw, dataclass_to_dict, encrypt_dict
-from mlox.server import AbstractServer
-
-
-def download_keyfile(server: AbstractServer, service: TSMService):
-    if st.toggle(
-        "Download Keyfile",
-        value=False,
-        key=f"download_keyfile_{service.name}",
-        help="Download the keyfile for this service. It contains the secrets and server information.",
-    ):
-        c1, c2 = st.columns(2)
-        keyfile_name = c1.text_input("Keyfile Name", value=f"{service.name}.json")
-        keyfile_pw = c2.text_input("Password", value=generate_pw(16))
-
-        keyfile_dict: Dict[str, Any] = {}
-        keyfile_dict["secrets_path"] = service.get_absolute_path()
-        keyfile_dict["secrets_pw"] = service.pw
-        keyfile_dict["server"] = dataclass_to_dict(server)
-        encrypted_keyfile_dict = encrypt_dict(keyfile_dict, keyfile_pw)
-
-        st.download_button(
-            "Download Keyfile",
-            data=encrypted_keyfile_dict,
-            file_name=keyfile_name,
-            mime="application/json",
-            icon=":material/download:",
-        )
-
 
 def settings(infra: Infrastructure, bundle: Bundle, service: TSMService):
     tsm = service.get_secret_manager(infra)
     secrets = tsm.list_secrets(keys_only=True)
-    download_keyfile(bundle.server, service)
 
     df = pd.DataFrame(
         [[k, "****"] for k, v in secrets.items()], columns=["Key", "Value"]

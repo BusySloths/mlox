@@ -4,6 +4,9 @@ import pandas as pd
 import streamlit as st
 
 from mlox.infra import Infrastructure
+from mlox.utils import generate_pw
+from mlox.view.utils import st_hack_align
+from mlox.secret_manager import get_encrypted_access_keyfile
 
 # Lightweight CSS for badges, chips, and custom tables
 st.markdown(
@@ -111,6 +114,7 @@ def secrets() -> None:
     selected = secret_manager_rows[selected_idx]
     bundle = selected["bundle"]
     secret_manager_service = selected["service"]
+    secret_manager = secret_manager_service.get_secret_manager(infra)
 
     st.divider()
     st.subheader("Selected Secret Manager")
@@ -123,7 +127,43 @@ def secrets() -> None:
         st.markdown("**Path**")
         st.code(selected["path"], language="bash")
 
-    secret_manager = secret_manager_service.get_secret_manager(infra)
+    if st.toggle(
+        "Download Keyfile",
+        value=False,
+        key=f"toggle_download_access_keyfile_{secret_manager_service.name}",
+        help="Download the keyfile for this service. It contains the secrets and server information.",
+    ):
+        with st.container(horizontal_alignment="distribute", border=True):
+            st.markdown("#### Download Access Keyfile")
+            st.caption(
+                "Download the keyfile for this secret manager. It contains the access information required to connect to it."
+            )
+            c1, c2, c3 = st.columns(3)
+            keyfile_name = c1.text_input(
+                "Keyfile Name",
+                value=f"{secret_manager_service.name}.json",
+                key=f"keyfile_name_{secret_manager_service.name}",
+            )
+            keyfile_pw = c2.text_input(
+                "Password",
+                value=generate_pw(16),
+                key=f"keyfile_pw_{secret_manager_service.name}",
+            )
+
+            encrypted_keyfile_dict = get_encrypted_access_keyfile(
+                secret_manager, keyfile_pw
+            )
+            st_hack_align(c3)
+            c3.download_button(
+                "Download Keyfile",
+                data=encrypted_keyfile_dict,
+                file_name=keyfile_name,
+                mime="application/json",
+                icon=":material/download:",
+                type="primary",
+                key=f"download_access_keyfile_{secret_manager_service.name}",
+                width="stretch",
+            )
 
     with st.container():
         st.markdown("#### Sync Secrets from Active Services")
@@ -138,14 +178,17 @@ def secrets() -> None:
         ):
             secrets_cnt = 0
             service_cnt = 0
+            name_uuid_map = {}
             with st.spinner("Collecting secrets from running services..."):
                 for service in infra.services():
                     if service.state != "running":
                         continue
+                    name_uuid_map[service.name] = service.uuid
                     service_cnt += 1
-                    for key, value in service.get_secrets().items():
-                        secret_manager.save_secret(f"{service.uuid}_{key}", value)
-                        secrets_cnt += 1
+                    service_secrets = service.get_secrets()
+                    secret_manager.save_secret(service.uuid, service_secrets)
+                    secrets_cnt += len(service_secrets.keys())
+            secret_manager.save_secret("MLOX_SERVICE_NAME_UUID_MAP", name_uuid_map)
             st.success(
                 f"Collected {secrets_cnt} secrets from {service_cnt} active services."
             )

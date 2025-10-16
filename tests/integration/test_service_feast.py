@@ -1,11 +1,12 @@
-import shutil
-
 import yaml
 import pytest
 
 from mlox.config import get_stacks_path, load_config
 from mlox.infra import Bundle, Infrastructure
-from mlox.services.feast.client import materialize_feature_store_config
+from mlox.services.feast.client import (
+    cleanup_repo_config,
+    materialize_feature_store_config,
+)
 from mlox.services.feast.docker import FeastDockerService
 from mlox.services.postgres.docker import PostgresDockerService
 from mlox.services.redis.docker import RedisDockerService
@@ -48,7 +49,11 @@ def install_feast_service(ubuntu_docker_server):
     if not postgres_bundle:
         pytest.skip("Failed to add Postgres service")
     postgres_service = next(
-        (svc for svc in postgres_bundle.services if isinstance(svc, PostgresDockerService)),
+        (
+            svc
+            for svc in postgres_bundle.services
+            if isinstance(svc, PostgresDockerService)
+        ),
         None,
     )
     assert postgres_service is not None, "Postgres service not created"
@@ -63,7 +68,9 @@ def install_feast_service(ubuntu_docker_server):
         "${ONLINE_STORE_SERVICE}": redis_service,
         "${OFFLINE_STORE_SERVICE}": postgres_service,
     }
-    feast_bundle = infra.add_service(ubuntu_docker_server.ip, feast_config, params=params)
+    feast_bundle = infra.add_service(
+        ubuntu_docker_server.ip, feast_config, params=params
+    )
     if not feast_bundle:
         pytest.skip("Failed to add Feast service")
     feast_service = next(
@@ -118,11 +125,13 @@ def test_materialize_feature_store_config(install_feast_service):
         assert config["online_store"]["connection_string"].endswith(
             f"{infra.get_bundle_by_service(redis_service).server.ip}:{redis_service.service_ports['Redis']}"
         )
-        assert config["offline_store"]["host"] == infra.get_bundle_by_service(
-            postgres_service
-        ).server.ip
-        assert config["offline_store"]["port"] == postgres_service.service_ports[
-            "Postgres"
-        ]
+        assert (
+            config["offline_store"]["host"]
+            == infra.get_bundle_by_service(postgres_service).server.ip
+        )
+        assert (
+            config["offline_store"]["port"]
+            == postgres_service.service_ports["Postgres"]
+        )
     finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
+        cleanup_repo_config(tmpdir)

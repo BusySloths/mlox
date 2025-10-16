@@ -15,9 +15,9 @@ services:
       feast init ${FEAST_PROJECT_NAME:-my_project};
       cd /app/${FEAST_PROJECT_NAME:-my_project}/feature_repo/;
       rm -f feature_store.yaml;
-      cp feature_store_mlox.yaml feature_store.yaml;
-      feast -c /app/${FEAST_PROJECT_NAME:-my_project}/feature_repo apply"
+      cp feature_store_mlox.yaml feature_store.yaml"
     networks:
+      # feast -c /app/${FEAST_PROJECT_NAME:-my_project}/feature_repo apply"
       - feast_network
 
   feast-registry:

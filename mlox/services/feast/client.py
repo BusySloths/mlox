@@ -1,110 +1,138 @@
 from __future__ import annotations
 
-import yaml
 import shutil
 import tempfile
+
 from pathlib import Path
-from typing import Any, Dict, cast
+from typing import Any, Dict
+from feast.repo_config import RepoConfig
+
+from mlox.secret_manager import load_secret_manager_from_encrypted_access_keyfile
 
 
-from mlox.infra import Infrastructure
-from mlox.services.feast.docker import FeastDockerService
-from mlox.services.redis.docker import RedisDockerService
-from mlox.services.postgres.docker import PostgresDockerService
+def cleanup_repo_config(tempdir: Path) -> None:
+    """Remove a temporary directory created for Feast client materials."""
+    shutil.rmtree(tempdir, ignore_errors=True)
 
 
-def materialize_feature_store_config(infra: Infrastructure, service_name: str) -> Path:
-    """Create a temporary Feast client configuration for the given service.
+def get_repo_config(
+    service_name: str, encrypted_access_keyfile: str, access_password: str
+) -> tuple[RepoConfig, Path]:
+    """Return a RepoConfig for the remote Feast deployment along with a temp directory.
 
-    The returned path contains a ``feature_store.yaml`` and CA bundles for the
-    registry, online (Redis) store, and offline (Postgres) store. Callers are
-    responsible for removing the directory when finished.
+    The temporary directory contains the TLS certificates referenced by the RepoConfig.
+    Callers are responsible for deleting this directory (e.g., via
+    :func:`cleanup_materialized_feature_store`) once the RepoConfig is no longer needed.
     """
-
-    service = infra.get_service(service_name)
-    if not isinstance(service, FeastDockerService):
-        raise ValueError(f"Service {service_name} is not a Feast deployment")
-
-    tmpdir = Path(tempfile.mkdtemp(prefix="mlox_feast_remote_"))
-
-    registry_secret = service.get_secrets()["feast_registry"]
-    if not isinstance(registry_secret, dict):
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        raise ValueError("Feast service did not expose registry secrets")
-
-    registry_bundle = infra.get_bundle_by_service(service)
-    if (
-        not registry_bundle
-        or not registry_bundle.server
-        or not registry_bundle.server.ip
-    ):
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        raise ValueError("Feast service bundle/server information is unavailable")
-
-    registry_host = registry_bundle.server.ip
-    registry_port = int(service.registry_port)
-    registry_cert = service.certificate
-
-    online_uuid = registry_secret["online_store_uuid"]
-    offline_uuid = registry_secret["offline_store_uuid"]
-
-    redis_service = infra.get_service_by_uuid(online_uuid)
-    postgres_service = infra.get_service_by_uuid(offline_uuid)
-    if not redis_service or not postgres_service:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        raise ValueError("Feast online/offline store services are unavailable")
-    redis_service = cast(RedisDockerService, redis_service)
-    postgres_service = cast(PostgresDockerService, postgres_service)
-
-    online_bundle = infra.get_bundle_by_service(redis_service)
-    offline_bundle = infra.get_bundle_by_service(postgres_service)
-    if not online_bundle or not offline_bundle:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        raise ValueError(
-            "Feast online/offline store bundle/server information is unavailable"
+    sm = load_secret_manager_from_encrypted_access_keyfile(
+        encrypted_access_keyfile, access_password
+    )
+    if not sm:
+        raise RuntimeError(
+            f"Failed to load secret manager from keyfile '{encrypted_access_keyfile}'."
         )
-    redis_host = online_bundle.server.ip
-    postgres_host = offline_bundle.server.ip
+    name_uuid_map = sm.load_secret("MLOX_SERVICE_NAME_UUID_MAP")
+    print(f"Loaded name_uuid_map: {name_uuid_map}")
+    if (
+        not name_uuid_map
+        or service_name not in name_uuid_map
+        or not isinstance(name_uuid_map, dict)
+    ):
+        raise ValueError(
+            f"Service name '{service_name}' not found in secret manager name/UUID map."
+        )
 
-    registry_ca = tmpdir / "registry_ca.pem"
-    redis_ca = tmpdir / "redis_ca.pem"
-    postgres_ca = tmpdir / "postgres_ca.pem"
+    service_uuid = name_uuid_map[service_name]
+    # Load Feast secret
+    feast_secret = sm.load_secret(service_uuid)
+    if (
+        not feast_secret
+        or "feast_registry" not in feast_secret
+        or not isinstance(feast_secret, dict)
+    ):
+        raise ValueError(f"Feast service secret not found for UUID '{service_uuid}'.")
 
-    registry_ca.write_text(registry_cert)
-    redis_ca.write_text(redis_service.certificate)
-    postgres_ca.write_text(postgres_service.certificate)
+    registry_secret = feast_secret["feast_registry"]
+    online_uuid = registry_secret.get("online_store_uuid")
+    offline_uuid = registry_secret.get("offline_store_uuid")
+    if not online_uuid or not offline_uuid:
+        raise ValueError("Feast service secret is missing store UUIDs.")
 
-    config: Dict[str, Any] = {
-        "project": registry_secret.get("project", service.project_name),
-        "provider": "local",
-        "registry": {
-            "registry_type": "remote",
-            "path": f"{registry_host}:{registry_port}",
-            "cert": str(registry_ca),
-        },
-        "online_store": {
-            "type": "redis",
-            # "redis_type": "redis",
-            "connection_string": (
-                # f"rediss://:{redis_service.pw}@{redis_host}:{redis_service.port}"
-                f"{redis_host}:{redis_service.port},ssl=True,password={redis_service.pw}"
-            ),
-            # "ssl": True,
-            # "ssl_cert": str(redis_ca),
-        },
-        "offline_store": {
-            "type": "postgres",
-            "host": postgres_host,
-            "port": postgres_service.port,
-            "database": postgres_service.db,
-            "user": postgres_service.user,
-            "password": postgres_service.pw,
-            # "sslmode": "require",
-            # "sslrootcert": str(postgres_ca),
-        },
-        "entity_key_serialization_version": 3,
-        "auth": {"type": "no_auth"},
-    }
+    online_secret = sm.load_secret(online_uuid)  # This should be a redis secret
+    offline_secret = sm.load_secret(offline_uuid)  # This should be a postgres secret
+    if (
+        not online_secret
+        or not offline_secret
+        or not isinstance(online_secret, dict)
+        or not isinstance(offline_secret, dict)
+    ):
+        raise ValueError("Feast online/offline store secrets could not be loaded.")
+    online_secret = online_secret["redis_connection"]
+    offline_secret = offline_secret["postgres_connection"]
 
-    (tmpdir / "feature_store.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
-    return tmpdir
+    # Build repo config
+    tmpdir = Path(tempfile.mkdtemp(prefix="mlox_feast_repo_"))
+    try:
+        # Feast Secret
+        project = registry_secret["project"]
+        registry_host = registry_secret["registry_host"]
+        registry_port = registry_secret["registry_port"]
+        registry_cert = registry_secret["certificate"]
+        # Redis Secret
+        print(f"Loaded online_secret: {online_secret}")
+        redis_host = online_secret["host"]
+        redis_port = online_secret["port"]
+        redis_pw = online_secret["password"]
+        redis_cert = online_secret["certificate"]
+        # Postgres Secret
+        print(f"Loaded online_secret: {offline_secret}")
+        pg_host = offline_secret["host"]
+        pg_port = offline_secret["port"]
+        pg_db = offline_secret["database"]
+        pg_user = offline_secret["username"]
+        pg_pw = offline_secret["password"]
+        pg_cert = offline_secret["certificate"]
+
+        # Write cert files
+        registry_ca = tmpdir / "registry_ca.pem"
+        redis_ca = tmpdir / "redis_ca.pem"
+        postgres_ca = tmpdir / "postgres_ca.pem"
+        registry_ca.write_text(str(registry_cert))
+        redis_ca.write_text(str(redis_cert))
+        postgres_ca.write_text(str(pg_cert))
+
+        config_dict: Dict[str, Any] = {
+            "project": project,
+            "provider": "local",
+            "registry": {
+                "registry_type": "remote",
+                "path": f"{registry_host}:{int(registry_port)}",
+                "cert": str(registry_ca),
+            },
+            "online_store": {
+                "type": "redis",
+                "redis_type": "redis",
+                "connection_string": (
+                    f"{redis_host}:{int(redis_port)},ssl=True,ssl_cert_reqs=none,password={redis_pw}"
+                ),
+            },
+            "offline_store": {
+                "type": "postgres",
+                "host": pg_host,
+                "port": int(pg_port),
+                "database": pg_db,
+                "user": pg_user,
+                "password": pg_pw,
+                "sslmode": "require",
+                "sslrootcert_path": str(postgres_ca),
+            },
+            "entity_key_serialization_version": 3,
+            "auth": {"type": "no_auth"},
+        }
+
+        repo_config = RepoConfig(**config_dict)
+        return repo_config, tmpdir
+    except Exception:
+        cleanup_repo_config(tmpdir)
+        raise
+    return None, None  # type: ignore[return-value]
