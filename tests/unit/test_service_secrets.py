@@ -78,27 +78,27 @@ SERVICE_CASES = [
         {},
         None,
     ),
-        (
-            FeastDockerService,
-            {
-                "dockerfile": "Dockerfile",
+    (
+        FeastDockerService,
+        {
+            "dockerfile": "Dockerfile",
+            "registry_port": "6565",
+            "project_name": "demo_project",
+            "online_store_uuid": "online_uuid",
+            "offline_store_uuid": "offline_uuid",
+        },
+        {
+            "feast_registry": {
+                "registry_host": "",
                 "registry_port": "6565",
-                "project_name": "demo_project",
-                "online_store_service": None,
-                "offline_store_service": None,
-            },
-            {
-                "feast_registry": {
-                    "registry_host": "",
-                    "registry_port": "6565",
-                    "certificate": "",
-                    "project": "demo_project",
-                    "online_store_uuid": "",
-                    "offline_store_uuid": "",
-                }
-            },
-            None,
-        ),
+                "certificate": "",
+                "project": "demo_project",
+                "online_store_uuid": "online_uuid",
+                "offline_store_uuid": "offline_uuid",
+            }
+        },
+        None,
+    ),
     (
         LiteLLMDockerService,
         {
