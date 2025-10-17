@@ -79,13 +79,11 @@ def get_repo_config(
         registry_port = registry_secret["registry_port"]
         registry_cert = registry_secret["certificate"]
         # Redis Secret
-        print(f"Loaded online_secret: {online_secret}")
         redis_host = online_secret["host"]
         redis_port = online_secret["port"]
         redis_pw = online_secret["password"]
         redis_cert = online_secret["certificate"]
         # Postgres Secret
-        print(f"Loaded online_secret: {offline_secret}")
         pg_host = offline_secret["host"]
         pg_port = offline_secret["port"]
         pg_db = offline_secret["database"]
