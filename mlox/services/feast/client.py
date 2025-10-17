@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict
 from feast.repo_config import RepoConfig
 
-from mlox.secret_manager import load_secret_manager_from_encrypted_access_keyfile
+from mlox.secret_manager import load_secret_manager_from_keyfile
 
 
 def cleanup_repo_config(tempdir: Path) -> None:
@@ -24,9 +24,7 @@ def get_repo_config(
     Callers are responsible for deleting this directory (e.g., via
     :func:`cleanup_materialized_feature_store`) once the RepoConfig is no longer needed.
     """
-    sm = load_secret_manager_from_encrypted_access_keyfile(
-        encrypted_access_keyfile, access_password
-    )
+    sm = load_secret_manager_from_keyfile(encrypted_access_keyfile, access_password)
     if not sm:
         raise RuntimeError(
             f"Failed to load secret manager from keyfile '{encrypted_access_keyfile}'."

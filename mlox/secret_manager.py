@@ -280,7 +280,7 @@ def get_encrypted_access_keyfile(
     return encrypted_keyfile_dict
 
 
-def load_secret_manager_from_encrypted_access_keyfile(
+def load_secret_manager_from_keyfile(
     encrypted_access_keyfile: str, keyfile_pw: str
 ) -> AbstractSecretManager | None:
     try:
@@ -315,7 +315,7 @@ if __name__ == "__main__":
     if not password:
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
         exit(1)
-    sm = load_secret_manager_from_encrypted_access_keyfile("/tsm_0.key", password)
+    sm = load_secret_manager_from_keyfile("/tsm_0.key", password)
     if not sm:
         print("Failed to load secret manager from keyfile.")
         exit(1)

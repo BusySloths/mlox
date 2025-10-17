@@ -69,20 +69,12 @@ class FeastDockerService(AbstractService):
             "project": self.project_name,
             "provider": "local",
             "registry": "data/registry.db",
-            # "registry": {
-            #     "registry_type": "local",
-            #     # "path": f"{conn.host}:{registry_port}",
-            #     "path"
-            #     "cert": "/certs/feast_registry.pem",
-            # },
             "online_store": {
                 "type": "redis",
                 "redis_type": "redis",
                 "connection_string": (
-                    f"rediss://:{redis_service.pw}@{redis_host}:{redis_service.port}"
+                    f"{redis_host}:{int(redis_service.port)},ssl=True,ssl_cert_reqs=none,password={redis_service.pw}"
                 ),
-                # "ssl": True,
-                # "ssl_cert": "/certs/redis_ca.pem",
             },
             "offline_store": {
                 "type": "postgres",
@@ -92,7 +84,7 @@ class FeastDockerService(AbstractService):
                 "user": postgres_service.user,
                 "password": postgres_service.pw,
                 "sslmode": "require",
-                # "sslrootcert": "/certs/postgres_ca.pem",
+                "sslrootcert_path": "/certs/postgres_ca.pem",
             },
             "entity_key_serialization_version": 3,
             "auth": {"type": "no_auth"},

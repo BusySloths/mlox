@@ -1,17 +1,22 @@
-import yaml
+import os
 import pytest
+from pathlib import Path
 
 from mlox.config import get_stacks_path, load_config
 from mlox.infra import Bundle, Infrastructure
 from mlox.services.feast.client import (
     cleanup_repo_config,
-    materialize_feature_store_config,
+    get_repo_config,
 )
 from mlox.services.feast.docker import FeastDockerService
 from mlox.services.postgres.docker import PostgresDockerService
 from mlox.services.redis.docker import RedisDockerService
+from mlox.secret_manager import (
+    InMemorySecretManager,
+    get_encrypted_access_keyfile,
+)
 
-from .conftest import wait_for_service_ready
+from tests.integration.conftest import wait_for_service_ready
 
 
 pytestmark = pytest.mark.integration
@@ -65,8 +70,8 @@ def install_feast_service(ubuntu_docker_server):
     feast_config = load_config(get_stacks_path(), "/feast", "mlox.feast.yaml")
     params = {
         "${FEAST_PROJECT_NAME}": "feast_integration",
-        "${ONLINE_STORE_SERVICE}": redis_service,
-        "${OFFLINE_STORE_SERVICE}": postgres_service,
+        "${ONLINE_STORE_UUID}": redis_service.uuid,
+        "${OFFLINE_STORE_UUID}": postgres_service.uuid,
     }
     feast_bundle = infra.add_service(
         ubuntu_docker_server.ip, feast_config, params=params
@@ -111,27 +116,62 @@ def test_feast_service_links_remote_stores(install_feast_service):
     secrets = service.get_secrets()
     assert secrets["feast_registry"]["online_store_uuid"] == redis_service.uuid
     assert secrets["feast_registry"]["offline_store_uuid"] == postgres_service.uuid
-    assert secrets["feast_online_store"]["service_uuid"] == redis_service.uuid
-    assert secrets["feast_offline_store"]["service_uuid"] == postgres_service.uuid
 
 
-def test_materialize_feature_store_config(install_feast_service):
+def test_get_repo_config(install_feast_service):
     infra, _, service, redis_service, postgres_service = install_feast_service
-    tmpdir = materialize_feature_store_config(infra, service.name)
+    secret_manager = InMemorySecretManager()
+
+    registry_secret = service.get_secrets()
+    secret_manager.save_secret(
+        "MLOX_SERVICE_NAME_UUID_MAP", {service.name: service.uuid}
+    )
+    secret_manager.save_secret(service.uuid, registry_secret)
+
+    redis_connection = {
+        "host": redis_service.service_urls["Redis IP"],
+        "port": int(redis_service.port),
+        "password": redis_service.pw,
+        "certificate": redis_service.certificate,
+    }
+    secret_manager.save_secret(
+        service.online_store_uuid, {"redis_connection": redis_connection}
+    )
+
+    postgres_connection = {
+        "host": postgres_service.service_urls["Postgres IP"],
+        "port": int(postgres_service.port),
+        "database": postgres_service.db,
+        "username": postgres_service.user,
+        "password": postgres_service.pw,
+        "certificate": postgres_service.certificate,
+    }
+    secret_manager.save_secret(
+        service.offline_store_uuid, {"postgres_connection": postgres_connection}
+    )
+
+    password = "test-secret"
+    keyfile_name = f".feast_repo_key_{service.uuid}.json"
+    keyfile_path = Path(os.getcwd()) / keyfile_name
+    keyfile_path.write_bytes(
+        get_encrypted_access_keyfile(secret_manager, password).encode("utf-8")
+    )
+
+    repo_config, tmpdir = get_repo_config(service.name, f"/{keyfile_name}", password)
     try:
-        cfg_path = tmpdir / "feature_store.yaml"
-        assert cfg_path.exists()
-        config = yaml.safe_load(cfg_path.read_text())
-        assert config["online_store"]["connection_string"].endswith(
-            f"{infra.get_bundle_by_service(redis_service).server.ip}:{redis_service.service_ports['Redis']}"
+        registry_cfg = registry_secret["feast_registry"]
+        assert repo_config.project == registry_cfg["project"]
+        assert repo_config.registry.path == (
+            f"{registry_cfg['registry_host']}:{registry_cfg['registry_port']}"
         )
-        assert (
-            config["offline_store"]["host"]
-            == infra.get_bundle_by_service(postgres_service).server.ip
+
+        connection_string = repo_config.online_store.connection_string
+        assert connection_string.startswith(
+            f"{redis_connection['host']}:{redis_connection['port']}"
         )
-        assert (
-            config["offline_store"]["port"]
-            == postgres_service.service_ports["Postgres"]
-        )
+
+        assert repo_config.offline_store.host == postgres_connection["host"]
+        assert repo_config.offline_store.port == postgres_connection["port"]
     finally:
         cleanup_repo_config(tmpdir)
+        keyfile_path.unlink(missing_ok=True)
