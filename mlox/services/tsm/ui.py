@@ -9,7 +9,11 @@ from mlox.services.utils_ui import save_to_secret_store
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: TSMService):
-    tsm = service.get_secret_manager(infra)
+    # store secret manager in session to avoid recreating it on every rerun
+    key = f"tsm_secret_manager_{service.uuid}"
+    if key not in st.session_state:
+        st.session_state[key] = service.get_secret_manager(infra)
+    tsm = st.session_state[key]
     secrets = tsm.list_secrets(keys_only=True)
 
     df = pd.DataFrame(
