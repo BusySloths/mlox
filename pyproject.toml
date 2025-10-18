@@ -59,47 +59,20 @@ gcp = [
     "google-cloud-secret-manager>=2.18",
 ]
 
-all = [
-    # Nicer Logging with colors
-    "colorama==0.4.6",  # M
-    # UI and data
-    "streamlit==1.49.1",  # M
-    "streamlit-vis-timeline==0.3.0",  # M
-    "textual==6.1.0",  # M
-    "textual-dev==1.7.0",  # M
-    "backports.tarfile>=1.0",
-    "pandas>=2.2",
-    "numpy>=1.26",
-    # GCP
-    "gspread==6.2.1",  # M
-    "pandas-gbq==0.29.2",  # M
-    "google-cloud-storage>=2.10",
-    "google-cloud-bigquery>=3.10",
-    "google-cloud-secret-manager>=2.18",
-    # ML
-    "mlflow==2.22.2",  # M
-    "mlserver==1.7.1",  # M
-    "psutil>=5.9",
-    # Telemetry
-    "opentelemetry-api==1.33.1",  # M
-    "opentelemetry-sdk==1.33.1",  # M
-    "opentelemetry-exporter-otlp==1.33.1",  # M
-    # Connectors
-    "redis>=4.6",
-    "influxdb>=5.3",
-    # "grpcio>=1.59",
-    # Database
-    "psycopg2-binary>=2.9",
+feast = [
+    "feast==0.54.0",  # M
 ]
 
 dev = [
     # Nicer Logging with colors
     "colorama==0.4.6",  # M
+    # Feast
+    "feast==0.54.0",  # M
     # developer extras (includes 'all')
-    "streamlit==1.49.1",  # M
+    "streamlit==1.50.0",  # M
     "streamlit-vis-timeline==0.3.0",  # M
-    "textual==6.1.0",  # M
-    "textual-dev==1.7.0",  # M
+    "textual==6.3.0",  # M
+    "textual-dev==1.8.0",  # M
     "backports.tarfile>=1.0",
     "pandas>=2.2",
     "numpy>=1.26",
