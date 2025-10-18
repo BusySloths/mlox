@@ -43,3 +43,4 @@ build:
     service_port: "4000"
     slack_webhook: ""
     api_key: ${MLOX_AUTO_API_KEY}
+    ollama_models: ${OLLAMA_MODELS}

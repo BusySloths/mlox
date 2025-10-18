@@ -24,6 +24,7 @@ class LiteLLMDockerService(AbstractService):
     service_port: str | int
     slack_webhook: str
     api_key: str
+    ollama_models: str = ""  # Comma-separated list of models to pre-install
     compose_service_names: Dict[str, str] = field(
         init=False,
         default_factory=lambda: {
@@ -50,6 +51,11 @@ class LiteLLMDockerService(AbstractService):
         self.exec.fs_append_line(conn, env_path, f"MY_LITELLM_SERVICE_PORT={self.service_port}")
         self.exec.fs_append_line(conn, env_path, f"MY_LITELLM_USERNAME={self.ui_user}")
         self.exec.fs_append_line(conn, env_path, f"MY_LITELLM_PASSWORD={self.ui_pw}")
+
+        # Add Ollama models configuration
+        if self.ollama_models:
+            self.exec.fs_append_line(conn, env_path, f"MY_OLLAMA_MODELS={self.ollama_models}")
+
         self.service_urls["LiteLLM UI"] = base_url
         self.service_urls["LiteLLM Service"] = (
             f"https://{conn.host}:{self.service_port}"
