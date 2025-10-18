@@ -5,14 +5,16 @@ import logging
 from cryptography.fernet import Fernet
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, cast
 from dataclasses import dataclass, field
 
 from mlox.infra import Infrastructure
 from mlox.server import AbstractServer
+import importlib
 from mlox.utils import (
     _get_encryption_key,
     dict_to_dataclass,
+    encrypt_dict,
     load_from_json,
     dataclass_to_dict,
 )
@@ -266,22 +268,55 @@ class InMemorySecretManager(AbstractSecretManager):
         return {"secrets": dict(self._store)}
 
 
+def get_encrypted_access_keyfile(
+    secret_manager: AbstractSecretManager, keyfile_pw: str
+) -> str:
+    access_secret_dict = secret_manager.get_access_secrets()
+    access_config = {
+        "access_secret": access_secret_dict,
+        "secret_manager_class": f"{secret_manager.__class__.__module__}.{secret_manager.__class__.__qualname__}",
+    }
+    encrypted_keyfile_dict = encrypt_dict(access_config, keyfile_pw)
+    return encrypted_keyfile_dict
+
+
+def load_secret_manager_from_keyfile(
+    encrypted_access_keyfile: str, keyfile_pw: str
+) -> AbstractSecretManager | None:
+    try:
+        # Part I: Load and decrypt the keyfile
+        keyfile_data = load_from_json(encrypted_access_keyfile, keyfile_pw)
+        logging.warning(f"Loaded keyfile data: {keyfile_data}")
+        secret_manager_class = keyfile_data["secret_manager_class"]
+        access_secret = keyfile_data["access_secret"]
+        if not secret_manager_class or not access_secret:
+            logging.error("Invalid keyfile format.")
+            return None
+    except Exception as e:
+        logging.error(
+            f"Error loading secret manager access secret '{encrypted_access_keyfile}': {e}"
+        )
+    try:
+        # Part II: Load the secret manager class
+        module_name, class_name = secret_manager_class.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+        sm_class = getattr(module, class_name)
+        sm_class = cast(AbstractSecretManager, sm_class)
+        return sm_class.instantiate_secret_manager(access_secret)
+    except Exception as e:
+        logging.error(
+            f"Error loading secret manager class '{secret_manager_class}': {e}"
+        )
+    return None
+
+
 if __name__ == "__main__":
-    # Make sure your environment variable is set!
     password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
     if not password:
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
         exit(1)
-
-    secret_manager = TinySecretManager("/mlox333.key", ".secrets", password)
-    # print(secret_manager.load_secret("TEST_SECRET"))
-    # secret_manager.save_secret(
-    #     "TEST_SECRET",
-    #     {
-    #         "superkey": "supervalue",
-    #         "anotherkey": "anothervalue",
-    #         "listkey": ["item1", "item2"],
-    #     },
-    # )
-    infra = secret_manager.load_secret("MLOX_CONFIG_INFRASTRUCTURE")
-    print(infra)
+    sm = load_secret_manager_from_keyfile("/tsm_0.key", password)
+    if not sm:
+        print("Failed to load secret manager from keyfile.")
+        exit(1)
+    print(sm.list_secrets(keys_only=True))

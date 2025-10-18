@@ -1,14 +1,14 @@
-id: feast-latest
+id: feast-0.54.0
 name: Feast Feature Store
-version: latest
+version: "0.54.0"
 maintainer: Your Name
 description_short: Feast is an open-source feature store for managing and serving machine learning features.
 description: |
-  Feast is an open-source feature store designed to help data scientists and engineers manage 
-  and serve machine learning features. It provides a centralized repository for features, 
-  enabling teams to share and reuse them across different models and projects. Feast supports 
-  both online and offline feature retrieval, making it suitable for real-time inference as well 
-  as batch processing. It integrates seamlessly with various data sources and can be deployed 
+  Feast is an open-source feature store designed to help data scientists and engineers manage
+  and serve machine learning features. It provides a centralized repository for features,
+  enabling teams to share and reuse them across different models and projects. Feast supports
+  both online and offline feature retrieval, making it suitable for real-time inference as well
+  as batch processing. It integrates seamlessly with various data sources and can be deployed
   on-premises or in the cloud.
 links:
   project: https://feast.dev/
@@ -26,21 +26,17 @@ groups:
     docker:
 ports:
   registry: 6564
-  online_store: 6566
-  offline_store: 6565
 ui:
   setup: mlox.services.feast.ui.setup
   settings: mlox.services.feast.ui.settings
 build:
   class_name: mlox.services.feast.docker.FeastDockerService
   params:
-    name: feast-latest
+    name: feast-0.54.0
     template: ${MLOX_STACKS_PATH}/feast/docker-compose-feast.yaml
     dockerfile: ${MLOX_STACKS_PATH}/feast/Dockerfile
-    target_path: ${MLOX_USER_HOME}/feast-latest
-    config: ${MLOX_STACKS_PATH}/feast/feature_store.yaml
+    target_path: ${MLOX_USER_HOME}/feast-0.54.0
     registry_port: ${MLOX_AUTO_PORT_REGISTRY}
-    online_port: ${MLOX_AUTO_PORT_ONLINE_STORE}
-    offline_port: ${MLOX_AUTO_PORT_OFFLINE_STORE}
-    # ui_user: ${MLOX_AUTO_USER}
-    # ui_pw: ${MLOX_AUTO_PW}
+    project_name: ${FEAST_PROJECT_NAME}
+    online_store_uuid: ${ONLINE_STORE_UUID}
+    offline_store_uuid: ${OFFLINE_STORE_UUID}

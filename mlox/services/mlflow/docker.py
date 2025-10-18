@@ -7,14 +7,6 @@ from typing import Dict
 
 from mlox.service import AbstractService
 
-
-
-# Configure logging (optional, but recommended)
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +23,9 @@ class MLFlowDockerService(AbstractService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_create_empty_file(conn, env_path)
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_PORT={self.port}")
@@ -44,7 +38,9 @@ class MLFlowDockerService(AbstractService):
         self.exec.fs_create_empty_file(conn, ini_path)
         self.exec.fs_append_line(conn, ini_path, "[mlflow]")
         self.exec.fs_append_line(conn, ini_path, "default_permission = READ")
-        self.exec.fs_append_line(conn, ini_path, "database_uri = sqlite:///basic_auth.db")
+        self.exec.fs_append_line(
+            conn, ini_path, "database_uri = sqlite:///basic_auth.db"
+        )
         self.exec.fs_append_line(conn, ini_path, f"admin_username = {self.ui_user}")
         self.exec.fs_append_line(conn, ini_path, f"admin_password = {self.ui_pw}")
         self.service_ports["MLFlow Webserver"] = int(self.port)

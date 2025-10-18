@@ -11,6 +11,7 @@ from mlox.config import (
     load_service_config_by_id,
     load_all_service_configs,
 )
+from mlox.service_registry import register_service, get_service_registry
 from mlox.server import AbstractServer
 from mlox.service import AbstractService
 from mlox.utils import (
@@ -50,6 +51,12 @@ class Infrastructure:
     def __post_init__(self):
         self.populate_configs()
 
+    def clear_service_registry(self) -> None:
+        """Clear the singleton service registry (useful for testing)"""
+        from mlox.service_registry import get_service_registry
+
+        get_service_registry().clear()
+
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
     ) -> List[AbstractService]:
@@ -79,6 +86,10 @@ class Infrastructure:
         return None
 
     def remove_bundle(self, bundle: Bundle) -> None:
+        registry = get_service_registry()
+        for service in bundle.services:
+            registry.unregister_service(service.uuid)
+
         try:
             self.bundles.remove(bundle)
         except ValueError:
@@ -103,6 +114,8 @@ class Infrastructure:
             service.spin_down(conn)
             service.teardown(conn)
         bundle.services.remove(service)
+        # UNREGISTER SERVICE FROM SINGLETON REGISTRY
+        get_service_registry().unregister_service(service.uuid)
 
     def add_service(
         self,
@@ -173,7 +186,9 @@ class Infrastructure:
 
         # SET TASK EXECUTOR
         service.set_task_executor(bundle.server.create_new_task_executor())
-
+        # REGISTER SERVICE IN SINGLETON REGISTRY FOR DEPENDENCY RESOLUTION
+        register_service(service.uuid, service)
+        # REGISTER SERVICE IN INFRASTRUCTURE
         bundle.services.append(service)
         return bundle
 
@@ -264,7 +279,13 @@ class Infrastructure:
     def from_dict(cls, infra_dict: Dict) -> "Infrastructure":
         infra = dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])
         infra.populate_configs()
+        infra.populate_service_registry()
         return infra
+
+    def populate_service_registry(self) -> None:
+        registry = get_service_registry()
+        for service in self.services():
+            registry.register_service(service.uuid, service)
 
     def populate_configs(self) -> None:
         configs = load_all_service_configs(prefix="mlox")

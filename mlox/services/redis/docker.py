@@ -81,6 +81,18 @@ class RedisDockerService(AbstractService):
         return {"status": "unknown"}
 
     def get_secrets(self) -> Dict[str, Dict]:
-        if not self.pw:
-            return {}
-        return {"redis_auth": {"password": self.pw}}
+        port_val = self.service_ports.get("Redis") or int(self.port)
+        host_val = self.service_urls.get("Redis IP", "")
+        connection = {
+            "host": host_val,
+            "port": str(port_val),
+            "password": self.pw,
+            "certificate": self.certificate,
+        }
+        if host_val and port_val:
+            connection["connection_url"] = (
+                f"rediss://:{self.pw}@{host_val}:{port_val}"
+                if self.pw
+                else f"rediss://{host_val}:{port_val}"
+            )
+        return {"redis_connection": connection}
