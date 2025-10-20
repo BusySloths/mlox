@@ -13,13 +13,18 @@ class K8sHeadlampService(AbstractService):
     service_name: str = "my-headlamp"
 
     def get_login_token(self, bundle) -> str:
-        token = ""
+        token = "no token"
+        if not bundle.server:
+            logger.error("No server connection available")
+            return token
         with bundle.server.get_server_connection() as conn:
-            token = self.exec.k8s_create_token(
+            _token = self.exec.k8s_create_token(
                 conn,
                 service_account=self.service_name,
                 namespace=self.namespace,
             )
+            if _token:
+                token = _token
         return token
 
     def setup(self, conn) -> None:
