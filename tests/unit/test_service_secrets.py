@@ -110,6 +110,7 @@ SERVICE_CASES = [
             "service_port": "8081",
             "slack_webhook": "https://hooks.slack.com/services/test",
             "api_key": "llm-api-key",
+            "openai_key": "openai-key",
         },
         {
             "litellm_api_access": {"api_key": "llm-api-key"},

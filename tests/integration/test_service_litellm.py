@@ -21,10 +21,10 @@ def install_litellm_service(ubuntu_docker_server):
     infra.bundles.append(bundle)
 
     # Load LiteLLM stack config
-    config = load_config(get_stacks_path(), "/litellm", "mlox.litellm.1.73.0.yaml")
+    config = load_config(get_stacks_path(), "/litellm", "mlox.litellm.1.77.7.yaml")
 
     # Test with minimal model selection for faster tests
-    params = {"${OLLAMA_MODELS}": "tinyllama"}
+    params = {"${OLLAMA_MODELS}": ["tinyllama"]}
 
     bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
@@ -76,7 +76,7 @@ def test_ollama_models_installed(install_litellm_service):
 
     # Verify that ollama_models parameter was set
     assert hasattr(service, "ollama_models")
-    assert service.ollama_models == "tinyllama"
+    assert "tinyllama" in service.ollama_models
 
     # TODO: Add actual API call to check if model is available in Ollama
     # This would require accessing Ollama API endpoint at http://ollama:11434/api/tags
@@ -90,10 +90,10 @@ def test_litellm_multiple_models_selection(ubuntu_docker_server):
     bundle = Bundle(name=ubuntu_docker_server.ip, server=ubuntu_docker_server)
     infra.bundles.append(bundle)
 
-    config = load_config(get_stacks_path(), "/litellm", "mlox.litellm.1.73.0.yaml")
+    config = load_config(get_stacks_path(), "/litellm", "mlox.litellm.1.77.7.yaml")
 
     # Test with multiple models
-    params = {"${OLLAMA_MODELS}": "tinyllama,qwen2.5:0.5b"}
+    params = {"${OLLAMA_MODELS}": ["tinyllama", "qwen2.5:0.5b"]}
 
     bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
@@ -102,7 +102,8 @@ def test_litellm_multiple_models_selection(ubuntu_docker_server):
     service = bundle_added.services[-1]
 
     # Verify models parameter
-    assert service.ollama_models == "tinyllama,qwen2.5:0.5b"
+    assert "tinyllama" in service.ollama_models
+    assert "qwen2.5:0.5b" in service.ollama_models
 
     # Cleanup (don't actually spin up to save test time)
     infra.remove_bundle(bundle_added)
@@ -114,10 +115,10 @@ def test_litellm_no_models_selection(ubuntu_docker_server):
     bundle = Bundle(name=ubuntu_docker_server.ip, server=ubuntu_docker_server)
     infra.bundles.append(bundle)
 
-    config = load_config(get_stacks_path(), "/litellm", "mlox.litellm.1.73.0.yaml")
+    config = load_config(get_stacks_path(), "/litellm", "mlox.litellm.1.77.7.yaml")
 
     # Test with empty model selection
-    params = {"${OLLAMA_MODELS}": ""}
+    params = {"${OLLAMA_MODELS}": []}
 
     bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
@@ -126,7 +127,8 @@ def test_litellm_no_models_selection(ubuntu_docker_server):
     service = bundle_added.services[-1]
 
     # Verify models parameter is empty
-    assert service.ollama_models == ""
+    assert isinstance(service.ollama_models, list)
+    assert len(service.ollama_models) == 0
 
     # Cleanup (don't actually spin up to save test time)
     infra.remove_bundle(bundle_added)

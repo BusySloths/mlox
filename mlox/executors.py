@@ -757,10 +757,18 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         self,
         connection: Connection,
         config_yaml: str,
+        env_file: str | None = None,
         remove_volumes: bool = False,
     ) -> str | None:
-        volumes = "--volumes " if remove_volumes else ""
-        command = f'docker compose -f "{config_yaml}" down {volumes}--remove-orphans'
+        parts: list[str] = ["docker compose"]
+        if env_file is not None:
+            parts.append(f"--env-file {env_file}")
+        parts.append(f'-f "{config_yaml}"')
+        parts.append("down")
+        if remove_volumes:
+            parts.append("--volumes")
+        parts.append("--remove-orphans")
+        command = " ".join(parts)
         result = self._run_task(
             connection,
             group=TaskGroup.CONTAINER_RUNTIME,

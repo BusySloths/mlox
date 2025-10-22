@@ -89,14 +89,16 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict:  # noqa: ARG001
 
     # Warning if no models selected
     if not selected_models:
-        st.warning("⚠️ No models selected. Ollama will start without any pre-installed models.")
+        st.warning(
+            "⚠️ No models selected. Ollama will start without any pre-installed models."
+        )
 
     # Show estimated disk usage
     if selected_models:
         st.info(f"✅ {len(selected_models)} model(s) selected")
 
     # Store selected models in params for the service
-    params["${OLLAMA_MODELS}"] = ",".join(selected_models) if selected_models else ""
+    params["${OLLAMA_MODELS}"] = selected_models
 
     return params
 
@@ -109,7 +111,68 @@ def settings(infra: Infrastructure, bundle: Bundle, service: LiteLLMDockerServic
         bundle: Bundle instance containing server information
         service: The LiteLLM service instance
     """
-    st.header(f"Settings for service {service.name}")
-    st.write(f"IP: {bundle.server.ip}")
+    st.header(f"LiteLLM + Ollama · {service.name}")
 
-    st.write(f'User and Password: "{service.ui_user}:{service.ui_pw}"')
+    ui_url = service.service_urls.get("Login", "")
+    api_url = service.service_urls.get("Service", "")
+    service_ip = bundle.server.ip
+
+    status_col, models_col, port_col = st.columns(3)
+    status_col.metric("Status", service.state.title())
+    models_col.metric("Configured Models", len(service.ollama_models))
+    port_col.metric("UI Port", service.service_ports.get("LiteLLM UI", "—"))
+
+    st.markdown("---")
+
+    link_cols = st.columns(3)
+    link_cols[0].link_button(
+        "Open LiteLLM UI", ui_url or "https://github.com/BerriAI/litellm"
+    )
+    link_cols[1].link_button(
+        "LiteLLM Docs",
+        "https://docs.litellm.ai",  # Official documentation
+    )
+    link_cols[2].link_button("Ollama Docs", "https://github.com/ollama/ollama")
+
+    st.subheader("Credentials")
+    cred_user_col, cred_pw_col = st.columns(2)
+    cred_user_col.text_input("UI Username", value=service.ui_user, disabled=True)
+    cred_pw_col.text_input(
+        "UI Password",
+        value=service.ui_pw,
+        type="password",
+        disabled=True,
+        help="Use these credentials to sign in to the LiteLLM web UI.",
+    )
+    st.text_input(
+        "LiteLLM Master Token",
+        value=service.api_key,
+        type="password",
+        disabled=True,
+        help="Shared secret set as MY_LITELLM_MASTER_KEY for authenticating API requests.",
+    )
+
+    st.subheader("Connection Details")
+    st.markdown(
+        f"""
+        - IP / Host: `{service_ip}`
+        - API Endpoint: `{api_url or "https://<host>:<service_port>"}`
+        - Config Path: `{service.target_path}/litellm-config.yaml`
+        """
+    )
+
+    st.subheader("Configured Ollama Models")
+    if service.ollama_models:
+        st.markdown("The following models will be pulled on startup:")
+        st.markdown("- " + "\n- ".join(service.ollama_models))
+    else:
+        st.info(
+            "No models pre-configured. Add models by editing the service and adding entries like "
+            "`tinyllama` or `qwen2.5:3b`."
+        )
+
+    st.subheader("Tips")
+    st.markdown(
+        "- Use `ollama ls` on the server to inspect installed models.\n"
+        "- Additional LiteLLM routes can be configured by editing the generated YAML above."
+    )
