@@ -1,8 +1,10 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
-    image: postgres:13
+    # image: pgvector/pgvector:pg18-trixie
+    image: postgres:17.6
+    container_name: ${MY_LITELLM_NAME}-postgres
     expose:
       - 5432
     environment:
@@ -18,12 +20,13 @@ services:
       start_period: 5s
     restart: always
     networks:
-      - litellm
+      - litellm-net
 
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
     # https://redis.io/blog/redis-adopts-dual-source-available-licensing/
     image: redis:7.2-bookworm
+    container_name: ${MY_LITELLM_NAME}-redis
     expose:
       - 6379
     healthcheck:
@@ -40,11 +43,11 @@ services:
       REDIS_PASSWORD: SDsdgFsfm4lmf43lfnm34lkf
     restart: always
     networks:
-      - litellm
-
+      - litellm-net
 
   litellm:
-    image: ghcr.io/berriai/litellm:v1.73.0-stable
+    image: ghcr.io/berriai/litellm:v1.77.7-stable
+    container_name: ${MY_LITELLM_NAME:-litellm}-litellm
     ports:
       - "${MY_LITELLM_PORT:-}:4000" # Map the container port to the host, change the host port if necessary
     environment:
@@ -54,22 +57,25 @@ services:
       # - SERVER_ROOT_PATH="/api/v1"
       - SSL_KEYFILE_PATH=/app/ssl.key
       - SSL_CERTFILE_PATH=/app/ssl.crt
-      - UI_USERNAME=${MY_LITELLM_USERNAME:-}   # username to sign in on UI
-      - UI_PASSWORD=${MY_LITELLM_PASSWORD:-}        # password to sign in on UI      
+      - UI_USERNAME=${MY_LITELLM_USERNAME:-} # username to sign in on UI
+      - UI_PASSWORD=${MY_LITELLM_PASSWORD:-} # password to sign in on UI
       # - REDIS_HOST=redis
       # - REDIS_PORT=6379
       # - REDIS_PASSWORD=SDsdgFsfm4lmf43lfnm34lkf
     volumes:
       - ./litellm-config.yaml:/app/config.yaml # Mount the local configuration file
-      - ./cert.pem:/app/ssl.crt 
+      - ./cert.pem:/app/ssl.crt
       - ./key.pem:/app/ssl.key
     # You can change the port or number of workers as per your requirements or pass any new supported CLI augument. Make sure the port passed here matches with the container port defined above in `ports` value
-    command: [ "--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8" ]
+    command:
+      ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "8"]
     networks:
-      - litellm
+      - litellm-net
     depends_on:
-      - redis
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   ollama:
     image: ollama/ollama:0.9.4-rc0
@@ -78,18 +84,23 @@ services:
     volumes:
       - ./ollama/ollama:/root/.ollama
       - ./entrypoint.sh:/entrypoint.sh
-    container_name: ollama 
+    container_name: ${MY_LITELLM_NAME}-ollama
     pull_policy: always
     tty: true
     restart: always
     environment:
       - OLLAMA_KEEP_ALIVE=24h
+      - MY_OLLAMA_MODELS=${MY_OLLAMA_MODELS:-}
       # - OLLAMA_HOST=0.0.0.0
     entrypoint: ["/usr/bin/bash", "/entrypoint.sh"]
     networks:
-      - litellm
+      - litellm-net
 
 networks:
-  litellm:
+  litellm-net: # Static key for Docker Compose's internal reference
+    # The actual Docker network name will be dynamically generated
+    name: ${MY_LITELLM_NAME:-litellm}-network
+    driver: bridge # Explicitly define the driver (bridge is default)
 volumes:
   postgres-db-volume:
+    name: "${MY_LITELLM_NAME:-litellm}-postgres-data"

@@ -170,10 +170,31 @@ def ubuntu_docker_server(multipass_instance):
         pytest.fail("Failed to add server to infrastructure")
     server = bundle.server
     server.setup()
+
+    def _list_docker_volumes() -> set[str]:
+        try:
+            with server.get_server_connection(force_root=True) as conn:
+                res = conn.run("docker volume ls -q", hide=True, warn=True, pty=False)
+                output = (res.stdout or "").strip().splitlines()
+                return {line.strip() for line in output if line.strip()}
+        except Exception as exc:  # pragma: no cover - best effort cleanup safeguard
+            logging.error(f"Unable to list docker volumes: {exc}")
+            return set()
+
+    baseline_volumes = _list_docker_volumes()
     yield server
     logging.info(
         f"Tearing down ubuntu_docker_server on VM {multipass_instance['name']}..."
     )
+    remaining_volumes = _list_docker_volumes()
+    new_volumes = sorted(remaining_volumes - baseline_volumes)
+    missing_volumes = sorted(baseline_volumes - remaining_volumes)
+    if new_volumes:
+        logging.error("Docker volumes left behind after teardown: %s", new_volumes)
+    if missing_volumes:
+        logging.warning(
+            "Baseline docker volumes removed during teardown: %s", missing_volumes
+        )
     try:
         server.teardown()
         logging.info("Successfully tore down ubuntu_docker_server.")

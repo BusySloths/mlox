@@ -1,6 +1,6 @@
-id: litellm-ollama-1.73.0-docker
+id: litellm-ollama-1.77.7-docker
 name: LiteLLM + Ollama
-version: 1.73.0 (stable)
+version: 1.77.7 (stable)
 maintainer: Your Name
 description_short: LiteLLM is an open-source library that simplifies the integration of large language models (LLMs) into applications.
 description: |
@@ -32,9 +32,9 @@ ui:
 build:
   class_name: mlox.services.litellm.docker.LiteLLMDockerService
   params:
-    name: litellm-ollama-1.73.0
-    template: ${MLOX_STACKS_PATH}/litellm/docker-compose-litellm-ollama-1.73.0.yaml
-    target_path: ${MLOX_USER_HOME}/litellm-1.73.0
+    name: litellm-ollama-1.77.7
+    template: ${MLOX_STACKS_PATH}/litellm/docker-compose-litellm-ollama-1.77.7.yaml
+    target_path: ${MLOX_USER_HOME}/litellm-1.77.7
     ollama_script: ${MLOX_STACKS_PATH}/litellm/entrypoint.sh
     litellm_config: ${MLOX_STACKS_PATH}/litellm/litellm-config.yaml
     ui_user: ${MLOX_AUTO_USER}
@@ -43,3 +43,5 @@ build:
     service_port: "4000"
     slack_webhook: ""
     api_key: ${MLOX_AUTO_API_KEY}
+    ollama_models: ${OLLAMA_MODELS}
+    openai_key: ${OPENAI_KEY}
