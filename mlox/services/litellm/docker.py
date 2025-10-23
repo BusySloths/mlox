@@ -171,13 +171,16 @@ class LiteLLMDockerService(AbstractService):
         deduped_models = list(dict.fromkeys(ollama_models))
 
         for model in deduped_models:
-            provider_model = model if "/" in model else f"ollama/{model}"
+            # Allow users to specify fully-qualified provider models (e.g. "ollama/tinyllama").
+            # When no provider prefix is given, default to Ollama.
+            # backend_model = model if "/" in model else f"ollama/{model}"
+            display_name = model.split("/", 1)[-1] if "/" in model else model
             config["model_list"].append(
                 {
-                    "model_name": model,
+                    "model_name": display_name,
                     "litellm_params": {
-                        "model": provider_model,
-                        "api_base": "ollama:11434",
+                        "model": f"ollama/{display_name}",
+                        "api_base": "http://ollama:11434",
                     },
                 }
             )
