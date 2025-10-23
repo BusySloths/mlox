@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from mlox.service import AbstractService
 
 
-
 # Configure logging (optional, but recommended)
 logging.basicConfig(
     level=logging.INFO,
@@ -49,8 +48,12 @@ class MLFlowMLServerDockerService(AbstractService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
-        self.exec.fs_copy(conn, self.dockerfile, f"{self.target_path}/dockerfile-mlflow-mlserver")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
+        self.exec.fs_copy(
+            conn, self.dockerfile, f"{self.target_path}/dockerfile-mlflow-mlserver"
+        )
         # self.exec.fs_copy(conn, self.settings, f"{self.target_path}/settings.json")
         # self.exec.tls_setup(conn, conn.host, self.target_path)
 
@@ -66,8 +69,12 @@ class MLFlowMLServerDockerService(AbstractService):
         self.exec.fs_append_line(conn, env_path, f"MLSERVER_ENDPOINT_URL={conn.host}")
         self.exec.fs_append_line(conn, env_path, f"MLSERVER_ENDPOINT_PORT={self.port}")
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_MODEL={self.model}")
-        self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_URI={self.tracking_uri}")
-        self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_USER={self.tracking_user}")
+        self.exec.fs_append_line(
+            conn, env_path, f"MLFLOW_REMOTE_URI={self.tracking_uri}"
+        )
+        self.exec.fs_append_line(
+            conn, env_path, f"MLFLOW_REMOTE_USER={self.tracking_user}"
+        )
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_PW={self.tracking_pw}")
         self.exec.fs_append_line(conn, env_path, "MLFLOW_REMOTE_INSECURE=true")
         self.service_ports["MLServer REST API"] = int(self.port)
