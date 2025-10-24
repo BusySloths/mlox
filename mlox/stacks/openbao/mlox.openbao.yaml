@@ -23,6 +23,7 @@ groups:
 ports:
   api: 8200
 ui:
+  setup: mlox.services.openbao.ui.setup
   settings: mlox.services.openbao.ui.settings
 build:
   class_name: mlox.services.openbao.docker.OpenBaoDockerService
@@ -30,6 +31,6 @@ build:
     name: openbao
     template: ${MLOX_STACKS_PATH}/openbao/docker-compose-openbao.yaml
     target_path: ${MLOX_USER_HOME}/openbao
-    root_token: ${MLOX_AUTO_API_KEY}
+    root_token: ${OPENBAO_ROOT_TOKEN}
     port: ${MLOX_AUTO_PORT_API}
     mount_path: secret

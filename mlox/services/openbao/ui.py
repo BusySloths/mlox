@@ -10,6 +10,7 @@ import streamlit as st
 
 from mlox.infra import Infrastructure, Bundle
 from mlox.services.utils_ui import save_to_secret_store
+from mlox.utils import generate_password
 
 from .docker import OpenBaoDockerService
 
@@ -22,11 +23,26 @@ def _format_secret_value(value: Any) -> str:
     return json.dumps(value, indent=2, default=str)
 
 
+def setup(infra: Infrastructure, bundle: Bundle):
+    """Provide a predictable, punctuation-free root token."""
+    params: dict[str, str] = {}
+
+    suggested_token = generate_password(length=20, with_punctuation=False)
+    root_token = st.text_input("Root Token", value=suggested_token)
+
+    params["${OPENBAO_ROOT_TOKEN}"] = root_token.strip()
+    return params
+
+
 def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerService):
     key = f"openbao_secret_manager_{service.uuid}"
     if key not in st.session_state:
         st.session_state[key] = service.get_secret_manager(infra)
     manager = st.session_state[key]
+
+    st.markdown("### Login Details")
+    st.write(f"Root Token: `{service.root_token}`")
+    st.write("Namespace: `root`")
 
     secrets = manager.list_secrets(keys_only=True)
 

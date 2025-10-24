@@ -44,10 +44,16 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_create_empty_file(conn, env_path)
-        self.exec.fs_append_line(conn, env_path, f"OPENBAO_STACK_PREFIX={self.stack_prefix}")
+        self.exec.fs_append_line(
+            conn, env_path, f"OPENBAO_STACK_PREFIX={self.stack_prefix}"
+        )
         self.exec.fs_append_line(conn, env_path, f"OPENBAO_PORT={self.port}")
-        self.exec.fs_append_line(conn, env_path, f"OPENBAO_ROOT_TOKEN={self.root_token}")
-        self.exec.fs_append_line(conn, env_path, f"OPENBAO_MOUNT_PATH={self.mount_path}")
+        self.exec.fs_append_line(
+            conn, env_path, f"OPENBAO_ROOT_TOKEN={self.root_token}"
+        )
+        self.exec.fs_append_line(
+            conn, env_path, f"OPENBAO_MOUNT_PATH={self.mount_path}"
+        )
         self.exec.fs_append_line(conn, env_path, f"OPENBAO_URL={conn.host}")
 
         self.compose_service_names = {
@@ -88,10 +94,23 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
             if not states:
                 self.state = "stopped"
                 return {"status": "stopped"}
+
+            target_name = None
+            if isinstance(self.compose_service_names, dict):
+                target_name = self.compose_service_names.get("OpenBao")
+
             for name, state in states.items():
-                if "openbao" in name and isinstance(state, dict):
+                if not isinstance(name, str):
+                    continue
+
+                if target_name:
+                    matched = name == target_name or target_name in name
+                else:
+                    matched = "openbao" in name.lower()
+
+                if matched and isinstance(state, dict):
                     status = state.get("Status") or state.get("State") or "unknown"
-                    if "running" in status:
+                    if isinstance(status, str) and "running" in status.lower():
                         self.state = "running"
                         return {"status": "running"}
             self.state = "stopped"
@@ -119,7 +138,9 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
     def get_secret_manager(self, infra: Infrastructure) -> AbstractSecretManager:
         bundle = infra.get_bundle_by_service(self)
         if bundle is None:
-            raise ValueError("OpenBao service is not attached to a bundle in the infrastructure")
+            raise ValueError(
+                "OpenBao service is not attached to a bundle in the infrastructure"
+            )
 
         server = bundle.server
         address = f"https://{server.ip}:{self.port}"
