@@ -61,6 +61,11 @@ gcp = [
 
 feast = [
     "feast==0.54.0",  # M
+    "feast[postgres]==0.54.0",  # M
+]
+
+minio = [
+    "boto3==1.40.56",  # M
 ]
 
 dev = [
@@ -68,6 +73,9 @@ dev = [
     "colorama==0.4.6",  # M
     # Feast
     "feast==0.54.0",  # M
+    "feast[postgres]==0.54.0",  # M    
+    # MinIO
+    "boto3==1.40.56",  # M
     # developer extras (includes 'all')
     "streamlit==1.50.0",  # M
     "streamlit-vis-timeline==0.3.0",  # M

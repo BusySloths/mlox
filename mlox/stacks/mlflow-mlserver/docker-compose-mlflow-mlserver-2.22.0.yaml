@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   traefik:
@@ -43,6 +43,7 @@ services:
       - MLFLOW_REMOTE_MODEL=${MLFLOW_REMOTE_MODEL}
       # MLSERVER_URL for Traefik routing, define in .env or environment
       - MLSERVER_URL=${MLSERVER_ENDPOINT_URL:-mlserver.localhost}
+      - MLSERVER_DISABLE_UVLOOP=1
     networks:
       - mlox_mlserver_dynamic_net # Use the same static internal reference name
     labels:
@@ -53,8 +54,8 @@ services:
       # Replace user:hashed_password with your actual credentials.
       # Generate with: echo $(htpasswd -nb your_user your_password) | sed -e s/\\$/\\$\\$/g
       # Example for user 'admin' and password 's3cr3tpAsswOrd':
-      # - "traefik.http.middlewares.mlserver-auth.basicauth.users=admin:$$apr1$$vEr/wAAE$$xaB99Pf.qkH3QFrgITm0P/" # admin:s3cr3t      
-      - "traefik.http.middlewares.mlserver-auth.basicauth.users=${TRAEFIK_USER_AND_PW}" 
+      # - "traefik.http.middlewares.mlserver-auth.basicauth.users=admin:$$apr1$$vEr/wAAE$$xaB99Pf.qkH3QFrgITm0P/" # admin:s3cr3t
+      - "traefik.http.middlewares.mlserver-auth.basicauth.users=${TRAEFIK_USER_AND_PW}"
 
       # HTTPS Router definition
       - "traefik.http.routers.mlserver-secure.entrypoints=websecure"
@@ -76,7 +77,7 @@ services:
         echo \"Serving model on internal port 5002 (HTTP)\"
         echo \"Traefik will route external HTTPS traffic from Host: $${MLSERVER_URL}\"
         
-        mlflow models serve -m models:/$${MLFLOW_REMOTE_MODEL} -p 5002 -h 0.0.0.0 -w 2 --enable-mlserver
+        mlflow models serve -m models:/$${MLFLOW_REMOTE_MODEL} -p 5002 -h 0.0.0.0 -w 1 --enable-mlserver
       "
 
 networks:

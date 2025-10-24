@@ -206,15 +206,12 @@ def generate_password(length: int = 10, with_punctuation: bool = False) -> str:
         raise ValueError("Password length must be at least 5 characters.")
     alphabet = string.ascii_letters + string.digits
     if with_punctuation:
-        alphabet = alphabet + string.punctuation
+        # Restrict punctuation to characters that are safe in .env and shell contexts.
+        safe_punctuation = "!@%*-_=+?.:,"
+        alphabet = alphabet + safe_punctuation
     while True:
         password = "".join(secrets.choice(alphabet) for i in range(length))
-        password = password.replace(" ", "")  # Remove spaces if any
-        password = password.replace("\\", "=")  # Remove escape characters if any
-        password = password.replace('"', "+")  # Remove escape characters if any
-        password = password.replace("'", "-")  # Remove escape characters if any
-        password = password.replace("`", "]")  # Remove escape characters if any
-        password = password.replace("^", "[")  # Remove escape characters if any
+        password = password.replace(" ", "")  # Remove spaces if any (defensive)
         if (
             any(c.islower() for c in password)
             and any(c.isupper() for c in password)
