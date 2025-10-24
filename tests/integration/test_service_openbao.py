@@ -3,6 +3,7 @@ import pytest
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
 from mlox.services.openbao.client import OpenBaoSecretManager
+from mlox.utils import generate_password
 
 from tests.integration.conftest import wait_for_service_ready
 
@@ -17,7 +18,10 @@ def install_openbao_service(ubuntu_docker_server):
 
     config = load_config(get_stacks_path(), "/openbao", "mlox.openbao.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    params = {
+        "${OPENBAO_ROOT_TOKEN}": generate_password(length=20, with_punctuation=False)
+    }
+    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
         pytest.skip("Failed to add OpenBao service from config")
 
