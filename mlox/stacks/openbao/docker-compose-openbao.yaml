@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=openbao_stack_traefik_net"
+      - "--entrypoints.https.address=:443"
+    ports:
+      - "${OPENBAO_PORT}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-net
+
+  openbao:
+    image: openbao/openbao:2.4.1
+    restart: unless-stopped
+    environment:
+      SKIP_SETCAP: "1"
+    command: >-
+      server -dev
+      -dev-root-token-id=${OPENBAO_ROOT_TOKEN}
+      -dev-listen-address=0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - openbao-data:/openbao/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openbao-secure.entrypoints=https"
+      - "traefik.http.routers.openbao-secure.rule=Host(`${OPENBAO_URL:-localhost}`)"
+      - "traefik.http.routers.openbao-secure.service=openbao-api"
+      - "traefik.http.routers.openbao-secure.tls=true"
+      - "traefik.http.services.openbao-api.loadbalancer.server.port=8200"
+      - "traefik.http.services.openbao-api.loadbalancer.server.scheme=http"
+    networks:
+      - traefik-net
+
+volumes:
+  openbao-data:
+    driver: local
+
+networks:
+  traefik-net:
+    name: openbao_stack_traefik_net

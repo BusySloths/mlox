@@ -1,0 +1,36 @@
+id: openbao-docker
+name: OpenBao
+version: "1.0"
+maintainer: MLOX Contributors
+description_short: OpenBao provides a Vault-compatible secret management server.
+description: |
+  OpenBao is an open-source, Vault-compatible secret manager offering a secure key-value store
+  and policy engine for managing sensitive information. This stack runs OpenBao in development
+  mode via Docker with a user-supplied root token so you can experiment locally with secret
+  management workflows.
+links:
+  project: https://openbao.org
+  documentation: https://github.com/openbao/openbao
+requirements:
+  cpus: 1.0
+  ram_gb: 1.0
+  disk_gb: 1.0
+groups:
+  service:
+  secret-manager:
+  backend:
+    docker:
+ports:
+  api: 8200
+ui:
+  settings: mlox.services.openbao.ui.settings
+build:
+  class_name: mlox.services.openbao.docker.OpenBaoDockerService
+  params:
+    name: openbao
+    template: ${MLOX_STACKS_PATH}/openbao/docker-compose-openbao.yaml
+    target_path: ${MLOX_USER_HOME}/openbao
+    root_token: ${MLOX_AUTO_API_KEY}
+    port: ${MLOX_AUTO_PORT_API}
+    mount_path: secret
+    server_uuid: ${MLOX_SERVER_UUID}
