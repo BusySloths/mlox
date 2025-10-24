@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Dict
 
@@ -20,22 +21,13 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
 
     root_token: str
     port: int | str
-    server_uuid: str | None
     mount_path: str = "secret"
-    scheme: str = "https"
-    verify_tls: bool = False
-    compose_service_names: Dict[str, str] = field(
-        default_factory=lambda: {"Traefik": "traefik", "OpenBao": "openbao"},
-        init=False,
-    )
+    compose_service_names: Dict[str, str] = field(init=False, default_factory=dict)
     service_url: str = field(default="", init=False)
+    stack_prefix: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
         self.port = int(self.port)
-        if self.server_uuid in ("", "None"):
-            self.server_uuid = None
-        self.scheme = (self.scheme or "https").lower()
-        self.verify_tls = bool(self.verify_tls)
         self.state = "un-initialized"
 
     # ------------------------------------------------------------------
@@ -47,15 +39,24 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
             conn, self.template, f"{self.target_path}/{self.target_docker_script}"
         )
 
+        slug = re.sub(r"[^a-z0-9]+", "_", self.name.lower()).strip("_") or "openbao"
+        self.stack_prefix = f"{slug}_{self.uuid[:8]}"
+
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_create_empty_file(conn, env_path)
+        self.exec.fs_append_line(conn, env_path, f"OPENBAO_STACK_PREFIX={self.stack_prefix}")
         self.exec.fs_append_line(conn, env_path, f"OPENBAO_PORT={self.port}")
         self.exec.fs_append_line(conn, env_path, f"OPENBAO_ROOT_TOKEN={self.root_token}")
         self.exec.fs_append_line(conn, env_path, f"OPENBAO_MOUNT_PATH={self.mount_path}")
         self.exec.fs_append_line(conn, env_path, f"OPENBAO_URL={conn.host}")
 
+        self.compose_service_names = {
+            "Traefik": f"{self.stack_prefix}_traefik",
+            "OpenBao": f"{self.stack_prefix}_openbao",
+        }
+
         self.service_ports["OpenBao API"] = int(self.port)
-        self.service_url = f"{self.scheme}://{conn.host}:{self.port}"
+        self.service_url = f"https://{conn.host}:{self.port}"
         self.service_urls["OpenBao API"] = self.service_url
         self.state = "stopped"
 
@@ -108,7 +109,7 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
                 "token": self.root_token,
                 "address": self.service_url,
                 "mount_path": self.mount_path,
-                "verify_tls": self.verify_tls,
+                "verify_tls": False,
             }
         }
 
@@ -116,23 +117,14 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
     # AbstractSecretManagerService implementation
     # ------------------------------------------------------------------
     def get_secret_manager(self, infra: Infrastructure) -> AbstractSecretManager:
-        if self.server_uuid is None and infra.bundles:
-            self.server_uuid = infra.bundles[0].server.uuid
+        bundle = infra.get_bundle_by_service(self)
+        if bundle is None:
+            raise ValueError("OpenBao service is not attached to a bundle in the infrastructure")
 
-        if not self.server_uuid:
-            raise ValueError("Server UUID is not set for OpenBao service")
-
-        server = infra.get_server_by_uuid(self.server_uuid)
-        if server is None:
-            raise ValueError(
-                f"Server with UUID {self.server_uuid} not found in infrastructure."
-            )
-
-        address = f"{self.scheme}://{server.ip}:{self.port}"
-        secret_manager = OpenBaoSecretManager(
+        server = bundle.server
+        address = f"https://{server.ip}:{self.port}"
+        return OpenBaoSecretManager(
             address=address,
             token=self.root_token,
             mount_path=self.mount_path,
-            verify_tls=self.verify_tls,
         )
-        return secret_manager

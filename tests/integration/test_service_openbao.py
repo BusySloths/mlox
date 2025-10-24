@@ -57,6 +57,7 @@ def test_openbao_secret_roundtrip(install_openbao_service):
     sm = service.get_secret_manager(infra)
     assert isinstance(sm, OpenBaoSecretManager)
     assert sm.is_working()
+    assert sm.address.startswith("https://")
 
     secret_name = "integration-secret"
     secret_payload = {"alpha": 1, "beta": "value"}
@@ -72,5 +73,8 @@ def test_openbao_secret_roundtrip(install_openbao_service):
 
     secrets = service.get_secrets()
     assert "openbao_root_credentials" in secrets
-    assert secrets["openbao_root_credentials"].get("token") == service.root_token
-    assert secrets["openbao_root_credentials"].get("verify_tls") == service.verify_tls
+    creds = secrets["openbao_root_credentials"]
+    assert creds.get("token") == service.root_token
+    assert creds.get("address", "").startswith("https://")
+    assert creds.get("verify_tls") is False
+    assert service.compose_service_names["OpenBao"].endswith("_openbao")

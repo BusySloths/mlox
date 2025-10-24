@@ -3,11 +3,12 @@ version: "3.8"
 services:
   traefik:
     image: traefik:v3.0
+    container_name: ${OPENBAO_STACK_PREFIX}_traefik
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=openbao_stack_traefik_net"
+      - "--providers.docker.network=${OPENBAO_STACK_PREFIX}_traefik_net"
       - "--entrypoints.https.address=:443"
     ports:
       - "${OPENBAO_PORT}:443"
@@ -19,6 +20,7 @@ services:
   openbao:
     image: openbao/openbao:2.4.1
     restart: unless-stopped
+    container_name: ${OPENBAO_STACK_PREFIX}_openbao
     environment:
       SKIP_SETCAP: "1"
     command: >-
@@ -42,8 +44,9 @@ services:
 
 volumes:
   openbao-data:
+    name: ${OPENBAO_STACK_PREFIX}_openbao_data
     driver: local
 
 networks:
   traefik-net:
-    name: openbao_stack_traefik_net
+    name: ${OPENBAO_STACK_PREFIX}_traefik_net

@@ -17,6 +17,7 @@ from mlox.services.milvus.docker import MilvusDockerService
 from mlox.services.minio.docker import MinioDockerService
 from mlox.services.mlflow.docker import MLFlowDockerService
 from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
+from mlox.services.openbao.docker import OpenBaoDockerService
 from mlox.services.otel.docker import OtelDockerService
 from mlox.services.postgres.docker import PostgresDockerService
 from mlox.services.redis.docker import RedisDockerService
@@ -65,6 +66,19 @@ SERVICE_CASES = [
             }
         },
         None,
+    ),
+    (
+        OpenBaoDockerService,
+        {"root_token": "root-token", "port": "8200", "mount_path": "kv"},
+        {
+            "openbao_root_credentials": {
+                "token": "root-token",
+                "address": "https://example.test:8200",
+                "mount_path": "kv",
+                "verify_tls": False,
+            }
+        },
+        lambda service: setattr(service, "service_url", "https://example.test:8200"),
     ),
     (
         KafkaDockerService,

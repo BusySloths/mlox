@@ -33,4 +33,3 @@ build:
     root_token: ${MLOX_AUTO_API_KEY}
     port: ${MLOX_AUTO_PORT_API}
     mount_path: secret
-    server_uuid: ${MLOX_SERVER_UUID}
