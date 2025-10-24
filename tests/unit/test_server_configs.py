@@ -88,7 +88,7 @@ def mock_dummy_modules(monkeypatch):
 @pytest.fixture
 def mock_package_resources(monkeypatch, tmp_path):
     """
-    Mocks `importlib.resources.files` to redirect lookups for 'mlox.stacks'
+    Mocks `importlib.resources.files` to redirect lookups for 'mlox.servers'
     to a temporary directory managed by pytest. This allows testing of
     package data loading functions without a full package installation.
     """
@@ -97,11 +97,11 @@ def mock_package_resources(monkeypatch, tmp_path):
     original_files = resources.files
 
     def mock_files(package):
-        if package == "mlox.stacks":
+        if package == "mlox.servers":
             return tmp_path
-        if package.startswith("mlox.stacks."):
-            # e.g., 'mlox.stacks.dummy' -> 'dummy'
-            sub_path = package.replace("mlox.stacks.", "").replace(".", os.path.sep)
+        if package.startswith("mlox.servers."):
+            # e.g., 'mlox.servers.dummy' -> 'dummy'
+            sub_path = package.replace("mlox.servers.", "").replace(".", os.path.sep)
             return tmp_path / sub_path
         return original_files(package)
 

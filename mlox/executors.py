@@ -9,6 +9,7 @@ import re
 import secrets
 import shlex
 from collections import deque
+from importlib import resources
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -293,14 +294,10 @@ class UbuntuTaskExecutor(ExecutionRecorder):
 
         return result
 
-    def _get_stacks_path(self) -> str:
-        """Return the default path containing stack configuration files."""
+    def _get_stacks_path(self):
+        """Return the packaged TLS configuration resource for services."""
 
-        # This preserves the historical behaviour of referencing the local
-        # stacks directory without relying on importlib.resources which may
-        # not always be available in runtime environments (e.g. when running
-        # from a source checkout during development).
-        return "./mlox/stacks/mlox"
+        return resources.files("mlox.services.shared").joinpath("openssl-san.cnf")
 
     def tls_setup_no_config(self, connection: Connection, ip: str, path: str) -> None:
         """Create TLS assets on the remote host without using a custom config."""
@@ -346,10 +343,8 @@ class UbuntuTaskExecutor(ExecutionRecorder):
 
         self.fs_create_dir(connection, path)
 
-        stacks_path = self._get_stacks_path()
-        self.fs_copy(
-            connection, f"{stacks_path}/openssl-san.cnf", f"{path}/openssl-san.cnf"
-        )
+        with resources.as_file(self._get_stacks_path()) as tls_config:
+            self.fs_copy(connection, str(tls_config), f"{path}/openssl-san.cnf")
         self.fs_find_and_replace(
             connection, f"{path}/openssl-san.cnf", "<MY_IP>", f"{ip}"
         )

@@ -51,7 +51,9 @@ def test_localhost_server_adds_custom_service():
 
     infra = Infrastructure()
 
-    server_config = load_config(get_stacks_path(), "/local", "mlox-server.local.yaml")
+    server_config = load_config(
+        get_stacks_path(prefix="mlox-server"), "/local", "mlox-server.local.yaml"
+    )
     bundle = infra.add_server(server_config, {})
 
     build_config = BuildConfig(

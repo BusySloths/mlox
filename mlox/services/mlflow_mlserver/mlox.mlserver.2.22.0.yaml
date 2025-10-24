@@ -32,8 +32,8 @@ build:
   class_name: mlox.services.mlflow_mlserver.docker.MLFlowMLServerDockerService
   params:
     name: mlflow-mlserver-2.22.0
-    template: ${MLOX_STACKS_PATH}/mlflow-mlserver/docker-compose-mlflow-mlserver-2.22.0.yaml
-    dockerfile: ${MLOX_STACKS_PATH}/mlflow-mlserver/dockerfile-mlflow-mlserver
+    template: ${MLOX_STACKS_PATH}/mlflow_mlserver/docker-compose-mlflow-mlserver-2.22.0.yaml
+    dockerfile: ${MLOX_STACKS_PATH}/mlflow_mlserver/dockerfile-mlflow-mlserver
     target_path: ${MLOX_USER_HOME}/mlflow-mlserver-2.22.0
     port: ${MLOX_AUTO_PORT_REST}
     model: ${MODEL_NAME}

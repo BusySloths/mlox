@@ -158,7 +158,11 @@ def multipass_instance():
 @pytest.fixture(scope="package")
 def ubuntu_docker_server(multipass_instance):
     infra = Infrastructure()
-    config = load_config(get_stacks_path(), "/ubuntu", "mlox-server.ubuntu.docker.yaml")
+    config = load_config(
+        get_stacks_path(prefix="mlox-server"),
+        "/ubuntu",
+        "mlox-server.ubuntu.docker.yaml",
+    )
     params = {
         "${MLOX_IP}": multipass_instance["ip"],
         "${MLOX_PORT}": "22",

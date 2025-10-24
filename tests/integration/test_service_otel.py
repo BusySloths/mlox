@@ -21,7 +21,7 @@ def install_otel_service(ubuntu_docker_server):
     bundle = Bundle(name=ubuntu_docker_server.ip, server=ubuntu_docker_server)
     infra.bundles.append(bundle)
 
-    config = load_config(get_stacks_path(), "/opentelemetry", "mlox.otel.0.127.0.yaml")
+    config = load_config(get_stacks_path(), "/otel", "mlox.otel.0.127.0.yaml")
     bundle_added = infra.add_service(
         ubuntu_docker_server.ip,
         config,
