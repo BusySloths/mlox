@@ -27,7 +27,9 @@ class OpenBaoSecretManager(AbstractSecretManager):
     verify_tls: bool = False
 
     def __post_init__(self) -> None:
-        if not self.address.startswith("http://") and not self.address.startswith("https://"):
+        if not self.address.startswith("http://") and not self.address.startswith(
+            "https://"
+        ):
             # Default to http because the dev server exposed by the stack does not use TLS
             self.address = f"http://{self.address}"
         self.address = self.address.rstrip("/")
@@ -84,7 +86,9 @@ class OpenBaoSecretManager(AbstractSecretManager):
             if status not in expected_status:
                 raise
         except URLError as exc:  # pragma: no cover - network failure path
-            raise ConnectionError(f"Failed to reach OpenBao at {url}: {exc.reason}") from exc
+            raise ConnectionError(
+                f"Failed to reach OpenBao at {url}: {exc.reason}"
+            ) from exc
 
         if status not in expected_status:
             raise RuntimeError(f"Unexpected response {status} from OpenBao for {path}")
@@ -96,6 +100,15 @@ class OpenBaoSecretManager(AbstractSecretManager):
             return json.loads(body)
         except json.JSONDecodeError:
             return {"raw": body}
+
+    @staticmethod
+    def _stringify_duration(value: str | int | float | None) -> str | None:
+        """Coerce numeric durations into Vault-friendly seconds strings."""
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return f"{int(value)}s"
+        return str(value)
 
     # ------------------------------------------------------------------
     # AbstractSecretManager interface
@@ -178,6 +191,52 @@ class OpenBaoSecretManager(AbstractSecretManager):
             timeout=timeout,
             verify_tls=verify_tls,
         )
+
+    def create_token(
+        self,
+        ttl: str | int,
+        *,
+        policies: list[str] | None = None,
+        renewable: bool | None = None,
+        explicit_max_ttl: str | int | None = None,
+        num_uses: int | None = None,
+        no_default_policy: bool | None = None,
+        period: str | int | None = None,
+        metadata: Dict[str, str] | None = None,
+        role_name: str | None = None,
+    ) -> Dict[str, Any]:
+        """Create a new scoped child token using the manager's root/admin token."""
+
+        duration = self._stringify_duration(ttl)
+        if not duration:
+            raise ValueError("A TTL must be provided when creating a token.")
+
+        payload: Dict[str, Any] = {"ttl": duration}
+        if policies is not None:
+            payload["policies"] = policies
+        if renewable is not None:
+            payload["renewable"] = renewable
+        if explicit_max_ttl is not None:
+            payload["explicit_max_ttl"] = self._stringify_duration(explicit_max_ttl)
+        if num_uses is not None:
+            payload["num_uses"] = num_uses
+        if no_default_policy is not None:
+            payload["no_default_policy"] = no_default_policy
+        if period is not None:
+            payload["period"] = self._stringify_duration(period)
+        if metadata:
+            payload["meta"] = metadata
+
+        path = "/v1/auth/token/create"
+        if role_name:
+            path = f"{path}/{role_name}"
+
+        response = self._request("POST", path, data=payload)
+        auth = response.get("auth", {})
+        client_token = auth.get("client_token")
+        if not client_token:
+            raise RuntimeError("OpenBao did not return a client token.")
+        return auth
 
     def get_access_secrets(self) -> Dict[str, Any] | None:
         return {

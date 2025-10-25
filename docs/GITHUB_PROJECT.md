@@ -16,7 +16,7 @@ MLOX (Machine Learning Operations eXcellence) is an infrastructure management to
 
 ## GitHub Project Structure
 
-Our GitHub project organization follows a hierarchical approach that flows from strategic planning down to specific implementation tasks:
+Our GitHub project organization follows a hierarchical approach that flows from strategic planning down to specific implementation tasks (in theory at least):
 
 ```
 Strategic Vision
@@ -48,12 +48,14 @@ GitHub Projects represent major functional areas or strategic initiatives. Each 
 Milestones represent planned releases or significant development phases. They group related issues that should be completed together.
 
 **Milestone Naming Convention:**
+
 - `v0.x.0` - Major feature releases
 - `v0.x.y` - Bug fix releases  
 - `Release YYYY.MM` - Time-based releases
 - `Epic: [Name]` - Large feature epics spanning multiple releases
 
 **Example Milestones:**
+
 - `v0.2.0 - Enhanced Service Management`
 - `v0.3.0 - Kubernetes Support`
 - `Release 2024.Q1 - Stability & Documentation`
@@ -63,6 +65,7 @@ Milestones represent planned releases or significant development phases. They gr
 Issues represent specific features, bugs, or tasks. They are categorized using labels and assigned to milestones and projects.
 
 **Issue Types:**
+
 - 🐛 **Bug**: Something isn't working correctly
 - ✨ **Feature**: New functionality or enhancement
 - 📚 **Documentation**: Documentation improvements
@@ -73,23 +76,27 @@ Issues represent specific features, bugs, or tasks. They are categorized using l
 ## Workflow: From Project to Implementation
 
 ### Phase 1: Strategic Planning (Projects)
+
 1. **Project Creation**: Create or update GitHub projects for major functional areas
 2. **Project Planning**: Define project goals, scope, and success criteria
 3. **Stakeholder Review**: Team discussion and alignment on priorities
 
 ### Phase 2: Release Planning (Milestones)
+
 1. **Milestone Creation**: Create milestones for upcoming releases
 2. **Issue Grooming**: Break down project goals into specific issues
 3. **Priority Assignment**: Assign issues to milestones based on priority and capacity
 4. **Effort Estimation**: Estimate complexity and effort for each issue
 
 ### Phase 3: Issue Management
+
 1. **Issue Creation**: Create detailed issues with acceptance criteria
 2. **Labeling**: Apply appropriate labels for categorization
 3. **Assignment**: Assign issues to contributors based on expertise and availability
 4. **Discussion**: Use issue comments for clarification and design discussions
 
 ### Phase 4: Implementation (Pull Requests)
+
 1. **Branch Creation**: Create feature branches following naming conventions
 2. **Development**: Implement the feature following coding standards
 3. **Testing**: Ensure comprehensive test coverage
@@ -101,6 +108,7 @@ Issues represent specific features, bugs, or tasks. They are categorized using l
 Our labeling system helps categorize and prioritize work:
 
 ### Type Labels
+
 - `type:bug` - Bug reports
 - `type:feature` - New features
 - `type:enhancement` - Improvements to existing features
@@ -108,12 +116,14 @@ Our labeling system helps categorize and prioritize work:
 - `type:maintenance` - Code maintenance and cleanup
 
 ### Priority Labels  
+
 - `priority:critical` - Critical bugs or security issues
 - `priority:high` - Important features or bugs
 - `priority:medium` - Standard priority
 - `priority:low` - Nice-to-have improvements
 
 ### Component Labels
+
 - `component:cli` - Command line interface
 - `component:ui` - Web user interface  
 - `component:infrastructure` - Core infrastructure management
@@ -122,6 +132,7 @@ Our labeling system helps categorize and prioritize work:
 - `component:docs` - Documentation
 
 ### Status Labels
+
 - `status:needs-triage` - Needs initial review and categorization
 - `status:blocked` - Blocked by external dependencies
 - `status:in-progress` - Currently being worked on
@@ -153,17 +164,20 @@ Our labeling system helps categorize and prioritize work:
 ## Integration with Development Process
 
 ### Issue-to-PR Linking
+
 - Use keywords like "Fixes #123" in PR descriptions to auto-close issues
 - Reference related issues for traceability
 - Update issue status as work progresses
 
 ### Release Process
+
 - Create release branches from main
 - Update CHANGELOG.md with milestone contents  
 - Tag releases with semantic versioning
 - Close milestone when release is complete
 
 ### Metrics and Tracking
+
 - Monitor milestone progress for release planning
 - Track issue resolution time for process improvement
 - Use project boards for visual progress tracking
