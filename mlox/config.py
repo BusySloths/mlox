@@ -107,8 +107,18 @@ class ServiceConfig:
             return None
 
 
-def get_stacks_path() -> str:
-    return str(resources.files("mlox.stacks"))
+def get_stacks_path(prefix: Literal["mlox", "mlox-server"] = "mlox") -> str:
+    """Return the on-disk path for bundled configuration assets.
+
+    Service configurations now live alongside their implementation modules
+    under ``mlox.services`` while server configurations are colocated within
+    ``mlox.servers``.  This helper keeps backward compatibility with the
+    previous single "stacks" directory by routing calls based on the
+    configuration prefix.
+    """
+
+    package = "mlox.services" if prefix == "mlox" else "mlox.servers"
+    return str(resources.files(package))
 
 
 def load_service_config_by_id(service_id: str) -> ServiceConfig | None:
@@ -130,7 +140,7 @@ def load_all_server_configs() -> List[ServiceConfig]:
 def load_all_service_configs(
     prefix: Literal["mlox", "mlox-server"] = "mlox",
 ) -> List[ServiceConfig]:
-    root_dir = get_stacks_path()
+    root_dir = get_stacks_path(prefix)
 
     configs: List[ServiceConfig] = []
     if not os.path.isdir(root_dir):
@@ -139,6 +149,8 @@ def load_all_service_configs(
 
     candidates = os.listdir(root_dir)
     for candidate in candidates:
+        if not os.path.isdir(os.path.join(root_dir, candidate)):
+            continue
         configs.extend(load_service_configs(root_dir, candidate, prefix=prefix))
     return configs
 
@@ -210,7 +222,7 @@ def load_config(
 def resource_files():
     # The .files() API returns a traversable object for your package's data
     # This is the modern way (Python 3.9+) to access package resources.
-    airflow_stack_path_obj = resources.files("mlox.stacks")
+    airflow_stack_path_obj = resources.files("mlox.services.airflow")
     # print(str(airflow_stack_path_obj))
 
     # You can join paths to get to a specific file

@@ -68,10 +68,14 @@ Interestingly, the basis of many cloud provider MLOps solutions is widely availa
 
 This is were the MLOX project comes in. The goal of MLOX is four-fold:
 
-1. [Infrastructure] MLOX offers individuals, startups, and small teams easy-to-use UI to securily deploy, maintain, and monitor complete MLOps infrastructures on-premise based on open-source software without any vendor lock-in.
-2. [Code] To bridge the gap between the users` code base and the MLOps infrastructure,  MLOX offers a Python PYPI package that adds necessary functionality to integrate with all MLOps services out-of-the-box.
+MLOX is for everyone — individuals, startups, and small teams.
+
+1. [Infrastructure] MLOX provides an easy-to-use Web UI, TUI, and CLI to securely deploy, maintain, and monitor complete on‑premise MLOps infrastructures built from open‑source components and without vendor lock‑in.
+2. [Code] Use the MLOX PyPI package to connect your code to the infrastructure — ready-made integration helpers, SDK clients, and example snippets for common tasks.
 3. [Processes] MLOX provides fully-functional templates for dealing with data from ingestion, transformation, storing, model building, up until serving.
-4. [Migration] Scripts help to easily migrate parts of your MLOps infrastructure to other service providers.
+4. [Lifecycle Management] Provide initial tooling to manage the lifecycle of services — migrate, upgrade, export, and decommission parts of your MLOps infrastructure*.
+
+*: planned for future releases
 
 More Links:
 
