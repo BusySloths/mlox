@@ -1,0 +1,180 @@
+version: "3.8"
+
+services:
+  harbor-log:
+    image: goharbor/harbor-log:v2.14.0
+    container_name: harbor-log
+    restart: unless-stopped
+    volumes:
+      - ./data/log:/var/log/docker
+    networks:
+      - harbor
+
+  harbor-db:
+    image: goharbor/harbor-db:v2.14.0
+    container_name: harbor-db
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_PASSWORD: ${HARBOR_DATABASE_PASSWORD:-HarborDB123}
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_DATABASE: registry
+      POSTGRESQL_SSLMODE: disable
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - harbor
+
+  harbor-redis:
+    image: goharbor/redis-photon:v2.14.0
+    container_name: harbor-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${HARBOR_REDIS_PASSWORD:-HarborRedis123}"]
+    volumes:
+      - redis-data:/var/lib/redis
+    networks:
+      - harbor
+
+  harbor-registry:
+    image: goharbor/registry-photon:v2.14.0
+    container_name: harbor-registry
+    depends_on:
+      - harbor-log
+    environment:
+      REGISTRY_HTTP_ADDR: 0.0.0.0:5000
+      REGISTRY_HTTP_TLS_CERTIFICATE: /etc/harbor/ssl/harbor.crt
+      REGISTRY_HTTP_TLS_KEY: /etc/harbor/ssl/harbor.key
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /storage
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      REGISTRY_AUTH_TOKEN_REALM: https://${HARBOR_HOSTNAME}:${HARBOR_HTTPS_PORT}/service/token
+      REGISTRY_AUTH_TOKEN_SERVICE: harbor-registry
+      REGISTRY_AUTH_TOKEN_ISSUER: harbor-token-issuer
+      REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE: /etc/harbor/ssl/harbor.crt
+      REGISTRY_HTTP_SECRET: ${HARBOR_REGISTRY_HTTP_SECRET:-harborregistrysecret}
+    volumes:
+      - registry-data:/storage
+      - ./cert.pem:/etc/harbor/ssl/harbor.crt:ro
+      - ./key.pem:/etc/harbor/ssl/harbor.key:ro
+    networks:
+      - harbor
+
+  harbor-registryctl:
+    image: goharbor/harbor-registryctl:v2.14.0
+    container_name: harbor-registryctl
+    depends_on:
+      - harbor-registry
+    environment:
+      REGISTRY_CONTROLLER_PORT: "8080"
+      CORE_SECRET: ${HARBOR_CORE_SECRET:-harborcoresecret}
+      JOBSERVICE_SECRET: ${HARBOR_JOBSERVICE_SECRET:-harborjobsecret}
+      REGISTRY_HTTP_SECRET: ${HARBOR_REGISTRY_HTTP_SECRET:-harborregistrysecret}
+      REGISTRY_CONTROLLER_URL: http://harbor-registryctl:8080
+      REGISTRY_URL: http://harbor-registry:5000
+    volumes:
+      - ./cert.pem:/etc/harbor/ssl/harbor.crt:ro
+      - ./key.pem:/etc/harbor/ssl/harbor.key:ro
+    networks:
+      - harbor
+
+  harbor-portal:
+    image: goharbor/harbor-portal:v2.14.0
+    container_name: harbor-portal
+    depends_on:
+      - harbor-log
+    restart: unless-stopped
+    networks:
+      - harbor
+
+  harbor-core:
+    image: goharbor/harbor-core:v2.14.0
+    container_name: harbor-core
+    depends_on:
+      - harbor-db
+      - harbor-redis
+      - harbor-registry
+      - harbor-registryctl
+      - harbor-portal
+    environment:
+      PORTAL_URL: https://${HARBOR_HOSTNAME}:${HARBOR_HTTPS_PORT}
+      REGISTRY_URL: http://harbor-registry:5000
+      REGISTRY_CONTROLLER_URL: http://harbor-registryctl:8080
+      TOKEN_SERVICE_URL: https://${HARBOR_HOSTNAME}:${HARBOR_HTTPS_PORT}/service/token
+      CORE_SECRET: ${HARBOR_CORE_SECRET:-harborcoresecret}
+      JOBSERVICE_SECRET: ${HARBOR_JOBSERVICE_SECRET:-harborjobsecret}
+      REGISTRY_HTTP_SECRET: ${HARBOR_REGISTRY_HTTP_SECRET:-harborregistrysecret}
+      DATABASE_TYPE: postgresql
+      POSTGRESQL_HOST: harbor-db
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_PASSWORD: ${HARBOR_DATABASE_PASSWORD:-HarborDB123}
+      POSTGRESQL_DATABASE: registry
+      REDIS_URL: redis://:${HARBOR_REDIS_PASSWORD:-HarborRedis123}@harbor-redis:6379/1
+      HARBOR_ADMIN_USERNAME: ${HARBOR_ADMIN_USERNAME:-admin}
+      HARBOR_ADMIN_PASSWORD: ${HARBOR_ADMIN_PASSWORD:-Harbor12345}
+      ADMIRAL_URL: ""
+      REGISTRY_CREDENTIAL_USERNAME: ${HARBOR_ADMIN_USERNAME:-admin}
+      REGISTRY_CREDENTIAL_PASSWORD: ${HARBOR_ADMIN_PASSWORD:-Harbor12345}
+      WITH_TRIVY: "true"
+      CHARTMUSEUM_ENABLED: "false"
+      NOTARY_ENABLED: "false"
+    volumes:
+      - ./harbor.yml:/etc/harbor/harbor.yml:ro
+      - ./cert.pem:/etc/harbor/tls/harbor.crt:ro
+      - ./key.pem:/etc/harbor/tls/harbor.key:ro
+      - core-data:/data
+    networks:
+      - harbor
+
+  harbor-jobservice:
+    image: goharbor/harbor-jobservice:v2.14.0
+    container_name: harbor-jobservice
+    depends_on:
+      - harbor-core
+      - harbor-redis
+    environment:
+      CORE_SECRET: ${HARBOR_CORE_SECRET:-harborcoresecret}
+      JOBSERVICE_SECRET: ${HARBOR_JOBSERVICE_SECRET:-harborjobsecret}
+      REDIS_URL: redis://:${HARBOR_REDIS_PASSWORD:-HarborRedis123}@harbor-redis:6379/1
+      REGISTRY_URL: http://harbor-registry:5000
+      REGISTRY_CONTROLLER_URL: http://harbor-registryctl:8080
+    volumes:
+      - jobservice-data:/var/log/jobservice
+    networks:
+      - harbor
+
+  harbor-trivy:
+    image: goharbor/trivy-adapter-photon:v2.14.0
+    container_name: harbor-trivy
+    depends_on:
+      - harbor-core
+    environment:
+      SCANNER_LOG_LEVEL: info
+      TZ: UTC
+    networks:
+      - harbor
+
+  harbor-nginx:
+    image: goharbor/nginx-photon:v2.14.0
+    container_name: harbor-nginx
+    depends_on:
+      - harbor-core
+      - harbor-portal
+    ports:
+      - ${HARBOR_HTTPS_PORT:-8443}:8443
+      - ${HARBOR_REGISTRY_PORT:-5443}:5443
+    volumes:
+      - ./harbor.yml:/etc/harbor/harbor.yml:ro
+      - ./cert.pem:/etc/harbor/tls/harbor.crt:ro
+      - ./key.pem:/etc/harbor/tls/harbor.key:ro
+    networks:
+      - harbor
+
+volumes:
+  db-data:
+  redis-data:
+  registry-data:
+  core-data:
+  jobservice-data:
+
+networks:
+  harbor:
+    driver: bridge

@@ -1,0 +1,44 @@
+id: harbor-2-14-0-docker
+name: Harbor
+version: "2.14.0"
+maintainer: MLOX Contributors
+description_short: Harbor is an open source container registry that secures artifacts with policies and role based access control.
+description: |
+  Harbor provides a hardened, policy-driven container registry with role-based access control,
+  vulnerability scanning, and replication capabilities. This stack deploys Harbor using the
+  official Docker images and configures TLS termination with a self-signed certificate so you
+  can experiment with a private container registry in a secure manner.
+links:
+  project: https://goharbor.io/
+  documentation: https://goharbor.io/docs/2.14.0/install-config/
+  source: https://github.com/goharbor/harbor
+requirements:
+  cpus: 4.0
+  ram_gb: 8.0
+  disk_gb: 30.0
+groups:
+  service:
+  registry:
+  backend:
+    docker:
+ports:
+  https: 8443
+  registry: 5443
+ui:
+  settings: mlox.services.harbor.ui.settings
+build:
+  class_name: mlox.services.harbor.docker.HarborDockerService
+  params:
+    name: harbor-2-14-0
+    template: ${MLOX_STACKS_PATH}/harbor/docker-compose-harbor.yaml
+    target_path: ${MLOX_USER_HOME}/harbor-2-14-0
+    hostname: ${MLOX_SERVER_IP}
+    https_port: ${MLOX_AUTO_PORT_HTTPS}
+    registry_port: ${MLOX_AUTO_PORT_REGISTRY}
+    admin_username: admin
+    admin_password: ${MLOX_AUTO_PW}
+    database_password: ${MLOX_AUTO_PW}
+    redis_password: ${MLOX_AUTO_PW}
+    core_secret: ${MLOX_AUTO_PW}
+    jobservice_secret: ${MLOX_AUTO_PW}
+    registry_http_secret: ${MLOX_AUTO_PW}
