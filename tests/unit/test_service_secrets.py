@@ -3,6 +3,7 @@ import pytest
 from mlox.services.kafka.docker import KafkaDockerService
 from mlox.services.airflow.docker import AirflowDockerService
 from mlox.services.feast.docker import FeastDockerService
+from mlox.services.harbor.docker import HarborDockerService
 from mlox.services.gcp.bq_service import GCPBigQueryService
 from mlox.services.gcp.secret_service import GCPSecretService
 from mlox.services.gcp.sheet_service import GCPSpreadsheetsService
@@ -207,6 +208,33 @@ SERVICE_CASES = [
             "minio_root_credentials": {
                 "username": "minio",
                 "password": "minio-pass",
+            },
+        },
+        None,
+    ),
+    (
+        HarborDockerService,
+        {
+            "hostname": "harbor.example.test",
+            "https_port": "8443",
+            "registry_port": "5443",
+            "admin_username": "admin",
+            "admin_password": "Harbor12345",
+            "database_password": "DbSecret123",
+            "redis_password": "RedisSecret123",
+            "core_secret": "CoreSecret123",
+            "jobservice_secret": "JobSecret123",
+            "registry_http_secret": "RegistrySecret123",
+        },
+        {
+            "harbor_admin_credentials": {
+                "username": "admin",
+                "password": "Harbor12345",
+            },
+            "harbor_registry": {
+                "hostname": "harbor.example.test",
+                "registry_url": "https://harbor.example.test:5443",
+                "certificate": "",
             },
         },
         None,
