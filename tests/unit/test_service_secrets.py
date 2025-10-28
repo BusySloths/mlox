@@ -20,6 +20,7 @@ from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
 from mlox.services.openbao.docker import OpenBaoDockerService
 from mlox.services.otel.docker import OtelDockerService
 from mlox.services.postgres.docker import PostgresDockerService
+from mlox.services.registry.docker import RegistryDockerService
 from mlox.services.redis.docker import RedisDockerService
 from mlox.services.tsm.service import TSMService
 
@@ -208,6 +209,17 @@ SERVICE_CASES = [
                 "username": "minio",
                 "password": "minio-pass",
             },
+        },
+        None,
+    ),
+    (
+        RegistryDockerService,
+        {"username": "registry", "password": "registry-pass", "port": "5000"},
+        {
+            "registry_credentials": {
+                "username": "registry",
+                "password": "registry-pass",
+            }
         },
         None,
     ),
