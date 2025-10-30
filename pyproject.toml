@@ -91,7 +91,7 @@ dev = [
     "google-cloud-secret-manager>=2.18",
     "mlflow==2.22.2",  # M
     "mlserver==1.7.1",  # M
-    "psutil>=5.9",
+    "psutil==7.1.2", # M: for mlflow monitoring
     "opentelemetry-api==1.33.1",  # M
     "opentelemetry-sdk==1.33.1",  # M
     "opentelemetry-exporter-otlp==1.33.1",  # M
