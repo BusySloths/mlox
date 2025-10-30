@@ -8,7 +8,6 @@ from typing import Dict
 from mlox.service import AbstractService
 
 
-
 # Configure logging (optional, but recommended)
 logging.basicConfig(
     level=logging.INFO,
@@ -42,7 +41,9 @@ class MilvusDockerService(AbstractService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
         self.exec.fs_copy(conn, self.config, f"{self.target_path}/milvus.yaml")
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(

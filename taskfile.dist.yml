@@ -312,5 +312,5 @@ tasks:
           printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
           exit 1; \
         fi
-      - "export MLOX_TUI=true; textual serve --dev mlox/tui.py"
+      - "export MLOX_TUI=true; textual serve --dev mlox/tui/app.py"
       - "export MLOX_TUI=false"

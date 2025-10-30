@@ -1,0 +1,34 @@
+id: registry-3-docker
+name: Private Registry
+version: "3"
+maintainer: MLOX Contributors
+description_short: Secure, private Docker distribution registry with TLS and htpasswd auth.
+description: |
+  Deploy a private Docker distribution registry secured with automatically managed
+  TLS certificates and HTTP basic authentication. Use this stack to host container
+  images locally for development or to experiment with authenticated registries
+  without relying on third-party services.
+links:
+  project: https://distribution.github.io/distribution/
+  documentation: https://distribution.github.io/distribution/about/deploying/
+  container_image: https://hub.docker.com/_/registry
+requirements:
+  cpus: 1.0
+  ram_gb: 1.0
+  disk_gb: 5.0
+groups:
+  service:
+  storage:
+  backend:
+    docker:
+ports:
+  registry: 5000
+build:
+  class_name: mlox.services.registry.docker.RegistryDockerService
+  params:
+    name: registry-3
+    template: ${MLOX_STACKS_PATH}/registry/docker-compose-registry.yaml
+    target_path: ${MLOX_USER_HOME}/registry-3
+    username: ${MLOX_AUTO_USER}
+    password: ${MLOX_AUTO_PW}
+    port: ${MLOX_AUTO_PORT_REGISTRY}

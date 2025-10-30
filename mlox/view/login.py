@@ -34,11 +34,11 @@ def create_session(project_name, password, create_new_project: bool) -> bool:
 def login():
     with st.form("Open Project"):
         project_name = st.text_input(
-            "Project Name", value=os.environ.get("MLOX_CONFIG_USER", "mlox")
+            "Project Name", value=os.environ.get("MLOX_PROJECT_NAME", "mlox")
         )
         password = st.text_input(
             "Password",
-            value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),
+            value=os.environ.get("MLOX_PROJECT_PASSWORD", ""),
             type="password",
         )
         submitted = st.form_submit_button("Open Project", icon=":material/login:")
