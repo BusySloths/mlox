@@ -43,7 +43,7 @@ dependencies = [
     "typer==0.17.4",  # M               # CLI helpers
     "grpcio==1.73.1",  # M
     "kafka-python-ng==2.2.3",
-    # "bcrypt>=4.0",
+    "bcrypt>=5.0.0",  # M
     # "requests>=2.31",
     # "python-dotenv>=1.0",
 ]

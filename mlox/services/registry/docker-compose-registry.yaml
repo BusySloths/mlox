@@ -7,19 +7,24 @@ services:
     restart: unless-stopped
     environment:
       REGISTRY_HTTP_ADDR: 0.0.0.0:5000
-      REGISTRY_HTTP_TLS_CERTIFICATE: ${REGISTRY_HTTP_TLS_CERTIFICATE:-/certs/domain.crt}
-      REGISTRY_HTTP_TLS_KEY: ${REGISTRY_HTTP_TLS_KEY:-/certs/domain.key}
+      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/domain.crt
+      REGISTRY_HTTP_TLS_KEY: /certs/domain.key
       REGISTRY_AUTH: htpasswd
-      REGISTRY_AUTH_HTPASSWD_PATH: ${REGISTRY_AUTH_HTPASSWD_PATH:-/auth/htpasswd}
-      REGISTRY_AUTH_HTPASSWD_REALM: ${REGISTRY_AUTH_HTPASSWD_REALM:-Registry Realm}
-      REGISTRY_STORAGE_DELETE_ENABLED: ${REGISTRY_STORAGE_DELETE_ENABLED:-true}
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: Registry Realm
+      REGISTRY_STORAGE_DELETE_ENABLED: true
+      # TELEMETRY / OpenTelemetry settings
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-none}
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER:-none}
+      OTEL_LOGS_EXPORTER: ${OTEL_LOGS_EXPORTER:-none}
+      OTEL_RESOURCE_ATTRIBUTES: service.name=private-docker-registry
     ports:
       - ${REGISTRY_PORT:-5000}:5000
     volumes:
       - registry-data:/var/lib/registry
-      - ./certs/domain.crt:/certs/domain.crt:ro
-      - ./certs/domain.key:/certs/domain.key:ro
-      - ./auth/htpasswd:/auth/htpasswd:ro
+      - ./cert.pem:/certs/domain.crt:ro
+      - ./key.pem:/certs/domain.key:ro
+      - ./htpasswd:/auth/htpasswd:ro
 
 volumes:
   registry-data:

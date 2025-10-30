@@ -31,5 +31,4 @@ build:
     target_path: ${MLOX_USER_HOME}/registry-3
     username: ${MLOX_AUTO_USER}
     password: ${MLOX_AUTO_PW}
-    port: ${MLOX_AUTO_PORT_SERVICE}
-    realm: Registry Realm
+    port: ${MLOX_AUTO_PORT_REGISTRY}
