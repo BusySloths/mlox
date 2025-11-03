@@ -6,21 +6,13 @@ servers and services in preparation for a server/client architecture.
 
 from __future__ import annotations
 
-import os
 import logging
 from typing import Dict, List
 
 import typer
 
-from mlox.session import MloxSession
-from mlox.config import (
-    get_stacks_path,
-    load_config,
-    load_all_service_configs,
-    load_all_server_configs,
-    load_service_config_by_id,
-)
-from mlox.utils import dataclass_to_dict, save_to_json
+from mlox import operations as ops
+from mlox.operations import OperationResult
 
 
 logging.basicConfig(
@@ -53,29 +45,13 @@ service_app.add_typer(service_configs_app, name="configs")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+def _handle_result(result: OperationResult) -> OperationResult:
+    """Raise a ``typer.Exit`` when an operation fails."""
 
-
-def get_session(project: str, password: str) -> MloxSession:
-    """Load an existing :class:`MloxSession` from credentials."""
-    try:
-        session = MloxSession(project, password)
-    except Exception as exc:  # pragma: no cover - defensive
-        # If the exception looks like an exit (has exit_code or is SystemExit), re-raise
-        if hasattr(exc, "exit_code") or isinstance(exc, SystemExit):
-            raise
-        typer.echo(f"[ERROR] Failed to load session: {exc}", err=True)
-        raise typer.Exit(code=1)
-
-    # Check secret manager health outside the try/except so Typer Exit codes
-    # raised here are not accidentally caught by the broader exception handler.
-    if session.secrets and not session.secrets.is_working():
-        typer.echo(
-            "[ERROR] Could not initialize session (secrets not working)",
-            err=True,
-        )
-        raise typer.Exit(code=2)
-
-    return session
+    if not result.success:
+        typer.echo(f"[ERROR] {result.message}", err=True)
+        raise typer.Exit(code=result.code)
+    return result
 
 
 def parse_kv(pairs: List[str]) -> Dict[str, str]:
@@ -90,14 +66,6 @@ def parse_kv(pairs: List[str]) -> Dict[str, str]:
     return data
 
 
-def _load_config_from_path(path: str):
-    """Load a configuration file relative to the stacks directory."""
-
-    stacks = get_stacks_path()
-    service_dir, candidate = os.path.split(path)
-    return load_config(stacks, service_dir, candidate)
-
-
 # ---------------------------------------------------------------------------
 # Project commands
 # ---------------------------------------------------------------------------
@@ -110,11 +78,8 @@ def project_new(
         ..., prompt=True, hide_input=True, help="Password for the session"
     ),
 ):
-    ms = MloxSession(project_name=name, password=password)
-    if not ms:
-        typer.echo("[ERROR] Failed to initialise project", err=True)
-        raise typer.Exit(code=1)
-    typer.echo(f"Created project '{name}'.")
+    result = _handle_result(ops.create_project(name=name, password=password))
+    typer.echo(result.message)
 
 
 # ---------------------------------------------------------------------------
@@ -131,14 +96,17 @@ def server_list(
 ):
     """List all servers registered in the project infrastructure."""
 
-    session = get_session(project, password)
-    if not session.infra.bundles:
-        typer.echo("No servers found.")
-        raise typer.Exit()
+    result = _handle_result(ops.list_servers(project=project, password=password))
+    servers = []
+    if result.data:
+        servers = result.data.get("servers", [])
+    if not servers:
+        typer.echo(result.message)
+        return
 
-    for bundle in session.infra.bundles:
+    for server in servers:
         typer.echo(
-            f"{bundle.server.ip} ({bundle.server.state}) - {len(bundle.services)} services"
+            f"{server['ip']} ({server['state']}) - {server['service_count']} services"
         )
 
 
@@ -163,28 +131,21 @@ def server_add(
 ):
     """Register a new server in the current project."""
 
-    session = get_session(project, password)
-    config = _load_config_from_path("ubuntu/mlox-server." + server_template + ".yaml")
-    # treat an empty dict as a valid config; only None means not found
-    if config is None:
-        typer.echo("[ERROR] Server template not found", err=True)
-        raise typer.Exit(code=1)
-
-    params = {
-        "${MLOX_IP}": ip,
-        "${MLOX_PORT}": str(port),
-        "${MLOX_ROOT}": root_user,
-        "${MLOX_ROOT_PW}": root_pw,
-    }
-    params.update(parse_kv(param))
-
-    bundle = session.infra.add_server(config=config, params=params)
-    if not bundle:
-        typer.echo("[ERROR] Failed to add server", err=True)
-        raise typer.Exit(code=1)
-
-    session.save_infrastructure()
-    typer.echo(f"Added server {ip}")
+    params = parse_kv(param)
+    template_path = f"ubuntu/mlox-server.{server_template}.yaml"
+    result = _handle_result(
+        ops.add_server(
+            project=project,
+            password=password,
+            template_path=template_path,
+            ip=ip,
+            port=port,
+            root_user=root_user,
+            root_password=root_pw,
+            extra_params=params,
+        )
+    )
+    typer.echo(result.message)
 
 
 @server_app.command("setup")
@@ -197,14 +158,8 @@ def server_setup(
 ):
     """Run the setup routine on a server."""
 
-    session = get_session(project, password)
-    bundle = session.infra.get_bundle_by_ip(ip)
-    if not bundle:
-        typer.echo("[ERROR] Server not found", err=True)
-        raise typer.Exit(code=1)
-    bundle.server.setup()
-    session.save_infrastructure()
-    typer.echo(f"Server {ip} set up")
+    result = _handle_result(ops.setup_server(project=project, password=password, ip=ip))
+    typer.echo(result.message)
 
 
 @server_app.command("teardown")
@@ -217,15 +172,10 @@ def server_teardown(
 ):
     """Tear down a server and remove it from the infrastructure."""
 
-    session = get_session(project, password)
-    bundle = session.infra.get_bundle_by_ip(ip)
-    if not bundle:
-        typer.echo("[ERROR] Server not found", err=True)
-        raise typer.Exit(code=1)
-    bundle.server.teardown()
-    session.infra.remove_bundle(bundle)
-    session.save_infrastructure()
-    typer.echo(f"Server {ip} removed")
+    result = _handle_result(
+        ops.teardown_server(project=project, password=password, ip=ip)
+    )
+    typer.echo(result.message)
 
 
 @server_app.command("save-key")
@@ -242,14 +192,10 @@ def server_save_key(
 ):
     """Save a server key file for local access."""
 
-    session = get_session(project, password)
-    bundle = session.infra.get_bundle_by_ip(ip)
-    if not bundle:
-        typer.echo("[ERROR] Server not found", err=True)
-        raise typer.Exit(code=1)
-    server_dict = dataclass_to_dict(bundle.server)
-    save_to_json(server_dict, output, password, True)
-    typer.echo(f"Saved key for {ip} to {output}")
+    result = _handle_result(
+        ops.save_server_key(project=project, password=password, ip=ip, output_path=output)
+    )
+    typer.echo(result.message)
 
 
 # ---------------------------------------------------------------------------
@@ -266,14 +212,18 @@ def service_list(
 ):
     """List services across all servers in the project."""
 
-    session = get_session(project, password)
-    found = False
-    for bundle in session.infra.bundles:
-        for svc in bundle.services:
-            typer.echo(f"{svc.name} ({svc.service_config_id}) on {bundle.server.ip}")
-            found = True
-    if not found:
-        typer.echo("No services found.")
+    result = _handle_result(ops.list_services(project=project, password=password))
+    services = []
+    if result.data:
+        services = result.data.get("services", [])
+    if not services:
+        typer.echo(result.message)
+        return
+
+    for svc in services:
+        typer.echo(
+            f"{svc['name']} ({svc['service_config_id']}) on {svc['server_ip']}"
+        )
 
 
 @service_app.command("add")
@@ -290,21 +240,17 @@ def service_add(
 ):
     """Add a new service to an existing server."""
 
-    session = get_session(project, password)
-    config = load_service_config_by_id(template_id)
-    if not config:
-        typer.echo("[ERROR] Service template not found", err=True)
-        raise typer.Exit(code=1)
-
     params = parse_kv(param)
-    bundle = session.infra.add_service(server_ip, config, params)
-    if not bundle:
-        typer.echo("[ERROR] Failed to add service", err=True)
-        raise typer.Exit(code=1)
-
-    session.save_infrastructure()
-    svc = bundle.services[-1]
-    typer.echo(f"Added service {svc.name} to {server_ip}")
+    result = _handle_result(
+        ops.add_service(
+            project=project,
+            password=password,
+            server_ip=server_ip,
+            template_id=template_id,
+            params=params,
+        )
+    )
+    typer.echo(result.message)
 
 
 @service_app.command("setup")
@@ -317,14 +263,10 @@ def service_setup(
 ):
     """Run the setup routine for a service."""
 
-    session = get_session(project, password)
-    svc = session.infra.get_service(name)
-    if not svc:
-        typer.echo("[ERROR] Service not found", err=True)
-        raise typer.Exit(code=1)
-    session.infra.setup_service(svc)
-    session.save_infrastructure()
-    typer.echo(f"Service {name} set up")
+    result = _handle_result(
+        ops.setup_service(project=project, password=password, name=name)
+    )
+    typer.echo(result.message)
 
 
 @service_app.command("teardown")
@@ -337,14 +279,10 @@ def service_teardown(
 ):
     """Remove a service from the infrastructure."""
 
-    session = get_session(project, password)
-    svc = session.infra.get_service(name)
-    if not svc:
-        typer.echo("[ERROR] Service not found", err=True)
-        raise typer.Exit(code=1)
-    session.infra.teardown_service(svc)
-    session.save_infrastructure()
-    typer.echo(f"Service {name} removed")
+    result = _handle_result(
+        ops.teardown_service(project=project, password=password, name=name)
+    )
+    typer.echo(result.message)
 
 
 @service_app.command("logs")
@@ -363,31 +301,22 @@ def service_logs(
     default compose service mapping.
     """
 
-    session = get_session(project, password)
-    svc = session.infra.get_service(name)
-    if not svc:
-        typer.echo("[ERROR] Service not found", err=True)
-        raise typer.Exit(code=1)
-
-    if label is None:
-        # pick the first label if available
-        if svc.compose_service_names:
-            label = next(iter(svc.compose_service_names.keys()))
-        else:
-            typer.echo(
-                "[ERROR] No compose service labels configured for this service",
-                err=True,
-            )
-            raise typer.Exit(code=1)
-
-    bundle = session.infra.get_bundle_by_service(svc)
-    if not bundle:
-        typer.echo("[ERROR] Could not find server bundle for service", err=True)
-        raise typer.Exit(code=1)
-
-    with bundle.server.get_server_connection() as conn:
-        logs = svc.compose_service_log_tail(conn, label=label, tail=tail)
-    typer.echo(logs)
+    result = _handle_result(
+        ops.service_logs(
+            project=project,
+            password=password,
+            name=name,
+            label=label,
+            tail=tail,
+        )
+    )
+    logs = ""
+    if result.data:
+        logs = result.data.get("logs", "")
+    if logs:
+        typer.echo(logs)
+    else:
+        typer.echo(result.message)
 
 
 # ---------------------------------------------------------------------------
@@ -399,24 +328,30 @@ def service_logs(
 def server_configs_list():
     """List available server configuration templates."""
 
-    configs = load_all_server_configs()
+    result = _handle_result(ops.list_server_configs())
+    configs = []
+    if result.data:
+        configs = result.data.get("configs", [])
     if not configs:
-        typer.echo("No server configs found.")
+        typer.echo(result.message)
         return
     for cfg in configs:
-        typer.echo(f"{cfg.id} - {cfg.path}")
+        typer.echo(f"{cfg['id']} - {cfg['path']}")
 
 
 @service_configs_app.command("list")
 def service_configs_list():
     """List available service configuration templates."""
 
-    configs = load_all_service_configs()
+    result = _handle_result(ops.list_service_configs())
+    configs = []
+    if result.data:
+        configs = result.data.get("configs", [])
     if not configs:
-        typer.echo("No service configs found.")
+        typer.echo(result.message)
         return
     for cfg in configs:
-        typer.echo(f"{cfg.id} - {cfg.path}")
+        typer.echo(f"{cfg['id']} - {cfg['path']}")
 
 
 # ---------------------------------------------------------------------------
