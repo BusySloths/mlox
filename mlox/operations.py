@@ -135,11 +135,19 @@ def list_servers(project: str, password: str) -> OperationResult:
     assert isinstance(session, MloxSession)
     servers: List[Dict[str, Any]] = []
     for bundle in session.infra.bundles:
+        backend = getattr(bundle.server, "backend", None)
+        discovered = getattr(bundle.server, "discovered", None)
+        template_id = getattr(bundle.server, "service_config_id", None)
+        port = getattr(bundle.server, "port", None)
         servers.append(
             {
                 "ip": bundle.server.ip,
                 "state": getattr(bundle.server, "state", "unknown"),
                 "service_count": len(bundle.services),
+                "service_config_id": template_id,
+                "port": port,
+                "discovered": discovered,
+                "backend": backend or [],
             }
         )
     message = "No servers found." if not servers else "Servers retrieved successfully."
@@ -254,11 +262,20 @@ def list_services(project: str, password: str) -> OperationResult:
     services: List[Dict[str, Any]] = []
     for bundle in session.infra.bundles:
         for svc in bundle.services:
+            labels = list(getattr(svc, "compose_service_names", {}).keys())
+            ports_dict = getattr(svc, "service_ports", {}) or {}
+            ports = [f"{name}:{port}" for name, port in ports_dict.items()]
+            urls_dict = getattr(svc, "service_urls", {}) or {}
+            urls = [f"{name}: {url}" for name, url in urls_dict.items()]
             services.append(
                 {
                     "name": svc.name,
                     "service_config_id": getattr(svc, "service_config_id", "unknown"),
                     "server_ip": bundle.server.ip,
+                    "state": getattr(svc, "state", "unknown"),
+                    "labels": labels,
+                    "ports": ports,
+                    "urls": urls,
                 }
             )
     message = "No services found." if not services else "Services retrieved successfully."

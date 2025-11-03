@@ -57,7 +57,10 @@ def test_server_list_outputs_servers(monkeypatch):
     result = runner.invoke(cli.app, ["server", "list", "proj", "--password", "pw"])
 
     assert result.exit_code == 0
-    assert "1.1.1.1 (running) - 3 services" in result.stdout
+    assert "Servers" in result.stdout
+    assert "| IP" in result.stdout
+    assert "| 1.1.1.1" in result.stdout
+    assert "running" in result.stdout
     mock_list.assert_called_once_with(project="proj", password="pw")
 
 
@@ -145,7 +148,11 @@ def test_service_list_outputs(monkeypatch):
     result = runner.invoke(cli.app, ["service", "list", "proj", "--password", "pw"])
 
     assert result.exit_code == 0
-    assert "svc (svc-template) on 1.1.1.1" in result.stdout
+    assert "Services" in result.stdout
+    assert "| Service" in result.stdout
+    assert "| svc" in result.stdout
+    assert "svc-template" in result.stdout
+    assert "1.1.1.1" in result.stdout
 
 
 def test_server_configs_list_no_configs(monkeypatch):
@@ -166,7 +173,10 @@ def test_server_configs_list_outputs(monkeypatch):
     result = runner.invoke(cli.app, ["server", "configs", "list"])
 
     assert result.exit_code == 0
-    assert "srv - servers/srv.yaml" in result.stdout
+    assert "Server Configs" in result.stdout
+    assert "| ID" in result.stdout
+    assert "| srv" in result.stdout
+    assert "servers/srv.yaml" in result.stdout
 
 
 def test_service_configs_list_no_configs(monkeypatch):
@@ -187,4 +197,7 @@ def test_service_configs_list_outputs(monkeypatch):
     result = runner.invoke(cli.app, ["service", "configs", "list"])
 
     assert result.exit_code == 0
-    assert "svc - services/svc.yaml" in result.stdout
+    assert "Service Configs" in result.stdout
+    assert "| ID" in result.stdout
+    assert "| svc" in result.stdout
+    assert "services/svc.yaml" in result.stdout
