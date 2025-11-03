@@ -95,6 +95,13 @@ class RegistryDockerService(AbstractService):
 
         return {"registry_credentials": secret}
 
-    def _generate_htpasswd_bcrypt(self, username: str, password: str) -> str:
+    @staticmethod
+    def _generate_htpasswd_entry(username: str, password: str) -> str:
+        if not username or not password:
+            raise ValueError("Username and password are required to generate htpasswd entries.")
+        return RegistryDockerService._generate_htpasswd_bcrypt(username, password)
+
+    @staticmethod
+    def _generate_htpasswd_bcrypt(username: str, password: str) -> str:
         hashed = bcrypt.hashpw(password.encode("UTF-8"), bcrypt.gensalt())
         return f"{username}:{hashed.decode('utf-8')}"

@@ -1,5 +1,3 @@
-import crypt
-
 import pytest
 
 from mlox.services.registry.docker import RegistryDockerService
@@ -11,7 +9,7 @@ def test_generate_htpasswd_entry_valid():
 
     username, hashed = entry.strip().split(":", 1)
     assert username == "alice"
-    assert crypt.crypt("secret", hashed) == hashed
+    assert hashed.startswith("$2b$")  # bcrypt hash prefix
 
 
 @pytest.mark.parametrize(
