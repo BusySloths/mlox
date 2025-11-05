@@ -1,7 +1,5 @@
 """Login screen for the Textual TUI."""
 
-from __future__ import annotations
-
 import os
 
 from textual.app import ComposeResult
@@ -18,12 +16,12 @@ class LoginScreen(Screen):
         with CenterMiddle(id="login-form"):
             yield Static("MLOX Login", id="login-title")
             yield Input(
-                value=os.environ.get("MLOX_CONFIG_USER", "mlox"),
+                value=os.environ.get("MLOX_PROJECT_NAME", "mlox"),
                 placeholder="Project",
                 id="project",
             )
             yield Input(
-                value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),
+                value=os.environ.get("MLOX_PROJECT_PASSWORD", ""),
                 placeholder="Password",
                 password=True,
                 id="password",
@@ -32,7 +30,9 @@ class LoginScreen(Screen):
             yield Static("", id="message")
         yield Footer(classes="app-footer")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:  # pragma: no cover - UI callback
+    def on_button_pressed(
+        self, event: Button.Pressed
+    ) -> None:  # pragma: no cover - UI callback
         if event.button.id != "login-btn":
             return
         project = self.query_one("#project", Input).value

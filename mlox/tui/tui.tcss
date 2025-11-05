@@ -106,6 +106,32 @@ Button {
   height: 1fr;
 }
 
+#main-tabs {
+  height: 1fr;
+}
+
+#overview-tab,
+#template-tab {
+  height: 1fr;
+}
+
+#overview-scroll,
+#template-scroll-wrapper {
+  height: 1fr;
+  width: 1fr;
+  overflow-y: auto;
+}
+
+#template-panel {
+  height: 1fr;
+  width: 1fr;
+  layout: vertical;
+}
+
+#template-content {
+  width: 1fr;
+}
+
 #selection-overview {
   margin-right: 1;
 }
