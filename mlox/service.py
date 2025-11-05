@@ -1,9 +1,11 @@
+import io
+import csv
+import json
 import uuid
 import logging
-
-from typing import Dict, Literal, Optional
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from typing import Dict, Literal, Optional
+from dataclasses import dataclass, field, asdict
 
 from mlox.executors import UbuntuTaskExecutor
 
@@ -175,3 +177,45 @@ class AbstractService(ABC):
         from mlox.service_registry import get_dependent_service
 
         return get_dependent_service(service_uuid)
+
+    def dump_state(self, conn) -> None:
+        """Persist service debugging artifacts to the target directory."""
+
+        self.exec.fs_create_dir(conn, self.target_path)
+
+        start_script = f"{self.target_path}/start.sh"
+        stop_script = f"{self.target_path}/stop.sh"
+        env_file = f"{self.target_path}/{self.target_docker_env}"
+        self.exec.fs_touch(conn, env_file)
+        compose_file = f"{self.target_path}/{self.target_docker_script}"
+        start_content = (
+            "#!/usr/bin/env bash\n"
+            f'docker compose --env-file "{env_file}" -f "{compose_file}" up -d --build\n'
+        )
+        stop_content = (
+            "#!/usr/bin/env bash\n"
+            f'docker compose --env-file "{env_file}" -f "{compose_file}" down --remove-orphans\n'
+        )
+        self.exec.fs_write_file(conn, start_script, start_content)
+        self.exec.fs_write_file(conn, stop_script, stop_content)
+        self.exec.fs_set_permissions(conn, start_script, "750")
+        self.exec.fs_set_permissions(conn, stop_script, "750")
+
+        history = list(self.exec.history)
+        fieldnames = sorted({key for entry in history for key in entry.keys()}) or [
+            "timestamp",
+            "action",
+            "status",
+        ]
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        for entry in history:
+            writer.writerow({field: entry.get(field, "") for field in fieldnames})
+        history_path = f"{self.target_path}/exec_history.csv"
+        self.exec.fs_write_file(conn, history_path, buffer.getvalue())
+
+        service_dict = asdict(self)
+        service_json = json.dumps(service_dict, indent=2, sort_keys=True, default=str)
+        service_json_path = f"{self.target_path}/service-state.json"
+        self.exec.fs_write_file(conn, service_json_path, service_json)

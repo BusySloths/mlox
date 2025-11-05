@@ -214,9 +214,13 @@ def installed_services():
 
         st.markdown("---")
         st.markdown(f"#### {svc.name}")
-        b1, b2, b3, b4, b5, _, b6, b7 = st.columns(
-            [1, 1, 1, 3, 1, 0.5, 1, 1], gap="small", vertical_alignment="bottom"
+        b1, b2, b3, b4, b5, b_dump, b6, b7 = st.columns(
+            [1, 1, 1, 3, 1, 1.5, 1, 1.5], gap="small", vertical_alignment="bottom"
         )
+        if b_dump.button("Dump State", key=f"export-{svc.uuid}"):
+            with bndl.server.get_server_connection() as conn:
+                svc.dump_state(conn)
+                st.success(f"Dumped state of {svc.name} to target directory.")
         if b6.button(
             "Setup",
             key=f"setup-{svc.uuid}",
@@ -251,9 +255,14 @@ def installed_services():
             save_infra()
             st.rerun()
 
-        new_name = b4.text_input("Rename", value=svc.name, key=f"rename-{svc.uuid}")
+        new_name = b4.text_input(
+            "Rename",
+            value=svc.name,
+            key=f"rename-{svc.uuid}",
+            label_visibility="collapsed",
+        )
         # st_hack_align(r2)
-        if b5.button("Apply", key=f"apply-{svc.uuid}") and new_name != svc.name:
+        if b5.button("Rename", key=f"apply-{svc.uuid}") and new_name != svc.name:
             if new_name in infra.list_service_names():
                 st.error("Service name must be unique.")
             else:
