@@ -28,6 +28,7 @@ ports:
 ui:
   setup: mlox.services.otel.ui.setup
   settings: mlox.services.otel.ui.settings
+  tui_settings: mlox.services.otel.tui.tui_settings
 build:
   class_name: mlox.services.otel.docker.OtelDockerService
   params:
