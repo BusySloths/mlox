@@ -120,8 +120,10 @@ def test_build_snapshot_groups_metrics() -> None:
     assert "network_throughput" in snapshot.groups
     cpu_group = snapshot.groups["cpu_utilization"]
     assert isinstance(cpu_group, MetricGroup)
-    assert cpu_group.values[-1] == pytest.approx(0.75)
-    assert cpu_group.unit == "1"
+    assert cpu_group.series
+    first_series = cpu_group.series[0]
+    assert first_series.values[-1] == pytest.approx(0.75)
+    assert first_series.unit == "1"
 
 
 def test_tui_settings_returns_panel() -> None:
