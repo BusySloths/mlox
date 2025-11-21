@@ -1,27 +1,34 @@
+import os
+import mlflow
 import logging
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore
+
 from typing import Dict
 from datetime import datetime
 
-from mlox.services.mlflow.models import MlopsModelWrapper, MLOpsModelInterface
+from mlox.services.mlflow.mlops import DeployableModel, MLFlowDeployableModelService
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 logger = logging.getLogger(__name__)
 
 
-class MyTrackedModel(MLOpsModelInterface):
+# Set MLflow connection environment variables here or in your system environment
+# Warning:  This is just for educational puposes.
+#           Avoid hardcoding sensitive information in production code!
+os.environ["MLFLOW_URI"] = "https://<YOUR-URI>"
+os.environ["MLFLOW_TRACKING_USERNAME"] = "YOUR_USERNAME"
+os.environ["MLFLOW_TRACKING_PASSWORD"] = "YOUR_PASSWORD"
+os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"  # only for self-signed certs
+
+
+class MyTrackedModel(DeployableModel):
     # The whole object and everything inside will be logged/persisted.
 
     my_model_weights: pd.DataFrame | None = None
 
     def live_predict(
         self,
-        model_input: np.ndarray,
+        model_input: np.ndarray | pd.DataFrame,
         params: Dict | None = None,
         artifacts: Dict | None = None,
     ) -> pd.DataFrame:
@@ -43,7 +50,7 @@ class MyTrackedModel(MLOpsModelInterface):
         logger.info("Done. Return results")
         return df_res
 
-    def tracking(self, mlflow, params: Dict | None = None) -> Dict | None:
+    def tracked_training(self, params: Dict | None = None) -> Dict | None:
         if params is not None:
             logger.info(
                 f"Tracking: my_train_param_1={params.get('my_train_param_1', None)}"
@@ -72,7 +79,7 @@ class MyTrackedModel(MLOpsModelInterface):
 def tracked_experiment():
     my_model = MyTrackedModel()
 
-    mlops = MlopsModelWrapper(my_model, "krabbelbox")
+    mlops = MLFlowDeployableModelService(my_model, "krabbelbox")
 
     # mlops.track_model sets up mlops and calls my_model.tracking
     mlops.track_model(
@@ -87,28 +94,5 @@ def tracked_experiment():
     )
 
 
-def local_experiment():
-    my_model = MyTrackedModel()
-    my_model.my_model_weights = pd.DataFrame(
-        [[0, 1], [2, 3]], columns=["ColocalA", "ColocalB"]
-    )
-    mlops = MlopsModelWrapper(my_model, "krabbelbox")
-
-    # mlops.track_model sets up mlops and calls my_model.tracking
-    logger.info(
-        mlops.predict(
-            None,
-            model_input=np.array(
-                [["my_input_example_value"]]
-            ),  # as of now inputs must be wrapped in np.numpy
-            params={
-                "my_param": True,
-                "my_additional_inference_param_1": False,
-            },  # this is optional (=additional parameters during inference)
-        )
-    )
-
-
 if __name__ == "__main__":
     tracked_experiment()
-    # local_experiment()
