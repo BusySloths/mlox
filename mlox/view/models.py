@@ -10,14 +10,14 @@ st.markdown(
     """
     <style>
     div[data-testid="stMetric"] {
-      background: rgba(15, 118, 110, 0.12);
-      border: 1px solid rgba(15, 118, 110, 0.5);
+      background: rgba(56, 149, 97, 0.12);
+      border: 1px solid rgba(46, 139, 87, 0.6);
       border-radius: 16px;
       padding: 12px;
     }
     div[data-testid="stMetric"] label {color:#cbd5e1}
-    div[data-testid="stMetricValue"] {color:#0f766e}
-    div[data-testid="stMetricValue"] * {color:#0f766e !important}
+    div[data-testid="stMetricValue"] {color:#2E8B57}
+    div[data-testid="stMetricValue"] * {color:#2E8B57 !important}
     </style>
     """,
     unsafe_allow_html=True,
@@ -125,13 +125,9 @@ def models():
 
     total_models = len(served_models)
     total_registries = len(registries)
-    total_running = sum(
-        1 for svc in served_models + registries if svc["state"] == "running"
-    )
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     col1.metric("Served Models", total_models)
     col2.metric("Registries", total_registries)
-    col3.metric("Running Total", total_running)
 
     served_tab, registry_tab = st.tabs(["Served Models", "Registries"])
     selected_entry: Optional[Dict[str, Any]] = None

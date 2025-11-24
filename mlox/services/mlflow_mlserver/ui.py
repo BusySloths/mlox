@@ -82,53 +82,83 @@ def settings(
     st.header(f"Settings for service {service.name}")
     mlflow.set_registry_uri(service.tracking_uri)
 
-    st.write(f"IP: {bundle.server.ip}")
-    st.write(f"Model: {service.model}")
-    st.write(f"TargetPath: {service.target_path}")
-    st.write(f"Tracking URI: {service.tracking_uri}")
-    st.write(f"Service URL: {service.service_url}")
-    st.write(f"Tracking User: {service.tracking_user}")
-    st.write(f"Tracking Password: {service.tracking_pw}")
-    st.write(f"User: {service.user}")
-    st.write(f"Password: {service.pw}")
-    logger.info(f"Password: {service.pw}")
-    foo = service.hashed_pw.replace("$", "\\$")
-    st.write(f"Hashed Password: '{foo}'")
-
-    url = service.service_url
-    if url.endswith("/"):
-        url = url[:-1]
-    example_curl = f"""
-curl -k -u '{service.user}:{service.pw}' \\
-{url}/invocations \\
--H 'Content-Type: application/json' \\
--d '{{"instances": [[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.1]]}}'
-    """  # .replace("\\", "  \n").strip()
-    st.write(f"Example cURL command to invoke the model:\n```bash\n{example_curl}\n```")
+    overview_tab, invoke_tab, versions_tab = st.tabs(
+        ["Overview", "Invocation & Sample", "Model Versions"]
+    )
 
     os.environ["MLFLOW_TRACKING_USERNAME"] = service.tracking_user
     os.environ["MLFLOW_TRACKING_PASSWORD"] = service.tracking_pw
     os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
-
-    names = list()
     client = mlflow.tracking.MlflowClient()
-    filter_string = f"name={service.model.split('/')[0]!r}"
-    for rm in client.search_model_versions(filter_string):
-        # names.append([rm.name, rm.version, rm.current_stage, rm.source, rm.run_id])
-        names.append(
-            {
-                # "name": rm.name,
-                "alias": [str(a) for a in rm.aliases],
-                "version": rm.version,
-                "tags": [f"{k}:{v}" for k, v in rm.tags.items()],
-                "current_stage": rm.current_stage,
-                "creation_timestamp": rm.creation_timestamp,
-                "run_id": rm.run_id,
-                "status": rm.status,
-                "last_updated_timestamp": rm.last_updated_timestamp,
-                "description": rm.description,
-                # "user_id": rm.user_id,
-                "run_link": f"{service.service_url}#/experiments/{rm.run_id}/runs/{rm.run_id}",
-            }
+
+    with overview_tab:
+        info_col, cred_col = st.columns(2)
+        with info_col:
+            st.subheader("Service & Tracking")
+            st.markdown(
+                "\n".join(
+                    [
+                        f"- **Service URL:** `{service.service_url}`",
+                        f"- **Tracking URI:** `{service.tracking_uri}`",
+                        f"- **Model Identifier:** `{service.model}`",
+                        f"- **Target Path:** `{service.target_path}`",
+                    ]
+                )
+            )
+        with cred_col:
+            st.subheader("Credentials")
+            st.code(
+                "\n".join(
+                    [
+                        f"MLServer user: '{service.user}'",
+                        f"MLServer password: '{service.pw}'",
+                        f"Tracking user: '{service.tracking_user}'",
+                        f"Tracking password: '{service.tracking_pw}'",
+                    ]
+                ),
+                language="bash",
+            )
+            st.caption(
+                f"Traefik basic auth hash: `{service.hashed_pw.replace('$', '\\$')}`",
+            )
+
+    with invoke_tab:
+        st.subheader("Invoke via cURL")
+
+        url = service.service_url
+        if url.endswith("/"):
+            url = url[:-1]
+        example_curl = f"""
+    curl -k -u '{service.user}:{service.pw}' \\
+    {url}/invocations \\
+    -H 'Content-Type: application/json' \\
+    -d '{{"instances": [[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.1]]}}'
+        """  # .replace("\\", "  \n").strip()
+        st.write(
+            f"Example cURL command to invoke the model:\n```bash\n{example_curl}\n```"
         )
-    st.write(pd.DataFrame(names))
+
+    with versions_tab:
+        st.subheader("Registered Versions")
+
+        names = list()
+        filter_string = f"name={service.model.split('/')[0]!r}"
+        for rm in client.search_model_versions(filter_string):
+            # names.append([rm.name, rm.version, rm.current_stage, rm.source, rm.run_id])
+            names.append(
+                {
+                    # "name": rm.name,
+                    "alias": [str(a) for a in rm.aliases],
+                    "version": rm.version,
+                    "tags": [f"{k}:{v}" for k, v in rm.tags.items()],
+                    "current_stage": rm.current_stage,
+                    "creation_timestamp": rm.creation_timestamp,
+                    "run_id": rm.run_id,
+                    "status": rm.status,
+                    "last_updated_timestamp": rm.last_updated_timestamp,
+                    "description": rm.description,
+                    # "user_id": rm.user_id,
+                    "run_link": f"{service.service_url}#/experiments/{rm.run_id}/runs/{rm.run_id}",
+                }
+            )
+        st.write(pd.DataFrame(names))

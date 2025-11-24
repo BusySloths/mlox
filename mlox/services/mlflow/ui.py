@@ -36,7 +36,11 @@ def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService
     os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
 
     client = mlflow.tracking.MlflowClient()
-    registered_models = client.search_registered_models(filter_string="name=")
+    try:
+        registered_models = client.search_registered_models()
+    except Exception as exc:  # pragma: no cover - defensive for UI failures
+        st.error(f"Failed to load MLflow registry data: {exc}")
+        return
     total_models = len(registered_models)
     total_versions = sum(
         len(client.search_model_versions(f"name='{rm.name}'"))

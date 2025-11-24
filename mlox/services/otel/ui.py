@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from typing import Any
 
@@ -222,6 +223,27 @@ def _build_metric_frames(
     return display_df, numeric_df
 
 
+def _strip_common_prefix(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    str_columns = df.columns.tolist()
+    if len(str_columns) <= 1:
+        return df
+
+    prefix = os.path.commonprefix(str_columns).rstrip(" .:-_")
+    if not prefix:
+        return df
+
+    def _rename(col: Any) -> Any:
+        if col.startswith(prefix):
+            col = col.rstrip(")")
+            return col[len(prefix) :].lstrip(" .:-_")
+        return col
+
+    return df.rename(columns=_rename)
+
+
 def _render_summary(
     spans: list[dict[str, Any]],
     logs: list[dict[str, Any]],
@@ -284,6 +306,7 @@ def _render_metric_charts(
             )
             .sort_index()
         )
+        chart_df = _strip_common_prefix(chart_df)
         st.line_chart(chart_df, use_container_width=True, height=280)
     else:
         st.caption("Selected metrics do not contain numeric datapoints.")
@@ -302,6 +325,8 @@ def _render_metric_charts(
             chart_df = group_df.pivot_table(
                 index="timestamp", columns="series", values="value", aggfunc="mean"
             ).sort_index()
+
+            chart_df = _strip_common_prefix(chart_df)
             st.line_chart(chart_df, use_container_width=True, height=220)
         if not found_standard:
             st.caption("Standard CPU, memory, or network metrics were not detected.")

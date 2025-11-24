@@ -219,7 +219,7 @@ tasks:
         for i in $(seq 1 {{.COUNT}}); do \
           NAME="{{.PREFIX}}-${TS}-$i"; \
           printf '\n\033[1;36m▶ Launching VM:\033[0m %s (cpus=%s, mem=%s, disk=%s)\n' "$NAME" "{{.CPUS}}" "{{.MEM}}" "{{.DISK}}"; \
-          multipass launch --name "$NAME" --cpus {{.CPUS}} --mem {{.MEM}} --disk {{.DISK}} --cloud-init "{{.CLOUD_INIT}}"; \
+          multipass launch --name "$NAME" --cpus {{.CPUS}} --memory {{.MEM}} --disk {{.DISK}} --cloud-init "{{.CLOUD_INIT}}"; \
           multipass info "$NAME" || true; \
         done
 
