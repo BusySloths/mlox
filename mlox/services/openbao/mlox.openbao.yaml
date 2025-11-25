@@ -1,6 +1,6 @@
 id: openbao-docker
 name: OpenBao
-version: "1.0"
+version: "2.4.1"
 maintainer: MLOX Contributors
 description_short: OpenBao provides a Vault-compatible secret management server.
 description: |
@@ -30,7 +30,7 @@ build:
   params:
     name: openbao
     template: ${MLOX_STACKS_PATH}/openbao/docker-compose-openbao.yaml
-    target_path: ${MLOX_USER_HOME}/openbao
+    target_path: ${MLOX_USER_HOME}/openbao-2.4.1
     root_token: ${OPENBAO_ROOT_TOKEN}
     port: ${MLOX_AUTO_PORT_API}
     mount_path: secret

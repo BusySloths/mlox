@@ -177,7 +177,7 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
             home=str(self.base_path),
             ssh_passphrase="",
         )
-        self.backend = ["local"]
+        self.backend = ["native"]
         self.docker_available = self._detect_docker()
         if self.docker_available:
             self.backend.append("docker")
