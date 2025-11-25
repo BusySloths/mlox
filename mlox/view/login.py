@@ -7,6 +7,7 @@ import streamlit as st
 from importlib import metadata as importlib_metadata  # py3.8+
 
 from mlox.session import MloxSession
+from mlox.view.utils import st_hack_align
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ def create_session(project_name, password, create_new_project: bool) -> bool:
 
 def login():
     with st.form("Open Project"):
+        st.markdown("### 🔐 Open Existing Project")
         project_name = st.text_input(
             "Project Name", value=os.environ.get("MLOX_PROJECT_NAME", "mlox")
         )
@@ -41,7 +43,9 @@ def login():
             value=os.environ.get("MLOX_PROJECT_PASSWORD", ""),
             type="password",
         )
-        submitted = st.form_submit_button("Open Project", icon=":material/login:")
+        submitted = st.form_submit_button(
+            "Open Project", icon=":material/login:", type="primary"
+        )
         if submitted:
             if create_session(project_name, password, create_new_project=False):
                 st.success("Project opened successfully!")
@@ -55,6 +59,8 @@ def login():
 
 def new_project():
     with st.container(border=True):
+        st.markdown("### 🆕 Create New Project")
+
         c1, c2, c3 = st.columns(3)
         project_name = c1.text_input("Project Name", value="mlox")
         password = c2.text_input(
@@ -62,7 +68,8 @@ def new_project():
             value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),
             type="password",
         )
-        if c3.button("Create Project", icon=":material/add_circle:"):
+        st_hack_align(c3, px=28)
+        if c3.button("Create Project", icon=":material/add_circle:", type="primary"):
             if create_session(project_name, password, create_new_project=True):
                 st.success("Project created successfully!")
                 st.rerun()

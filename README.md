@@ -98,6 +98,8 @@ Easing into MLOX should feel like a lazy stretch on a sunny branch:
    ```
 
    This unhurried command crafts a conda environment and gathers every dependency for you.
+   For a more comprehensive guide on how to install and run the show, please have a look at our
+   **[Sloth's paced Guide to Installation Enlightment](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md)**.
 
 Once you're comfortably set up, there are many ways to contribute, and they are not limited to writing code. We welcome all contributions such as:
 
@@ -119,9 +121,9 @@ We use GitHub Projects, Milestones, and Issues to organize our development workf
 
 📚 **Documentation:**
 
-- [GitHub Project Guide](docs/GITHUB_PROJECT.md) - Understanding our project organization
-- [Project Planning Guide](docs/PROJECT_PLANNING.md) - How to create and manage projects
-- [Labels Guide](docs/LABELS.md) - Our issue categorization system
+- [GitHub Project Guide](https://github.com/BusySloths/mlox/blob/main/docs/GITHUB_PROJECT.md) - Understanding our project organization
+- [Project Planning Guide](https://github.com/BusySloths/mlox/blob/main/docs/PROJECT_PLANNING.md) - How to create and manage projects
+- [Labels Guide](https://github.com/BusySloths/mlox/blob/main/docs/LABELS.md) - Our issue categorization system
 
 ## Big Thanks to our Sponsors
 

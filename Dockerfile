@@ -20,7 +20,7 @@ COPY . .
 # if they are defined in a setup.py or pyproject.toml.
 # We add streamlit and other UI-specific packages here.
 # --no-cache-dir is used to keep the final image size down.
-RUN pip install -e ".[all]"  
+RUN pip install -e ".[dev]"  
 
 # 5. Expose Port
 # Streamlit runs on port 8501 by default. This makes it accessible from outside the container.

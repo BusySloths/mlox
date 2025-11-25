@@ -7,6 +7,7 @@ import pandas as pd
 
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
+from tests.integration.conftest import wait_for_service_ready
 
 # Mark this module as an integration test
 pytestmark = pytest.mark.integration
@@ -41,7 +42,7 @@ def install_mlflow_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
         # Allow some time for containers to become healthy
-    time.sleep(120)
+    wait_for_service_ready(service, bundle, retries=6, interval=20, no_checks=True)
 
     yield bundle_added, service
 
@@ -64,8 +65,9 @@ def test_mlflow_service_is_running(install_mlflow_service):
     assert service.service_url
     assert service.state == "running"
 
-    with bundle.server.get_server_connection() as conn:
-        status = service.check(conn)
+    status = wait_for_service_ready(service, bundle, retries=12, interval=30)
+    # with bundle.server.get_server_connection() as conn:
+    #     status = service.check(conn)
     assert status.get("status") == "running"
 
 
