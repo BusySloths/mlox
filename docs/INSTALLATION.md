@@ -37,4 +37,11 @@ Run one of the following:
 
 ## Docker Hub
 
-- use `docker pull drbusysloth/mlox:latest`
+### Option 1: I don't need to persist projects
+
+- use `docker run -it --rm -p 8501:8501 drbusysloth/mlox:latest` this pulls and runs the image
+
+### Option 2: I want to persist projects
+
+- first time usage: `docker run -it --name mlox -p 8501:8501 drbusysloth/mlox:latest` this will pull the image and start a container with name `mlox`
+- You can now use MLOX and stop the container as you like without loosing your projects. If you want to run again and load your projects just start the container again with `docker start mlox`
