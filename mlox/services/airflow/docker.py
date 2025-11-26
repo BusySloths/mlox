@@ -49,7 +49,9 @@ class AirflowDockerService(AbstractService):
         # self.exec.fs_create_dir(conn, self.target_path + "/logs")
         # self.exec.fs_create_dir(conn, self.target_path + "/plugins")
 
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
         self.exec.tls_setup(conn, conn.host, self.target_path)
         # setup environment
         base_url = f"https://{conn.host}:{self.port}"
@@ -59,14 +61,27 @@ class AirflowDockerService(AbstractService):
         self.exec.fs_create_empty_file(conn, env_path)
         self.exec.fs_append_line(conn, env_path, "_AIRFLOW_SSL_CERT_NAME=cert.pem")
         self.exec.fs_append_line(conn, env_path, "_AIRFLOW_SSL_KEY_NAME=key.pem")
-        self.exec.fs_append_line(conn, env_path, f"AIRFLOW_UID={self.exec.sys_user_id(conn)}")
-        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_SSL_FILE_PATH={self.target_path}/")
+        self.exec.fs_append_line(
+            conn, env_path, f"AIRFLOW_UID={self.exec.sys_user_id(conn)}"
+        )
+        self.exec.fs_append_line(
+            conn, env_path, f"_AIRFLOW_SSL_FILE_PATH={self.target_path}/"
+        )
         self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_OUT_PORT={self.port}")
         self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_BASE_URL={base_url}")
-        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_WWW_USER_USERNAME={self.ui_user}")
-        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_WWW_USER_PASSWORD={self.ui_pw}")
-        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_OUT_FILE_PATH={self.path_output}")
-        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}")
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_LOG_HOST={base_url}")
+        self.exec.fs_append_line(
+            conn, env_path, f"_AIRFLOW_WWW_USER_USERNAME={self.ui_user}"
+        )
+        self.exec.fs_append_line(
+            conn, env_path, f"_AIRFLOW_WWW_USER_PASSWORD={self.ui_pw}"
+        )
+        self.exec.fs_append_line(
+            conn, env_path, f"_AIRFLOW_OUT_FILE_PATH={self.path_output}"
+        )
+        self.exec.fs_append_line(
+            conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}"
+        )
         self.exec.fs_append_line(conn, env_path, "_AIRFLOW_LOAD_EXAMPLES=false")
         self.service_urls["Airflow UI"] = base_url
         self.service_ports["Airflow Webserver"] = int(self.port)

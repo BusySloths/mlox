@@ -78,6 +78,9 @@ class GithubRepoService(AbstractService, Repo):
         self.exec.fs_delete_dir(conn, self.target_path + "/" + self.repo_name)
         self.state = "un-initialized"
 
+    def spin_down(self, conn):
+        return None
+
     def spin_up(self, conn):
         return None
 

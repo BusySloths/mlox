@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 import streamlit as st
 
@@ -10,6 +11,8 @@ from mlox.services.github.service import GithubRepoService
 from mlox.infra import Infrastructure, Bundle, Repo
 from mlox.server import AbstractGitServer
 from mlox.service import AbstractService
+
+logger = logging.getLogger(__name__)
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: AirflowDockerService):
@@ -92,8 +95,13 @@ def tab_repositories(
                 with bundle.server.get_server_connection() as conn:
                     new_repo.setup(conn)
                     new_repo.spin_up(conn)
-                    new_repo.git_clone(conn)
-                    new_repo.git_pull(conn)
+                    try:
+                        new_repo.git_clone(conn)
+                        new_repo.git_pull(conn)
+                    except Exception as e:
+                        logger.info(
+                            f"Error cloning or pulling repository (repo exists already)): {e}"
+                        )
                 save_infrastructure()
                 st.rerun()
 
