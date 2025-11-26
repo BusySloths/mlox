@@ -14,9 +14,9 @@ from airflow.decorators import dag, task
 )
 def virtual_env_dag():
     @task.virtualenv(
-        # python_version="3.11",
+        # python_version="3.12",  # Use whatever version your Airflow workers have
         requirements=[
-            "pendulum==2.1.2",
+            "pendulum",
         ],
     )
     def hello_task():
