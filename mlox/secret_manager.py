@@ -308,15 +308,3 @@ def load_secret_manager_from_keyfile(
             f"Error loading secret manager class '{secret_manager_class}': {e}"
         )
     return None
-
-
-if __name__ == "__main__":
-    password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
-    if not password:
-        print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
-        exit(1)
-    sm = load_secret_manager_from_keyfile("/tsm_0.key", password)
-    if not sm:
-        print("Failed to load secret manager from keyfile.")
-        exit(1)
-    print(sm.list_secrets(keys_only=True))

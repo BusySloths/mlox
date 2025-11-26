@@ -1,6 +1,7 @@
 import os
 import grpc  # type: ignore
 import time
+
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -25,9 +26,6 @@ resource = Resource.create(
     }
 )
 
-# Set the URL of the OpenTelemetry collector
-
-
 mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
 mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
 # Make sure your environment variable is set!
@@ -43,17 +41,9 @@ monitors = infra.filter_by_group("monitor")
 if len(monitors) == 0:
     print("No monitors found.")
     exit()
-# collector_url = f"{infra.bundles[0].server.ip}:{infra.bundles[0].services[2].service.service_ports['OTLP gRPC receiver']}"
-# trusted_certs = infra.bundles[0].services[2].service.certificate.encode("utf-8")
+
 collector_url = monitors[0].service_url
 trusted_certs = monitors[0].certificate.encode("utf-8")
-
-# # Path to the self-signed certificate of the mlflow server
-# cert_path = "cert-otel.pem"
-
-# # Load the certificate
-# with open(cert_path, "rb") as f:
-#     trusted_certs = f.read()
 
 # Create SSL credentials with the self-signed certificate
 ssl_credentials = grpc.ssl_channel_credentials(root_certificates=trusted_certs)
@@ -83,24 +73,3 @@ with tracer.start_as_current_span("test-span-2") as span:
         span.add_event("child-event-2")
         print("Child Event created")
         time.sleep(2.5)
-
-# os.environ["GRPC_TRACE"] = "all"
-# os.environ["GRPC_VERBOSITY"] = "DEBUG"
-
-# # import time
-
-# # time.sleep(10)  # Allow
-
-# otlp_exporter.shutdown()  # Explicitly shut down the exporter
-# print("Forcing flush of telemetry data...")
-# try:
-#     # provider.force_flush() can take a timeout.
-#     # Increase if necessary, default is 30 seconds (30000 ms).
-#     provider.force_flush(timeout_millis=10000)  # e.g., 10 seconds
-#     print("Flush attempt complete.")
-# except Exception as e:
-#     print(f"Error during force_flush: {e}")
-
-# print("Shutting down TracerProvider...")
-# provider.shutdown()
-# print("TracerProvider shutdown complete.")
