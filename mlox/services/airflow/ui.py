@@ -34,9 +34,9 @@ def tab_repositories(
     infra: Infrastructure, bundle: Bundle, service: AirflowDockerService
 ):
     my_repos = []
-    for r in infra.filter_by_group("git"):
-        if not isinstance(r, GithubRepoService):
-            continue
+    for r in infra.filter_by_group("repository"):
+        # if not isinstance(r, GithubRepoService):
+        #     continue
         t = (
             r.created_timestamp
             if hasattr(r, "created_timestamp")

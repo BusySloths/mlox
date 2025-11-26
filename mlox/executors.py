@@ -99,6 +99,7 @@ class UbuntuTaskExecutor(ExecutionRecorder):
     """Execute Ubuntu-specific remote commands while recording history."""
 
     supported_os_ids: str = "Ubuntu"
+    security_global_disable_sudo: bool = False
 
     def _exec_command(
         self,
@@ -116,7 +117,7 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         metadata = metadata or {}
         metadata = {**metadata, "sudo": sudo, "pty": pty}
         try:
-            if sudo:
+            if sudo and not self.security_global_disable_sudo:
                 result = connection.sudo(cmd, hide=hide, pty=pty)
             else:
                 result = connection.run(cmd, hide=hide)
@@ -1049,6 +1050,7 @@ class UbuntuTaskExecutor(ExecutionRecorder):
         )
 
     def fs_create_empty_file(self, connection: Connection, fname: str) -> None:
+        """Create an empty file, truncating if it exists. Attention: echo -n >| will not work on e.g. OSX"""
         self._run_task(
             connection,
             group=TaskGroup.FILESYSTEM,

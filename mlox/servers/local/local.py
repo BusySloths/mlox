@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, IO
 
+from mlox.executors import UbuntuTaskExecutor
 from mlox.server import (
     AbstractGitServer,
     AbstractServer,
@@ -165,6 +166,9 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        logger.info("Disabling sudo for LocalhostServer executor.")
+        self.exec.security_global_disable_sudo = True
+
         if not self.ip:
             self.ip = "127.0.0.1"
         self.port = "0"
@@ -181,6 +185,12 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
         self.docker_available = self._detect_docker()
         if self.docker_available:
             self.backend.append("docker")
+
+    def create_new_task_executor(self) -> UbuntuTaskExecutor:
+        exec = super().create_new_task_executor()
+        logger.info("Disabling sudo for Localhost service executor.")
+        exec.security_global_disable_sudo = True
+        return exec
 
     # Connection helpers -------------------------------------------------
     def get_server_connection(self, force_root: bool = False) -> LocalServerConnection:

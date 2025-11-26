@@ -28,9 +28,9 @@ def setup(infra: Infrastructure, bundle: Bundle):
     params: dict[str, str] = {}
 
     suggested_token = generate_password(length=20, with_punctuation=False)
-    root_token = st.text_input("Root Token", value=suggested_token)
+    # root_token = st.text_input("Root Token", value=suggested_token)
 
-    params["${OPENBAO_ROOT_TOKEN}"] = root_token.strip()
+    params["${OPENBAO_ROOT_TOKEN}"] = suggested_token.strip()
     return params
 
 

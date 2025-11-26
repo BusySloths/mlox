@@ -82,7 +82,55 @@ class UbuntuDockerServer(UbuntuNativeServer):
                 group=TaskGroup.CONTAINER_RUNTIME,
                 sudo=True,
             )
+            self._apply_docker_29_patch(conn)
             self.state = "running"
+
+    def _apply_docker_29_patch(self, conn) -> None:
+        """Applies a patch to Docker to set the minimum API version to 1.24 (Docker 20.10 / 29)
+        - systemctl edit docker.service
+        - Add this part above the line ### Lines below this comment will be discarded:
+        `[Service]
+        Environment=DOCKER_MIN_API_VERSION=1.24`
+        - Save the file and exit
+        - systemctl restart docker
+        """
+        logger.info("Applying Docker 20.10 (API v1.24) compatibility patch...")
+        override_dir = "/etc/systemd/system/docker.service.d"
+        override_file = f"{override_dir}/override.conf"
+        create_dir_cmd = f"mkdir -p {override_dir}"
+        write_override_cmd = (
+            "sh -c "
+            f"\"printf '%s\\\\n' '[Service]' 'Environment=DOCKER_MIN_API_VERSION=1.24' > {override_file}\""
+        )
+        self.exec.execute(
+            conn,
+            create_dir_cmd,
+            group=TaskGroup.FILESYSTEM,
+            sudo=True,
+            pty=False,
+        )
+        self.exec.execute(
+            conn,
+            write_override_cmd,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            sudo=True,
+            pty=False,
+        )
+        self.exec.execute(
+            conn,
+            "systemctl daemon-reload",
+            group=TaskGroup.SERVICE_CONTROL,
+            sudo=True,
+            pty=False,
+        )
+        self.exec.execute(
+            conn,
+            "systemctl restart docker",
+            group=TaskGroup.SERVICE_CONTROL,
+            sudo=True,
+            pty=False,
+        )
+        logger.info("Docker compatibility patch applied.")
 
     def teardown_backend(self) -> None:
         """Uninstalls Docker Engine and related packages."""
