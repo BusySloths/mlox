@@ -98,7 +98,7 @@ class AirflowDockerService(AbstractService):
         return self.compose_up(conn)
 
     def spin_down(self, conn) -> bool:
-        return self.compose_down(conn)
+        return self.compose_down(conn, remove_volumes=True)
 
     def check(self, conn) -> Dict:
         """

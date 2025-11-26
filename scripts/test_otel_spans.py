@@ -28,12 +28,15 @@ resource = Resource.create(
 # Set the URL of the OpenTelemetry collector
 
 
-password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
+mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
+mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
 # Make sure your environment variable is set!
-if not password:
-    print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
+if not mlox_password or not mlox_name:
+    print(
+        "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_NAME environment variable is not set."
+    )
     exit(1)
-session = MloxSession("mlox", password)
+session = MloxSession(mlox_name, mlox_password)
 infra = session.infra
 
 monitors = infra.filter_by_group("monitor")
