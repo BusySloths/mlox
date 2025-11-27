@@ -118,6 +118,7 @@ def tab_repositories(
         idx = selection["selection"]["rows"][0]
         repo_service = cast(AbstractService, my_repos[idx]["repo"])
         if st.button("Remove from DAGs"):
-            infra.teardown_service(repo_service)
-            save_infrastructure()
-            st.rerun()
+            st.error("Removing repositories from Airflow DAGs is not yet supported.")
+            # infra.teardown_service(repo_service)
+            # save_infrastructure()
+            # st.rerun()
