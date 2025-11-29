@@ -1,6 +1,6 @@
-id: airflow-3.0.1-docker
+id: airflow-3.1.3-docker
 name: Airflow
-version: 3.0.1
+version: 3.1.3
 maintainer: Your Name
 description_short:
   Apache Airflow is a workflow orchestrator used to schedule and monitor
@@ -33,11 +33,11 @@ ui:
 build:
   class_name: mlox.services.airflow.docker.AirflowDockerService
   params:
-    name: airflow-3.0.1
-    template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.0.1.yaml
-    target_path: ${MLOX_USER_HOME}/airflow-3.0.1
-    path_output: ${MLOX_USER_HOME}/airflow-3.0.1/output
-    path_dags: ${MLOX_USER_HOME}/airflow-3.0.1/dags
+    name: airflow-3.1.3
+    template: ${MLOX_STACKS_PATH}/airflow/docker-compose-airflow-3.1.3.yaml
+    target_path: ${MLOX_USER_HOME}/airflow-3.1.3
+    path_output: ${MLOX_USER_HOME}/airflow-3.1.3/output
+    path_dags: ${MLOX_USER_HOME}/airflow-3.1.3/dags
     port: ${MLOX_AUTO_PORT_WEB_UI}
     ui_user: ${MLOX_AUTO_USER}
     ui_pw: ${MLOX_AUTO_PW}

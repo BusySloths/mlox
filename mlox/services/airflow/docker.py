@@ -8,6 +8,7 @@ from typing import Dict
 from dataclasses import dataclass, field
 
 from mlox.service import AbstractService
+from mlox.utils import generate_password
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,10 @@ class AirflowDockerService(AbstractService):
     ui_pw: str
     port: str
     secret_path: str = ""
+    secret_key: str = field(
+        default="9d54873d8b53466dbcfd00a2bb9a104caa8071143f864aa88c36d3f5a8c8615f",
+        init=False,
+    )
     compose_service_names: Dict[str, str] = field(
         init=False,
         default_factory=lambda: {
@@ -64,6 +69,8 @@ class AirflowDockerService(AbstractService):
         self.exec.fs_append_line(
             conn, env_path, f"AIRFLOW_UID={self.exec.sys_user_id(conn)}"
         )
+        self.secret_key = generate_password(length=48)
+        self.exec.fs_append_line(conn, env_path, f"_AIRFLOW_SECRET={self.secret_key}")
         self.exec.fs_append_line(
             conn, env_path, f"_AIRFLOW_SSL_FILE_PATH={self.target_path}/"
         )
@@ -153,6 +160,10 @@ class AirflowDockerService(AbstractService):
             for key, value in {
                 "username": self.ui_user,
                 "password": self.ui_pw,
+                "port": self.port,
+                "secret_key": self.secret_key,
+                "secret_path": self.secret_path,
+                "base_url": self.service_urls.get("Airflow UI", ""),
             }.items()
             if value
         }

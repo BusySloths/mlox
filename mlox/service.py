@@ -160,7 +160,9 @@ class AbstractService(ABC):
 
         # heuristic match
         for cname in all_states:
-            if f"_{service}_" in cname or cname.endswith(f"_{service}_1"):
+            if f"_{service}_" in cname:
+                return self.exec.docker_service_log_tails(conn, cname, tail=tail)
+            if f"-{service}-" in cname:
                 return self.exec.docker_service_log_tails(conn, cname, tail=tail)
             elif f"{service}/" in cname:
                 return self.exec.docker_service_log_tails(conn, cname, tail=tail)

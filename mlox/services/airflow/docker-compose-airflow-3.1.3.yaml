@@ -61,7 +61,7 @@ x-airflow-common: &airflow-common
   # In order to add custom dependencies or upgrade provider packages you can use your extended image.
   # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
-  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.0.1}
+  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.1.3}
   # build: .
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
@@ -85,11 +85,26 @@ x-airflow-common: &airflow-common
     # The following line can be used to set a custom config file, stored in the local config folder
     # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
     # AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    # OLD WEBSERVER
     AIRFLOW__WEBSERVER__WEB_SERVER_SSL_CERT: /opt/airflow/ssl/${_AIRFLOW_SSL_CERT_NAME}
     AIRFLOW__WEBSERVER__WEB_SERVER_SSL_KEY: /opt/airflow/ssl/${_AIRFLOW_SSL_KEY_NAME}
     AIRFLOW__WEBSERVER__BASE_URL: ${_AIRFLOW_BASE_URL}
+
+    # API SERVER
+    AIRFLOW__API_AUTH__JWT_ALGORITHM: "HS512"
+    AIRFLOW__API_AUTH__JWT_SECRET: ${_AIRFLOW_SECRET:-9d54873d8b53466dbcfd00a2bb9a104caa8071143f864aa88c36d3f5a8c8615f}
+    AIRFLOW__API__SECRET_KEY: ${_AIRFLOW_SECRET:-9d54873d8b53466dbcfd00a2bb9a104caa8071143f864aa88c36d3f5a8c8615f}
+    AIRFLOW_EXECUTION_API_SECRET_KEY: ${_AIRFLOW_SECRET:-9d54873d8b53466dbcfd00a2bb9a104caa8071143f864aa88c36d3f5a8c8615f}
+    AIRFLOW__CORE__EXECUTION_API_SECRET_KEY: ${_AIRFLOW_SECRET:-9d54873d8b53466dbcfd00a2bb9a104caa8071143f864aa88c36d3f5a8c8615f}
+
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "${_AIRFLOW_BASE_URL}/execution/"
+    AIRFLOW__API__SSL_CERT: /opt/airflow/ssl/${_AIRFLOW_SSL_CERT_NAME}
+    AIRFLOW__API__SSL_KEY: /opt/airflow/ssl/${_AIRFLOW_SSL_KEY_NAME}
+
     AIRFLOW__LOGGING__LOG_SERVER_HOST: ${_AIRFLOW_LOG_HOST:-airflow-webserver}
     AIRFLOW__LOGGING__LOG_SERVER_PORT: ${_AIRFLOW_LOG_PORT:-8793}
+
+    AIRFLOW__API__WORKERS: 1
   volumes:
     - ${_AIRFLOW_SSL_FILE_PATH:-.}:/opt/airflow/ssl
     - ${_AIRFLOW_DAGS_FILE_PATH:-.}:/opt/airflow/dags
@@ -138,11 +153,21 @@ services:
     ports:
       - ${_AIRFLOW_OUT_PORT:-8080}:8080
     healthcheck:
+      # test:
+      #   [
+      #     "CMD",
+      #     "curl",
+      #     "--fail",
+      #     "${_AIRFLOW_BASE_URL:-http://localhost:8080}/api/v2/version",
+      #   ]
+      # Add --cacert to trust certificate
       test:
         [
           "CMD",
           "curl",
           "--fail",
+          "--cacert",
+          "/opt/airflow/ssl/${_AIRFLOW_SSL_CERT_NAME}",
           "${_AIRFLOW_BASE_URL:-http://localhost:8080}/api/v2/version",
         ]
       interval: 30s

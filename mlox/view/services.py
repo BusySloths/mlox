@@ -481,22 +481,19 @@ def _render_add_service_dialog():
     # Action buttons
     col1, col2 = st.columns(2)
 
-    with col1:
-        if st.button("Add Service", type="primary", use_container_width=True):
-            if selected_bundle:
-                with st.spinner(f"Adding {config.name}..."):
-                    ret = infra.add_service(
-                        selected_bundle.server.ip, config, params or {}
+    if col1.button("Add Service", type="primary", use_container_width=True):
+        if selected_bundle:
+            with st.spinner(f"Adding {config.name}..."):
+                ret = infra.add_service(selected_bundle.server.ip, config, params or {})
+                if ret:
+                    st.success(
+                        f"Successfully added {config.name} to {selected_bundle.name}"
                     )
-                    if ret:
-                        st.success(
-                            f"Successfully added {config.name} to {selected_bundle.name}"
-                        )
-                        save_infra()
-                        st.session_state.show_add_dialog = False
-                        st.rerun()
-                    else:
-                        st.error("Failed to add service")
+                    save_infra()
+                    st.session_state.show_add_dialog = False
+                    st.rerun()
+                else:
+                    st.error("Failed to add service")
 
     with col2:
         if st.button("Cancel", use_container_width=True):
