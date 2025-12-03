@@ -156,17 +156,11 @@ class AirflowDockerService(AbstractService):
 
     def get_secrets(self) -> Dict[str, Dict]:
         credentials = {
-            key: value
-            for key, value in {
-                "username": self.ui_user,
-                "password": self.ui_pw,
-                "port": self.port,
-                "secret_key": self.secret_key,
-                "secret_path": self.secret_path,
-                "base_url": self.service_urls.get("Airflow UI", ""),
-            }.items()
-            if value
+            "username": self.ui_user,
+            "password": self.ui_pw,
+            "port": self.port,
+            "secret_key": self.secret_key,
+            "secret_path": self.secret_path,
+            "base_url": self.service_urls.get("Airflow UI", ""),
         }
-        if not credentials:
-            return {}
         return {"airflow_ui_credentials": credentials}

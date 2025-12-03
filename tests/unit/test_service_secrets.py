@@ -46,11 +46,18 @@ SERVICE_CASES = [
             "ui_user": "airflow",
             "ui_pw": "airflowpw",
             "port": "8080",
+            "secret_path": "secret_path",
+            # "secret_key": "secret_key",
+            # "base_url": "base_url",
         },
         {
             "airflow_ui_credentials": {
                 "username": "airflow",
                 "password": "airflowpw",
+                "port": "8080",
+                "secret_path": "secret_path",
+                "secret_key": "9d54873d8b53466dbcfd00a2bb9a104caa8071143f864aa88c36d3f5a8c8615f",
+                "base_url": "",
             },
         },
         None,
