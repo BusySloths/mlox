@@ -2,6 +2,7 @@ import uuid
 import time
 import socket
 import logging
+import shlex
 import pytest
 
 from pathlib import Path
@@ -204,6 +205,46 @@ def ubuntu_docker_server(multipass_instance):
         logging.info("Successfully tore down ubuntu_docker_server.")
     except Exception as e:
         logging.warning(f"Could not tear down ubuntu_docker_server: {e}")
+    infra.remove_bundle(bundle)
+
+
+@pytest.fixture(scope="package")
+def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
+    infra = Infrastructure()
+    config = load_config(
+        get_stacks_path(prefix="mlox-server"),
+        "/ubuntu",
+        "mlox-server.ubuntu.simple.yaml",
+    )
+
+    private_key = ubuntu_docker_server.remote_user.ssh_key
+    public_key = ubuntu_docker_server.remote_user.ssh_pub_key
+    passphrase = ubuntu_docker_server.remote_user.ssh_passphrase
+    mlox_name = ubuntu_docker_server.mlox_user.name
+    mlox_pw = ubuntu_docker_server.mlox_user.pw
+    params = {
+        "${MLOX_IP}": multipass_instance["ip"],
+        "${MLOX_PORT}": "22",
+        "${MLOX_ROOT}": mlox_name,
+        "${MLOX_ROOT_PW}": mlox_pw,
+        "${MLOX_ROOT_PRIVATE_KEY}": private_key,
+        "${MLOX_ROOT_PASSPHRASE}": passphrase,
+    }
+    bundle = infra.add_server(config, params)
+    if not bundle:
+        pytest.fail("Failed to add simple server to infrastructure")
+    server = bundle.server
+    server.setup()
+    yield server
+    logging.info(
+        f"Tearing down ubuntu_simple_server on VM {multipass_instance['name']}..."
+    )
+    try:
+        server.disable_debug_access()
+        server.teardown()
+        logging.info("Successfully tore down ubuntu_simple_server.")
+    except Exception as e:
+        logging.warning(f"Could not tear down ubuntu_simple_server: {e}")
     infra.remove_bundle(bundle)
 
 

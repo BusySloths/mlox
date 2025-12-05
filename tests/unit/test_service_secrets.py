@@ -47,8 +47,6 @@ SERVICE_CASES = [
             "ui_pw": "airflowpw",
             "port": "8080",
             "secret_path": "secret_path",
-            # "secret_key": "secret_key",
-            # "base_url": "base_url",
         },
         {
             "airflow_ui_credentials": {
