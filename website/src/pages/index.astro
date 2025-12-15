@@ -48,7 +48,7 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
             </>
           )}
           {heroContent && (
-            <div class="text-lg text-gray-400 mb-12 leading-relaxed max-w-3xl mx-auto animate-slide-up prose prose-invert max-w-none [&>p]:mb-4">
+            <div class="text-lg text-gray-400 mb-12 leading-relaxed max-w-3xl mx-auto animate-slide-up prose prose-invert [&>p]:mb-4">
               <heroContent.Content />
             </div>
           )}
@@ -195,8 +195,8 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
           <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
             {whyMloxPage.data.title}
           </h2>
-          <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8">
-            <div class="prose prose-invert max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h2:mb-3 prose-h2:text-accent-cyan prose-p:text-gray-300 prose-p:leading-relaxed bg-dark-700 rounded-xl border-2 border-dark-600 p-8 hover:border-accent-purple transition-all duration-300">
+          <div class="max-w-4xl mx-auto">
+            <div class="prose prose-invert max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h2:mb-3 prose-h2:text-accent-cyan prose-p:text-gray-300 prose-p:leading-relaxed bg-dark-700 rounded-xl border-2 border-dark-600 p-8 md:p-12 hover:border-accent-purple transition-all duration-300">
               <whyMloxContent.Content />
             </div>
           </div>
