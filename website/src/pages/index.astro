@@ -108,23 +108,31 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
         {featuresPage && featuresPage.data.features && (
           <div class="max-w-6xl mx-auto">
             <div class="grid md:grid-cols-3 gap-8">
-              {featuresPage.data.features.map((feature) => (
-                <div class={`group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-${feature.color} shadow-lg hover:shadow-accent-${feature.color}/20 transition-all duration-300 transform hover:-translate-y-2`}>
-                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{feature.icon}</div>
-                  <h3 class="text-2xl font-bold mb-4 text-white">{feature.title}</h3>
-                  {feature.description && (
-                    <p class="text-gray-300 mb-3">{feature.description}</p>
-                  )}
-                  <ul class="space-y-3 list-none">
-                    {feature.items.map((item) => (
-                      <li class="flex items-start text-gray-300">
-                        <span class="text-accent-green mr-2 mt-1">✓</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+              {featuresPage.data.features.map((feature) => {
+                const borderColorClass = feature.color === 'cyan' ? 'hover:border-accent-cyan' :
+                                       feature.color === 'purple' ? 'hover:border-accent-purple' :
+                                       'hover:border-accent-pink';
+                const shadowColorClass = feature.color === 'cyan' ? 'hover:shadow-accent-cyan/20' :
+                                        feature.color === 'purple' ? 'hover:shadow-accent-purple/20' :
+                                        'hover:shadow-accent-pink/20';
+                return (
+                  <div class={`group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 ${borderColorClass} shadow-lg ${shadowColorClass} transition-all duration-300 transform hover:-translate-y-2`}>
+                    <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{feature.icon}</div>
+                    <h3 class="text-2xl font-bold mb-4 text-white">{feature.title}</h3>
+                    {feature.description && (
+                      <p class="text-gray-300 mb-3">{feature.description}</p>
+                    )}
+                    <ul class="space-y-3 list-none">
+                      {feature.items.map((item) => (
+                        <li class="flex items-start text-gray-300">
+                          <span class="text-accent-green mr-2 mt-1">✓</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -140,10 +148,16 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
           </h2>
           <div class="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {whyMloxPage.data.cards.map((card, index) => {
-              const colors = ['accent-cyan', 'accent-purple', 'accent-pink', 'accent-yellow'];
-              const color = colors[index % colors.length];
+              const borderColorClass = index % 4 === 0 ? 'hover:border-accent-cyan' :
+                                      index % 4 === 1 ? 'hover:border-accent-purple' :
+                                      index % 4 === 2 ? 'hover:border-accent-pink' :
+                                      'hover:border-accent-yellow';
+              const shadowColorClass = index % 4 === 0 ? 'hover:shadow-accent-cyan/20' :
+                                      index % 4 === 1 ? 'hover:shadow-accent-purple/20' :
+                                      index % 4 === 2 ? 'hover:shadow-accent-pink/20' :
+                                      'hover:shadow-accent-yellow/20';
               return (
-                <div class={`group p-6 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-${color} shadow-lg hover:shadow-${color}/20 transition-all duration-300 transform hover:-translate-y-2`}>
+                <div class={`group p-6 bg-dark-700 rounded-xl border-2 border-dark-600 ${borderColorClass} shadow-lg ${shadowColorClass} transition-all duration-300 transform hover:-translate-y-2`}>
                   <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{card.icon}</div>
                   <h3 class="text-xl font-bold mb-3 text-white">{card.title}</h3>
                   <p class="text-gray-300 leading-relaxed">{card.description}</p>
