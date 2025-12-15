@@ -7,12 +7,12 @@ const navItems = [
 ];
 ---
 
-<header class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md shadow-sm transition-all duration-300">
+<header class="fixed top-0 left-0 right-0 z-50 bg-dark-800/95 backdrop-blur-md border-b border-dark-600 transition-all duration-300">
   <nav class="container mx-auto px-6 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-2">
         <a href={import.meta.env.BASE_URL} class="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-          <span class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <span class="text-2xl font-bold text-accent-cyan">
             MLOX
           </span>
         </a>
@@ -22,7 +22,7 @@ const navItems = [
         {navItems.map((item) => (
           <a 
             href={item.href}
-            class="text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium"
+            class="text-gray-300 hover:text-accent-cyan transition-colors duration-200 font-medium"
             target={item.external ? '_blank' : undefined}
             rel={item.external ? 'noopener noreferrer' : undefined}
           >
@@ -34,7 +34,7 @@ const navItems = [
       <!-- Mobile menu button -->
       <button 
         id="mobile-menu-button"
-        class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+        class="md:hidden p-2 rounded-lg hover:bg-dark-600 transition-colors text-gray-300"
         aria-label="Toggle menu"
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -48,7 +48,7 @@ const navItems = [
       {navItems.map((item) => (
         <a 
           href={item.href}
-          class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          class="block px-4 py-2 text-gray-300 hover:bg-dark-600 hover:text-accent-cyan rounded-lg transition-colors"
           target={item.external ? '_blank' : undefined}
           rel={item.external ? 'noopener noreferrer' : undefined}
         >
@@ -95,9 +95,10 @@ const navItems = [
       const currentScroll = window.pageYOffset;
       
       if (currentScroll > 100) {
-        header?.classList.add('shadow-md');
-      } else {
+        header?.classList.add('shadow-lg');
         header?.classList.remove('shadow-md');
+      } else {
+        header?.classList.remove('shadow-lg');
       }
     });
   });

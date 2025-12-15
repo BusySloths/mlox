@@ -1,44 +1,31 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
+import { getCollection } from 'astro:content';
 
-// Hero content
-const hero = {
-  frontmatter: {
-    title: "Accelerate your ML journey",
-    subtitle: "Deploy production-ready MLOps in minutes, not months.",
-    cta_primary: "Get Started",
-    cta_primary_link: "https://github.com/BusySloths/mlox",
-    cta_secondary: "View Documentation",
-    cta_secondary_link: "https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md"
-  },
-  content: "Tired of tangled configs, YAML jungles, and broken ML pipelines? So were we.\n\nMLOX gives you a calm, streamlined way to deploy, monitor, and maintain production-grade MLOps infrastructure—without rushing.\n\nIt's for engineers who prefer thoughtful systems over chaos. Powered by sloths. Backed by open source."
-};
+// Get content from markdown files
+const pages = await getCollection('pages');
+const heroPage = pages.find(p => p.id === 'hero.md');
+const featuresPage = pages.find(p => p.id === 'features.md');
+const gettingStartedPage = pages.find(p => p.id === 'getting-started.md');
 
-const features = {
-  frontmatter: {
-    title: "What can you do with MLOX?"
-  }
-};
-
-const gettingStarted = {
-  frontmatter: {
-    title: "Get Started"
-  }
-};
+// Render markdown content
+const heroContent = heroPage ? await heroPage.render() : null;
+const featuresContent = featuresPage ? await featuresPage.render() : null;
+const gettingStartedContent = gettingStartedPage ? await gettingStartedPage.render() : null;
 ---
 
 <BaseLayout title="MLOX - MLOps Made Simple">
   <Header />
   
-  <main class="pt-16">
+  <main class="pt-16 bg-dark-900">
     <!-- Hero Section -->
-    <section class="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 overflow-hidden">
-      <!-- Animated background elements -->
-      <div class="absolute inset-0 overflow-hidden">
-        <div class="absolute -top-1/2 -left-1/4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float"></div>
-        <div class="absolute -bottom-1/2 -right-1/4 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float" style="animation-delay: 1s;"></div>
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float" style="animation-delay: 2s;"></div>
+    <section class="relative min-h-screen flex items-center justify-center bg-dark-900">
+      <!-- Decorative elements -->
+      <div class="absolute inset-0 overflow-hidden opacity-30">
+        <div class="absolute top-20 left-10 w-64 h-64 bg-accent-cyan rounded-full blur-3xl"></div>
+        <div class="absolute bottom-20 right-10 w-80 h-80 bg-accent-purple rounded-full blur-3xl"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-accent-pink rounded-full blur-3xl"></div>
       </div>
 
       <div class="container mx-auto px-6 relative z-10">
@@ -48,34 +35,42 @@ const gettingStarted = {
             alt="MLOX Logo" 
             class="w-full max-w-md mx-auto mb-8 animate-slide-down"
           />
-          <h1 class="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent animate-slide-up">
-            {hero.frontmatter.title}
-          </h1>
-          <p class="text-xl md:text-2xl text-gray-700 mb-8 animate-slide-up" style="animation-delay: 0.1s;">
-            {hero.frontmatter.subtitle}
-          </p>
-          <p class="text-lg text-gray-600 mb-12 leading-relaxed max-w-3xl mx-auto animate-slide-up" style="animation-delay: 0.2s;">
-            {hero.content}
-          </p>
-          <div class="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slide-up" style="animation-delay: 0.3s;">
-            <a 
-              href={hero.frontmatter.cta_primary_link} 
-              class="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 hover:scale-105"
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              {hero.frontmatter.cta_primary}
-            </a>
-            <a 
-              href={hero.frontmatter.cta_secondary_link} 
-              class="px-8 py-4 bg-white text-gray-700 rounded-full font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 border-2 border-gray-200 hover:border-purple-300"
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              {hero.frontmatter.cta_secondary}
-            </a>
-          </div>
-          <div class="flex flex-wrap gap-3 justify-center mt-12 animate-slide-up" style="animation-delay: 0.4s;">
+          {heroPage && (
+            <>
+              <h1 class="text-5xl md:text-6xl font-bold mb-6 text-white animate-slide-up">
+                {heroPage.data.title}
+              </h1>
+              <p class="text-xl md:text-2xl text-gray-300 mb-8 animate-slide-up">
+                {heroPage.data.subtitle}
+              </p>
+            </>
+          )}
+          {heroContent && (
+            <div class="text-lg text-gray-400 mb-12 leading-relaxed max-w-3xl mx-auto animate-slide-up prose prose-invert">
+              <heroContent.Content />
+            </div>
+          )}
+          {heroPage && (
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slide-up">
+              <a 
+                href={heroPage.data.cta_primary_link} 
+                class="px-8 py-4 bg-accent-cyan text-dark-900 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-cyan/50 transform hover:-translate-y-1 transition-all duration-300 hover:scale-105"
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                {heroPage.data.cta_primary}
+              </a>
+              <a 
+                href={heroPage.data.cta_secondary_link} 
+                class="px-8 py-4 bg-dark-700 text-gray-200 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-purple/30 transform hover:-translate-y-1 transition-all duration-300 border-2 border-dark-600 hover:border-accent-purple"
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                {heroPage.data.cta_secondary}
+              </a>
+            </div>
+          )}
+          <div class="flex flex-wrap gap-3 justify-center mt-12 animate-slide-up">
             <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
               <img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" class="h-5" />
             </a>
@@ -94,86 +89,88 @@ const gettingStarted = {
 
       <!-- Scroll indicator -->
       <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-6 h-6 text-accent-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
         </svg>
       </div>
     </section>
 
     <!-- Features Section -->
-    <section id="features" class="py-20 bg-white">
+    <section id="features" class="py-20 bg-dark-800">
       <div class="container mx-auto px-6">
-        <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-gray-900">
-          {features.frontmatter.title}
-        </h2>
+        {featuresPage && (
+          <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
+            {featuresPage.data.title}
+          </h2>
+        )}
         <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           <!-- Infrastructure -->
-          <div class="group p-8 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+          <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-cyan shadow-lg hover:shadow-accent-cyan/20 transition-all duration-300 transform hover:-translate-y-2">
             <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">🏗️</div>
-            <h3 class="text-2xl font-bold mb-4 text-gray-900">Infrastructure</h3>
-            <ul class="space-y-3 text-gray-700">
+            <h3 class="text-2xl font-bold mb-4 text-white">Infrastructure</h3>
+            <ul class="space-y-3 text-gray-300">
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Manage servers: add, remove, tag, and name</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Choose your runtime: Native, Docker, or Kubernetes</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Spin up Kubernetes: single node or multi‑node clusters</span>
               </li>
             </ul>
           </div>
 
           <!-- Services -->
-          <div class="group p-8 bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2" style="transition-delay: 0.1s;">
+          <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-purple shadow-lg hover:shadow-accent-purple/20 transition-all duration-300 transform hover:-translate-y-2">
             <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">🔧</div>
-            <h3 class="text-2xl font-bold mb-4 text-gray-900">Services</h3>
-            <ul class="space-y-3 text-gray-700">
+            <h3 class="text-2xl font-bold mb-4 text-white">Services</h3>
+            <ul class="space-y-3 text-gray-300">
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Install, update, and remove services without fuss</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Centralized secrets and configuration</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Secure Docker services: MLflow, Airflow, LiteLLM, Ollama, and more</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Kubernetes add‑ons: Dashboard, Helm, Headlamp</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Import GitHub repositories with ease</span>
               </li>
             </ul>
           </div>
 
           <!-- GCP Integrations -->
-          <div class="group p-8 bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2" style="transition-delay: 0.2s;">
+          <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-pink shadow-lg hover:shadow-accent-pink/20 transition-all duration-300 transform hover:-translate-y-2">
             <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">☁️</div>
-            <h3 class="text-2xl font-bold mb-4 text-gray-900">GCP Integrations</h3>
-            <ul class="space-y-3 text-gray-700">
+            <h3 class="text-2xl font-bold mb-4 text-white">GCP Integrations</h3>
+            <ul class="space-y-3 text-gray-300">
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>BigQuery</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Secret Manager</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Cloud Storage</span>
               </li>
               <li class="flex items-start">
-                <span class="text-green-500 mr-2 mt-1">✓</span>
+                <span class="text-accent-green mr-2 mt-1">✓</span>
                 <span>Sheets</span>
               </li>
             </ul>
@@ -183,49 +180,51 @@ const gettingStarted = {
     </section>
 
     <!-- Getting Started Section -->
-    <section id="get-started" class="py-20 bg-gradient-to-br from-gray-50 to-gray-100">
+    <section id="get-started" class="py-20 bg-dark-900">
       <div class="container mx-auto px-6">
-        <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-gray-900">
-          {gettingStarted.frontmatter.title}
-        </h2>
+        {gettingStartedPage && (
+          <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
+            {gettingStartedPage.data.title}
+          </h2>
+        )}
         <div class="max-w-4xl mx-auto">
-          <div class="bg-white rounded-2xl shadow-xl p-8 md:p-12 transform hover:scale-[1.02] transition-transform duration-300">
-            <h3 class="text-3xl font-bold mb-6 text-gray-900">Sloth-Friendly Setup</h3>
-            <p class="text-lg text-gray-700 mb-8">Easing into MLOX should feel like a lazy stretch on a sunny branch:</p>
+          <div class="bg-dark-700 rounded-xl border-2 border-dark-600 shadow-xl p-8 md:p-12 transform hover:scale-[1.01] transition-transform duration-300">
+            <h3 class="text-3xl font-bold mb-6 text-white">Sloth-Friendly Setup</h3>
+            <p class="text-lg text-gray-300 mb-8">Easing into MLOX should feel like a lazy stretch on a sunny branch:</p>
             <ol class="space-y-6 mb-8">
               <li class="flex items-start">
-                <span class="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center font-bold mr-4">1</span>
-                <div>
+                <span class="flex-shrink-0 w-8 h-8 bg-accent-cyan text-dark-900 rounded-full flex items-center justify-center font-bold mr-4">1</span>
+                <div class="text-gray-300">
                   <span>Install </span>
-                  <a href="https://taskfile.dev/installation/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-purple-600 font-medium transition-colors">Task</a>
+                  <a href="https://taskfile.dev/installation/" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple font-medium transition-colors underline decoration-accent-cyan/30">Task</a>
                   <span> – our go-powered task runner</span>
                 </div>
               </li>
               <li class="flex items-start">
-                <span class="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center font-bold mr-4">2</span>
-                <div>
+                <span class="flex-shrink-0 w-8 h-8 bg-accent-purple text-white rounded-full flex items-center justify-center font-bold mr-4">2</span>
+                <div class="text-gray-300">
                   <span>Clone the repository: </span>
-                  <code class="bg-gray-100 px-3 py-1 rounded text-sm font-mono text-gray-800">git clone https://github.com/BusySloths/mlox.git</code>
+                  <code class="bg-dark-600 px-3 py-1 rounded text-sm font-mono text-accent-cyan">git clone https://github.com/BusySloths/mlox.git</code>
                 </div>
               </li>
               <li class="flex items-start">
-                <span class="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center font-bold mr-4">3</span>
-                <div>
+                <span class="flex-shrink-0 w-8 h-8 bg-accent-pink text-white rounded-full flex items-center justify-center font-bold mr-4">3</span>
+                <div class="text-gray-300">
                   <span>Mosey into the project and run: </span>
-                  <code class="bg-gray-100 px-3 py-1 rounded text-sm font-mono text-gray-800">task first:steps</code>
+                  <code class="bg-dark-600 px-3 py-1 rounded text-sm font-mono text-accent-cyan">task first:steps</code>
                 </div>
               </li>
             </ol>
-            <p class="text-gray-700 mb-6">
+            <p class="text-gray-300 mb-6">
               This unhurried command crafts a conda environment and gathers every dependency for you.
               For a more comprehensive guide, check out our 
-              <a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-purple-600 font-medium transition-colors">Installation Guide</a>.
+              <a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple font-medium transition-colors underline decoration-accent-cyan/30">Installation Guide</a>.
             </p>
-            <div class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r-lg">
-              <h4 class="text-xl font-bold mb-2 text-gray-900">📑 Want the Big Picture?</h4>
-              <p class="text-gray-700">
+            <div class="bg-dark-600 border-l-4 border-accent-yellow p-6 rounded-r-lg">
+              <h4 class="text-xl font-bold mb-2 text-accent-yellow">📑 Want the Big Picture?</h4>
+              <p class="text-gray-300">
                 Check out our 
-                <a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-purple-600 font-medium transition-colors">
+                <a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple font-medium transition-colors underline decoration-accent-cyan/30">
                   MLOX – State of the Union
                 </a> 
                 — a short slide overview of what MLOX is, what problem it solves, and where it's heading.
@@ -237,59 +236,59 @@ const gettingStarted = {
     </section>
 
     <!-- Sponsors Section -->
-    <section id="sponsors" class="py-20 bg-white">
+    <section id="sponsors" class="py-20 bg-dark-800">
       <div class="container mx-auto px-6">
-        <h2 class="text-4xl md:text-5xl font-bold text-center mb-12 text-gray-900">Big Thanks to our Sponsors</h2>
+        <h2 class="text-4xl md:text-5xl font-bold text-center mb-12 text-white">Big Thanks to our Sponsors</h2>
         <div class="flex justify-center mb-16">
           <img 
             src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" 
             alt="BMFTR" 
-            class="max-w-md w-full h-auto rounded-lg shadow-lg hover:shadow-2xl transition-shadow duration-300"
+            class="max-w-md w-full h-auto rounded-lg shadow-lg hover:shadow-accent-cyan/30 transition-shadow duration-300 border-2 border-dark-600"
           />
         </div>
-        <h3 class="text-3xl font-bold text-center mb-8 text-gray-900">Supporters</h3>
+        <h3 class="text-3xl font-bold text-center mb-8 text-white">Supporters</h3>
         <div class="flex justify-center">
           <img 
             src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_light.png?raw=true" 
             alt="PrototypeFund" 
-            class="max-w-sm w-full h-auto rounded-lg shadow-lg hover:shadow-2xl transition-shadow duration-300"
+            class="max-w-sm w-full h-auto rounded-lg shadow-lg hover:shadow-accent-purple/30 transition-shadow duration-300 border-2 border-dark-600"
           />
         </div>
       </div>
     </section>
 
     <!-- Footer -->
-    <footer class="bg-gray-900 text-white py-12">
+    <footer class="bg-dark-900 border-t border-dark-700 text-white py-12">
       <div class="container mx-auto px-6">
         <div class="grid md:grid-cols-4 gap-8 mb-8">
           <div>
-            <h4 class="text-xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">MLOX</h4>
+            <h4 class="text-xl font-bold mb-4 text-accent-cyan">MLOX</h4>
             <p class="text-gray-400 mb-4">Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.</p>
             <p class="text-sm text-gray-500">MLOX is open-source under the MIT license.</p>
           </div>
           <div>
-            <h4 class="text-lg font-semibold mb-4">Resources</h4>
+            <h4 class="text-lg font-semibold mb-4 text-white">Resources</h4>
             <ul class="space-y-2">
-              <li><a href="https://github.com/BusySloths/mlox" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">GitHub</a></li>
-              <li><a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">Documentation</a></li>
-              <li><a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">Issues</a></li>
-              <li><a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">Discussions</a></li>
+              <li><a href="https://github.com/BusySloths/mlox" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">GitHub</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Documentation</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Issues</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Discussions</a></li>
             </ul>
           </div>
           <div>
-            <h4 class="text-lg font-semibold mb-4">Contributing</h4>
+            <h4 class="text-lg font-semibold mb-4 text-white">Contributing</h4>
             <ul class="space-y-2">
-              <li><a href="https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">Contributing Guide</a></li>
-              <li><a href="https://github.com/BusySloths/mlox/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">Code of Conduct</a></li>
-              <li><a href="https://github.com/BusySloths/mlox/projects" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition-colors">Projects</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Contributing Guide</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Code of Conduct</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/projects" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Projects</a></li>
             </ul>
           </div>
           <div>
-            <h4 class="text-lg font-semibold mb-4">Contact</h4>
-            <p class="text-gray-400">Email: <a href="mailto:contact@mlox.org" class="hover:text-white transition-colors">contact@mlox.org</a></p>
+            <h4 class="text-lg font-semibold mb-4 text-white">Contact</h4>
+            <p class="text-gray-400">Email: <a href="mailto:contact@mlox.org" class="hover:text-accent-cyan transition-colors">contact@mlox.org</a></p>
           </div>
         </div>
-        <div class="border-t border-gray-800 pt-8 text-center text-gray-500">
+        <div class="border-t border-dark-700 pt-8 text-center text-gray-500">
           <p>&copy; 2025 BusySloths. All rights reserved.</p>
         </div>
       </div>
