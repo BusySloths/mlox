@@ -8,11 +8,13 @@ const pages = await getCollection('pages');
 const heroPage = pages.find(p => p.id === 'hero.md');
 const featuresPage = pages.find(p => p.id === 'features.md');
 const gettingStartedPage = pages.find(p => p.id === 'getting-started.md');
+const whyMloxPage = pages.find(p => p.id === 'why-mlox.md');
 
 // Render markdown content
 const heroContent = heroPage ? await heroPage.render() : null;
 const featuresContent = featuresPage ? await featuresPage.render() : null;
 const gettingStartedContent = gettingStartedPage ? await gettingStartedPage.render() : null;
+const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
 ---
 
 <BaseLayout title="MLOX - MLOps Made Simple">
@@ -46,7 +48,7 @@ const gettingStartedContent = gettingStartedPage ? await gettingStartedPage.rend
             </>
           )}
           {heroContent && (
-            <div class="text-lg text-gray-400 mb-12 leading-relaxed max-w-3xl mx-auto animate-slide-up prose prose-invert">
+            <div class="text-lg text-gray-400 mb-12 leading-relaxed max-w-3xl mx-auto animate-slide-up prose prose-invert max-w-none [&>p]:mb-4">
               <heroContent.Content />
             </div>
           )}
@@ -95,7 +97,7 @@ const gettingStartedContent = gettingStartedPage ? await gettingStartedPage.rend
       </div>
     </section>
 
-    <!-- Features Section -->
+    <!-- Features Section - Using Markdown Content -->
     <section id="features" class="py-20 bg-dark-800">
       <div class="container mx-auto px-6">
         {featuresPage && (
@@ -103,84 +105,107 @@ const gettingStartedContent = gettingStartedPage ? await gettingStartedPage.rend
             {featuresPage.data.title}
           </h2>
         )}
-        <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          <!-- Infrastructure -->
-          <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-cyan shadow-lg hover:shadow-accent-cyan/20 transition-all duration-300 transform hover:-translate-y-2">
-            <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">🏗️</div>
-            <h3 class="text-2xl font-bold mb-4 text-white">Infrastructure</h3>
-            <ul class="space-y-3 text-gray-300">
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Manage servers: add, remove, tag, and name</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Choose your runtime: Native, Docker, or Kubernetes</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Spin up Kubernetes: single node or multi‑node clusters</span>
-              </li>
-            </ul>
-          </div>
+        {featuresContent && (
+          <div class="max-w-6xl mx-auto">
+            <div class="prose prose-invert max-w-none [&>h2]:hidden [&>p]:hidden">
+              <div class="grid md:grid-cols-3 gap-8 not-prose">
+                {/* Each h2 section from markdown becomes a card */}
+                <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-cyan shadow-lg hover:shadow-accent-cyan/20 transition-all duration-300 transform hover:-translate-y-2">
+                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">🏗️</div>
+                  <h3 class="text-2xl font-bold mb-4 text-white">Infrastructure</h3>
+                  <ul class="space-y-3 text-gray-300 list-none">
+                    <li class="flex items-start">
+                      <span class="text-accent-green mr-2 mt-1">✓</span>
+                      <span>Manage servers: add, remove, tag, and name</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-accent-green mr-2 mt-1">✓</span>
+                      <span>Choose your runtime: Native, Docker, or Kubernetes</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-accent-green mr-2 mt-1">✓</span>
+                      <span>Spin up Kubernetes: single node or multi‑node clusters</span>
+                    </li>
+                  </ul>
+                </div>
 
-          <!-- Services -->
-          <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-purple shadow-lg hover:shadow-accent-purple/20 transition-all duration-300 transform hover:-translate-y-2">
-            <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">🔧</div>
-            <h3 class="text-2xl font-bold mb-4 text-white">Services</h3>
-            <ul class="space-y-3 text-gray-300">
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Install, update, and remove services without fuss</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Centralized secrets and configuration</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Secure Docker services: MLflow, Airflow, LiteLLM, Ollama, and more</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Kubernetes add‑ons: Dashboard, Helm, Headlamp</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Import GitHub repositories with ease</span>
-              </li>
-            </ul>
-          </div>
+                <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-purple shadow-lg hover:shadow-accent-purple/20 transition-all duration-300 transform hover:-translate-y-2">
+                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">🔧</div>
+                  <h3 class="text-2xl font-bold mb-4 text-white">Services</h3>
+                  <ul class="space-y-3 text-gray-300 list-none">
+                    <li class="flex items-start">
+                      <span class="text-accent-green mr-2 mt-1">✓</span>
+                      <span>Install, update, and remove services without fuss</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-accent-green mr-2 mt-1">✓</span>
+                      <span>Centralized secrets and configuration, ready to use</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-accent-green mr-2 mt-1">✓</span>
+                      <span>Secure Docker services: MLflow, Airflow, LiteLLM, Ollama, InfluxDB, Redis, and more</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-accent-green mr-2 mt-1">✓</span>
+                      <span>Kubernetes add‑ons: Dashboard, Helm, Headlamp</span>
+                    </li>
+                    <li class="flex items-start">
+                      <span class="text-accent-green mr-2 mt-1">✓</span>
+                      <span>Import GitHub repositories — public or private — with ease</span>
+                    </li>
+                  </ul>
+                </div>
 
-          <!-- GCP Integrations -->
-          <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-pink shadow-lg hover:shadow-accent-pink/20 transition-all duration-300 transform hover:-translate-y-2">
-            <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">☁️</div>
-            <h3 class="text-2xl font-bold mb-4 text-white">GCP Integrations</h3>
-            <ul class="space-y-3 text-gray-300">
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>BigQuery</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Secret Manager</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Cloud Storage</span>
-              </li>
-              <li class="flex items-start">
-                <span class="text-accent-green mr-2 mt-1">✓</span>
-                <span>Sheets</span>
-              </li>
-            </ul>
+                <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-pink shadow-lg hover:shadow-accent-pink/20 transition-all duration-300 transform hover:-translate-y-2">
+                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">☁️</div>
+                  <h3 class="text-2xl font-bold mb-4 text-white">GCP Integrations</h3>
+                  <div class="prose prose-invert max-w-none prose-p:text-gray-300 prose-p:mb-3 prose-ul:list-none prose-ul:space-y-3 prose-li:flex prose-li:items-start prose-li:text-gray-300">
+                    <p class="text-gray-300 mb-3">Use GCP integrations in your code:</p>
+                    <ul class="space-y-3 list-none">
+                      <li class="flex items-start">
+                        <span class="text-accent-green mr-2 mt-1">✓</span>
+                        <span>BigQuery</span>
+                      </li>
+                      <li class="flex items-start">
+                        <span class="text-accent-green mr-2 mt-1">✓</span>
+                        <span>Secret Manager</span>
+                      </li>
+                      <li class="flex items-start">
+                        <span class="text-accent-green mr-2 mt-1">✓</span>
+                        <span>Cloud Storage</span>
+                      </li>
+                      <li class="flex items-start">
+                        <span class="text-accent-green mr-2 mt-1">✓</span>
+                        <span>Sheets</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </section>
 
-    <!-- Getting Started Section -->
-    <section id="get-started" class="py-20 bg-dark-900">
+    <!-- Why MLOX Section - NEW -->
+    {whyMloxPage && whyMloxContent && (
+      <section id="why-mlox" class="py-20 bg-dark-900">
+        <div class="container mx-auto px-6">
+          <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
+            {whyMloxPage.data.title}
+          </h2>
+          <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8">
+            <div class="prose prose-invert max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h2:mb-3 prose-h2:text-accent-cyan prose-p:text-gray-300 prose-p:leading-relaxed bg-dark-700 rounded-xl border-2 border-dark-600 p-8 hover:border-accent-purple transition-all duration-300">
+              <whyMloxContent.Content />
+            </div>
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- Getting Started Section - Using Markdown Content -->
+    <section id="get-started" class="py-20 bg-dark-800">
       <div class="container mx-auto px-6">
         {gettingStartedPage && (
           <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
@@ -189,54 +214,18 @@ const gettingStartedContent = gettingStartedPage ? await gettingStartedPage.rend
         )}
         <div class="max-w-4xl mx-auto">
           <div class="bg-dark-700 rounded-xl border-2 border-dark-600 shadow-xl p-8 md:p-12 transform hover:scale-[1.01] transition-transform duration-300">
-            <h3 class="text-3xl font-bold mb-6 text-white">Sloth-Friendly Setup</h3>
-            <p class="text-lg text-gray-300 mb-8">Easing into MLOX should feel like a lazy stretch on a sunny branch:</p>
-            <ol class="space-y-6 mb-8">
-              <li class="flex items-start">
-                <span class="flex-shrink-0 w-8 h-8 bg-accent-cyan text-dark-900 rounded-full flex items-center justify-center font-bold mr-4">1</span>
-                <div class="text-gray-300">
-                  <span>Install </span>
-                  <a href="https://taskfile.dev/installation/" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple font-medium transition-colors underline decoration-accent-cyan/30">Task</a>
-                  <span> – our go-powered task runner</span>
-                </div>
-              </li>
-              <li class="flex items-start">
-                <span class="flex-shrink-0 w-8 h-8 bg-accent-purple text-white rounded-full flex items-center justify-center font-bold mr-4">2</span>
-                <div class="text-gray-300">
-                  <span>Clone the repository: </span>
-                  <code class="bg-dark-600 px-3 py-1 rounded text-sm font-mono text-accent-cyan">git clone https://github.com/BusySloths/mlox.git</code>
-                </div>
-              </li>
-              <li class="flex items-start">
-                <span class="flex-shrink-0 w-8 h-8 bg-accent-pink text-white rounded-full flex items-center justify-center font-bold mr-4">3</span>
-                <div class="text-gray-300">
-                  <span>Mosey into the project and run: </span>
-                  <code class="bg-dark-600 px-3 py-1 rounded text-sm font-mono text-accent-cyan">task first:steps</code>
-                </div>
-              </li>
-            </ol>
-            <p class="text-gray-300 mb-6">
-              This unhurried command crafts a conda environment and gathers every dependency for you.
-              For a more comprehensive guide, check out our 
-              <a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple font-medium transition-colors underline decoration-accent-cyan/30">Installation Guide</a>.
-            </p>
-            <div class="bg-dark-600 border-l-4 border-accent-yellow p-6 rounded-r-lg">
-              <h4 class="text-xl font-bold mb-2 text-accent-yellow">📑 Want the Big Picture?</h4>
-              <p class="text-gray-300">
-                Check out our 
-                <a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple font-medium transition-colors underline decoration-accent-cyan/30">
-                  MLOX – State of the Union
-                </a> 
-                — a short slide overview of what MLOX is, what problem it solves, and where it's heading.
-              </p>
-            </div>
+            {gettingStartedContent && (
+              <div class="prose prose-invert max-w-none prose-h2:text-3xl prose-h2:font-bold prose-h2:mb-6 prose-h2:text-white prose-p:text-gray-300 prose-p:text-lg prose-p:mb-8 prose-ol:space-y-6 prose-ol:mb-8 prose-li:text-gray-300 prose-a:text-accent-cyan prose-a:hover:text-accent-purple prose-a:font-medium prose-a:transition-colors prose-a:underline prose-a:decoration-accent-cyan/30 prose-code:bg-dark-600 prose-code:px-3 prose-code:py-1 prose-code:rounded prose-code:text-sm prose-code:font-mono prose-code:text-accent-cyan">
+                <gettingStartedContent.Content />
+              </div>
+            )}
           </div>
         </div>
       </div>
     </section>
 
     <!-- Sponsors Section -->
-    <section id="sponsors" class="py-20 bg-dark-800">
+    <section id="sponsors" class="py-20 bg-dark-900">
       <div class="container mx-auto px-6">
         <h2 class="text-4xl md:text-5xl font-bold text-center mb-12 text-white">Big Thanks to our Sponsors</h2>
         <div class="flex justify-center mb-16">
