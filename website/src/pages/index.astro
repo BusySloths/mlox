@@ -105,100 +105,51 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
             {featuresPage.data.title}
           </h2>
         )}
-        {featuresContent && (
+        {featuresPage && featuresPage.data.features && (
           <div class="max-w-6xl mx-auto">
-            <div class="prose prose-invert max-w-none [&>h2]:hidden [&>p]:hidden">
-              <div class="grid md:grid-cols-3 gap-8 not-prose">
-                {/* Each h2 section from markdown becomes a card */}
-                <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-cyan shadow-lg hover:shadow-accent-cyan/20 transition-all duration-300 transform hover:-translate-y-2">
-                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">🏗️</div>
-                  <h3 class="text-2xl font-bold mb-4 text-white">Infrastructure</h3>
-                  <ul class="space-y-3 text-gray-300 list-none">
-                    <li class="flex items-start">
-                      <span class="text-accent-green mr-2 mt-1">✓</span>
-                      <span>Manage servers: add, remove, tag, and name</span>
-                    </li>
-                    <li class="flex items-start">
-                      <span class="text-accent-green mr-2 mt-1">✓</span>
-                      <span>Choose your runtime: Native, Docker, or Kubernetes</span>
-                    </li>
-                    <li class="flex items-start">
-                      <span class="text-accent-green mr-2 mt-1">✓</span>
-                      <span>Spin up Kubernetes: single node or multi‑node clusters</span>
-                    </li>
+            <div class="grid md:grid-cols-3 gap-8">
+              {featuresPage.data.features.map((feature) => (
+                <div class={`group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-${feature.color} shadow-lg hover:shadow-accent-${feature.color}/20 transition-all duration-300 transform hover:-translate-y-2`}>
+                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{feature.icon}</div>
+                  <h3 class="text-2xl font-bold mb-4 text-white">{feature.title}</h3>
+                  {feature.description && (
+                    <p class="text-gray-300 mb-3">{feature.description}</p>
+                  )}
+                  <ul class="space-y-3 list-none">
+                    {feature.items.map((item) => (
+                      <li class="flex items-start text-gray-300">
+                        <span class="text-accent-green mr-2 mt-1">✓</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
-
-                <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-purple shadow-lg hover:shadow-accent-purple/20 transition-all duration-300 transform hover:-translate-y-2">
-                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">🔧</div>
-                  <h3 class="text-2xl font-bold mb-4 text-white">Services</h3>
-                  <ul class="space-y-3 text-gray-300 list-none">
-                    <li class="flex items-start">
-                      <span class="text-accent-green mr-2 mt-1">✓</span>
-                      <span>Install, update, and remove services without fuss</span>
-                    </li>
-                    <li class="flex items-start">
-                      <span class="text-accent-green mr-2 mt-1">✓</span>
-                      <span>Centralized secrets and configuration, ready to use</span>
-                    </li>
-                    <li class="flex items-start">
-                      <span class="text-accent-green mr-2 mt-1">✓</span>
-                      <span>Secure Docker services: MLflow, Airflow, LiteLLM, Ollama, InfluxDB, Redis, and more</span>
-                    </li>
-                    <li class="flex items-start">
-                      <span class="text-accent-green mr-2 mt-1">✓</span>
-                      <span>Kubernetes add‑ons: Dashboard, Helm, Headlamp</span>
-                    </li>
-                    <li class="flex items-start">
-                      <span class="text-accent-green mr-2 mt-1">✓</span>
-                      <span>Import GitHub repositories — public or private — with ease</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div class="group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-accent-pink shadow-lg hover:shadow-accent-pink/20 transition-all duration-300 transform hover:-translate-y-2">
-                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">☁️</div>
-                  <h3 class="text-2xl font-bold mb-4 text-white">GCP Integrations</h3>
-                  <div class="prose prose-invert max-w-none prose-p:text-gray-300 prose-p:mb-3 prose-ul:list-none prose-ul:space-y-3 prose-li:flex prose-li:items-start prose-li:text-gray-300">
-                    <p class="text-gray-300 mb-3">Use GCP integrations in your code:</p>
-                    <ul class="space-y-3 list-none">
-                      <li class="flex items-start">
-                        <span class="text-accent-green mr-2 mt-1">✓</span>
-                        <span>BigQuery</span>
-                      </li>
-                      <li class="flex items-start">
-                        <span class="text-accent-green mr-2 mt-1">✓</span>
-                        <span>Secret Manager</span>
-                      </li>
-                      <li class="flex items-start">
-                        <span class="text-accent-green mr-2 mt-1">✓</span>
-                        <span>Cloud Storage</span>
-                      </li>
-                      <li class="flex items-start">
-                        <span class="text-accent-green mr-2 mt-1">✓</span>
-                        <span>Sheets</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         )}
       </div>
     </section>
 
-    <!-- Why MLOX Section - NEW -->
-    {whyMloxPage && whyMloxContent && (
+    <!-- Why MLOX Section -->
+    {whyMloxPage && whyMloxPage.data.cards && (
       <section id="why-mlox" class="py-20 bg-dark-900">
         <div class="container mx-auto px-6">
           <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
             {whyMloxPage.data.title}
           </h2>
-          <div class="max-w-4xl mx-auto">
-            <div class="prose prose-invert max-w-none prose-h2:text-2xl prose-h2:font-bold prose-h2:mb-3 prose-h2:text-accent-cyan prose-p:text-gray-300 prose-p:leading-relaxed bg-dark-700 rounded-xl border-2 border-dark-600 p-8 md:p-12 hover:border-accent-purple transition-all duration-300">
-              <whyMloxContent.Content />
-            </div>
+          <div class="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {whyMloxPage.data.cards.map((card, index) => {
+              const colors = ['accent-cyan', 'accent-purple', 'accent-pink', 'accent-yellow'];
+              const color = colors[index % colors.length];
+              return (
+                <div class={`group p-6 bg-dark-700 rounded-xl border-2 border-dark-600 hover:border-${color} shadow-lg hover:shadow-${color}/20 transition-all duration-300 transform hover:-translate-y-2`}>
+                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{card.icon}</div>
+                  <h3 class="text-xl font-bold mb-3 text-white">{card.title}</h3>
+                  <p class="text-gray-300 leading-relaxed">{card.description}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

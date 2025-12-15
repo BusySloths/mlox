@@ -10,6 +10,18 @@ const contentCollection = defineCollection({
     cta_primary_link: z.string().optional(),
     cta_secondary: z.string().optional(),
     cta_secondary_link: z.string().optional(),
+    cards: z.array(z.object({
+      title: z.string(),
+      icon: z.string(),
+      description: z.string(),
+    })).optional(),
+    features: z.array(z.object({
+      title: z.string(),
+      icon: z.string(),
+      color: z.string(),
+      description: z.string().optional(),
+      items: z.array(z.string()),
+    })).optional(),
   }),
 });
 

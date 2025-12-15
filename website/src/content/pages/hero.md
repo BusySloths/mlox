@@ -1,5 +1,5 @@
 ---
-title: "Accelerate your ML journey"
+title: "ML Infrastructure. Slothfully Simple."
 subtitle: "Deploy production-ready MLOps in minutes, not months."
 description: "Tired of tangled configs, YAML jungles, and broken ML pipelines? MLOX gives you a calm, streamlined way to deploy, monitor, and maintain production-grade MLOps infrastructure—without rushing."
 cta_primary: "Get Started"
