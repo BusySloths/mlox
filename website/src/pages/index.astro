@@ -1,0 +1,539 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Hero content
+const hero = {
+  frontmatter: {
+    title: "Accelerate your ML journey",
+    subtitle: "Deploy production-ready MLOps in minutes, not months.",
+    cta_primary: "Get Started",
+    cta_primary_link: "https://github.com/BusySloths/mlox",
+    cta_secondary: "View Documentation",
+    cta_secondary_link: "https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md"
+  },
+  content: "Tired of tangled configs, YAML jungles, and broken ML pipelines? So were we.\n\nMLOX gives you a calm, streamlined way to deploy, monitor, and maintain production-grade MLOps infrastructure—without rushing.\n\nIt's for engineers who prefer thoughtful systems over chaos. Powered by sloths. Backed by open source."
+};
+
+const features = {
+  frontmatter: {
+    title: "What can you do with MLOX?"
+  }
+};
+
+const gettingStarted = {
+  frontmatter: {
+    title: "Get Started"
+  }
+};
+---
+
+<BaseLayout title="MLOX - MLOps Made Simple">
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <img 
+            src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_logo_wide.png?raw=true" 
+            alt="MLOX Logo" 
+            class="logo"
+          />
+          <h1>{hero.frontmatter.title}</h1>
+          <p class="subtitle">{hero.frontmatter.subtitle}</p>
+          <p class="description">{hero.content}</p>
+          <div class="cta-buttons">
+            <a href={hero.frontmatter.cta_primary_link} class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+              {hero.frontmatter.cta_primary}
+            </a>
+            <a href={hero.frontmatter.cta_secondary_link} class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+              {hero.frontmatter.cta_secondary}
+            </a>
+          </div>
+          <div class="badges">
+            <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer">
+              <img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" />
+            </a>
+            <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer">
+              <img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" />
+            </a>
+            <a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer">
+              <img alt="GitHub Issues" src="https://img.shields.io/github/issues/busysloths/mlox" />
+            </a>
+            <a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer">
+              <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+      <div class="container">
+        <h2>{features.frontmatter.title}</h2>
+        <div class="features-grid">
+          <div class="feature-card">
+            <h3>🏗️ Infrastructure</h3>
+            <ul>
+              <li>Manage servers: add, remove, tag, and name</li>
+              <li>Choose your runtime: Native, Docker, or Kubernetes</li>
+              <li>Spin up Kubernetes: single node or multi‑node clusters</li>
+            </ul>
+          </div>
+          <div class="feature-card">
+            <h3>🔧 Services</h3>
+            <ul>
+              <li>Install, update, and remove services without fuss</li>
+              <li>Centralized secrets and configuration</li>
+              <li>Secure Docker services: MLflow, Airflow, LiteLLM, Ollama, and more</li>
+              <li>Kubernetes add‑ons: Dashboard, Helm, Headlamp</li>
+              <li>Import GitHub repositories with ease</li>
+            </ul>
+          </div>
+          <div class="feature-card">
+            <h3>☁️ GCP Integrations</h3>
+            <ul>
+              <li>BigQuery</li>
+              <li>Secret Manager</li>
+              <li>Cloud Storage</li>
+              <li>Sheets</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Getting Started Section -->
+    <section class="getting-started">
+      <div class="container">
+        <h2>{gettingStarted.frontmatter.title}</h2>
+        <div class="setup-content">
+          <h3>Sloth-Friendly Setup</h3>
+          <p>Easing into MLOX should feel like a lazy stretch on a sunny branch:</p>
+          <ol>
+            <li>Install <a href="https://taskfile.dev/installation/" target="_blank" rel="noopener noreferrer">Task</a> – our go-powered task runner</li>
+            <li>Clone the repository: <code>git clone https://github.com/BusySloths/mlox.git</code></li>
+            <li>Mosey into the project and run: <code>task first:steps</code></li>
+          </ol>
+          <p>
+            This unhurried command crafts a conda environment and gathers every dependency for you.
+            For a more comprehensive guide, check out our 
+            <a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer">Installation Guide</a>.
+          </p>
+          <div class="state-of-union">
+            <h4>📑 Want the Big Picture?</h4>
+            <p>
+              Check out our 
+              <a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing" target="_blank" rel="noopener noreferrer">
+                MLOX – State of the Union
+              </a> 
+              — a short slide overview of what MLOX is, what problem it solves, and where it's heading.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sponsors Section -->
+    <section class="sponsors">
+      <div class="container">
+        <h2>Big Thanks to our Sponsors</h2>
+        <div class="sponsor-logos">
+          <img 
+            src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" 
+            alt="BMFTR" 
+            class="sponsor-logo"
+          />
+        </div>
+        <h3>Supporters</h3>
+        <div class="supporter-logos">
+          <img 
+            src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_light.png?raw=true" 
+            alt="PrototypeFund" 
+            class="supporter-logo"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-content">
+          <div class="footer-section">
+            <h4>MLOX</h4>
+            <p>Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.</p>
+            <p class="license">MLOX is open-source under the MIT license.</p>
+          </div>
+          <div class="footer-section">
+            <h4>Resources</h4>
+            <ul>
+              <li><a href="https://github.com/BusySloths/mlox" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer">Documentation</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer">Issues</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer">Discussions</a></li>
+            </ul>
+          </div>
+          <div class="footer-section">
+            <h4>Contributing</h4>
+            <ul>
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing Guide</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener noreferrer">Code of Conduct</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/projects" target="_blank" rel="noopener noreferrer">Projects</a></li>
+            </ul>
+          </div>
+          <div class="footer-section">
+            <h4>Contact</h4>
+            <p>Email: <a href="mailto:contact@mlox.org">contact@mlox.org</a></p>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <p>&copy; 2025 BusySloths. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <style>
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 4rem 0 6rem;
+      text-align: center;
+    }
+
+    .hero-content {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      max-width: 400px;
+      width: 100%;
+      height: auto;
+      margin-bottom: 2rem;
+    }
+
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      opacity: 0.95;
+    }
+
+    .description {
+      font-size: 1.1rem;
+      margin-bottom: 2rem;
+      opacity: 0.9;
+      line-height: 1.8;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 0.75rem 2rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background-color: white;
+      color: #667eea;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    }
+
+    .btn-secondary {
+      background-color: transparent;
+      color: white;
+      border: 2px solid white;
+    }
+
+    .btn-secondary:hover {
+      background-color: rgba(255,255,255,0.1);
+    }
+
+    .badges {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .badges img {
+      height: 20px;
+    }
+
+    /* Features Section */
+    .features {
+      padding: 4rem 0;
+      background-color: var(--color-bg);
+    }
+
+    .features h2 {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 3rem;
+      color: var(--color-text);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .feature-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    }
+
+    .feature-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: var(--color-text);
+    }
+
+    .feature-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .feature-card li {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .feature-card li:last-child {
+      border-bottom: none;
+    }
+
+    .feature-card li:before {
+      content: "✓ ";
+      color: var(--color-secondary);
+      font-weight: bold;
+      margin-right: 0.5rem;
+    }
+
+    /* Getting Started Section */
+    .getting-started {
+      padding: 4rem 0;
+      background-color: var(--color-bg-alt);
+    }
+
+    .getting-started h2 {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .setup-content {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .setup-content h3 {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+      color: var(--color-text);
+    }
+
+    .setup-content h4 {
+      font-size: 1.3rem;
+      margin: 2rem 0 1rem;
+      color: var(--color-text);
+    }
+
+    .setup-content ol {
+      margin: 1.5rem 0;
+      padding-left: 2rem;
+    }
+
+    .setup-content li {
+      margin-bottom: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .setup-content code {
+      background-color: #f3f4f6;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+    }
+
+    .state-of-union {
+      background-color: #eff6ff;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-top: 2rem;
+      border-left: 4px solid var(--color-primary);
+    }
+
+    /* Sponsors Section */
+    .sponsors {
+      padding: 4rem 0;
+      background-color: white;
+      text-align: center;
+    }
+
+    .sponsors h2 {
+      font-size: 2.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .sponsors h3 {
+      font-size: 2rem;
+      margin: 3rem 0 2rem;
+    }
+
+    .sponsor-logos, .supporter-logos {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .sponsor-logo {
+      max-width: 400px;
+      width: 100%;
+      height: auto;
+    }
+
+    .supporter-logo {
+      max-width: 350px;
+      width: 100%;
+      height: auto;
+    }
+
+    /* Footer */
+    .footer {
+      background-color: #1f2937;
+      color: white;
+      padding: 3rem 0 1rem;
+    }
+
+    .footer-content {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .footer-section h4 {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      color: white;
+    }
+
+    .footer-section p {
+      margin-bottom: 0.5rem;
+      color: #d1d5db;
+      line-height: 1.6;
+    }
+
+    .footer-section ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .footer-section li {
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-section a {
+      color: #9ca3af;
+      transition: color 0.3s ease;
+    }
+
+    .footer-section a:hover {
+      color: white;
+    }
+
+    .license {
+      font-size: 0.9rem;
+      margin-top: 1rem;
+    }
+
+    .footer-bottom {
+      text-align: center;
+      padding-top: 2rem;
+      border-top: 1px solid #374151;
+      color: #9ca3af;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2rem;
+      }
+
+      .subtitle {
+        font-size: 1.2rem;
+      }
+
+      .description {
+        font-size: 1rem;
+      }
+
+      .logo {
+        max-width: 300px;
+      }
+
+      .features h2,
+      .getting-started h2,
+      .sponsors h2 {
+        font-size: 2rem;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .cta-buttons {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .btn {
+        width: 100%;
+      }
+
+      .footer-content {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</BaseLayout>
