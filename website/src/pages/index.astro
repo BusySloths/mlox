@@ -139,28 +139,31 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
       </div>
     </section>
 
-    <!-- Why MLOX Section -->
+    <!-- Why MLOX Section - Flat Minimal Design -->
     {whyMloxPage && whyMloxPage.data.cards && (
-      <section id="why-mlox" class="py-20 bg-dark-900">
-        <div class="container mx-auto px-6">
-          <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
+      <section id="why-mlox" class="py-24 bg-dark-900 relative overflow-hidden">
+        <!-- Subtle background pattern -->
+        <div class="absolute inset-0 opacity-5">
+          <div class="absolute top-0 left-0 w-full h-full" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 40px 40px;"></div>
+        </div>
+        
+        <div class="container mx-auto px-6 relative z-10">
+          <h2 class="text-4xl md:text-5xl font-bold text-center mb-20 text-white">
             {whyMloxPage.data.title}
           </h2>
-          <div class="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div class="max-w-6xl mx-auto grid md:grid-cols-2 lg:grid-cols-4 gap-12">
             {whyMloxPage.data.cards.map((card, index) => {
-              const borderColorClass = index % 4 === 0 ? 'hover:border-accent-cyan' :
-                                      index % 4 === 1 ? 'hover:border-accent-purple' :
-                                      index % 4 === 2 ? 'hover:border-accent-pink' :
-                                      'hover:border-accent-yellow';
-              const shadowColorClass = index % 4 === 0 ? 'hover:shadow-accent-cyan/20' :
-                                      index % 4 === 1 ? 'hover:shadow-accent-purple/20' :
-                                      index % 4 === 2 ? 'hover:shadow-accent-pink/20' :
-                                      'hover:shadow-accent-yellow/20';
+              const iconColorClass = index % 4 === 0 ? 'text-accent-cyan' :
+                                     index % 4 === 1 ? 'text-accent-purple' :
+                                     index % 4 === 2 ? 'text-accent-pink' :
+                                     'text-accent-yellow';
               return (
-                <div class={`group p-6 bg-dark-700 rounded-xl border-2 border-dark-600 ${borderColorClass} shadow-lg ${shadowColorClass} transition-all duration-300 transform hover:-translate-y-2`}>
-                  <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{card.icon}</div>
-                  <h3 class="text-xl font-bold mb-3 text-white">{card.title}</h3>
-                  <p class="text-gray-300 leading-relaxed">{card.description}</p>
+                <div class="group text-center">
+                  <div class={`inline-flex items-center justify-center w-20 h-20 mb-6 text-5xl ${iconColorClass} transition-all duration-300 group-hover:scale-110 group-hover:rotate-6`}>
+                    {card.icon}
+                  </div>
+                  <h3 class="text-xl font-bold mb-4 text-white group-hover:text-accent-cyan transition-colors duration-300">{card.title}</h3>
+                  <p class="text-gray-400 leading-relaxed text-base">{card.description}</p>
                 </div>
               );
             })}
@@ -169,7 +172,7 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
       </section>
     )}
 
-    <!-- Getting Started Section - Using Markdown Content -->
+    <!-- Getting Started Section - Clean & Readable -->
     <section id="get-started" class="py-20 bg-dark-800">
       <div class="container mx-auto px-6">
         {gettingStartedPage && (
@@ -177,10 +180,21 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
             {gettingStartedPage.data.title}
           </h2>
         )}
-        <div class="max-w-4xl mx-auto">
-          <div class="bg-dark-700 rounded-xl border-2 border-dark-600 shadow-xl p-8 md:p-12 transform hover:scale-[1.01] transition-transform duration-300">
+        <div class="max-w-5xl mx-auto">
+          <div class="bg-gradient-to-br from-dark-700 to-dark-800 rounded-2xl border border-dark-600 shadow-2xl p-8 md:p-12">
             {gettingStartedContent && (
-              <div class="prose prose-invert max-w-none prose-h2:text-3xl prose-h2:font-bold prose-h2:mb-6 prose-h2:text-white prose-p:text-gray-300 prose-p:text-lg prose-p:mb-8 prose-ol:space-y-6 prose-ol:mb-8 prose-li:text-gray-300 prose-a:text-accent-cyan prose-a:hover:text-accent-purple prose-a:font-medium prose-a:transition-colors prose-a:underline prose-a:decoration-accent-cyan/30 prose-code:bg-dark-600 prose-code:px-3 prose-code:py-1 prose-code:rounded prose-code:text-sm prose-code:font-mono prose-code:text-accent-cyan">
+              <div class="prose prose-invert prose-lg max-w-none 
+                         prose-headings:text-white prose-headings:font-bold
+                         prose-h2:text-3xl prose-h2:mb-8 prose-h2:mt-0
+                         prose-p:text-gray-200 prose-p:text-lg prose-p:leading-relaxed prose-p:mb-6
+                         prose-ol:my-8 prose-ol:space-y-8
+                         prose-li:text-gray-200 prose-li:text-lg prose-li:leading-relaxed
+                         prose-a:text-accent-cyan prose-a:no-underline prose-a:font-semibold 
+                         prose-a:hover:text-accent-purple prose-a:transition-colors
+                         prose-code:bg-dark-900 prose-code:text-accent-cyan prose-code:px-4 prose-code:py-2 
+                         prose-code:rounded-lg prose-code:text-base prose-code:font-mono prose-code:border 
+                         prose-code:border-dark-600
+                         prose-strong:text-white prose-strong:font-bold">
                 <gettingStartedContent.Content />
               </div>
             )}
