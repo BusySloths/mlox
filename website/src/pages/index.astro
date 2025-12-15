@@ -31,60 +31,75 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
       </div>
 
       <div class="container mx-auto px-6 relative z-10">
-        <div class="max-w-4xl mx-auto text-center animate-fade-in">
-          <img 
-            src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_logo_wide.png?raw=true" 
-            alt="MLOX Logo" 
-            class="w-full max-w-md mx-auto mb-8 animate-slide-down"
-          />
-          {heroPage && (
-            <>
-              <h1 class="text-5xl md:text-6xl font-bold mb-6 text-white animate-slide-up">
-                {heroPage.data.title}
-              </h1>
-              <p class="text-xl md:text-2xl text-gray-300 mb-8 animate-slide-up">
-                {heroPage.data.subtitle}
-              </p>
-            </>
-          )}
-          {heroContent && (
-            <div class="text-lg text-gray-400 mb-12 leading-relaxed max-w-3xl mx-auto animate-slide-up prose prose-invert [&>p]:mb-4">
-              <heroContent.Content />
-            </div>
-          )}
-          {heroPage && (
-            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slide-up">
-              <a 
-                href={heroPage.data.cta_primary_link} 
-                class="px-8 py-4 bg-accent-cyan text-dark-900 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-cyan/50 transform hover:-translate-y-1 transition-all duration-300 hover:scale-105"
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                {heroPage.data.cta_primary}
+        <div class="grid md:grid-cols-2 gap-12 items-center max-w-7xl mx-auto">
+          <!-- Left: Hero text content -->
+          <div class="text-left animate-fade-in">
+            <img 
+              src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_logo_wide.png?raw=true" 
+              alt="MLOX Logo" 
+              class="w-full max-w-sm mb-8 animate-slide-down"
+            />
+            {heroPage && (
+              <>
+                <h1 class="text-5xl md:text-6xl font-bold mb-6 text-white animate-slide-up">
+                  {heroPage.data.title}
+                </h1>
+                <p class="text-xl md:text-2xl text-gray-300 mb-8 animate-slide-up">
+                  {heroPage.data.subtitle}
+                </p>
+              </>
+            )}
+            {heroContent && (
+              <div class="text-lg text-gray-400 mb-12 leading-relaxed animate-slide-up prose prose-invert [&>p]:mb-4">
+                <heroContent.Content />
+              </div>
+            )}
+            {heroPage && (
+              <div class="flex flex-col sm:flex-row gap-4 animate-slide-up">
+                <a 
+                  href={heroPage.data.cta_primary_link} 
+                  class="px-8 py-4 bg-accent-cyan text-dark-900 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-cyan/50 transform hover:-translate-y-1 transition-all duration-300 hover:scale-105 text-center"
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  {heroPage.data.cta_primary}
+                </a>
+                <a 
+                  href={heroPage.data.cta_secondary_link} 
+                  class="px-8 py-4 bg-dark-700 text-gray-200 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-purple/30 transform hover:-translate-y-1 transition-all duration-300 border-2 border-dark-600 hover:border-accent-purple text-center"
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  {heroPage.data.cta_secondary}
+                </a>
+              </div>
+            )}
+            <div class="flex flex-wrap gap-3 mt-12 animate-slide-up">
+              <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
+                <img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" class="h-5" />
               </a>
-              <a 
-                href={heroPage.data.cta_secondary_link} 
-                class="px-8 py-4 bg-dark-700 text-gray-200 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-purple/30 transform hover:-translate-y-1 transition-all duration-300 border-2 border-dark-600 hover:border-accent-purple"
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                {heroPage.data.cta_secondary}
+              <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
+                <img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" class="h-5" />
+              </a>
+              <a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
+                <img alt="GitHub Issues" src="https://img.shields.io/github/issues/busysloths/mlox" class="h-5" />
+              </a>
+              <a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
+                <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox" class="h-5" />
               </a>
             </div>
-          )}
-          <div class="flex flex-wrap gap-3 justify-center mt-12 animate-slide-up">
-            <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
-              <img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" class="h-5" />
-            </a>
-            <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
-              <img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" class="h-5" />
-            </a>
-            <a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
-              <img alt="GitHub Issues" src="https://img.shields.io/github/issues/busysloths/mlox" class="h-5" />
-            </a>
-            <a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
-              <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox" class="h-5" />
-            </a>
+          </div>
+          
+          <!-- Right: Hero interface mockup image -->
+          <div class="animate-fade-in animate-slide-up">
+            <div class="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-dark-700 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
+              <img 
+                src="https://placehold.co/800x600/1a2332/00e5ff?text=MLOX+Dashboard+Interface&font=raleway" 
+                alt="MLOX Dashboard Interface"
+                class="w-full h-auto"
+              />
+              <div class="absolute inset-0 bg-gradient-to-t from-dark-900/80 via-transparent to-transparent"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -172,8 +187,99 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
       </section>
     )}
 
-    <!-- Getting Started Section - Maximum Readability -->
-    <section id="get-started" class="py-20 bg-dark-800">
+    <!-- Screenshots Section -->
+    <section id="screenshots" class="py-20 bg-dark-800">
+      <div class="container mx-auto px-6">
+        <h2 class="text-4xl md:text-5xl font-bold text-center mb-6 text-white">
+          See MLOX in Action
+        </h2>
+        <p class="text-xl text-gray-400 text-center mb-16 max-w-3xl mx-auto">
+          Experience the power of MLOX through our intuitive interface and comprehensive tooling
+        </p>
+        <div class="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <!-- Screenshot 1: Dashboard -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="https://placehold.co/600x400/1a2332/00e5ff?text=Dashboard+Overview&font=raleway" 
+              alt="MLOX Dashboard Overview"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Dashboard Overview</h3>
+              <p class="text-gray-300 text-sm">Monitor all your ML infrastructure at a glance</p>
+            </div>
+          </div>
+
+          <!-- Screenshot 2: Service Management -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-purple transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="https://placehold.co/600x400/1a2332/a855f7?text=Service+Management&font=raleway" 
+              alt="MLOX Service Management"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Service Management</h3>
+              <p class="text-gray-300 text-sm">Deploy and manage ML services effortlessly</p>
+            </div>
+          </div>
+
+          <!-- Screenshot 3: Infrastructure Control -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-pink transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="https://placehold.co/600x400/1a2332/ec4899?text=Infrastructure+Control&font=raleway" 
+              alt="MLOX Infrastructure Control"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Infrastructure Control</h3>
+              <p class="text-gray-300 text-sm">Manage servers and clusters with ease</p>
+            </div>
+          </div>
+
+          <!-- Screenshot 4: Integration View -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-yellow transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="https://placehold.co/600x400/1a2332/fbbf24?text=GCP+Integrations&font=raleway" 
+              alt="MLOX GCP Integrations"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">GCP Integrations</h3>
+              <p class="text-gray-300 text-sm">Seamless integration with Google Cloud Platform</p>
+            </div>
+          </div>
+
+          <!-- Screenshot 5: Configuration -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-green transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="https://placehold.co/600x400/1a2332/10b981?text=Configuration+Panel&font=raleway" 
+              alt="MLOX Configuration Panel"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Configuration Panel</h3>
+              <p class="text-gray-300 text-sm">Centralized configuration management</p>
+            </div>
+          </div>
+
+          <!-- Screenshot 6: Monitoring -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="https://placehold.co/600x400/1a2332/00e5ff?text=Real-time+Monitoring&font=raleway" 
+              alt="MLOX Real-time Monitoring"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Real-time Monitoring</h3>
+              <p class="text-gray-300 text-sm">Track performance and metrics in real-time</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Getting Started Section - Enhanced Readability -->
+    <section id="get-started" class="py-20 bg-dark-900">
       <div class="container mx-auto px-6">
         {gettingStartedPage && (
           <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
@@ -181,21 +287,24 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
           </h2>
         )}
         <div class="max-w-5xl mx-auto">
-          <!-- Light background card for maximum readability -->
-          <div class="bg-white rounded-2xl shadow-2xl p-10 md:p-16">
+          <!-- Darker card with better hierarchy instead of white -->
+          <div class="bg-dark-700 rounded-2xl shadow-2xl p-10 md:p-16 border-2 border-dark-600">
             {gettingStartedContent && (
-              <div class="prose prose-xl max-w-none 
-                         prose-headings:text-gray-900 prose-headings:font-bold
-                         prose-h2:text-4xl prose-h2:mb-10 prose-h2:mt-0 prose-h2:text-gray-900
-                         prose-p:text-gray-800 prose-p:text-xl prose-p:leading-relaxed prose-p:mb-6
-                         prose-ol:my-10 prose-ol:space-y-6
-                         prose-li:text-gray-800 prose-li:text-xl prose-li:leading-relaxed prose-li:mb-2
-                         prose-a:text-accent-cyan prose-a:no-underline prose-a:font-bold 
-                         prose-a:hover:text-accent-purple prose-a:transition-colors
-                         prose-code:bg-gray-100 prose-code:text-pink-600 prose-code:px-4 prose-code:py-2 
-                         prose-code:rounded-lg prose-code:text-lg prose-code:font-mono prose-code:border-2 
-                         prose-code:border-gray-300 prose-code:font-semibold
-                         prose-strong:text-gray-900 prose-strong:font-bold">
+              <div class="prose prose-lg max-w-none 
+                         prose-headings:text-white prose-headings:font-extrabold
+                         prose-h2:text-5xl prose-h2:mb-8 prose-h2:mt-0 prose-h2:tracking-tight
+                         prose-h3:text-3xl prose-h3:mt-12 prose-h3:mb-6 prose-h3:text-accent-cyan
+                         prose-p:text-gray-300 prose-p:text-lg prose-p:leading-relaxed prose-p:mb-6
+                         prose-ol:my-10 prose-ol:space-y-6 prose-ol:text-gray-300
+                         prose-li:text-gray-200 prose-li:text-lg prose-li:leading-relaxed prose-li:mb-3
+                         prose-a:text-accent-cyan prose-a:no-underline prose-a:font-semibold 
+                         prose-a:hover:text-accent-purple prose-a:transition-colors prose-a:underline
+                         prose-code:bg-dark-800 prose-code:text-accent-cyan prose-code:px-4 prose-code:py-2 
+                         prose-code:rounded-lg prose-code:text-base prose-code:font-mono prose-code:border-2 
+                         prose-code:border-accent-cyan/30 prose-code:font-normal
+                         prose-strong:text-white prose-strong:font-bold
+                         [&_ol]:list-decimal [&_ol]:pl-6
+                         [&_li]:marker:text-accent-purple [&_li]:marker:font-bold">
                 <gettingStartedContent.Content />
               </div>
             )}
