@@ -1,6 +1,6 @@
 import logging
-from dataclasses import dataclass
 from typing import Dict
+from dataclasses import dataclass, field
 
 from mlox.executors import TaskGroup
 from mlox.service import AbstractService
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 class K8sHeadlampService(AbstractService):
     namespace: str = "kube-system"
     service_name: str = "my-headlamp"
+    kubeconfig: str = field(default="/etc/rancher/k3s/k3s.yaml", init=False)
 
     def get_login_token(self, bundle) -> str:
         token = "no token"
@@ -30,16 +31,14 @@ class K8sHeadlampService(AbstractService):
 
     def setup(self, conn) -> None:
         logger.info("🔧 Installing K8s Headlamp")
-
-        kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
-        src_url = f"https://kubernetes-sigs.github.io/headlamp/"
+        src_url = "https://kubernetes-sigs.github.io/headlamp/"
 
         # Add kubernetes-dashboard repository
         self.exec.helm_repo_add(
             conn,
             "headlamp",
             src_url,
-            kubeconfig=kubeconfig,
+            kubeconfig=self.kubeconfig,
         )
         # Deploy a Helm Release named "kubernetes-dashboard" using the kubernetes-dashboard chart
         self.exec.helm_upgrade_install(
@@ -47,9 +46,14 @@ class K8sHeadlampService(AbstractService):
             release=self.service_name,
             chart="headlamp/headlamp",
             namespace=self.namespace,
-            kubeconfig=kubeconfig,
+            kubeconfig=self.kubeconfig,
             create_namespace=True,
         )
+        self._bind_service_account_cluster_admin(conn)
+        # Install Plugins
+        # self.install_gadgets_plugin(conn)
+
+        # Expose the Dashboard Service via Ingress or NodePort
         node_ip, port, path = self.expose_dashboard_ingress(conn)
         # node_ip, port = self.expose_dashboard_nodeport(conn)
         url_path = "" if path == "/" else path
@@ -135,7 +139,7 @@ spec:
   - http:
       paths:
       - path: {path}
-        pathType: Prefix
+        pathType: ImplementationSpecific
         backend:
           service:
             name: {self.service_name}
@@ -173,6 +177,88 @@ spec:
             f"Dashboard exposed at https://{node_ip}:{ingress_port}{'' if path == '/' else path} via ingress"
         )
         return node_ip, ingress_port, path
+
+    def install_gadgets_plugin(self, conn) -> None:
+        """Install/upgrade Headlamp with the Gadgets plugin enabled via Helm values."""
+        logger.info("🔧 Enabling Headlamp Gadgets plugin")
+        values_path = f"{self.target_path}/plugin-gadgets-values.yaml"
+
+        values_yaml = f"""initContainers:
+  - name: headlamp-plugins
+    image: ghcr.io/inspektor-gadget/headlamp-plugin:0.1.0-beta.2
+    imagePullPolicy: Always
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /build/plugins && cp -r /plugins/* /build/plugins/",
+      ]
+    volumeMounts:
+      - name: headlamp-plugins
+        mountPath: /build/plugins
+
+persistentVolumeClaim:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+
+volumeMounts:
+  - name: headlamp-plugins
+    mountPath: /build/plugins
+
+volumes:
+  - name: headlamp-plugins
+    persistentVolumeClaim:
+      claimName: "{self.service_name}"
+
+config:
+  pluginsDir: /build/plugins
+"""
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_write_file(conn, values_path, values_yaml)
+
+        # Upgrade the existing release with the plugin values.
+        self.exec.helm_upgrade_install(
+            conn,
+            release=self.service_name,
+            chart="headlamp/headlamp",
+            namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
+            create_namespace=True,
+            extra_args=["-f", values_path],
+        )
+        logger.info("✅ Gadgets plugin configuration applied")
+
+    def _bind_service_account_cluster_admin(self, conn) -> None:
+        """Grant Headlamp service account cluster-admin to enable log access."""
+        binding_name = f"{self.service_name}-cluster-admin"
+        manifest_path = f"{self.target_path}/{binding_name}.yaml"
+        manifest = f"""apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {binding_name}
+subjects:
+  - kind: ServiceAccount
+    name: {self.service_name}
+    namespace: {self.namespace}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+"""
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_write_file(conn, manifest_path, manifest)
+        self.exec.k8s_apply_manifest(
+            conn,
+            manifest_path,
+            kubeconfig=self.kubeconfig,
+        )
+        logger.info(
+            "Bound service account %s/%s to cluster-admin",
+            self.namespace,
+            self.service_name,
+        )
 
     def _detect_service_port(self, conn) -> int:
         """Detect the Service port to avoid hard-coding; fall back to 8080."""
@@ -221,25 +307,30 @@ spec:
         Tear down the Kubernetes Dashboard and all related RBAC/namespace.
         """
         logger.info("🗑️ Uninstalling Headlamp")
-        self.exec.k8s_delete_resource(
+        # self.exec.k8s_delete_resource(
+        #     conn,
+        #     "deployment",
+        #     self.service_name,
+        #     namespace=self.namespace,
+        # )
+        # self.exec.k8s_delete_resource(
+        #     conn,
+        #     "service",
+        #     self.service_name,
+        #     namespace=self.namespace,
+        # )
+        # self.exec.k8s_delete_resource(
+        #     conn,
+        #     "svc",
+        #     self.service_name,
+        #     namespace=self.namespace,
+        # )
+        self.exec.helm_uninstall(
             conn,
-            "deployment",
-            self.service_name,
+            release=self.service_name,
             namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
         )
-        self.exec.k8s_delete_resource(
-            conn,
-            "service",
-            self.service_name,
-            namespace=self.namespace,
-        )
-        self.exec.k8s_delete_resource(
-            conn,
-            "svc",
-            self.service_name,
-            namespace=self.namespace,
-        )
-
         logger.info("✅ Headlamp uninstall complete")
         self.state = "un-initialized"
 
