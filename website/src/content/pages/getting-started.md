@@ -1,17 +1,19 @@
 ---
 title: "Get Started"
 ---
-
 ## Sloth-Friendly Setup
 
 Easing into MLOX should feel like a lazy stretch on a sunny branch:
 
 1. Install [Task](https://taskfile.dev/installation/) – our go-powered task runner.
 2. Clone the repository:
+
    ```bash
    git clone https://github.com/BusySloths/mlox.git
    ```
+
 3. Mosey into the project and run:
+
    ```bash
    task first:steps
    ```

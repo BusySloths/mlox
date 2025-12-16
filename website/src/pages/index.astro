@@ -34,11 +34,6 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
         <div class="grid md:grid-cols-2 gap-12 items-center max-w-7xl mx-auto">
           <!-- Left: Hero text content -->
           <div class="text-left animate-fade-in">
-            <img 
-              src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_logo_wide.png?raw=true" 
-              alt="MLOX Logo" 
-              class="w-full max-w-sm mb-8 animate-slide-down"
-            />
             {heroPage && (
               <>
                 <h1 class="text-5xl md:text-6xl font-bold mb-6 text-white animate-slide-up">
@@ -316,7 +311,7 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
     <!-- Sponsors Section -->
     <section id="sponsors" class="py-20 bg-dark-900">
       <div class="container mx-auto px-6">
-        <h2 class="text-4xl md:text-5xl font-bold text-center mb-12 text-white">Big Thanks to our Sponsors</h2>
+        <h3 class="text-4xl md:text-5xl font-bold text-center mb-12 text-white">Big Thanks to our Sponsors and Supporters</h2>
         <div class="flex justify-center mb-16">
           <img 
             src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" 
@@ -324,12 +319,11 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
             class="max-w-md w-full h-auto rounded-lg shadow-lg hover:shadow-accent-cyan/30 transition-shadow duration-300 border-2 border-dark-600"
           />
         </div>
-        <h3 class="text-3xl font-bold text-center mb-8 text-white">Supporters</h3>
         <div class="flex justify-center">
           <img 
             src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_light.png?raw=true" 
             alt="PrototypeFund" 
-            class="max-w-sm w-full h-auto rounded-lg shadow-lg hover:shadow-accent-purple/30 transition-shadow duration-300 border-2 border-dark-600"
+            class="max-w-sm w-full h-auto rounded-lg transition-shadow duration-300 border-0"
           />
         </div>
       </div>
