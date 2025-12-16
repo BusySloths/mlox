@@ -10,11 +10,8 @@ const featuresPage = pages.find(p => p.id === 'features.md');
 const gettingStartedPage = pages.find(p => p.id === 'getting-started.md');
 const whyMloxPage = pages.find(p => p.id === 'why-mlox.md');
 
-// Render markdown content
+// Render markdown content (only for sections that need it)
 const heroContent = heroPage ? await heroPage.render() : null;
-const featuresContent = featuresPage ? await featuresPage.render() : null;
-const gettingStartedContent = gettingStartedPage ? await gettingStartedPage.render() : null;
-const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
 ---
 
 <BaseLayout title="MLOX - MLOps Made Simple">
@@ -273,37 +270,76 @@ const whyMloxContent = whyMloxPage ? await whyMloxPage.render() : null;
       </div>
     </section>
 
-    <!-- Getting Started Section - Enhanced Readability -->
+    <!-- Getting Started Section - Card-based Steps -->
     <section id="get-started" class="py-20 bg-dark-900">
       <div class="container mx-auto px-6">
         {gettingStartedPage && (
-          <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
-            {gettingStartedPage.data.title}
-          </h2>
-        )}
-        <div class="max-w-5xl mx-auto">
-          <!-- Darker card with better hierarchy instead of white -->
-          <div class="bg-dark-700 rounded-2xl shadow-2xl p-10 md:p-16 border-2 border-dark-600">
-            {gettingStartedContent && (
-              <div class="prose prose-lg max-w-none 
-                         prose-headings:text-white prose-headings:font-extrabold
-                         prose-h2:text-5xl prose-h2:mb-8 prose-h2:mt-0 prose-h2:tracking-tight
-                         prose-h3:text-3xl prose-h3:mt-12 prose-h3:mb-6 prose-h3:text-accent-cyan
-                         prose-p:text-gray-300 prose-p:text-lg prose-p:leading-relaxed prose-p:mb-6
-                         prose-ol:my-10 prose-ol:space-y-6 prose-ol:text-gray-300
-                         prose-li:text-gray-200 prose-li:text-lg prose-li:leading-relaxed prose-li:mb-3
-                         prose-a:text-accent-cyan prose-a:font-semibold prose-a:underline
-                         prose-a:hover:text-accent-purple prose-a:transition-colors
-                         prose-code:bg-dark-800 prose-code:text-accent-cyan prose-code:px-4 prose-code:py-2 
-                         prose-code:rounded-lg prose-code:text-base prose-code:font-mono prose-code:border-2 
-                         prose-code:border-accent-cyan/30 prose-code:font-normal
-                         prose-strong:text-white prose-strong:font-bold
-                         [&_ol]:list-decimal [&_ol]:pl-6
-                         [&_li]:marker:text-accent-purple [&_li]:marker:font-bold">
-                <gettingStartedContent.Content />
-              </div>
+          <>
+            <h2 class="text-4xl md:text-5xl font-bold text-center mb-4 text-white">
+              {gettingStartedPage.data.title}
+            </h2>
+            {gettingStartedPage.data.subtitle && (
+              <h3 class="text-2xl md:text-3xl text-center mb-6 text-accent-cyan font-semibold">
+                {gettingStartedPage.data.subtitle}
+              </h3>
             )}
-          </div>
+            {gettingStartedPage.data.description && (
+              <p class="text-lg text-center mb-16 text-gray-400 max-w-3xl mx-auto">
+                {gettingStartedPage.data.description}
+              </p>
+            )}
+          </>
+        )}
+        
+        <div class="max-w-6xl mx-auto">
+          {gettingStartedPage?.data.steps && (
+            <div class="grid md:grid-cols-2 gap-8">
+              {gettingStartedPage.data.steps.map((step, index) => {
+                const colors = ['cyan', 'purple', 'pink', 'yellow'];
+                const color = colors[index % colors.length];
+                const borderClass = 
+                  color === 'cyan' ? 'border-accent-cyan hover:border-accent-cyan hover:shadow-accent-cyan/30' :
+                  color === 'purple' ? 'border-accent-purple hover:border-accent-purple hover:shadow-accent-purple/30' :
+                  color === 'pink' ? 'border-accent-pink hover:border-accent-pink hover:shadow-accent-pink/30' :
+                  'border-accent-yellow hover:border-accent-yellow hover:shadow-accent-yellow/30';
+                const numberClass = 
+                  color === 'cyan' ? 'bg-accent-cyan text-dark-900' :
+                  color === 'purple' ? 'bg-accent-purple text-dark-900' :
+                  color === 'pink' ? 'bg-accent-pink text-dark-900' :
+                  'bg-accent-yellow text-dark-900';
+                
+                return (
+                  <div 
+                    class={`bg-dark-700 rounded-2xl p-8 border-2 border-dark-600 ${borderClass} transition-all duration-300 transform hover:scale-105 hover:shadow-2xl`}
+                  >
+                    <div class="flex items-start gap-4 mb-4">
+                      <div class={`${numberClass} w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0`}>
+                        {index + 1}
+                      </div>
+                      <div class="flex-1">
+                        <h4 class="text-2xl font-bold text-white mb-2">{step.title}</h4>
+                        <p class="text-gray-300 text-base leading-relaxed">{step.description}</p>
+                      </div>
+                    </div>
+                    
+                    {step.code && (
+                      <div class="mt-4">
+                        <pre class="bg-dark-800 text-accent-cyan px-4 py-3 rounded-lg text-sm font-mono border-2 border-accent-cyan/30 overflow-x-auto"><code>{step.code}</code></pre>
+                      </div>
+                    )}
+                    
+                    {step.note && (
+                      <div class="mt-4 p-4 bg-dark-800/50 rounded-lg border border-accent-yellow/30">
+                        <p class="text-gray-400 text-sm leading-relaxed">
+                          <span class="text-accent-yellow font-semibold">💡 Note:</span> <span set:html={step.note}></span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </section>

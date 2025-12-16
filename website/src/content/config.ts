@@ -22,6 +22,12 @@ const contentCollection = defineCollection({
       description: z.string().optional(),
       items: z.array(z.string()),
     })).optional(),
+    steps: z.array(z.object({
+      title: z.string(),
+      description: z.string(),
+      code: z.string().optional(),
+      note: z.string().optional(),
+    })).optional(),
   }),
 });
 
