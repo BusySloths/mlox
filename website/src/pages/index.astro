@@ -17,6 +17,29 @@ const heroContent = heroPage ? await heroPage.render() : null;
 <BaseLayout title="MLOX - MLOps Made Simple">
   <Header />
   
+  <style>
+    .hero-container {
+      perspective: 1200px;
+      perspective-origin: center center;
+    }
+    
+    .hero-3d {
+      transform: rotateY(-15deg) rotateX(5deg);
+      transform-style: preserve-3d;
+      transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      box-shadow: 
+        20px 20px 40px rgba(0, 0, 0, 0.3),
+        -10px -10px 20px rgba(79, 209, 197, 0.1);
+    }
+    
+    .hero-3d:hover {
+      transform: rotateY(-8deg) rotateX(2deg) scale(1.02);
+      box-shadow: 
+        30px 30px 60px rgba(0, 0, 0, 0.4),
+        -15px -15px 30px rgba(79, 209, 197, 0.15);
+    }
+  </style>
+  
   <main class="pt-16 bg-dark-900">
     <!-- Hero Section -->
     <section class="relative min-h-screen flex items-center justify-center bg-dark-900">
@@ -28,7 +51,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
       </div>
 
       <div class="container mx-auto px-6 relative z-10">
-        <div class="grid md:grid-cols-2 gap-12 items-center max-w-7xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-12 items-center max-w-600x400xl mx-auto">
           <!-- Left: Hero text content -->
           <div class="text-left animate-fade-in">
             {heroPage && (
@@ -83,14 +106,14 @@ const heroContent = heroPage ? await heroPage.render() : null;
           </div>
           
           <!-- Right: Hero interface mockup image -->
-          <div class="animate-fade-in animate-slide-up">
-            <div class="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-dark-700 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
+          <div class="animate-fade-in animate-slide-up hero-container">
+            <div class="relative rounded-2xl overflow-hidden hero-3d border-2 border-dark-600 hover:border-accent-cyan">
               <img 
-                src="https://placehold.co/800x600/1a2332/00e5ff?text=MLOX+Dashboard+Interface&font=raleway" 
+                src="public/mlox_hero.png" 
                 alt="MLOX Dashboard Interface"
-                class="w-full h-auto"
+                class="w-full h-auto opacity-85 hover:opacity-95 transition-opacity duration-500"
               />
-              <div class="absolute inset-0 bg-gradient-to-t from-dark-900/80 via-transparent to-transparent"></div>
+              <div class="absolute inset-0 bg-gradient-to-tr from-dark-900/50 via-transparent to-transparent"></div>
             </div>
           </div>
         </div>
@@ -189,36 +212,10 @@ const heroContent = heroPage ? await heroPage.render() : null;
           Experience the power of MLOX through our intuitive interface and comprehensive tooling
         </p>
         <div class="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <!-- Screenshot 1: Dashboard -->
-          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
-            <img 
-              src="https://placehold.co/600x400/1a2332/00e5ff?text=Dashboard+Overview&font=raleway" 
-              alt="MLOX Dashboard Overview"
-              class="w-full h-auto"
-            />
-            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
-              <h3 class="text-xl font-bold text-white mb-2">Dashboard Overview</h3>
-              <p class="text-gray-300 text-sm">Monitor all your ML infrastructure at a glance</p>
-            </div>
-          </div>
-
-          <!-- Screenshot 2: Service Management -->
-          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-purple transition-all duration-300 transform hover:scale-105">
-            <img 
-              src="https://placehold.co/600x400/1a2332/a855f7?text=Service+Management&font=raleway" 
-              alt="MLOX Service Management"
-              class="w-full h-auto"
-            />
-            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
-              <h3 class="text-xl font-bold text-white mb-2">Service Management</h3>
-              <p class="text-gray-300 text-sm">Deploy and manage ML services effortlessly</p>
-            </div>
-          </div>
-
-          <!-- Screenshot 3: Infrastructure Control -->
+          <!-- Screenshot 1: Infrastructure Control -->
           <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-pink transition-all duration-300 transform hover:scale-105">
             <img 
-              src="https://placehold.co/600x400/1a2332/ec4899?text=Infrastructure+Control&font=raleway" 
+              src="public/mlox_server.png" 
               alt="MLOX Infrastructure Control"
               class="w-full h-auto"
             />
@@ -228,42 +225,69 @@ const heroContent = heroPage ? await heroPage.render() : null;
             </div>
           </div>
 
-          <!-- Screenshot 4: Integration View -->
-          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-yellow transition-all duration-300 transform hover:scale-105">
+
+          <!-- Screenshot 2: Service Management -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-purple transition-all duration-300 transform hover:scale-105">
             <img 
-              src="https://placehold.co/600x400/1a2332/fbbf24?text=GCP+Integrations&font=raleway" 
-              alt="MLOX GCP Integrations"
+              src="public/mlox_services.png" 
+              alt="MLOX Service Management"
               class="w-full h-auto"
             />
             <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
-              <h3 class="text-xl font-bold text-white mb-2">GCP Integrations</h3>
-              <p class="text-gray-300 text-sm">Seamless integration with Google Cloud Platform</p>
+              <h3 class="text-xl font-bold text-white mb-2">Service Management</h3>
+              <p class="text-gray-300 text-sm">Deploy and manage ML services effortlessly</p>
             </div>
           </div>
 
-          <!-- Screenshot 5: Configuration -->
-          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-green transition-all duration-300 transform hover:scale-105">
+
+          <!-- Screenshot 4: Integration View -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-yellow transition-all duration-300 transform hover:scale-105">
             <img 
-              src="https://placehold.co/600x400/1a2332/10b981?text=Configuration+Panel&font=raleway" 
-              alt="MLOX Configuration Panel"
+              src="public/mlox_add_git_service.png" 
+              alt="MLOX GIT & Cloud Integrations"
               class="w-full h-auto"
             />
             <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
-              <h3 class="text-xl font-bold text-white mb-2">Configuration Panel</h3>
-              <p class="text-gray-300 text-sm">Centralized configuration management</p>
+              <h3 class="text-xl font-bold text-white mb-2">Git & Cloud Integrations</h3>
+              <p class="text-gray-300 text-sm">Seamless integration with Git and Cloud Platforms</p>
             </div>
           </div>
 
           <!-- Screenshot 6: Monitoring -->
           <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
             <img 
-              src="https://placehold.co/600x400/1a2332/00e5ff?text=Real-time+Monitoring&font=raleway" 
+              src="public/mlox_monitor.png" 
               alt="MLOX Real-time Monitoring"
               class="w-full h-auto"
             />
             <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
               <h3 class="text-xl font-bold text-white mb-2">Real-time Monitoring</h3>
               <p class="text-gray-300 text-sm">Track performance and metrics in real-time</p>
+            </div>
+          </div>
+          <!-- Screenshot 5: Configuration -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-green transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="public/mlox_tui.png" 
+              alt="MLOX TUI"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Terminal UI</h3>
+              <p class="text-gray-300 text-sm">Low bandwidth configuration management</p>
+            </div>
+          </div>
+
+          <!-- Screenshot 6: CLI -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="public/mlox_cli.png" 
+              alt="MLOX Dashboard Overview"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">CLI</h3>
+              <p class="text-gray-300 text-sm">Build for automation.</p>
             </div>
           </div>
         </div>
