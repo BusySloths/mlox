@@ -1,0 +1,429 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import { getCollection } from 'astro:content';
+
+// Get content from markdown files
+const pages = await getCollection('pages');
+const heroPage = pages.find(p => p.id === 'hero.md');
+const featuresPage = pages.find(p => p.id === 'features.md');
+const gettingStartedPage = pages.find(p => p.id === 'getting-started.md');
+const whyMloxPage = pages.find(p => p.id === 'why-mlox.md');
+
+// Render markdown content (only for sections that need it)
+const heroContent = heroPage ? await heroPage.render() : null;
+---
+
+<BaseLayout title="MLOX - MLOps Made Simple">
+  <Header />
+  
+  <style>
+    .hero-container {
+      perspective: 1200px;
+      perspective-origin: center center;
+    }
+    
+    .hero-3d {
+      transform: rotateY(-15deg) rotateX(5deg);
+      transform-style: preserve-3d;
+      transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      box-shadow: 
+        20px 20px 40px rgba(0, 0, 0, 0.3),
+        -10px -10px 20px rgba(79, 209, 197, 0.1);
+    }
+    
+    .hero-3d:hover {
+      transform: rotateY(-8deg) rotateX(2deg) scale(1.02);
+      box-shadow: 
+        30px 30px 60px rgba(0, 0, 0, 0.4),
+        -15px -15px 30px rgba(79, 209, 197, 0.15);
+    }
+  </style>
+  
+  <main class="pt-16 bg-dark-900">
+    <!-- Hero Section -->
+    <section class="relative min-h-screen flex items-center justify-center bg-dark-900">
+      <!-- Decorative elements -->
+      <div class="absolute inset-0 overflow-hidden opacity-30">
+        <div class="absolute top-20 left-10 w-64 h-64 bg-accent-cyan rounded-full blur-3xl"></div>
+        <div class="absolute bottom-20 right-10 w-80 h-80 bg-accent-purple rounded-full blur-3xl"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-accent-pink rounded-full blur-3xl"></div>
+      </div>
+
+      <div class="container mx-auto px-6 relative z-10">
+        <div class="grid md:grid-cols-2 gap-12 items-center max-w-600x400xl mx-auto">
+          <!-- Left: Hero text content -->
+          <div class="text-left animate-fade-in">
+            {heroPage && (
+              <>
+                <h1 class="text-5xl md:text-6xl font-bold mb-6 text-white animate-slide-up">
+                  {heroPage.data.title}
+                </h1>
+                <p class="text-xl md:text-2xl text-gray-300 mb-8 animate-slide-up">
+                  {heroPage.data.subtitle}
+                </p>
+              </>
+            )}
+            {heroContent && (
+              <div class="text-lg text-gray-400 mb-12 leading-relaxed animate-slide-up prose prose-invert [&>p]:mb-4">
+                <heroContent.Content />
+              </div>
+            )}
+            {heroPage && (
+              <div class="flex flex-col sm:flex-row gap-4 animate-slide-up">
+                <a 
+                  href={heroPage.data.cta_primary_link} 
+                  class="px-8 py-4 bg-accent-cyan text-dark-900 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-cyan/50 transform hover:-translate-y-1 transition-all duration-300 hover:scale-105 text-center"
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  {heroPage.data.cta_primary}
+                </a>
+                <a 
+                  href={heroPage.data.cta_secondary_link} 
+                  class="px-8 py-4 bg-dark-700 text-gray-200 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-purple/30 transform hover:-translate-y-1 transition-all duration-300 border-2 border-dark-600 hover:border-accent-purple text-center"
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  {heroPage.data.cta_secondary}
+                </a>
+              </div>
+            )}
+            <div class="flex flex-wrap gap-3 mt-12 animate-slide-up">
+              <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
+                <img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" class="h-5" />
+              </a>
+              <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
+                <img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" class="h-5" />
+              </a>
+              <a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
+                <img alt="GitHub Issues" src="https://img.shields.io/github/issues/busysloths/mlox" class="h-5" />
+              </a>
+              <a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer" class="transition-transform hover:scale-110 duration-200">
+                <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox" class="h-5" />
+              </a>
+            </div>
+          </div>
+          
+          <!-- Right: Hero interface mockup image -->
+          <div class="animate-fade-in animate-slide-up hero-container">
+            <div class="relative rounded-2xl overflow-hidden hero-3d border-2 border-dark-600 hover:border-accent-cyan">
+              <img 
+                src="public/mlox_hero.png" 
+                alt="MLOX Dashboard Interface"
+                class="w-full h-auto opacity-85 hover:opacity-95 transition-opacity duration-500"
+              />
+              <div class="absolute inset-0 bg-gradient-to-tr from-dark-900/50 via-transparent to-transparent"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scroll indicator -->
+      <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+        <svg class="w-6 h-6 text-accent-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+        </svg>
+      </div>
+    </section>
+
+    <!-- Features Section - Using Markdown Content -->
+    <section id="features" class="py-20 bg-dark-800">
+      <div class="container mx-auto px-6">
+        {featuresPage && (
+          <h2 class="text-4xl md:text-5xl font-bold text-center mb-16 text-white">
+            {featuresPage.data.title}
+          </h2>
+        )}
+        {featuresPage && featuresPage.data.features && (
+          <div class="max-w-6xl mx-auto">
+            <div class="grid md:grid-cols-3 gap-8">
+              {featuresPage.data.features.map((feature) => {
+                const borderColorClass = feature.color === 'cyan' ? 'hover:border-accent-cyan' :
+                                       feature.color === 'purple' ? 'hover:border-accent-purple' :
+                                       'hover:border-accent-pink';
+                const shadowColorClass = feature.color === 'cyan' ? 'hover:shadow-accent-cyan/20' :
+                                        feature.color === 'purple' ? 'hover:shadow-accent-purple/20' :
+                                        'hover:shadow-accent-pink/20';
+                return (
+                  <div class={`group p-8 bg-dark-700 rounded-xl border-2 border-dark-600 ${borderColorClass} shadow-lg ${shadowColorClass} transition-all duration-300 transform hover:-translate-y-2`}>
+                    <div class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{feature.icon}</div>
+                    <h3 class="text-2xl font-bold mb-4 text-white">{feature.title}</h3>
+                    {feature.description && (
+                      <p class="text-gray-300 mb-3">{feature.description}</p>
+                    )}
+                    <ul class="space-y-3 list-none">
+                      {feature.items.map((item) => (
+                        <li class="flex items-start text-gray-300">
+                          <span class="text-accent-green mr-2 mt-1">✓</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- Why MLOX Section - Flat Minimal Design -->
+    {whyMloxPage && whyMloxPage.data.cards && (
+      <section id="why-mlox" class="py-24 bg-dark-900 relative overflow-hidden">
+        <!-- Subtle background pattern -->
+        <div class="absolute inset-0 opacity-5">
+          <div class="absolute top-0 left-0 w-full h-full" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 40px 40px;"></div>
+        </div>
+        
+        <div class="container mx-auto px-6 relative z-10">
+          <h2 class="text-4xl md:text-5xl font-bold text-center mb-20 text-white">
+            {whyMloxPage.data.title}
+          </h2>
+          <div class="max-w-6xl mx-auto grid md:grid-cols-2 lg:grid-cols-4 gap-12">
+            {whyMloxPage.data.cards.map((card, index) => {
+              const iconColorClass = index % 4 === 0 ? 'text-accent-cyan' :
+                                     index % 4 === 1 ? 'text-accent-purple' :
+                                     index % 4 === 2 ? 'text-accent-pink' :
+                                     'text-accent-yellow';
+              return (
+                <div class="group text-center">
+                  <div class={`inline-flex items-center justify-center w-20 h-20 mb-6 text-5xl ${iconColorClass} transition-all duration-300 group-hover:scale-110 group-hover:rotate-6`}>
+                    {card.icon}
+                  </div>
+                  <h3 class="text-xl font-bold mb-4 text-white group-hover:text-accent-cyan transition-colors duration-300">{card.title}</h3>
+                  <p class="text-gray-400 leading-relaxed text-base">{card.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- Screenshots Section -->
+    <section id="screenshots" class="py-20 bg-dark-800">
+      <div class="container mx-auto px-6">
+        <h2 class="text-4xl md:text-5xl font-bold text-center mb-6 text-white">
+          See MLOX in Action
+        </h2>
+        <p class="text-xl text-gray-400 text-center mb-16 max-w-3xl mx-auto">
+          Experience the power of MLOX through our intuitive interface and comprehensive tooling
+        </p>
+        <div class="max-w-7xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <!-- Screenshot 1: Infrastructure Control -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-pink transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="public/mlox_server.png" 
+              alt="MLOX Infrastructure Control"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Infrastructure Control</h3>
+              <p class="text-gray-300 text-sm">Manage servers and clusters with ease</p>
+            </div>
+          </div>
+
+
+          <!-- Screenshot 2: Service Management -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-purple transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="public/mlox_services.png" 
+              alt="MLOX Service Management"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Service Management</h3>
+              <p class="text-gray-300 text-sm">Deploy and manage ML services effortlessly</p>
+            </div>
+          </div>
+
+
+          <!-- Screenshot 4: Integration View -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-yellow transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="public/mlox_add_git_service.png" 
+              alt="MLOX GIT & Cloud Integrations"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Git & Cloud Integrations</h3>
+              <p class="text-gray-300 text-sm">Seamless integration with Git and Cloud Platforms</p>
+            </div>
+          </div>
+
+          <!-- Screenshot 6: Monitoring -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="public/mlox_monitor.png" 
+              alt="MLOX Real-time Monitoring"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Real-time Monitoring</h3>
+              <p class="text-gray-300 text-sm">Track performance and metrics in real-time</p>
+            </div>
+          </div>
+          <!-- Screenshot 5: Configuration -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-green transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="public/mlox_tui.png" 
+              alt="MLOX TUI"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">Terminal UI</h3>
+              <p class="text-gray-300 text-sm">Low bandwidth configuration management</p>
+            </div>
+          </div>
+
+          <!-- Screenshot 6: CLI -->
+          <div class="group relative overflow-hidden rounded-xl shadow-xl border-2 border-dark-600 hover:border-accent-cyan transition-all duration-300 transform hover:scale-105">
+            <img 
+              src="public/mlox_cli.png" 
+              alt="MLOX Dashboard Overview"
+              class="w-full h-auto"
+            />
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-dark-900 via-dark-900/90 to-transparent p-6">
+              <h3 class="text-xl font-bold text-white mb-2">CLI</h3>
+              <p class="text-gray-300 text-sm">Build for automation.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Getting Started Section - Card-based Steps -->
+    <section id="get-started" class="py-20 bg-dark-900">
+      <div class="container mx-auto px-6">
+        {gettingStartedPage && (
+          <>
+            <h2 class="text-4xl md:text-5xl font-bold text-center mb-4 text-white">
+              {gettingStartedPage.data.title}
+            </h2>
+            {gettingStartedPage.data.subtitle && (
+              <h3 class="text-2xl md:text-3xl text-center mb-6 text-accent-cyan font-semibold">
+                {gettingStartedPage.data.subtitle}
+              </h3>
+            )}
+            {gettingStartedPage.data.description && (
+              <p class="text-lg text-center mb-16 text-gray-400 max-w-3xl mx-auto">
+                {gettingStartedPage.data.description}
+              </p>
+            )}
+          </>
+        )}
+        
+        <div class="max-w-6xl mx-auto">
+          {gettingStartedPage?.data.steps && (
+            <div class="grid md:grid-cols-2 gap-8">
+              {gettingStartedPage.data.steps.map((step, index) => {
+                const colors = ['cyan', 'purple', 'pink', 'yellow'];
+                const color = colors[index % colors.length];
+                const borderClass = 
+                  color === 'cyan' ? 'border-accent-cyan hover:border-accent-cyan hover:shadow-accent-cyan/30' :
+                  color === 'purple' ? 'border-accent-purple hover:border-accent-purple hover:shadow-accent-purple/30' :
+                  color === 'pink' ? 'border-accent-pink hover:border-accent-pink hover:shadow-accent-pink/30' :
+                  'border-accent-yellow hover:border-accent-yellow hover:shadow-accent-yellow/30';
+                const numberClass = 
+                  color === 'cyan' ? 'bg-accent-cyan text-dark-900' :
+                  color === 'purple' ? 'bg-accent-purple text-dark-900' :
+                  color === 'pink' ? 'bg-accent-pink text-dark-900' :
+                  'bg-accent-yellow text-dark-900';
+                
+                return (
+                  <div 
+                    class={`bg-dark-700 rounded-2xl p-8 border-2 border-dark-600 ${borderClass} transition-all duration-300 transform hover:scale-105 hover:shadow-2xl`}
+                  >
+                    <div class="flex items-start gap-4 mb-4">
+                      <div class={`${numberClass} w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0`}>
+                        {index + 1}
+                      </div>
+                      <div class="flex-1">
+                        <h4 class="text-2xl font-bold text-white mb-2">{step.title}</h4>
+                        <p class="text-gray-300 text-base leading-relaxed">{step.description}</p>
+                      </div>
+                    </div>
+                    
+                    {step.code && (
+                      <div class="mt-4">
+                        <pre class="bg-dark-800 text-accent-cyan px-4 py-3 rounded-lg text-sm font-mono border-2 border-accent-cyan/30 overflow-x-auto"><code>{step.code}</code></pre>
+                      </div>
+                    )}
+                    
+                    {step.note && (
+                      <div class="mt-4 p-4 bg-dark-800/50 rounded-lg border border-accent-yellow/30">
+                        <p class="text-gray-400 text-sm leading-relaxed">
+                          <span class="text-accent-yellow font-semibold">💡 Note:</span> <span set:html={step.note}></span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+
+    <!-- Sponsors Section -->
+    <section id="sponsors" class="py-20 bg-dark-900">
+      <div class="container mx-auto px-6">
+        <h3 class="text-4xl md:text-5xl font-bold text-center mb-12 text-white">Big Thanks to our Sponsors and Supporters</h2>
+        <div class="flex justify-center mb-16">
+          <img 
+            src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" 
+            alt="BMFTR" 
+            class="max-w-md w-full h-auto rounded-lg shadow-lg hover:shadow-accent-cyan/30 transition-shadow duration-300 border-2 border-dark-600"
+          />
+        </div>
+        <div class="flex justify-center">
+          <img 
+            src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_light.png?raw=true" 
+            alt="PrototypeFund" 
+            class="max-w-sm w-full h-auto rounded-lg transition-shadow duration-300 border-0"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-dark-900 border-t border-dark-700 text-white py-12">
+      <div class="container mx-auto px-6">
+        <div class="grid md:grid-cols-4 gap-8 mb-8">
+          <div>
+            <h4 class="text-xl font-bold mb-4 text-accent-cyan">MLOX</h4>
+            <p class="text-gray-400 mb-4">Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.</p>
+            <p class="text-sm text-gray-500">MLOX is open-source under the MIT license.</p>
+          </div>
+          <div>
+            <h4 class="text-lg font-semibold mb-4 text-white">Resources</h4>
+            <ul class="space-y-2">
+              <li><a href="https://github.com/BusySloths/mlox" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">GitHub</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Documentation</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Issues</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Discussions</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="text-lg font-semibold mb-4 text-white">Contributing</h4>
+            <ul class="space-y-2">
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Contributing Guide</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Code of Conduct</a></li>
+              <li><a href="https://github.com/BusySloths/mlox/projects" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent-cyan transition-colors">Projects</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="text-lg font-semibold mb-4 text-white">Contact</h4>
+            <p class="text-gray-400">Email: <a href="mailto:contact@mlox.org" class="hover:text-accent-cyan transition-colors">contact@mlox.org</a></p>
+          </div>
+        </div>
+        <div class="border-t border-dark-700 pt-8 text-center text-gray-500">
+          <p>&copy; 2025 BusySloths. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
+  </main>
+</BaseLayout>
