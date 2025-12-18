@@ -284,6 +284,11 @@ tasks:
         fi
       - "streamlit run mlox/app.py"
 
+  ui:landing:
+    desc: Start the astro landing page locally (dev server)
+    cmds:
+      - "cd website && npm install && npm run dev"
+
   ui:cli:
     desc: Start the Typer CLI app
     cmds:
