@@ -1,0 +1,82 @@
+name: Deploy Website and Docs to GitHub Pages
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pages: write
+    id-token: write
+
+concurrency:
+    group: "pages"
+    cancel-in-progress: false
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+                  cache-dependency-path: website/package-lock.json
+
+            - name: Setup Pages
+              uses: actions/configure-pages@v4
+
+            - name: Install website dependencies
+              working-directory: ./website
+              run: npm ci
+
+            - name: Build website
+              working-directory: ./website
+              run: npm run build
+
+            - name: Setup Python for pdoc documentation
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.12"
+
+            - name: Install Python dependencies and pdoc
+              run: |
+                  pip install -e '.[dev]'
+                  pip install pdoc
+
+            - name: Build pdoc documentation
+              run: |
+                  pdoc mlox !mlox.view !mlox.assets !mlox.resources !mlox.stacks -o temp_docs/ --no-show-source --logo "https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox.png?raw=true"
+
+            - name: Combine website and docs
+              run: |
+                  # Copy pdoc docs to website/dist/docs
+                  mkdir -p website/dist/docs
+                  cp -r temp_docs/* website/dist/docs/
+
+                  # Create navigation links between website and docs
+                  # Add a docs link to the website (you can customize this)
+                  echo "Documentation available at: /docs/" > website/dist/docs-info.txt
+
+            - name: Upload artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: ./website/dist
+
+    deploy:
+        needs: build
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
