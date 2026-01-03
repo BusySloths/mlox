@@ -2,16 +2,24 @@ import os
 import mlflow  # type: ignore
 import logging
 
+from typing import Any, Dict, List
+from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Dict
 
 from mlox.service import AbstractService
+from mlox.infra import ModelRegistry
 
 logger = logging.getLogger(__name__)
 
 
+def _fmt_ts(ts: int | None) -> str:
+    if not ts:
+        return ""
+    return datetime.utcfromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M")
+
+
 @dataclass
-class MLFlowDockerService(AbstractService):
+class MLFlowDockerService(AbstractService, ModelRegistry):
     ui_user: str
     ui_pw: str
     port: str | int
@@ -93,9 +101,43 @@ class MLFlowDockerService(AbstractService):
             for key, value in {
                 "username": self.ui_user,
                 "password": self.ui_pw,
+                "service_url": self.service_url,
+                "port": str(self.port),
+                "insecure_tls": "true",
             }.items()
             if value
         }
         if not credentials:
             return {}
-        return {"mlflow_ui_credentials": credentials}
+        return credentials
+
+    def list_models(self) -> List[Dict[str, Any]]:
+        """List all registered model names from the MLflow server."""
+        all_models = []
+        try:
+            mlflow.set_registry_uri(self.service_url)
+            os.environ["MLFLOW_TRACKING_USERNAME"] = self.ui_user
+            os.environ["MLFLOW_TRACKING_PASSWORD"] = self.ui_pw
+            os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
+
+            client = mlflow.tracking.MlflowClient()
+            models = client.search_model_versions(filter_string="", max_results=250)
+            for m in models:
+                all_models.append(
+                    {
+                        "Model": m.name,
+                        "Description": m.description or "",
+                        "Version": m.version,
+                        "Stage": m.current_stage or "-",
+                        "Aliases": ", ".join(m.aliases or []),
+                        "Status": m.status,
+                        "Tags": m.tags or {},
+                        "Updated": _fmt_ts(m.last_updated_timestamp),
+                        "Run ID": m.run_id,
+                        "Open": f"{self.service_url}#/models/{m.name}/versions/{m.version}",
+                    }
+                )
+
+        except Exception as e:
+            logger.error("Error listing models from MLflow: %s", e)
+        return all_models

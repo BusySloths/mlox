@@ -1,22 +1,17 @@
 import logging
 
-from typing import Dict
+from typing import Dict, cast
 from passlib.hash import apr_md5_crypt  # type: ignore
 from dataclasses import dataclass, field
 
+from mlox.infra import ModelRegistry, ModelServer
 from mlox.service import AbstractService
 
-
-# Configure logging (optional, but recommended)
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MLFlowMLServerDockerService(AbstractService):
+class MLFlowMLServerDockerService(AbstractService, ModelServer):
     dockerfile: str
     port: str | int
     model: str
@@ -124,3 +119,23 @@ class MLFlowMLServerDockerService(AbstractService):
             secrets["mlflow_tracking_credentials"] = tracking_auth
 
         return secrets
+
+    def get_registry(self) -> ModelRegistry | None:
+        if not self.registry_uuid:
+            return None
+        svc = cast(AbstractService, self)  # type: ignore
+        registry = svc.get_dependent_service(self.registry_uuid)
+        return cast(ModelRegistry, registry)  # type: ignore
+
+    def is_model(self, name: str) -> bool:
+        if ":" in name:
+            parts = name.split(":")
+            if len(parts) != 3:
+                return False
+            registry_name, model_name, version = parts
+            registry_service = self.get_dependent_service_by_name(registry_name)
+            if not registry_service:
+                return False
+            full_model_name = f"{model_name}/{version}"
+            return full_model_name == self.model
+        return name == self.model

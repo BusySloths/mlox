@@ -42,3 +42,4 @@ build:
     tracking_pw: ${TRACKING_PW}
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}
+    registry_uuid: ${MODEL_REGISTRY_UUID}

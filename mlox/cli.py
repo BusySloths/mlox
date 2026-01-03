@@ -6,13 +6,14 @@ servers and services in preparation for a server/client architecture.
 
 from __future__ import annotations
 
-import logging
 import os
-import shutil
-import textwrap
-from typing import Any, Dict, List, Optional, Sequence, Tuple
-
 import typer
+import shutil
+import logging
+import textwrap
+
+from importlib import metadata as importlib_metadata
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from mlox import operations as ops
 from mlox.operations import OperationResult
@@ -28,6 +29,7 @@ app = typer.Typer(help="MLOX command line interface", no_args_is_help=True)
 project_app = typer.Typer(help="Manage MLOX projects")
 server_app = typer.Typer(help="Manage servers in the project infrastructure")
 service_app = typer.Typer(help="Manage services running on servers")
+model_app = typer.Typer(help="Manage ML models")
 
 # New nested groups for configs under server and service
 server_configs_app = typer.Typer(help="Server configuration templates")
@@ -36,6 +38,7 @@ service_configs_app = typer.Typer(help="Service configuration templates")
 app.add_typer(project_app, name="project")
 app.add_typer(server_app, name="server")
 app.add_typer(service_app, name="service")
+app.add_typer(model_app, name="model")
 
 # Attach configs namespace under existing groups
 server_app.add_typer(server_configs_app, name="configs")
@@ -102,6 +105,40 @@ def _resolve_credentials(
     resolved_project = _resolve_project(project)
     resolved_password = _resolve_password(password, prompt_text=prompt_text)
     return resolved_project, resolved_password
+
+
+def _get_package_version() -> str:
+    """Return the installed MLOX package version, with a safe fallback."""
+
+    try:
+        return importlib_metadata.version("busysloths-mlox")
+    except importlib_metadata.PackageNotFoundError:
+        return "(local)"
+    except Exception:
+        return "(unknown)"
+
+
+def _version_callback(value: Optional[bool]) -> None:
+    """Handle ``--version`` and exit early."""
+
+    if value:
+        typer.echo(f"MLOX {_get_package_version()}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        "-v",
+        help="Show MLOX version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+        flag_value=True,
+    ),
+):
+    return
 
 
 def _stringify_value(value: Any) -> str:
@@ -585,6 +622,127 @@ def service_logs(
         typer.echo(logs)
     else:
         typer.echo(result.message)
+
+
+# ---------------------------------------------------------------------------
+# Model commands
+# ---------------------------------------------------------------------------
+
+
+@model_app.command("list")
+def model_list(
+    project: Optional[str] = typer.Argument(None, help="Project name"),
+    password: Optional[str] = typer.Option(
+        None,
+        "--password",
+        help="Password for the session",
+        show_default=False,
+    ),
+    registry: Optional[str] = typer.Option(
+        None,
+        "--registry",
+        "-r",
+        help="Name or ID of the model registry service to use.",
+    ),
+):
+    """List registered models from the configured MLflow registry."""
+
+    resolved_project, resolved_password = _resolve_credentials(project, password)
+    result = _handle_result(
+        ops.list_models(
+            project=resolved_project,
+            password=resolved_password,
+            registry_name=registry,
+        )
+    )
+    models = []
+    if result.data:
+        models = result.data.get("models", [])
+    if not models:
+        typer.echo(result.message)
+        return
+
+    rows = []
+    for m in models:
+        rows.append(
+            [
+                m.get("registry_name", "-"),
+                "x" if m.get("is_deployed", False) else "-",
+                m.get("Model", "-"),
+                m.get("Stage", "-"),
+                m.get("Version", "-"),
+                m.get("Description", "-"),
+                m.get("registry_name", "-")
+                + ":"
+                + m.get("Model", "-")
+                + ":"
+                + str(m.get("Version", "-")),
+            ]
+        )
+
+    title = "Models"
+    render_table(
+        [
+            "Registry",
+            "Deployed",
+            "Model",
+            "Stage",
+            "Version",
+            "Description",
+            "Deploy Key",
+        ],
+        rows,
+        title=title,
+    )
+
+
+@model_app.command("deploy")
+def model_deploy(
+    project: Optional[str] = typer.Argument(None, help="Project name"),
+    password: Optional[str] = typer.Option(
+        None,
+        "--password",
+        help="Password for the session",
+        show_default=False,
+    ),
+    model: str = typer.Option(
+        ...,
+        "--name",
+        "-n",
+        help="Registered model to deploy with format <registry_name>:<model_name>:<version>",
+    ),
+    target: str = typer.Option(
+        ...,
+        "--target",
+        "-t",
+        help="Target server IP or hostname where MLServer should run",
+    ),
+):
+    """Deploy a registered model using the MLflow MLServer docker service."""
+
+    resolved_project, resolved_password = _resolve_credentials(project, password)
+    registry, model_name, model_version = "", "", ""
+    parts = model.split(":")
+    if len(parts) == 3:
+        registry, model_name, model_version = parts
+    else:
+        typer.echo(
+            "[ERROR] Model identifier must be in the format <registry_name>:<model_name>:<version> or <model_name>:<version>",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    result = _handle_result(
+        ops.deploy_model(
+            project=resolved_project,
+            password=resolved_password,
+            registry_name=registry,
+            model_name=model_name,
+            model_version=model_version,
+            server_ip=target,
+        )
+    )
+    typer.echo(result.message)
 
 
 # ---------------------------------------------------------------------------

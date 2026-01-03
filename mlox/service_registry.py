@@ -55,3 +55,12 @@ def register_service(uuid: str, service: "AbstractService") -> None:
 def get_dependent_service(uuid: str) -> Optional["AbstractService"]:
     """Get a dependent service by UUID"""
     return get_service_registry().get_service(uuid)
+
+
+def get_dependent_service_by_name(name: str) -> Optional["AbstractService"]:
+    """Get a dependent service by name. Assumes service names are unique. Attention: Service names might change
+    and inefficient lookup."""
+    for _, service in get_service_registry()._services.items():
+        if service.name == name:
+            return service
+    return None

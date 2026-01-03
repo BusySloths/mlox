@@ -23,8 +23,11 @@ from mlox.config import (
     load_config,
     load_service_config_by_id,
 )
+from mlox.infra import ModelRegistry, ModelServer
 from mlox.session import MloxSession
 from mlox.utils import dataclass_to_dict, save_to_json
+
+DEFAULT_MLSERVER_TEMPLATE_ID = "mlflow-mlserver-2.22.0-docker"
 
 
 @dataclass
@@ -94,7 +97,9 @@ def _load_session(
 
     if session.secrets and not session.secrets.is_working():
         _SESSION_CACHE.invalidate(project)
-        return OperationResult(False, 2, "Secret manager for the project is not working.")
+        return OperationResult(
+            False, 2, "Secret manager for the project is not working."
+        )
 
     _SESSION_CACHE.set(project, password, session)
     return OperationResult(True, 0, "Session loaded.", session)
@@ -186,7 +191,9 @@ def add_server(
 
     bundle = session.infra.add_server(config=config, params=params)
     if not bundle:
-        return OperationResult(False, 4, "Failed to add server to the project infrastructure.")
+        return OperationResult(
+            False, 4, "Failed to add server to the project infrastructure."
+        )
 
     session.save_infrastructure()
     return OperationResult(True, 0, f"Added server {ip}.", {"bundle": bundle})
@@ -278,7 +285,9 @@ def list_services(project: str, password: str) -> OperationResult:
                     "urls": urls,
                 }
             )
-    message = "No services found." if not services else "Services retrieved successfully."
+    message = (
+        "No services found." if not services else "Services retrieved successfully."
+    )
     return OperationResult(True, 0, message, {"services": services})
 
 
@@ -306,7 +315,9 @@ def add_service(
 
     session.save_infrastructure()
     svc = bundle.services[-1]
-    return OperationResult(True, 0, f"Added service {svc.name} to {server_ip}.", {"service": svc})
+    return OperationResult(
+        True, 0, f"Added service {svc.name} to {server_ip}.", {"service": svc}
+    )
 
 
 def setup_service(project: str, password: str, *, name: str) -> OperationResult:
@@ -381,6 +392,134 @@ def service_logs(
 
 
 # ---------------------------------------------------------------------------
+# Model operations
+# ---------------------------------------------------------------------------
+
+
+def list_models(
+    project: str,
+    password: str,
+    *,
+    registry_name: Optional[str] = None,
+) -> OperationResult:
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    session = result.data
+    assert isinstance(session, MloxSession)
+
+    # select registry services
+    model_server = session.infra.filter_by_group("model-server")
+    registries = session.infra.filter_by_group("model-registry")
+    if len(registries) == 0:
+        return OperationResult(
+            False, 11, "No model registry service found in the project."
+        )
+
+    # filter registries by name if provided
+    if registry_name:
+        registry_service = next(
+            (svc for svc in registries if svc.name == registry_name), None
+        )
+        if not registry_service:
+            return OperationResult(
+                False,
+                13,
+                f"Registry service '{registry_name}' not found in the project.",
+            )
+
+    models = list()
+    for r in registries:
+        assert isinstance(r, ModelRegistry)
+
+        r_models = r.list_models()
+        for m in r_models:
+            is_deployed = False
+
+            for s in model_server:
+                if isinstance(s, ModelServer):
+                    model_name = f"{r.name}:{m.get('Model', '')}:{m.get('Version', '')}"
+                    is_deployed = s.is_model(model_name)
+                    if is_deployed:
+                        break
+
+            m["registry_name"] = r.name
+            m["is_deployed"] = is_deployed
+            models.append(m)
+    message = (
+        "No registered models found."
+        if len(models) == 0
+        else "Registered models retrieved."
+    )
+    return OperationResult(True, 0, message, {"models": models})
+
+
+def deploy_model(
+    project: str,
+    password: str,
+    *,
+    registry_name: Optional[str],
+    model_name: str,
+    model_version: str,
+    server_ip: str,
+    template_id: str = DEFAULT_MLSERVER_TEMPLATE_ID,
+) -> OperationResult:
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    session = result.data
+    assert isinstance(session, MloxSession)
+
+    target_bundle = session.infra.get_bundle_by_ip(server_ip)
+    if not target_bundle:
+        return OperationResult(
+            False, 14, f"Server {server_ip} not found in infrastructure."
+        )
+
+    registries = session.infra.filter_by_group("model-registry")
+    registry_service = None
+    for svc in registries:
+        if svc.name == registry_name:
+            registry_service = svc
+            break
+
+    if not registry_service:
+        return OperationResult(
+            False, 11, "No MLflow registry service found in the project."
+        )
+
+    secrets = registry_service.get_secrets()
+
+    params: Dict[str, str] = {
+        "${MODEL_NAME}": f"{model_name}/{model_version}",
+        "${TRACKING_URI}": str(secrets.get("service_url", "")),
+        "${TRACKING_USER}": str(secrets.get("username", "")),
+        "${TRACKING_PW}": str(secrets.get("password", "")),
+    }
+
+    # 1. Add service
+    op_res = add_service(
+        project=project,
+        password=password,
+        server_ip=server_ip,
+        template_id=template_id,
+        params=params,
+    )
+    # 2. Setup service
+    if not op_res.success:
+        return op_res
+    if not op_res.data:
+        return OperationResult(False, 15, "Failed to retrieve deployed service.")
+    if "service" not in op_res.data:
+        return OperationResult(False, 15, "Failed to retrieve deployed service.")
+    svc = op_res.data.get("service", None)
+    if not svc:
+        return OperationResult(False, 15, "Failed to retrieve deployed service.")
+    assert isinstance(svc, ModelServer)
+    return setup_service(project, password, name=svc.name)
+
+
+# ---------------------------------------------------------------------------
 # Config operations
 # ---------------------------------------------------------------------------
 
@@ -407,7 +546,9 @@ def list_service_configs() -> OperationResult:
         }
         for cfg in configs
     ]
-    message = "No service configs found." if not payload else "Service configs retrieved."
+    message = (
+        "No service configs found." if not payload else "Service configs retrieved."
+    )
     return OperationResult(True, 0, message, {"configs": payload})
 
 

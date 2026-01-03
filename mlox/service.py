@@ -180,6 +180,14 @@ class AbstractService(ABC):
 
         return get_dependent_service(service_uuid)
 
+    def get_dependent_service_by_name(
+        self, service_name: str
+    ) -> Optional["AbstractService"]:
+        """Get a dependent service by UUID using singleton registry."""
+        from mlox.service_registry import get_dependent_service_by_name
+
+        return get_dependent_service_by_name(service_name)
+
     def dump_state(self, conn) -> None:
         """Persist service debugging artifacts to the target directory."""
 

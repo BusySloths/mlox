@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from collections.abc import Generator
 import logging
 
@@ -23,6 +24,27 @@ from mlox.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ModelRegistry:
+    @abstractmethod
+    def list_models(self) -> List[Dict[str, Any]]:
+        pass
+
+
+@dataclass
+class ModelServer:
+    # kw_only avoids default-before-required ordering problems in subclasses
+    registry_uuid: str | None = field(default=None, kw_only=True)
+
+    @abstractmethod
+    def is_model(self, name: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_registry(self) -> ModelRegistry | None:
+        pass
 
 
 @dataclass

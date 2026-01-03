@@ -1,9 +1,10 @@
 import logging
 from datetime import datetime, timezone
 
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 
+from mlox.migrations.base import MloxMigrations
 from mlox.infra import Infrastructure
 from mlox.secret_manager import AbstractSecretManager, InMemorySecretManager
 from mlox.utils import (
@@ -64,11 +65,18 @@ class MloxSession:
     project: MloxProject
     infra: Infrastructure
     secrets: AbstractSecretManager | None = None
+    migrations: List[MloxMigrations] | None = None
 
-    def __init__(self, project_name: str, password: str):
+    def __init__(
+        self,
+        project_name: str,
+        password: str,
+        migrations: List[MloxMigrations] | None = None,
+    ):
         # self.scheduler = GlobalProcessScheduler().scheduler
         self.secrets = None
         self.password = password
+        self.migrations = migrations
         self.load_project(project_name)
         self.load_secret_manager()
         self.load_infrastructure()
@@ -180,4 +188,8 @@ class MloxSession:
             return None
         if not isinstance(infra_dict, dict):
             raise ValueError("Infrastructure data is not in the expected format.")
+        if self.migrations:
+            for migration in self.migrations:
+                logger.info(f"Applying migration: {migration.name}")
+                infra_dict = migration._migrate_childs(infra_dict)
         self.infra = Infrastructure.from_dict(infra_dict)

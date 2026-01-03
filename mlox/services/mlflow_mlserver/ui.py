@@ -6,72 +6,50 @@ import streamlit as st
 
 from typing import Dict, cast
 
-from mlox.infra import Infrastructure, Bundle
-from mlox.services.mlflow.docker import MLFlowDockerService
+from mlox.infra import Infrastructure, Bundle, ModelRegistry
 from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
 logger = logging.getLogger(__name__)
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
     params: Dict = dict()
 
-    c1, c2, c3 = st.columns(3)
-
-    mlflows = list()
-    for bundle in infra.bundles:
-        for s in bundle.services:
-            if s.name.lower().startswith("mlflow"):
-                mlflows.append(s)
-
-    if len(mlflows) == 0:
-        st.warning("No MLFlow server found. You need to add one first.")
+    registries = infra.filter_by_group(group="model-registry")
+    if len(registries) == 0:
+        st.warning("No model registries found. Please add one first.")
         return None
 
-    service = c1.selectbox(
-        "MLFlow Registry Server",
-        mlflows,
+    svc = st.selectbox(
+        "Select Model Registry",
+        registries,
         format_func=lambda x: f"{x.name} @ {x.service_url}",
     )
+    registry_secrets = svc.get_secrets()
 
-    service = cast(MLFlowDockerService, service)
+    if not registry_secrets:
+        st.warning(
+            f"No credentials found for model registry {svc.name}. Please add them first."
+        )
+        return None
 
-    # mlflow.set_tracking_uri(service.service_url)
-    mlflow.set_registry_uri(service.service_url)
-
-    os.environ["MLFLOW_TRACKING_USERNAME"] = service.ui_user
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = service.ui_pw
-    os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
-
-    client = mlflow.tracking.MlflowClient()
-    models = list()
-    for rm in client.search_registered_models():
-        models.append(rm.name)
-
-    my_model = c2.selectbox("Registered Models", models)
-
-    names = list()
-    filter_string = f"name='{my_model}'"
-    for rm in client.search_model_versions(filter_string):
-        # names.append([rm.name, rm.version, rm.current_stage, rm.source, rm.run_id])
-        names.append([rm.version, rm.aliases])
-
-    model = c3.selectbox(
-        "Model Version", names, format_func=lambda x: f"Version: {x[0]} - {x[1]}"
+    svc = cast(ModelRegistry, svc)  # type: ignore
+    models = svc.list_models()
+    my_model = st.selectbox(
+        "Select Model to Deploy",
+        models,
+        format_func=lambda x: f"{x['Model']}/{x['Version']}",
     )
 
-    model_uri = f"{my_model}/{model[0]}"
+    model_uri = f"{my_model['Model']}/{my_model['Version']}"
     st.write(model_uri)
 
     params["${MODEL_NAME}"] = model_uri
-    params["${TRACKING_URI}"] = service.service_url
-    params["${TRACKING_USER}"] = service.ui_user
-    params["${TRACKING_PW}"] = service.ui_pw
+    params["${TRACKING_URI}"] = registry_secrets["service_url"]
+    params["${TRACKING_USER}"] = registry_secrets["username"]
+    params["${TRACKING_PW}"] = registry_secrets["password"]
+
+    params["${MODEL_REGISTRY_UUID}"] = svc.uuid
 
     return params
 
