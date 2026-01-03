@@ -115,7 +115,9 @@ def settings(
         if not my_registry:
             st.warning("No model registry associated with this MLFlow MLServer.")
         else:
-            names = my_registry.list_models()
+            names = my_registry.list_models(
+                filter=f"name={service.model.split('/')[0]!r}"
+            )
 
             # filter_string = f"name={service.model.split('/')[0]!r}"
             # for rm in client.search_model_versions(filter_string):
@@ -136,4 +138,9 @@ def settings(
             #             "run_link": f"{service.service_url}#/experiments/{rm.run_id}/runs/{rm.run_id}",
             #         }
             #     )
-            st.write(pd.DataFrame(names))
+            st.dataframe(
+                pd.DataFrame(names),
+                height=400,
+                use_container_width=True,
+                column_config={"Tags": st.column_config.ListColumn(width="small")},
+            )

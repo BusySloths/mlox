@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ModelRegistry:
     @abstractmethod
-    def list_models(self) -> List[Dict[str, Any]]:
+    def list_models(self, filter: str | None = None) -> List[Dict[str, Any]]:
         pass
 
 

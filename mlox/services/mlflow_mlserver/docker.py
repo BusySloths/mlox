@@ -126,6 +126,9 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
             return None
         svc = cast(AbstractService, self)  # type: ignore
         registry = svc.get_dependent_service(self.registry_uuid)
+        if not registry:
+            logger.warning("No registry service found for UUID %s", self.registry_uuid)
+            return None
         return cast(ModelRegistry, registry)  # type: ignore
 
     def is_model(self, name: str) -> bool:

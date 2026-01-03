@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 from mlox.services.kafka.docker import KafkaDockerService
@@ -24,6 +26,7 @@ from mlox.services.registry.docker import RegistryDockerService
 from mlox.services.redis.docker import RedisDockerService
 from mlox.services.tsm.service import TSMService
 
+logger = logging.getLogger(__name__)
 
 BASE_KWARGS = {
     "name": "test-service",
@@ -298,10 +301,10 @@ SERVICE_CASES = [
         MLFlowDockerService,
         {"ui_user": "mlflow", "ui_pw": "mlflow-pass", "port": "5000"},
         {
-            "mlflow_ui_credentials": {
-                "username": "mlflow",
-                "password": "mlflow-pass",
-            },
+            "username": "mlflow",
+            "password": "mlflow-pass",
+            "port": "5000",
+            "insecure_tls": "true",
         },
         None,
     ),
@@ -341,4 +344,5 @@ def test_service_get_secrets(service_cls, extra_kwargs, expected, post_init):
     service = service_cls(**kwargs)
     if post_init is not None:
         post_init(service)
+    logger.info(f"secrets for service {service.name}: {service.get_secrets()}")
     assert service.get_secrets() == expected

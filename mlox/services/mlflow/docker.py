@@ -111,7 +111,7 @@ class MLFlowDockerService(AbstractService, ModelRegistry):
             return {}
         return credentials
 
-    def list_models(self) -> List[Dict[str, Any]]:
+    def list_models(self, filter: str | None = None) -> List[Dict[str, Any]]:
         """List all registered model names from the MLflow server."""
         all_models = []
         try:
@@ -121,7 +121,9 @@ class MLFlowDockerService(AbstractService, ModelRegistry):
             os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
 
             client = mlflow.tracking.MlflowClient()
-            models = client.search_model_versions(filter_string="", max_results=250)
+            models = client.search_model_versions(
+                filter_string=filter or "", max_results=250
+            )
             for m in models:
                 all_models.append(
                     {
