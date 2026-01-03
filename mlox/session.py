@@ -1,4 +1,6 @@
+import os
 import logging
+
 from datetime import datetime, timezone
 
 from typing import List, Optional, Dict, Any
@@ -193,3 +195,15 @@ class MloxSession:
                 logger.info(f"Applying migration: {migration.name}")
                 infra_dict = migration._migrate_childs(infra_dict)
         self.infra = Infrastructure.from_dict(infra_dict)
+
+
+def load_mlox_session(migrations: List[MloxMigrations] | None = None) -> MloxSession:
+    mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
+    mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
+    # Make sure your environment variable is set!
+    if not mlox_password or not mlox_name:
+        print(
+            "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_NAME environment variable is not set."
+        )
+        exit(1)
+    return MloxSession(mlox_name, mlox_password, migrations=migrations)

@@ -1,10 +1,7 @@
-import os
 import logging
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
-
-from mlox.session import MloxSession
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +68,3 @@ class MloxMigrations(ABC):
     @abstractmethod
     def migrate(self, data: Dict[str, Any]) -> Dict[str, Any]:
         pass
-
-
-def load_mlox_session(migrations: List[MloxMigrations]) -> MloxSession:
-    mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
-    mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
-    # Make sure your environment variable is set!
-    if not mlox_password or not mlox_name:
-        print(
-            "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_NAME environment variable is not set."
-        )
-        exit(1)
-    return MloxSession(mlox_name, mlox_password, migrations=migrations)

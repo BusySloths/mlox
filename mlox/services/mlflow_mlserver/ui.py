@@ -64,6 +64,8 @@ def settings(
         ["Overview", "Invocation & Sample", "Model Versions"]
     )
 
+    my_registry = service.get_registry()
+
     os.environ["MLFLOW_TRACKING_USERNAME"] = service.tracking_user
     os.environ["MLFLOW_TRACKING_PASSWORD"] = service.tracking_pw
     os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
@@ -120,23 +122,28 @@ def settings(
         st.subheader("Registered Versions")
 
         names = list()
-        filter_string = f"name={service.model.split('/')[0]!r}"
-        for rm in client.search_model_versions(filter_string):
-            # names.append([rm.name, rm.version, rm.current_stage, rm.source, rm.run_id])
-            names.append(
-                {
-                    # "name": rm.name,
-                    "alias": [str(a) for a in rm.aliases],
-                    "version": rm.version,
-                    "tags": [f"{k}:{v}" for k, v in rm.tags.items()],
-                    "current_stage": rm.current_stage,
-                    "creation_timestamp": rm.creation_timestamp,
-                    "run_id": rm.run_id,
-                    "status": rm.status,
-                    "last_updated_timestamp": rm.last_updated_timestamp,
-                    "description": rm.description,
-                    # "user_id": rm.user_id,
-                    "run_link": f"{service.service_url}#/experiments/{rm.run_id}/runs/{rm.run_id}",
-                }
-            )
-        st.write(pd.DataFrame(names))
+        if not my_registry:
+            st.warning("No model registry associated with this MLFlow MLServer.")
+        else:
+            names = my_registry.list_models()
+
+            # filter_string = f"name={service.model.split('/')[0]!r}"
+            # for rm in client.search_model_versions(filter_string):
+            #     # names.append([rm.name, rm.version, rm.current_stage, rm.source, rm.run_id])
+            #     names.append(
+            #         {
+            #             # "name": rm.name,
+            #             "alias": [str(a) for a in rm.aliases],
+            #             "version": rm.version,
+            #             "tags": [f"{k}:{v}" for k, v in rm.tags.items()],
+            #             "current_stage": rm.current_stage,
+            #             "creation_timestamp": rm.creation_timestamp,
+            #             "run_id": rm.run_id,
+            #             "status": rm.status,
+            #             "last_updated_timestamp": rm.last_updated_timestamp,
+            #             "description": rm.description,
+            #             # "user_id": rm.user_id,
+            #             "run_link": f"{service.service_url}#/experiments/{rm.run_id}/runs/{rm.run_id}",
+            #         }
+            #     )
+            st.write(pd.DataFrame(names))
