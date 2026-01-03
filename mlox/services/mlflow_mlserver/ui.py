@@ -1,6 +1,4 @@
-import os
 import logging
-import mlflow  # type: ignore
 import pandas as pd
 import streamlit as st
 
@@ -50,7 +48,6 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
     params["${TRACKING_PW}"] = registry_secrets["password"]
 
     params["${MODEL_REGISTRY_UUID}"] = svc.uuid
-
     return params
 
 
@@ -58,18 +55,9 @@ def settings(
     infra: Infrastructure, bundle: Bundle, service: MLFlowMLServerDockerService
 ):
     st.header(f"Settings for service {service.name}")
-    mlflow.set_registry_uri(service.tracking_uri)
-
     overview_tab, invoke_tab, versions_tab = st.tabs(
         ["Overview", "Invocation & Sample", "Model Versions"]
     )
-
-    my_registry = service.get_registry()
-
-    os.environ["MLFLOW_TRACKING_USERNAME"] = service.tracking_user
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = service.tracking_pw
-    os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
-    client = mlflow.tracking.MlflowClient()
 
     with overview_tab:
         info_col, cred_col = st.columns(2)
@@ -120,8 +108,10 @@ def settings(
 
     with versions_tab:
         st.subheader("Registered Versions")
+        my_registry = service.get_registry()
+        # st.write(service.registry_uuid)
+        # st.write(my_registry)
 
-        names = list()
         if not my_registry:
             st.warning("No model registry associated with this MLFlow MLServer.")
         else:

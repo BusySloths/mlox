@@ -122,6 +122,7 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
 
     def get_registry(self) -> ModelRegistry | None:
         if not self.registry_uuid:
+            logger.warning("No registry UUID set for MLFlow MLServer service.")
             return None
         svc = cast(AbstractService, self)  # type: ignore
         registry = svc.get_dependent_service(self.registry_uuid)
