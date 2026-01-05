@@ -12,7 +12,7 @@ const { title, description = "Accelerate your ML journey—deploy production-rea
   <head>
     <meta charset="UTF-8" />
     <meta name="description" content={description} />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href={`${import.meta.env.BASE_URL}favicon.svg`} />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
@@ -22,7 +22,7 @@ const { title, description = "Accelerate your ML journey—deploy production-rea
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   </head>
-  <body class="antialiased font-sans">
+  <body class="antialiased font-sans bg-dark-900 text-white min-h-screen overflow-x-hidden">
     <slot />
   </body>
 </html>
