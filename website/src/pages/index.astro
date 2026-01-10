@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
+import NewsBanner from '../components/NewsBanner.astro';
 import { getCollection } from 'astro:content';
 
 // Get content from markdown files
@@ -16,7 +17,8 @@ const heroContent = heroPage ? await heroPage.render() : null;
 
 <BaseLayout title="MLOX - MLOps Made Simple">
   <Header />
-  
+  <NewsBanner />
+
   <style>
     .hero-container {
       perspective: 1200px;
@@ -40,7 +42,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
     }
   </style>
   
-  <main class="pt-16 bg-dark-900">
+  <main class="pt-28 bg-dark-900">
     <!-- Hero Section -->
     <section class="relative min-h-screen flex items-center justify-center bg-dark-900">
       <!-- Decorative elements -->

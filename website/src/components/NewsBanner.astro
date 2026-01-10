@@ -1,0 +1,52 @@
+---
+// News banner for important announcements
+---
+
+<div id="news-banner" class="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-accent-purple via-accent-pink to-accent-cyan shadow-lg transition-all duration-300">
+  <div class="container mx-auto px-6 py-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3 flex-1 justify-center text-center">
+        <span class="text-2xl animate-pulse">🎉</span>
+        <p class="text-dark-900 font-semibold text-sm md:text-base">
+          <span class="font-bold">News:</span> Our paper "MLOX: Open-Source MLOps for the Rest of Us" has been accepted by
+          <a href="https://conf.researchr.org/home/cain-2026" target="_blank" rel="noopener noreferrer" class="underline hover:text-white transition-colors font-bold">
+            CAIN 2026
+          </a>
+          <span class="hidden sm:inline"> - the top AI Engineering conference!</span>
+        </p>
+        <span class="text-2xl animate-pulse">🎉</span>
+      </div>
+      <button
+        id="close-banner"
+        class="ml-4 text-dark-900 hover:text-white transition-colors p-1 rounded hover:bg-dark-900/20"
+        aria-label="Close banner"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const banner = document.getElementById('news-banner');
+    const closeButton = document.getElementById('close-banner');
+
+    // Check if banner was previously closed
+    const bannerClosed = localStorage.getItem('news-banner-closed');
+    if (bannerClosed === 'true') {
+      banner?.classList.add('hidden');
+      // Adjust main content padding
+      document.querySelector('main')?.classList.remove('pt-16');
+    }
+
+    closeButton?.addEventListener('click', () => {
+      banner?.classList.add('hidden');
+      localStorage.setItem('news-banner-closed', 'true');
+      // Adjust main content padding when banner is closed
+      document.querySelector('main')?.classList.remove('pt-16');
+    });
+  });
+</script>
