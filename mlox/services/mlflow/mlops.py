@@ -1,6 +1,5 @@
 import os
 import logging
-import urllib3
 from pathlib import Path
 
 import numpy as np
@@ -13,8 +12,10 @@ from abc import ABC, abstractmethod
 import mlflow  # type: ignore
 from mlflow.tracking import MlflowClient  # type: ignore
 
+import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,17 @@ class DeployableModel(ABC):
 
 
 class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
+    registered_model_name: str | None
+    requirements_file: str | None
+    requirements_python_version: str | None
+
     def __init__(
         self,
         model: DeployableModel,
         model_class: str,
         code_paths: Sequence[str] | None = None,
+        requirements_file: str | None = None,
+        requirements_python_version: str = "3.12.5",
     ) -> None:
         self.model = model
         self.model_class = model_class
@@ -48,6 +55,18 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
         self.tracking_uri = os.environ["MLFLOW_URI"]
         self.registry_uri = os.environ["MLFLOW_URI"]
         self.code_paths = list(code_paths) if code_paths is not None else ["./airml"]
+        self.registered_model_name = None
+        self.requirements_file = requirements_file
+        self.requirements_python_version = requirements_python_version
+
+    def set_registered_model_name(self, registered_model_name: str | None) -> None:
+        if registered_model_name:
+            logger.info("Setting registered model name to '%s'", registered_model_name)
+        else:
+            logger.info(
+                "Clearing registered model name means that model won't be registered."
+            )
+        self.registered_model_name = registered_model_name
 
     def track_model(
         self,
@@ -97,22 +116,27 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
                 conda_env=self.get_conda_env(),
                 signature=signature,
                 input_example=input_example,
-                registered_model_name=None,
+                registered_model_name=self.registered_model_name,
                 artifacts=artifacts,
             )
 
-    def get_conda_env(
-        self,
-        name: str = "mlflow-models",
-        python_version: str = "3.11.5",
-        requirements_file: str = "requirements-mlops.txt",
-    ) -> Dict:
+    def get_conda_env(self) -> Dict:
+        """Create a conda environment for the MLflow model."""
+        if self.requirements_file is None:
+            return {
+                "name": "mlflow-models",
+                "channels": ["defaults"],
+                "dependencies": [
+                    f"python={self.requirements_python_version or '3.12.5'}",
+                    {"pip": [f"mlflow=={mlflow.__version__}"]},
+                ],
+            }
         return {
-            "name": name,
+            "name": "mlflow-models",
             "channels": ["defaults"],
             "dependencies": [
-                f"python={python_version}",
-                {"pip": [f"-r {requirements_file}"]},
+                f"python={self.requirements_python_version or '3.12.5'}",
+                {"pip": [f"-r {self.requirements_file}"]},
             ],
         }
 
@@ -123,11 +147,13 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
             context: MLflow context where the model artifact is stored.
         """
         logger.info(f"Load context called with context={context}")
+        # self._add_code_paths_to_pythonpath(context)
         self.artifacts = context.artifacts or {}
         logger.info(f"Load artifacts {list(self.artifacts.keys())}")
         self.model_config = context.model_config
         if self.model_config is not None:
             logger.info(f"Load model_config {list(self.model_config.keys())}")
+
         logger.info("Done.")
 
     def predict(self, context, model_input, params=None) -> pd.DataFrame:
@@ -137,6 +163,10 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
         logger.info(f"Params: {params}")
         logger.info(f"Input: {model_input}")
         logger.info(f"Input type: {type(model_input)}")
+
+        if params is None:
+            logger.info("No params provided; using empty dict.")
+            params = {}
 
         logger.info("Entering prediction.")
         try:
