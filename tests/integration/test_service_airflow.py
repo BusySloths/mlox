@@ -20,7 +20,7 @@ def install_airflow_service(ubuntu_docker_server):
     infra.bundles.append(bundle)
 
     # Load Airflow stack config
-    config = load_config(get_stacks_path(), "/airflow", "mlox.3.0.1.yaml")
+    config = load_config(get_stacks_path(), "/airflow", "mlox.3.1.3.yaml")
 
     bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
