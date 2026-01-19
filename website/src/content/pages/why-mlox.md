@@ -10,7 +10,7 @@ cards:
   - title: "Sloth-Paced Philosophy"
     icon: "🦥"
     description: "We believe in thoughtful, calm systems over rushed chaos. Move fast by moving deliberately, with sensible defaults and clear documentation."
-  - title: "Production-Ready"
+  - title: "Designed for Long-Term Use"
     icon: "🚀"
-    description: "Built for production from day one. Secure by default, scalable by design, and maintainable for the long haul. No prototypes—just solid infrastructure."
+    description: "Built with stability, transparency, and maintainability in mind. MLOX evolves with real-world usage and community guidance."
 ---
