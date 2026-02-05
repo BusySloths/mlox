@@ -540,6 +540,10 @@ def service_add(
         )
     )
     typer.echo(result.message)
+    svc = result.data.get("service", None) if result.data else None
+    if svc:
+        typer.echo(f"Service UUID: {svc.uuid}")
+        typer.echo(f"Service Name: {svc.name}")
 
 
 @service_app.command("setup")
@@ -562,6 +566,10 @@ def service_setup(
         )
     )
     typer.echo(result.message)
+    svc = result.data.get("service", None) if result.data else None
+    if svc:
+        typer.echo(f"Service UUID: {svc.uuid}")
+        typer.echo(f"Service Name: {svc.name}")
 
 
 @service_app.command("teardown")
@@ -742,7 +750,13 @@ def model_deploy(
             server_ip=target,
         )
     )
+    svc = result.data.get("service", None) if result.data else None
     typer.echo(result.message)
+    if svc:
+        typer.echo(f"Deployed service URL: {svc.get('urls', ['-'])[0]}")
+        typer.echo(f"Deployed service ports: {svc.get('ports', ['-'])}")
+        typer.echo(f"Model service UUID: {svc.uuid}")
+        typer.echo(f"Model service name: {svc.name}")
 
 
 # ---------------------------------------------------------------------------

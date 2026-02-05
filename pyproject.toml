@@ -77,7 +77,7 @@ dev = [
     # MinIO
     "boto3==1.40.56",  # M
     # developer extras (includes 'all')
-    "streamlit==1.50.0",  # M
+    "streamlit==1.53.0",  # M
     "streamlit-vis-timeline==0.3.0",  # M
     "textual==6.3.0",  # M
     "textual-dev==1.8.0",  # M
@@ -89,7 +89,7 @@ dev = [
     "google-cloud-storage>=2.10",
     "google-cloud-bigquery>=3.10",
     "google-cloud-secret-manager>=2.18",
-    "mlflow==2.22.2",  # M
+    "mlflow==3.8.1",  # M
     "mlserver==1.7.1",  # M
     "psutil==7.1.2", # M: for mlflow monitoring
     "opentelemetry-api==1.33.1",  # M

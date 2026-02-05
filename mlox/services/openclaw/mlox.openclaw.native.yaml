@@ -1,0 +1,35 @@
+id: openclaw-native
+name: OpenClaw
+version: "latest"
+maintainer: Your Name
+description_short: OpenClaw is a personal AI assistant you run on your own devices.
+description: |
+  OpenClaw is a personal AI assistant you run on your own devices. It provides a
+  gateway control plane and multi-channel integrations. This native service
+  installs the OpenClaw CLI and runs the gateway on a VPS.
+links:
+  project: https://openclaw.ai
+  documentation: https://docs.openclaw.ai
+  changelog: https://github.com/openclaw/openclaw/releases
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 5.0
+groups:
+  service:
+  assistant:
+  backend:
+    native:
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
+  gateway: 18789
+ui:
+  setup: mlox.services.openclaw.ui.setup
+  settings: mlox.services.openclaw.ui.settings
+build:
+  class_name: mlox.services.openclaw.native.OpenClawNativeService
+  params:
+    name: openclaw-native
+    template: ${MLOX_STACKS_PATH}/openclaw/mlox.openclaw.native.yaml
+    target_path: ${MLOX_USER_HOME}/openclaw
+    port: ${MLOX_AUTO_PORT_GATEWAY}
+    install_channel: ${OPENCLAW_INSTALL_CHANNEL}

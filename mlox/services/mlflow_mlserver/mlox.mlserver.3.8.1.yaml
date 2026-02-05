@@ -1,0 +1,45 @@
+id: mlflow-mlserver-3.8.1-docker
+name: MLFlow-MLServer
+version: "3.8.1"
+maintainer: Your Name
+description_short: MLServer is an open-source Python library for building production-ready asynchronous APIs for machine learning models.
+description: |
+  MLServer aims to provide an easy way to start serving your machine learning models through a REST and gRPC interface,
+  fully compliant with KFServing's V2 Dataplane spec. MLServer supports multi-model serving, the ability to run inference
+  in parallel for vertical scaling across multiple models through a sharedpool of inference workers, and more. This service
+  uses MLFlow MLServer integration to deploy single models. The version of this service refers to MLFlow.
+links:
+  project: https://mlserver.readthedocs.io/en/stable/
+  news: https://mlserver.readthedocs.io/en/stable/
+  security: https://mlserver.readthedocs.io/en/stable/
+  documentation: https://mlserver.readthedocs.io/en/stable/index.html
+  changelog: https://mlserver.readthedocs.io/en/stable/changelog.html
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
+groups:
+  service:
+  model-server:
+  backend:
+    docker:
+ports: # These are 'preferred' ports, they can and possibly will be changed by automation
+  rest: 6432
+ui:
+  setup: mlox.services.mlflow_mlserver.ui.setup
+  settings: mlox.services.mlflow_mlserver.ui.settings
+build:
+  class_name: mlox.services.mlflow_mlserver.docker.MLFlowMLServerDockerService
+  params:
+    name: mlflow-mlserver-3.8.1
+    template: ${MLOX_STACKS_PATH}/mlflow_mlserver/docker-compose-mlflow-mlserver-3.8.1.yaml
+    dockerfile: ${MLOX_STACKS_PATH}/mlflow_mlserver/dockerfile-mlflow-mlserver-3.8.1
+    target_path: ${MLOX_USER_HOME}/mlflow-mlserver-3.8.1
+    port: ${MLOX_AUTO_PORT_REST}
+    model: ${MODEL_NAME}
+    tracking_uri: ${TRACKING_URI}
+    tracking_user: ${TRACKING_USER}
+    tracking_pw: ${TRACKING_PW}
+    user: ${MLOX_AUTO_USER}
+    pw: ${MLOX_AUTO_PW}
+    registry_uuid: ${MODEL_REGISTRY_UUID}

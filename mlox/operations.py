@@ -333,7 +333,7 @@ def setup_service(project: str, password: str, *, name: str) -> OperationResult:
 
     session.infra.setup_service(svc)
     session.save_infrastructure()
-    return OperationResult(True, 0, f"Service {name} set up.")
+    return OperationResult(True, 0, f"Service {name} set up.", data={"service": svc})
 
 
 def teardown_service(project: str, password: str, *, name: str) -> OperationResult:
@@ -349,7 +349,7 @@ def teardown_service(project: str, password: str, *, name: str) -> OperationResu
 
     session.infra.teardown_service(svc)
     session.save_infrastructure()
-    return OperationResult(True, 0, f"Service {name} removed.")
+    return OperationResult(True, 0, f"Service {name} removed.", data={"service": svc})
 
 
 def service_logs(

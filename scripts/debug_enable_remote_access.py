@@ -1,5 +1,4 @@
 import os
-import os
 
 from mlox.executors import TaskGroup
 from mlox.session import MloxSession
@@ -13,9 +12,7 @@ def enable_password_authentication(bundle_name: str):
         exit(1)
 
     project = (
-        os.environ.get("MLOX_CONFIG_USER")
-        or os.environ.get("MLOX_PROJECT")
-        or "mlox"
+        os.environ.get("MLOX_CONFIG_USER") or os.environ.get("MLOX_PROJECT") or "mlox"
     )
 
     session = MloxSession(project, password)

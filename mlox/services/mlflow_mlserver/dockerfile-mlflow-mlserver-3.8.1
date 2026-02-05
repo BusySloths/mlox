@@ -1,0 +1,44 @@
+FROM python:3.11-slim
+
+# Ensure operations are done as root, making $HOME=/root consistent for PYENV_ROOT
+USER root
+
+# Define PYENV_ROOT and add pyenv's shims and bin directories to the PATH.
+# Shims need to be prioritized for pyenv to function correctly.
+ENV PYENV_ROOT="/root/.pyenv"
+ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+
+ENV PYTHONPATH=.
+
+# Install prerequisites for pyenv (git and curl) and other utilities.
+# Consolidate into a single RUN layer and clean up apt cache to reduce image size.
+RUN apt-get -y update && apt-get -y install --no-install-recommends \
+    curl \
+    bash \
+    git \
+    # Add build dependencies for pyenv to compile Python
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libncursesw5-dev \
+    libffi-dev \
+    liblzma-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pyenv using the official installer.
+# The -L flag for curl follows redirects.
+# The script installs pyenv into $PYENV_ROOT.
+RUN curl -s -L https://pyenv.run | bash
+
+# Install MLflow and its extras. Using --no-cache-dir to reduce image size.
+RUN pip install --no-cache-dir "mlflow==3.8.1" "mlflow[extras]==3.8.1"
+
+# Install recent MLServer integrations compatible with MLflow 3.x.
+RUN pip install --no-cache-dir "mlserver~=1.7.1" "mlserver-mlflow~=1.7.1"
+
+# Install uvloop version compatible with MLServer
+RUN pip install --no-cache-dir "uvloop==0.21.0"

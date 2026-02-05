@@ -1,0 +1,67 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # Constrain Docker provider to only discover services on this stack's specific network
+      - "--providers.docker.network=mlflow_3_8_1_stack_traefik_net"
+      - "--entrypoints.https.address=:443"
+    ports:
+      - ${MLFLOW_PORT:-1234}:443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-net
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.8.1
+    environment:
+      # - MLFLOW_TRACKING_TOKEN=${MLFLOW_TOKEN:-token}
+      # MLFLOW_TRACKING_USERNAME: ${MLFLOW_USERNAME:-admin}
+      # MLFLOW_TRACKING_PASSWORD: ${MLFLOW_PASSWORD:-password}
+      MLFLOW_AUTH_CONFIG_PATH: "/var/lib/mlflow/mlflow-auth/basic-auth.ini"
+      MLFLOW_FLASK_SERVER_SECRET_KEY: "my-secret-key"
+      # Optional: point MLflow to the AI Gateway when enabled in this stack.
+      # MLFLOW_GATEWAY_URI: "http://mlflow-gateway:5003"
+    restart: always
+    container_name: mlflow
+    command: >-
+      bash -c "pip install 'Flask-WTF==1.2.2' && mlflow server --host 0.0.0.0 --port 5002 --app-name basic-auth
+      --cors-allowed-origins https://${MLFLOW_URL:-localhost}:${MLFLOW_PORT:-1234},http://${MLFLOW_URL:-localhost}:${MLFLOW_PORT:-1234}
+      --allowed-hosts ${MLFLOW_URL:-localhost},${MLFLOW_URL:-localhost}:${MLFLOW_PORT:-1234}"
+    labels:
+      - "traefik.enable=true"
+
+      # Define a unique router for the MLflow UI
+      - "traefik.http.routers.mlflow-secure.entrypoints=https"
+      - "traefik.http.routers.mlflow-secure.rule=Host(`${MLFLOW_URL:-localhost}`)"
+      - "traefik.http.routers.mlflow-secure.service=mlflow-ui-service"
+      - "traefik.http.routers.mlflow-secure.tls=true"
+
+      # Define the Traefik service that the router points to
+      - "traefik.http.services.mlflow-ui-service.loadbalancer.server.port=5002"
+    networks:
+      - traefik-net
+    volumes:
+      - ./basic-auth.ini:/var/lib/mlflow/mlflow-auth/basic-auth.ini
+      - mlflow-runs:/mlruns
+      - mlflow-artifacts:/mlartifacts
+
+volumes:
+  traefik-public-certificates:
+
+  mlflow-runs:
+
+  mlflow-artifacts:
+
+networks:
+  traefik-net:
+    name: mlflow_3_8_1_stack_traefik_net

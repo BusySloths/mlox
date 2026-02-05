@@ -1,4 +1,6 @@
 import logging
+import os
+import shlex
 
 from typing import Dict, cast
 from passlib.hash import apr_md5_crypt  # type: ignore
@@ -6,6 +8,7 @@ from dataclasses import dataclass, field
 
 from mlox.infra import ModelRegistry, ModelServer
 from mlox.service import AbstractService
+from mlox.executors import TaskGroup
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,9 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
             conn, self.template, f"{self.target_path}/{self.target_docker_script}"
         )
         self.exec.fs_copy(
-            conn, self.dockerfile, f"{self.target_path}/dockerfile-mlflow-mlserver"
+            conn,
+            self.dockerfile,
+            f"{self.target_path}/{os.path.basename(self.dockerfile)}",
         )
         # self.exec.fs_copy(conn, self.settings, f"{self.target_path}/settings.json")
         # self.exec.tls_setup(conn, conn.host, self.target_path)
@@ -91,7 +96,37 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
         return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
-        return {}
+        try:
+            state = self.exec.docker_service_state(
+                conn, self.compose_service_names.get("MLServer", "")
+            )
+            if state and state.strip() == "running":
+                health_url = f"{self.service_url}/v2/health/ready"
+                host = shlex.quote(conn.host)
+                user = shlex.quote(self.user)
+                pw = shlex.quote(self.pw)
+                url = shlex.quote(health_url)
+                cmd = (
+                    "curl -s -o /dev/null -w '%{http_code}' -k "
+                    f"-u {user}:{pw} -H 'Host: {host}' {url}"
+                )
+                code = self.exec.execute(
+                    conn,
+                    command=cmd,
+                    group=TaskGroup.NETWORKING,
+                    description="Check MLServer readiness",
+                )
+                if code and code.strip() == "200":
+                    self.state = "running"
+                    return {"status": "running"}
+                self.state = "unknown"
+                return {"status": "unknown", "http_code": (code or "").strip()}
+            self.state = "stopped"
+            return {"status": "stopped"}
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            logger.error("Error checking MLServer status: %s", exc)
+            self.state = "unknown"
+        return {"status": "unknown"}
 
     def get_secrets(self) -> Dict[str, Dict]:
         secrets: Dict[str, Dict] = {}
