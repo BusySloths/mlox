@@ -1,3 +1,22 @@
+"""Service base abstractions and lifecycle contract for deployable MLOX services.
+
+Purpose:
+- Provide the common dataclass model and lifecycle methods shared by all concrete services.
+
+Key public classes/functions:
+- ``AbstractService`` core base class with setup/spin/check/teardown interfaces
+- helper methods for compose execution, dependency lookup, and URL/port registration
+
+Expected runtime mode:
+- Remote executor backend used from CLI/UI/TUI workflows
+
+Related modules (plain-text links):
+- mlox.infra
+- mlox.server
+- mlox.executors
+- mlox.services
+"""
+
 import io
 import csv
 import json

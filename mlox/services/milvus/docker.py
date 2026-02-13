@@ -1,3 +1,19 @@
+"""Docker deployment adapter for Milvus vector database services.
+
+Purpose:
+- Prepare Milvus Compose runtime files, environment variables, and reachable service URLs.
+
+Key public classes/functions:
+- ``MilvusDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.milvus.ui
+"""
+
 import logging
 import hashlib
 import base64

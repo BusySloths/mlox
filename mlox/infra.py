@@ -1,3 +1,25 @@
+"""Infrastructure domain models for bundles, services, and registry-aware composition.
+
+Purpose:
+- Represent and mutate project infrastructure state, including server bundles and configured services.
+
+Key public classes/functions:
+- ``Infrastructure`` for top-level infrastructure orchestration and serialization
+- ``Bundle`` for grouping services by server
+- ``ModelRegistry`` and ``ModelServer`` interfaces for model-serving integrations
+- ``Repo`` domain metadata container
+
+Expected runtime mode:
+- Remote executor + CLI/UI/TUI backend state management
+
+Related modules (plain-text links):
+- mlox.server
+- mlox.service
+- mlox.config
+- mlox.session
+- mlox.service_registry
+"""
+
 from abc import abstractmethod
 from collections.abc import Generator
 import logging

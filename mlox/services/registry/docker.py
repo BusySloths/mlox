@@ -1,4 +1,18 @@
-"""Docker-based private registry service implementation."""
+"""Docker deployment adapter for private OCI/Docker image registry services.
+
+Purpose:
+- Manage registry setup with TLS and auth so other services can push and pull private images.
+
+Key public classes/functions:
+- ``RegistryDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.registry.ui
+"""
 
 import bcrypt
 import logging

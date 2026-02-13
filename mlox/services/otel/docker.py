@@ -1,3 +1,20 @@
+"""Docker deployment adapter for OpenTelemetry collector and observability stack.
+
+Purpose:
+- Configure OTel collector compose services, certificates, and telemetry endpoint exposure.
+
+Key public classes/functions:
+- ``OtelDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.otel.ui
+- mlox.services.otel.client
+"""
+
 import logging
 
 from dataclasses import dataclass, field

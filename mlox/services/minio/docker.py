@@ -1,3 +1,19 @@
+"""Docker deployment adapter for MinIO object storage services.
+
+Purpose:
+- Configure MinIO credentials, TLS material, and compose runtime needed for S3-compatible access.
+
+Key public classes/functions:
+- ``MinioDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.minio.ui
+"""
+
 import logging
 
 from dataclasses import dataclass, field

@@ -1,3 +1,19 @@
+"""Docker deployment adapter for Apache Kafka service instances.
+
+Purpose:
+- Set up Kafka Compose stacks, runtime environment values, and service endpoint registration.
+
+Key public classes/functions:
+- ``KafkaDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.kafka.ui
+"""
+
 import base64
 import logging
 import secrets

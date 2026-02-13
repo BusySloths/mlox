@@ -1,3 +1,20 @@
+"""Docker deployment adapter for MLflow + MLServer inference stacks.
+
+Purpose:
+- Provision combined tracking and model-serving containers for MLflow/MLServer workflows.
+
+Key public classes/functions:
+- ``MLFlowMLServerDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.mlflow_mlserver.ui
+- mlox.services.mlflow
+"""
+
 import logging
 import os
 import shlex

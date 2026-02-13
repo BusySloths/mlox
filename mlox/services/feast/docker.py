@@ -1,3 +1,21 @@
+"""Docker deployment adapter for Feast registry services.
+
+Purpose:
+- Provision Feast registry containers and connect them to Redis and Postgres dependent stores.
+
+Key public classes/functions:
+- ``FeastDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.redis.docker
+- mlox.services.postgres.docker
+- mlox.services.feast.ui
+"""
+
 from __future__ import annotations
 import yaml
 import logging
