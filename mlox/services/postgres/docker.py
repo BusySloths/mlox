@@ -1,3 +1,19 @@
+"""Docker deployment adapter for PostgreSQL database services.
+
+Purpose:
+- Provision PostgreSQL containers, set credentials/database vars, and register connection URLs.
+
+Key public classes/functions:
+- ``PostgresDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.postgres.ui
+"""
+
 import logging
 
 from dataclasses import dataclass, field

@@ -1,3 +1,24 @@
+"""Session and project persistence orchestration for MLOX runtime state.
+
+Purpose:
+- Manage project loading/saving, secret manager wiring, migrations, and infrastructure persistence.
+
+Key public classes/functions:
+- ``MloxSession`` for authenticated project sessions and infrastructure access
+- ``MloxProject`` persisted project metadata model
+- ``GlobalProcessScheduler`` singleton wrapper around background process scheduling
+
+Expected runtime mode:
+- CLI/UI/TUI runtime coordinator (local control plane with remote executor integration)
+
+Related modules (plain-text links):
+- mlox.infra
+- mlox.secret_manager
+- mlox.scheduler
+- mlox.migrations
+- mlox.utils
+"""
+
 import os
 import logging
 

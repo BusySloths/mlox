@@ -1,3 +1,19 @@
+"""Docker deployment adapter for Redis cache and message-broker services.
+
+Purpose:
+- Configure Redis compose deployment, password/port variables, and discoverable service URLs.
+
+Key public classes/functions:
+- ``RedisDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.redis.ui
+"""
+
 import logging
 
 from dataclasses import dataclass, field

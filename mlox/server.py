@@ -1,3 +1,22 @@
+"""Server abstractions and concrete server execution context models.
+
+Purpose:
+- Define server-side connection, provisioning, and command execution contracts consumed by infrastructure and services.
+
+Key public classes/functions:
+- ``AbstractServer`` base interface for server lifecycle and execution operations
+- concrete server implementations and metadata helpers used by bundles/infrastructure
+
+Expected runtime mode:
+- Remote executor backend driven by CLI/UI/TUI control planes
+
+Related modules (plain-text links):
+- mlox.executors
+- mlox.infra
+- mlox.service
+- mlox.servers
+"""
+
 import os
 import time  # Added for retry delay
 import uuid

@@ -1,7 +1,22 @@
-"""Command line interface for MLOX.
+"""MLOX command-line entrypoints and command group wiring.
 
-This rewrite exposes a higher level interface for managing projects,
-servers and services in preparation for a server/client architecture.
+Purpose:
+- Define the Typer-based CLI surface for project, server, service, and model lifecycle operations.
+
+Key public classes/functions:
+- ``app``, ``project_app``, ``server_app``, ``service_app``, ``model_app`` (Typer applications)
+- ``main`` callback and command handlers for project/server/service/model actions
+- helper resolvers such as ``_resolve_credentials`` and ``parse_kv``
+
+Expected runtime mode:
+- CLI (interactive shell and scriptable command execution)
+
+Related modules (plain-text links):
+- mlox.operations
+- mlox.session
+- mlox.config
+- mlox.service
+- mlox.server
 """
 
 from __future__ import annotations

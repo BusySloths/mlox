@@ -1,3 +1,19 @@
+"""Docker deployment adapter for InfluxDB service instances.
+
+Purpose:
+- Configure InfluxDB container runtime, credentials, and TLS-enabled service exposure.
+
+Key public classes/functions:
+- ``InfluxDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.influx.ui
+"""
+
 import logging
 
 from dataclasses import dataclass, field

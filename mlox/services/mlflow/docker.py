@@ -1,3 +1,20 @@
+"""Docker deployment adapter for MLflow tracking and artifact services.
+
+Purpose:
+- Configure MLflow compose stacks, optional backend dependencies, and externally reachable endpoints.
+
+Key public classes/functions:
+- ``MLFlowDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.mlflow.ui
+- mlox.services.mlflow.mlops
+"""
+
 import os
 import mlflow  # type: ignore
 import logging

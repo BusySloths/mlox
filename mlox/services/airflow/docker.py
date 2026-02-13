@@ -1,3 +1,20 @@
+"""Docker deployment adapter for Apache Airflow service instances.
+
+Purpose:
+- Configure and manage Airflow containers, TLS assets, and runtime credentials on a target server.
+
+Key public classes/functions:
+- ``AirflowDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.executors
+- mlox.services.airflow.ui
+"""
+
 import ssl
 import json
 import base64

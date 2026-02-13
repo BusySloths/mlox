@@ -1,4 +1,19 @@
-"""Docker-based OpenBao secret manager service."""
+"""Docker deployment adapter for OpenBao secret management services.
+
+Purpose:
+- Stand up OpenBao in containers with TLS setup and service endpoint metadata.
+
+Key public classes/functions:
+- ``OpenBaoDockerService``
+
+Expected runtime mode:
+- Remote executor (invoked from CLI/UI/TUI orchestration)
+
+Related modules (plain-text links):
+- mlox.service
+- mlox.services.openbao.ui
+- mlox.services.openbao.client
+"""
 
 from __future__ import annotations
 
