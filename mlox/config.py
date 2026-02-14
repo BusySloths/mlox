@@ -3,9 +3,9 @@ import yaml
 import logging
 import importlib
 
-from importlib import resources
+from importlib import resources, metadata as importlib_metadata
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Literal, Callable
+from typing import Dict, List, Any, Literal, Callable, TypedDict
 
 from mlox.service import AbstractService
 from mlox.server import AbstractServer
@@ -133,11 +133,7 @@ def load_service_config_by_id(service_id: str) -> ServiceConfig | None:
     return None
 
 
-def load_all_server_configs() -> List[ServiceConfig]:
-    return load_all_service_configs(prefix="mlox-server")
-
-
-def load_all_service_configs(
+def _load_builtin_configs(
     prefix: Literal["mlox", "mlox-server"] = "mlox",
 ) -> List[ServiceConfig]:
     root_dir = get_stacks_path(prefix)
@@ -152,6 +148,25 @@ def load_all_service_configs(
         if not os.path.isdir(os.path.join(root_dir, candidate)):
             continue
         configs.extend(load_service_configs(root_dir, candidate, prefix=prefix))
+    return configs
+
+
+def load_all_server_configs(*, include_plugins: bool = True) -> List[ServiceConfig]:
+    return load_all_service_configs(prefix="mlox-server", include_plugins=include_plugins)
+
+
+def load_all_service_configs(
+    prefix: Literal["mlox", "mlox-server"] = "mlox",
+    *,
+    include_plugins: bool = True,
+) -> List[ServiceConfig]:
+    configs = _load_builtin_configs(prefix=prefix)
+    if not include_plugins:
+        return configs
+
+    kind: PluginKind = "service" if prefix == "mlox" else "server"
+    for plugin in _discover_entrypoint_plugins(kind):
+        configs.append(plugin["config"])
     return configs
 
 
@@ -217,6 +232,64 @@ def load_config(
                 f"An unexpected error occurred while processing {filepath}: {e}"
             )
     return None
+
+
+PluginKind = Literal["service", "server"]
+
+
+class ConfigPluginRecord(TypedDict):
+    """Plugin discovery record with an instantiated ``ServiceConfig`` object."""
+
+    plugin_id: str
+    config: ServiceConfig
+
+
+def _entrypoint_group(kind: PluginKind) -> str:
+    return "mlox.service_plugins" if kind == "service" else "mlox.server_plugins"
+
+
+def _config_prefix(kind: PluginKind) -> str:
+    return "mlox" if kind == "service" else "mlox-server"
+
+
+def _from_entry_point(value: object) -> ConfigPluginRecord | None:
+    if isinstance(value, ServiceConfig):
+        return {"plugin_id": value.id, "config": value}
+    return None
+
+
+def _discover_entrypoint_plugins(kind: PluginKind) -> List[ConfigPluginRecord]:
+    plugins: List[ConfigPluginRecord] = []
+    eps = importlib_metadata.entry_points()
+    for entry_point in eps.select(group=_entrypoint_group(kind)):
+        try:
+            provider = entry_point.load()
+            provided = provider() if callable(provider) else provider
+            plugin = _from_entry_point(provided)
+            if plugin:
+                plugins.append(plugin)
+        except Exception:
+            continue
+    return plugins
+
+
+def discover_config_plugins(kind: PluginKind) -> List[ConfigPluginRecord]:
+    """Discover built-in and entry-point provided config plugins."""
+
+    plugins: List[ConfigPluginRecord] = [
+        {"plugin_id": config.id, "config": config}
+        for config in _load_builtin_configs(prefix=_config_prefix(kind))
+    ]
+    plugins.extend(_discover_entrypoint_plugins(kind))
+    return plugins
+
+
+def discover_service_plugins() -> List[ConfigPluginRecord]:
+    return discover_config_plugins("service")
+
+
+def discover_server_plugins() -> List[ConfigPluginRecord]:
+    return discover_config_plugins("server")
 
 
 def resource_files():
