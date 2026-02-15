@@ -10,6 +10,8 @@ from typing import Dict, List, Any, Literal, Callable, TypedDict
 from mlox.service import AbstractService
 from mlox.server import AbstractServer
 
+PluginKind = Literal["service", "server"]
+
 
 @dataclass
 class BuildConfig:
@@ -107,6 +109,13 @@ class ServiceConfig:
             return None
 
 
+class ConfigPluginRecord(TypedDict):
+    """Plugin discovery record with an instantiated ``ServiceConfig`` object."""
+
+    plugin_id: str
+    config: ServiceConfig
+
+
 def get_stacks_path(prefix: Literal["mlox", "mlox-server"] = "mlox") -> str:
     """Return the on-disk path for bundled configuration assets.
 
@@ -152,7 +161,9 @@ def _load_builtin_configs(
 
 
 def load_all_server_configs(*, include_plugins: bool = True) -> List[ServiceConfig]:
-    return load_all_service_configs(prefix="mlox-server", include_plugins=include_plugins)
+    return load_all_service_configs(
+        prefix="mlox-server", include_plugins=include_plugins
+    )
 
 
 def load_all_service_configs(
@@ -234,16 +245,6 @@ def load_config(
     return None
 
 
-PluginKind = Literal["service", "server"]
-
-
-class ConfigPluginRecord(TypedDict):
-    """Plugin discovery record with an instantiated ``ServiceConfig`` object."""
-
-    plugin_id: str
-    config: ServiceConfig
-
-
 def _entrypoint_group(kind: PluginKind) -> str:
     return "mlox.service_plugins" if kind == "service" else "mlox.server_plugins"
 
@@ -314,8 +315,8 @@ def resource_files():
 
 if __name__ == "__main__":
     # resource_files()
-    configs = load_all_service_configs()
-    # configs = load_all_server_configs("./stacks")
+    # configs = load_all_service_configs()
+    configs = load_all_server_configs()
     for c in configs:
         print(
             c.name
