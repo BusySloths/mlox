@@ -40,7 +40,9 @@ def test_handle_result_failure(capsys):
 
 def test_server_list_no_servers(monkeypatch):
     operation_result = OperationResult(True, 0, "No servers found.", {"servers": []})
-    monkeypatch.setattr(cli.ops, "list_servers", mock.Mock(return_value=operation_result))
+    monkeypatch.setattr(
+        cli.ops, "list_servers", mock.Mock(return_value=operation_result)
+    )
 
     result = runner.invoke(cli.app, ["server", "list", "proj", "--password", "pw"])
 
@@ -50,7 +52,9 @@ def test_server_list_no_servers(monkeypatch):
 
 def test_server_list_outputs_servers(monkeypatch):
     payload = {"servers": [{"ip": "1.1.1.1", "state": "running", "service_count": 3}]}
-    operation_result = OperationResult(True, 0, "Servers retrieved successfully.", payload)
+    operation_result = OperationResult(
+        True, 0, "Servers retrieved successfully.", payload
+    )
     mock_list = mock.Mock(return_value=operation_result)
     monkeypatch.setattr(cli.ops, "list_servers", mock_list)
 
@@ -124,7 +128,9 @@ def test_server_add_success(monkeypatch):
 
 def test_service_list_no_services(monkeypatch):
     operation_result = OperationResult(True, 0, "No services found.", {"services": []})
-    monkeypatch.setattr(cli.ops, "list_services", mock.Mock(return_value=operation_result))
+    monkeypatch.setattr(
+        cli.ops, "list_services", mock.Mock(return_value=operation_result)
+    )
 
     result = runner.invoke(cli.app, ["service", "list", "proj", "--password", "pw"])
 
@@ -142,8 +148,12 @@ def test_service_list_outputs(monkeypatch):
             }
         ]
     }
-    operation_result = OperationResult(True, 0, "Services retrieved successfully.", payload)
-    monkeypatch.setattr(cli.ops, "list_services", mock.Mock(return_value=operation_result))
+    operation_result = OperationResult(
+        True, 0, "Services retrieved successfully.", payload
+    )
+    monkeypatch.setattr(
+        cli.ops, "list_services", mock.Mock(return_value=operation_result)
+    )
 
     result = runner.invoke(cli.app, ["service", "list", "proj", "--password", "pw"])
 
@@ -156,8 +166,12 @@ def test_service_list_outputs(monkeypatch):
 
 
 def test_server_configs_list_no_configs(monkeypatch):
-    operation_result = OperationResult(True, 0, "No server configs found.", {"configs": []})
-    monkeypatch.setattr(cli.ops, "list_server_configs", mock.Mock(return_value=operation_result))
+    operation_result = OperationResult(
+        True, 0, "No server configs found.", {"configs": []}
+    )
+    monkeypatch.setattr(
+        cli.ops, "list_server_configs", mock.Mock(return_value=operation_result)
+    )
 
     result = runner.invoke(cli.app, ["server", "configs", "list"])
 
@@ -168,7 +182,9 @@ def test_server_configs_list_no_configs(monkeypatch):
 def test_server_configs_list_outputs(monkeypatch):
     payload = {"configs": [{"id": "srv", "path": "servers/srv.yaml"}]}
     operation_result = OperationResult(True, 0, "Server configs retrieved.", payload)
-    monkeypatch.setattr(cli.ops, "list_server_configs", mock.Mock(return_value=operation_result))
+    monkeypatch.setattr(
+        cli.ops, "list_server_configs", mock.Mock(return_value=operation_result)
+    )
 
     result = runner.invoke(cli.app, ["server", "configs", "list"])
 
@@ -180,8 +196,12 @@ def test_server_configs_list_outputs(monkeypatch):
 
 
 def test_service_configs_list_no_configs(monkeypatch):
-    operation_result = OperationResult(True, 0, "No service configs found.", {"configs": []})
-    monkeypatch.setattr(cli.ops, "list_service_configs", mock.Mock(return_value=operation_result))
+    operation_result = OperationResult(
+        True, 0, "No service configs found.", {"configs": []}
+    )
+    monkeypatch.setattr(
+        cli.ops, "list_service_configs", mock.Mock(return_value=operation_result)
+    )
 
     result = runner.invoke(cli.app, ["service", "configs", "list"])
 
@@ -192,7 +212,9 @@ def test_service_configs_list_no_configs(monkeypatch):
 def test_service_configs_list_outputs(monkeypatch):
     payload = {"configs": [{"id": "svc", "path": "services/svc.yaml"}]}
     operation_result = OperationResult(True, 0, "Service configs retrieved.", payload)
-    monkeypatch.setattr(cli.ops, "list_service_configs", mock.Mock(return_value=operation_result))
+    monkeypatch.setattr(
+        cli.ops, "list_service_configs", mock.Mock(return_value=operation_result)
+    )
 
     result = runner.invoke(cli.app, ["service", "configs", "list"])
 
@@ -207,7 +229,7 @@ def test_start_ui_invokes_streamlit(monkeypatch):
     mock_run = mock.Mock(return_value=mock.Mock(returncode=0))
     monkeypatch.setattr(cli.subprocess, "run", mock_run)
 
-    result = runner.invoke(cli.app, ["start-ui"])
+    result = runner.invoke(cli.app, ["ui"])
 
     assert result.exit_code == 0
     mock_run.assert_called_once()
