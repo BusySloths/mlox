@@ -201,3 +201,19 @@ def test_service_configs_list_outputs(monkeypatch):
     assert "| ID" in result.stdout
     assert "| svc" in result.stdout
     assert "services/svc.yaml" in result.stdout
+
+
+def test_start_ui_invokes_streamlit(monkeypatch):
+    mock_run = mock.Mock(return_value=mock.Mock(returncode=0))
+    monkeypatch.setattr(cli.subprocess, "run", mock_run)
+
+    result = runner.invoke(cli.app, ["start-ui"])
+
+    assert result.exit_code == 0
+    mock_run.assert_called_once()
+    call_args = mock_run.call_args
+    command = call_args.args[0]
+    assert command[0] == cli.sys.executable
+    assert command[1:4] == ["-m", "streamlit", "run"]
+    assert command[4].endswith("mlox/app.py")
+    assert call_args.kwargs["check"] is False

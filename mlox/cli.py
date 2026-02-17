@@ -22,12 +22,15 @@ Related modules (plain-text links):
 from __future__ import annotations
 
 import os
+import sys
 import typer
 import shutil
 import logging
 import textwrap
+import subprocess
 
 from importlib import metadata as importlib_metadata
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from mlox import operations as ops
@@ -139,6 +142,17 @@ def _version_callback(value: Optional[bool]) -> None:
     if value:
         typer.echo(f"MLOX {_get_package_version()}")
         raise typer.Exit()
+
+
+@app.command("start-ui")
+def start_ui() -> None:
+    """Start the Streamlit UI."""
+
+    app_path = Path(__file__).with_name("app.py")
+    command = [sys.executable, "-m", "streamlit", "run", str(app_path)]
+    result = subprocess.run(command, check=False)
+    if result.returncode != 0:
+        raise typer.Exit(code=result.returncode)
 
 
 @app.callback()
