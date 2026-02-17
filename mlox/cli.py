@@ -144,9 +144,9 @@ def _version_callback(value: Optional[bool]) -> None:
         raise typer.Exit()
 
 
-@app.command("start-ui")
+@app.command("ui")
 def start_ui() -> None:
-    """Start the Streamlit UI."""
+    """Start the Web UI."""
 
     app_path = Path(__file__).with_name("app.py")
     command = [sys.executable, "-m", "streamlit", "run", str(app_path)]

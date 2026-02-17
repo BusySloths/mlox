@@ -90,7 +90,7 @@ dev = [
     "google-cloud-bigquery>=3.10",
     "google-cloud-secret-manager>=2.18",
     "mlflow==3.8.1",  # M
-    "mlserver==1.7.1",  # M
+    "mlserver==1.7.1",  # Mx`
     "psutil==7.1.2", # M: for mlflow monitoring
     "opentelemetry-api==1.33.1",  # M
     "opentelemetry-sdk==1.33.1",  # M
@@ -120,8 +120,6 @@ dev = [
 "Examples" = "https://github.com/busysloths/mlox"
 
 [project.scripts]
-mlox-start-multipass = "mlox.cli:start_multipass"
-mlox-ui = "mlox.cli:start_ui"
 mlox = "mlox.cli:app"
 
 
