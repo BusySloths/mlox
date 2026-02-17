@@ -8,8 +8,8 @@ readme = "README.md"
 keywords = ["Infrastructure", "Server", "Service", "Dashboard", "Opinionated", "MLOps"]
 license = { file = "LICENSE" }
 description = "Accelerate your ML journey—deploy production-ready MLOps in minutes, not months."
-requires-python = ">=3.11"
-authors = [{ name = "nicococo", email = "contact@mlox.org" }]
+requires-python = ">=3.11,<3.13"
+authors = [{ name = "drbusysloth", email = "contact@mlox.org" }]
 classifiers = [
     # How mature is this project? Common values are
     #   1 - Planning
@@ -120,6 +120,7 @@ dev = [
 "Examples" = "https://github.com/busysloths/mlox"
 
 [project.scripts]
+
 mlox = "mlox.cli:app"
 
 
