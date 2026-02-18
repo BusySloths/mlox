@@ -20,29 +20,93 @@ const heroContent = heroPage ? await heroPage.render() : null;
   <NewsBanner />
 
   <style>
+    :global(body) {
+      background: repeating-linear-gradient(
+        -45deg,
+        #f9f4e8,
+        #f9f4e8 18px,
+        #efe8d8 18px,
+        #efe8d8 36px
+      );
+    }
+
     .hero-container {
-      perspective: 1200px;
-      perspective-origin: center center;
+      transform: rotate(-1.5deg);
     }
-    
+
     .hero-3d {
-      transform: rotateY(-15deg) rotateX(5deg);
-      transform-style: preserve-3d;
-      transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      box-shadow: 
-        20px 20px 40px rgba(0, 0, 0, 0.3),
-        -10px -10px 20px rgba(79, 209, 197, 0.1);
+      border: 4px solid #000;
+      box-shadow: 12px 12px 0 #000;
+      transition: transform 0.2s ease;
+      background: #fff;
     }
-    
+
     .hero-3d:hover {
-      transform: rotateY(-8deg) rotateX(2deg) scale(1.02);
-      box-shadow: 
-        30px 30px 60px rgba(0, 0, 0, 0.4),
-        -15px -15px 30px rgba(79, 209, 197, 0.15);
+      transform: translate(-4px, -4px);
+      box-shadow: 16px 16px 0 #000;
+    }
+
+    main :global(.bg-dark-900),
+    main :global(.bg-dark-800),
+    main :global(.bg-dark-700),
+    main :global(.bg-dark-600),
+    main :global(.bg-dark-500\/95) {
+      background: #f9f4e8 !important;
+    }
+
+    main :global(.text-white),
+    main :global(.text-gray-400),
+    main :global(.text-gray-300),
+    main :global(.text-gray-200),
+    main :global(.text-gray-500) {
+      color: #000 !important;
+    }
+
+    main :global(.rounded-2xl),
+    main :global(.rounded-xl),
+    main :global(.rounded-lg),
+    main :global(.rounded-full) {
+      border-radius: 0 !important;
+    }
+
+    main :global(.border-dark-600),
+    main :global(.border-dark-700) {
+      border-color: #000 !important;
+      border-width: 3px !important;
+    }
+
+    main :global(.shadow-lg),
+    main :global(.shadow-xl),
+    main :global(.shadow-2xl),
+    main :global(.shadow-md) {
+      box-shadow: 8px 8px 0 #000 !important;
+    }
+
+    section {
+      border-top: 4px solid #000;
+    }
+
+    h1, h2, h3, h4 {
+      text-transform: uppercase;
+      letter-spacing: -0.02em;
+    }
+
+    .prose {
+      max-width: 70ch;
+      font-weight: 500;
+    }
+
+    .prose strong {
+      background: #ffe14d;
+      padding: 0 4px;
+    }
+
+    .absolute.inset-0.overflow-hidden.opacity-30 {
+      display: none;
     }
   </style>
   
-  <main class="pt-28 bg-dark-900">
+  <main class="pt-40 bg-dark-900">
     <!-- Hero Section -->
     <section class="relative min-h-screen flex items-center justify-center bg-dark-900">
       <!-- Decorative elements -->
