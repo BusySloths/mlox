@@ -10,6 +10,7 @@ const heroPage = pages.find(p => p.id === 'hero.md');
 const featuresPage = pages.find(p => p.id === 'features.md');
 const gettingStartedPage = pages.find(p => p.id === 'getting-started.md');
 const whyMloxPage = pages.find(p => p.id === 'why-mlox.md');
+const baseUrl = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 
 // Render markdown content (only for sections that need it)
 const heroContent = heroPage ? await heroPage.render() : null;
@@ -20,29 +21,105 @@ const heroContent = heroPage ? await heroPage.render() : null;
   <NewsBanner />
 
   <style>
+    :global(body) {
+      --paper: #f6f1e6;
+      --paper-alt: #e9dec7;
+      --ink: #1f1b16;
+      --highlight: #d3a321;
+      background: repeating-linear-gradient(
+        -45deg,
+        var(--paper),
+        var(--paper) 14px,
+        var(--paper-alt) 14px,
+        var(--paper-alt) 28px
+      );
+    }
+
     .hero-container {
-      perspective: 1200px;
-      perspective-origin: center center;
+      transform: rotate(-1.5deg);
     }
-    
+
     .hero-3d {
-      transform: rotateY(-15deg) rotateX(5deg);
-      transform-style: preserve-3d;
-      transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      box-shadow: 
-        20px 20px 40px rgba(0, 0, 0, 0.3),
-        -10px -10px 20px rgba(79, 209, 197, 0.1);
+      border: 3px solid var(--ink);
+      box-shadow: 8px 8px 0 var(--ink);
+      transition: transform 0.2s ease;
+      background: #fbf7ee;
     }
-    
+
     .hero-3d:hover {
-      transform: rotateY(-8deg) rotateX(2deg) scale(1.02);
-      box-shadow: 
-        30px 30px 60px rgba(0, 0, 0, 0.4),
-        -15px -15px 30px rgba(79, 209, 197, 0.15);
+      transform: translate(-3px, -3px);
+      box-shadow: 11px 11px 0 var(--ink);
+    }
+
+    main :global(.bg-dark-900),
+    main :global(.bg-dark-800),
+    main :global(.bg-dark-700),
+    main :global(.bg-dark-600),
+    main :global(.bg-dark-500\/95) {
+      background: var(--paper) !important;
+    }
+
+    main :global(.text-white),
+    main :global(.text-gray-400),
+    main :global(.text-gray-300),
+    main :global(.text-gray-200),
+    main :global(.text-gray-500) {
+      color: var(--ink) !important;
+    }
+
+    main :global(.rounded-2xl),
+    main :global(.rounded-xl),
+    main :global(.rounded-lg),
+    main :global(.rounded-full) {
+      border-radius: 0 !important;
+    }
+
+    main :global(.border-dark-600),
+    main :global(.border-dark-700) {
+      border-color: var(--ink) !important;
+      border-width: 2px !important;
+    }
+
+    main :global(.border-2) {
+      border-width: 1.5px !important;
+    }
+
+    main :global(.border) {
+      border-width: 1px !important;
+    }
+
+    main :global(.shadow-lg),
+    main :global(.shadow-xl),
+    main :global(.shadow-2xl),
+    main :global(.shadow-md) {
+      box-shadow: 6px 6px 0 var(--ink) !important;
+    }
+
+    main > section + section {
+      border-top: 2px solid var(--ink);
+    }
+
+    h1, h2, h3, h4 {
+      text-transform: uppercase;
+      letter-spacing: -0.02em;
+    }
+
+    .prose {
+      max-width: 70ch;
+      font-weight: 500;
+    }
+
+    .prose strong {
+      background: var(--highlight);
+      padding: 0 4px;
+    }
+
+    .absolute.inset-0.overflow-hidden.opacity-30 {
+      display: none;
     }
   </style>
   
-  <main class="pt-28 bg-dark-900">
+  <main class="pt-24 md:pt-24 bg-dark-900">
     <!-- Hero Section -->
     <section class="relative min-h-screen flex items-center justify-center bg-dark-900">
       <!-- Decorative elements -->
@@ -66,16 +143,11 @@ const heroContent = heroPage ? await heroPage.render() : null;
                 </p>
               </>
             )}
-            {heroContent && (
-              <div class="text-lg text-gray-400 mb-12 leading-relaxed animate-slide-up prose prose-invert [&>p]:mb-4">
-                <heroContent.Content />
-              </div>
-            )}
             {heroPage && (
               <div class="flex flex-col sm:flex-row gap-4 animate-slide-up">
                 <a 
                   href={heroPage.data.cta_primary_link} 
-                  class="px-8 py-4 bg-accent-cyan text-dark-900 rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-cyan/50 transform hover:-translate-y-1 transition-all duration-300 hover:scale-105 text-center"
+                  class="px-8 py-4 bg-accent-cyan text-black rounded-lg font-semibold text-lg shadow-lg hover:shadow-accent-cyan/50 transform hover:-translate-y-1 transition-all duration-300 hover:scale-105 text-center"
                   target="_blank" 
                   rel="noopener noreferrer"
                 >
@@ -111,8 +183,8 @@ const heroContent = heroPage ? await heroPage.render() : null;
           <div class="animate-fade-in animate-slide-up hero-container">
             <div class="relative rounded-2xl overflow-hidden hero-3d border-2 border-dark-600 hover:border-accent-cyan">
               <img 
-                src="https://github.com/BusySloths/mlox/blob/main/website/public/mlox_hero.png?raw=true" 
-                alt="MLOX Dashboard Interface"
+                src={`${baseUrl}mlox_sloth_logo.png`}
+                alt="MLOX Sloth Logo"
                 class="w-full h-auto opacity-85 hover:opacity-95 transition-opacity duration-500"
               />
               <div class="absolute inset-0 bg-gradient-to-tr from-dark-900/50 via-transparent to-transparent"></div>
@@ -128,6 +200,61 @@ const heroContent = heroPage ? await heroPage.render() : null;
         </svg>
       </div>
     </section>
+
+    {heroContent && (
+      <section class="py-16 bg-dark-900">
+        <div class="container mx-auto px-6">
+          <div class="max-w-6xl mx-auto relative border-2 border-dark-600 bg-[#fbf7ee] p-8 md:p-12 shadow-xl overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-36 h-36 border-2 border-black bg-accent-cyan/30"></div>
+            <div class="absolute -bottom-8 -left-8 w-24 h-24 border-2 border-black bg-accent-yellow/40"></div>
+
+            <div class="relative z-10 grid lg:grid-cols-3 gap-8 md:gap-10 items-start">
+              <div class="lg:col-span-2">
+                <p class="inline-block text-xs font-black tracking-[0.18em] px-3 py-1 border border-black bg-accent-cyan text-black mb-5">
+                  WHY TEAMS PICK MLOX
+                </p>
+                <h2 class="text-3xl md:text-4xl font-bold mb-6 text-black">
+                  Calm Operations for Serious ML Systems
+                </h2>
+                <div class="text-lg text-black leading-relaxed prose prose-invert [&>p]:mb-4 max-w-none">
+                  <heroContent.Content />
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="border-2 border-black p-4 bg-accent-yellow/60">
+                  <p class="text-xs font-black uppercase tracking-wider mb-1">Own Your Stack</p>
+                  <p class="text-sm">Run on your own infrastructure with inspectable configs and no black boxes.</p>
+                </div>
+                <div class="border-2 border-black p-4 bg-accent-pink/35">
+                  <p class="text-xs font-black uppercase tracking-wider mb-1">Operational Clarity</p>
+                  <p class="text-sm">Web UI, TUI, and CLI stay aligned so teams can deploy and debug faster.</p>
+                </div>
+                <div class="border-2 border-black p-4 bg-accent-cyan/20">
+                  <p class="text-xs font-black uppercase tracking-wider mb-1">Built To Evolve</p>
+                  <p class="text-sm">Open-source foundations designed for long-term maintainability and adaptation.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="relative z-10 mt-8 grid sm:grid-cols-3 gap-4">
+              <div class="border border-black bg-[#f6f1e6] px-4 py-3 text-center">
+                <p class="text-2xl font-black text-black">UI + TUI + CLI</p>
+                <p class="text-xs uppercase tracking-wider">One Unified Control Surface</p>
+              </div>
+              <div class="border border-black bg-[#f6f1e6] px-4 py-3 text-center">
+                <p class="text-2xl font-black text-black">Open Source</p>
+                <p class="text-xs uppercase tracking-wider">Transparent By Default</p>
+              </div>
+              <div class="border border-black bg-[#f6f1e6] px-4 py-3 text-center">
+                <p class="text-2xl font-black text-black">Hybrid Ready</p>
+                <p class="text-xs uppercase tracking-wider">On-Prem Or Mixed Cloud</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    )}
 
     <!-- Features Section - Using Markdown Content -->
     <section id="features" class="py-20 bg-dark-800">
@@ -200,19 +327,14 @@ const heroContent = heroPage ? await heroPage.render() : null;
               );
             })}
           </div>
+          <div class="max-w-5xl mx-auto mt-16 rounded-2xl border border-accent-yellow/80 bg-accent-yellow px-5 py-5 text-center shadow-md">
+            <p class="text-xs md:text-sm text-black font-semibold md:whitespace-nowrap">
+              MLOX is under active development. Features and workflows continue to evolve. We welcome contributors and feedback.
+            </p>
+          </div>
         </div>
       </section>
     )}
-
-    <section class="bg-dark-900">
-      <div class="container mx-auto px-6 pb-16">
-        <div class="max-w-5xl mx-auto rounded-2xl border border-accent-yellow/80 bg-accent-yellow px-5 py-5 text-center shadow-md">
-          <p class="text-xs md:text-sm text-dark-900 font-semibold md:whitespace-nowrap">
-            MLOX is under active development. Features and workflows continue to evolve. We welcome contributors and feedback.
-          </p>
-        </div>
-      </div>
-    </section>
 
     <!-- Screenshots Section -->
     <section id="screenshots" class="py-20 bg-dark-800">
@@ -339,10 +461,10 @@ const heroContent = heroPage ? await heroPage.render() : null;
                   color === 'pink' ? 'border-accent-pink hover:border-accent-pink hover:shadow-accent-pink/30' :
                   'border-accent-yellow hover:border-accent-yellow hover:shadow-accent-yellow/30';
                 const numberClass = 
-                  color === 'cyan' ? 'bg-accent-cyan text-dark-900' :
-                  color === 'purple' ? 'bg-accent-purple text-dark-900' :
-                  color === 'pink' ? 'bg-accent-pink text-dark-900' :
-                  'bg-accent-yellow text-dark-900';
+                  color === 'cyan' ? 'bg-accent-cyan text-black' :
+                  color === 'purple' ? 'bg-accent-purple text-black' :
+                  color === 'pink' ? 'bg-accent-pink text-black' :
+                  'bg-accent-yellow text-black';
                 
                 return (
                   <div 
@@ -384,14 +506,12 @@ const heroContent = heroPage ? await heroPage.render() : null;
     <section id="sponsors" class="py-20 bg-dark-900">
       <div class="container mx-auto px-6">
         <h3 class="text-4xl md:text-5xl font-bold text-center mb-12 text-white">Big Thanks to our Sponsors and Supporters</h2>
-        <div class="flex justify-center mb-16">
+        <div class="flex flex-col md:flex-row items-center justify-center gap-10 md:gap-16">
           <img 
             src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" 
             alt="BMFTR" 
             class="max-w-md w-full h-auto rounded-lg shadow-lg hover:shadow-accent-cyan/30 transition-shadow duration-300 border-2 border-dark-600"
           />
-        </div>
-        <div class="flex justify-center">
           <img 
             src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_light.png?raw=true" 
             alt="PrototypeFund" 
@@ -402,7 +522,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
     </section>
 
     <!-- Footer -->
-    <footer class="bg-dark-900 border-t border-dark-700 text-white py-12">
+    <footer class="bg-[#e3d6bf] border-t-2 border-black text-white py-12">
       <div class="container mx-auto px-6">
         <div class="grid md:grid-cols-4 gap-8 mb-8">
           <div>
@@ -433,8 +553,8 @@ const heroContent = heroPage ? await heroPage.render() : null;
             <p class="text-gray-400">Email: <a href="mailto:contact@mlox.org" class="hover:text-accent-cyan transition-colors">contact@mlox.org</a></p>
           </div>
         </div>
-        <div class="border-t border-dark-700 pt-8 text-center text-gray-500">
-          <p>&copy; 2025 BusySloths. All rights reserved.</p>
+        <div class="pt-8 text-center text-gray-500">
+          <p>&copy; 2026 BusySloths. All rights reserved.</p>
         </div>
       </div>
     </footer>

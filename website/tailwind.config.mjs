@@ -11,20 +11,20 @@ export default {
         mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', 'monospace'],
       },
       colors: {
-        // Dark color scheme
+        // Brutalist warm-paper color scheme
         dark: {
-          900: '#0a0e1a', // Darkest background
-          800: '#121827', // Dark background
-          700: '#1a2332', // Card background
-          600: '#2a3446', // Lighter card
+          900: '#f6f1e6', // Primary surface
+          800: '#efe6d2', // Alternate section surface
+          700: '#e6dac0', // Card background
+          600: '#d8c9a8', // Stronger contrast surface
         },
-        // Playful accent colors
+        // Muted high-contrast accents
         accent: {
-          cyan: '#00e5ff',    // Bright cyan
-          purple: '#a855f7',  // Vibrant purple
-          pink: '#ec4899',    // Hot pink
-          yellow: '#fbbf24',  // Warm yellow
-          green: '#10b981',   // Bright green
+          cyan: '#0f8b8d',    // Teal
+          purple: '#4f5d75',  // Slate indigo
+          pink: '#d16a4b',    // Burnt orange
+          yellow: '#d3a321',  // Mustard
+          green: '#5e7f3b',   // Olive green
         },
       },
       animation: {
