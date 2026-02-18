@@ -10,7 +10,7 @@ const navItems = [
 ];
 ---
 
-<header class="fixed top-0 left-0 right-0 z-50 border-b-4 border-black bg-[#ffe14d]">
+<header class="fixed top-0 left-0 right-0 z-50 border-b-2 border-black bg-[#d3a321]">
   <nav class="container mx-auto px-6 py-3">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center space-x-2">
@@ -23,7 +23,7 @@ const navItems = [
         {navItems.map((item) => (
           <a
             href={item.href}
-            class="font-bold text-sm px-3 py-1 border-2 border-black bg-white hover:bg-black hover:text-white transition-colors"
+            class="font-bold text-sm px-3 py-1 border border-black bg-[#fbf7ee] hover:bg-black hover:text-white transition-colors"
             target={item.external ? '_blank' : undefined}
             rel={item.external ? 'noopener noreferrer' : undefined}
           >
@@ -34,7 +34,7 @@ const navItems = [
 
       <button
         id="mobile-menu-button"
-        class="md:hidden p-2 border-2 border-black bg-white hover:bg-black hover:text-white transition-colors"
+        class="md:hidden p-2 border border-black bg-[#fbf7ee] hover:bg-black hover:text-white transition-colors"
         aria-label="Toggle menu"
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,7 +47,7 @@ const navItems = [
       {navItems.map((item) => (
         <a
           href={item.href}
-          class="block px-4 py-2 font-bold border-2 border-black bg-white hover:bg-black hover:text-white transition-colors"
+          class="block px-4 py-2 font-bold border border-black bg-[#fbf7ee] hover:bg-black hover:text-white transition-colors"
           target={item.external ? '_blank' : undefined}
           rel={item.external ? 'noopener noreferrer' : undefined}
         >
