@@ -1,0 +1,44 @@
+id: mlflow-mlserver-3.8.1-k3s
+name: MLFlow-MLServer
+version: "3.8.1"
+maintainer: Your Name
+description_short: Deploy an MLflow registry model with MLServer on Kubernetes (k3s).
+description: |
+  Deploys an MLflow registry model as an MLServer workload on Kubernetes (k3s) using
+  native Deployment/Service manifests. The service installs MLflow and MLServer in the
+  serving pod and exposes the v2 inference API via a NodePort.
+links:
+  project: https://mlserver.readthedocs.io/en/stable/
+  news: https://mlserver.readthedocs.io/en/stable/
+  security: https://mlserver.readthedocs.io/en/stable/
+  documentation: https://mlserver.readthedocs.io/en/stable/index.html
+  changelog: https://mlserver.readthedocs.io/en/stable/changelog.html
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 1.0
+groups:
+  service:
+  model-server:
+  backend:
+    kubernetes:
+ports:
+  rest: 30432
+ui:
+  setup: mlox.services.mlflow_mlserver.ui.setup
+  settings: mlox.services.mlflow_mlserver.ui.settings
+build:
+  class_name: mlox.services.mlflow_mlserver.k3s.MLFlowMLServerK3sService
+  params:
+    name: mlflow-mlserver-3.8.1
+    template: ${MLOX_STACKS_PATH}/mlflow_mlserver/mlox.mlserver.3.8.1.k3s.yaml
+    dockerfile: ${MLOX_STACKS_PATH}/mlflow_mlserver/dockerfile-mlflow-mlserver-3.8.1
+    target_path: ${MLOX_USER_HOME}/mlflow-mlserver-3.8.1-k3s
+    port: ${MLOX_AUTO_PORT_REST}
+    model: ${MODEL_NAME}
+    tracking_uri: ${TRACKING_URI}
+    tracking_user: ${TRACKING_USER}
+    tracking_pw: ${TRACKING_PW}
+    user: ${MLOX_AUTO_USER}
+    pw: ${MLOX_AUTO_PW}
+    registry_uuid: ${MODEL_REGISTRY_UUID}
