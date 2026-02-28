@@ -238,7 +238,7 @@ def _strip_common_prefix(df: pd.DataFrame) -> pd.DataFrame:
     def _rename(col: Any) -> Any:
         if col.startswith(prefix):
             col = col.rstrip(")")
-            return col[len(prefix) :].lstrip(" .:-_")
+            return col[len(prefix):].lstrip(" .:-_")
         return col
 
     return df.rename(columns=_rename)
@@ -453,16 +453,69 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict[str, str]:
         "Grafana API Token", key="grafana_token", type="password"
     )
 
-    st.markdown("#### Optional InfluxDB (MLOX service) storage")
+    st.markdown("#### Optional InfluxDB storage (metrics)")
+    influx_services = [
+        service
+        for service in infra.filter_by_group("database")
+        if "influx" in service.name.lower() or "Influx" in type(service).__name__
+    ]
+
+    selected_influx_service = st.selectbox(
+        "InfluxDB service",
+        options=[None] + influx_services,
+        index=0,
+        format_func=lambda svc: (
+            "None"
+            if svc is None
+            else (
+                f"{svc.name} "
+                f"({infra.get_bundle_by_service(svc).server.ip if infra.get_bundle_by_service(svc) else '?'})"
+            )
+        ),
+        key="otel_influx_service",
+        help="Select a running MLOX InfluxDB service to auto-fill endpoint and token.",
+    )
+
+    if selected_influx_service is not None:
+        selected_bundle = infra.get_bundle_by_service(selected_influx_service)
+        selected_host = selected_bundle.server.ip if selected_bundle else ""
+        selected_port = getattr(selected_influx_service, "port", "")
+        endpoint_default = (
+            f"https://{selected_host}:{selected_port}"
+            if selected_host and selected_port
+            else ""
+        )
+        token_default = getattr(selected_influx_service, "token", "")
+    else:
+        endpoint_default = ""
+        token_default = ""
+
     col_influx_endpoint, col_influx_token = st.columns(2)
     params["${MLOX_INFLUX_ENDPOINT}"] = col_influx_endpoint.text_input(
-        "InfluxDB OTLP Endpoint",
-        value="http://influxdbv2:8086/api/v2/otlp",
+        "InfluxDB Endpoint",
+        value=endpoint_default,
         key="influx_endpoint",
+        help="Example: https://<host>:8086",
     )
     params["${MLOX_INFLUX_TOKEN}"] = col_influx_token.text_input(
-        "InfluxDB Token", key="influx_token", type="password"
+        "InfluxDB Token",
+        value=token_default,
+        key="influx_token",
+        type="password",
     )
+
+    col_influx_org, col_influx_bucket = st.columns(2)
+    params["${MLOX_INFLUX_ORG}"] = col_influx_org.text_input(
+        "InfluxDB Org",
+        value="mlox",
+        key="influx_org",
+    )
+    params["${MLOX_INFLUX_BUCKET}"] = col_influx_bucket.text_input(
+        "InfluxDB Bucket",
+        value="otel",
+        key="influx_bucket",
+    )
+    params["${MLOX_INFLUX_INSECURE_SKIP_VERIFY}"] = "true"
 
     return params
 

@@ -13,7 +13,10 @@ services:
       - MY_OTEL_GRAFANA_ENDPOINT=${OTEL_GRAFANA_ENDPOINT}
       - MY_OTEL_GRAFANA_AUTH=${OTEL_GRAFANA_AUTH}
       - MY_OTEL_INFLUX_ENDPOINT=${OTEL_INFLUX_ENDPOINT}
-      - MY_OTEL_INFLUX_AUTH=${OTEL_INFLUX_AUTH}
+      - MY_OTEL_INFLUX_TOKEN=${OTEL_INFLUX_TOKEN}
+      - MY_OTEL_INFLUX_ORG=${OTEL_INFLUX_ORG}
+      - MY_OTEL_INFLUX_BUCKET=${OTEL_INFLUX_BUCKET}
+      - MY_OTEL_INFLUX_INSECURE_SKIP_VERIFY=${OTEL_INFLUX_INSECURE_SKIP_VERIFY}
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./otel-data:/etc/otelcol  # fix path to where the file exporter writes

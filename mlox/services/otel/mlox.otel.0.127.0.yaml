@@ -43,6 +43,9 @@ build:
     grafana_token: ${MLOX_GRAFANA_TOKEN}
     influx_endpoint: ${MLOX_INFLUX_ENDPOINT}
     influx_token: ${MLOX_INFLUX_TOKEN}
+    influx_org: ${MLOX_INFLUX_ORG}
+    influx_bucket: ${MLOX_INFLUX_BUCKET}
+    influx_insecure_skip_verify: ${MLOX_INFLUX_INSECURE_SKIP_VERIFY}
     port_grpc: ${MLOX_AUTO_PORT_GRPC}
     port_http: ${MLOX_AUTO_PORT_HTTP}
     port_health: ${MLOX_AUTO_PORT_HEALTH}

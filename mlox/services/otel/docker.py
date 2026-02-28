@@ -21,7 +21,6 @@ from base64 import b64encode
 from dataclasses import dataclass, field
 from typing import Dict, Any
 
-from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 # Configure logging (optional, but recommended)
@@ -41,6 +40,9 @@ class OtelDockerService(AbstractService):
     grafana_token: str
     influx_endpoint: str
     influx_token: str
+    influx_org: str
+    influx_bucket: str
+    influx_insecure_skip_verify: str
     config: str
     port_grpc: str | int
     port_http: str | int
@@ -73,33 +75,49 @@ class OtelDockerService(AbstractService):
 
         self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         self.exec.fs_copy(conn, self.config, f"{self.target_path}/otel-collector-config.yaml")
-        exporter_names: list[str] = []
+        pipeline_exporters: list[str] = []
+        metric_pipeline_exporters: list[str] = []
         otel_cfg_path = f"{self.target_path}/otel-collector-config.yaml"
 
         if len(self.relic_key) > 4 and len(self.relic_endpoint) > 4:
-            exporter_names.append("otlphttp/newrelic")
+            pipeline_exporters.append("otlphttp/newrelic")
 
         if (
             len(self.grafana_token) > 4
             and len(self.grafana_endpoint) > 4
             and len(self.grafana_username) > 1
         ):
-            exporter_names.append("otlphttp/grafana")
+            pipeline_exporters.append("otlphttp/grafana")
 
-        if len(self.influx_endpoint) > 4 and len(self.influx_token) > 4:
-            exporter_names.append("otlphttp/influx")
+        metric_pipeline_exporters.extend(pipeline_exporters)
+        if (
+            len(self.influx_endpoint) > 4
+            and len(self.influx_token) > 4
+            and len(self.influx_org) > 0
+            and len(self.influx_bucket) > 0
+        ):
+            metric_pipeline_exporters.append("influxdb")
 
-        pipeline_exporters = ""
-        if exporter_names:
-            pipeline_exporters = ", " + ", ".join(exporter_names)
-
+        pipeline_exporters_cfg = ""
         if pipeline_exporters:
-            self.exec.fs_find_and_replace(
-                conn,
-                otel_cfg_path,
-                "exporters: [debug, file]",
-                f"exporters: [debug, file{pipeline_exporters}]",
-            )
+            pipeline_exporters_cfg = ", " + ", ".join(pipeline_exporters)
+
+        metric_pipeline_exporters_cfg = ""
+        if metric_pipeline_exporters:
+            metric_pipeline_exporters_cfg = ", " + ", ".join(metric_pipeline_exporters)
+
+        self.exec.fs_find_and_replace(
+            conn,
+            otel_cfg_path,
+            "${MLOX_OTEL_PIPELINE_EXPORTERS}",
+            pipeline_exporters_cfg,
+        )
+        self.exec.fs_find_and_replace(
+            conn,
+            otel_cfg_path,
+            "${MLOX_OTEL_METRIC_PIPELINE_EXPORTERS}",
+            metric_pipeline_exporters_cfg,
+        )
 
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
@@ -117,9 +135,6 @@ class OtelDockerService(AbstractService):
         if self.grafana_username and self.grafana_token:
             raw_auth = f"{self.grafana_username}:{self.grafana_token}".encode("utf-8")
             grafana_auth = "Basic " + b64encode(raw_auth).decode("utf-8")
-        influx_auth = ""
-        if self.influx_token:
-            influx_auth = f"Token {self.influx_token}"
         self.exec.fs_append_line(
             conn, env_path, f"OTEL_GRAFANA_ENDPOINT={self.grafana_endpoint}"
         )
@@ -127,7 +142,14 @@ class OtelDockerService(AbstractService):
         self.exec.fs_append_line(
             conn, env_path, f"OTEL_INFLUX_ENDPOINT={self.influx_endpoint}"
         )
-        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_AUTH={influx_auth}")
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_TOKEN={self.influx_token}")
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_ORG={self.influx_org}")
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_BUCKET={self.influx_bucket}")
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_INFLUX_INSECURE_SKIP_VERIFY={self.influx_insecure_skip_verify}",
+        )
         self.service_url = f"https://{conn.host}:{self.port_grpc}"
         self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
         self.service_ports["OTLP HTTP receiver"] = int(self.port_http)
@@ -179,6 +201,8 @@ class OtelDockerService(AbstractService):
                 "grafana_token": self.grafana_token,
                 "influx_endpoint": self.influx_endpoint,
                 "influx_token": self.influx_token,
+                "influx_org": self.influx_org,
+                "influx_bucket": self.influx_bucket,
             }.items()
             if value
         }

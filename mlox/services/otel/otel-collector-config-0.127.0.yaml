@@ -31,10 +31,13 @@ exporters:
     endpoint: ${env:MY_OTEL_GRAFANA_ENDPOINT}
     headers:
       Authorization: ${env:MY_OTEL_GRAFANA_AUTH}
-  otlphttp/influx:
+  influxdb:
     endpoint: ${env:MY_OTEL_INFLUX_ENDPOINT}
-    headers:
-      Authorization: ${env:MY_OTEL_INFLUX_AUTH}
+    token: ${env:MY_OTEL_INFLUX_TOKEN}
+    org: ${env:MY_OTEL_INFLUX_ORG}
+    bucket: ${env:MY_OTEL_INFLUX_BUCKET}
+    tls:
+      insecure_skip_verify: ${env:MY_OTEL_INFLUX_INSECURE_SKIP_VERIFY}
   file:
     path: /etc/otelcol/telemetry.json # Path inside the container where data will be written
     rotation:
@@ -49,10 +52,6 @@ processors:
     check_interval: 1s
     limit_percentage: 65
     spike_limit_percentage: 20
-
-# connectors:
-#   spanmetrics:
-#     namespace: myspanmetrics
 
 extensions:
   health_check:
@@ -72,12 +71,18 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters:
+        - debug
+        - file${MLOX_OTEL_PIPELINE_EXPORTERS}
     metrics:
       receivers: [otlp, hostmetrics]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters:
+        - debug
+        - file${MLOX_OTEL_METRIC_PIPELINE_EXPORTERS}
     logs:
       receivers: [otlp]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters:
+        - debug
+        - file${MLOX_OTEL_PIPELINE_EXPORTERS}
