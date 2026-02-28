@@ -2,6 +2,7 @@ import pytest
 import yaml
 import os
 import importlib
+from importlib import metadata as importlib_metadata
 
 from mlox.config import (
     ServiceConfig,
@@ -96,7 +97,12 @@ def mock_package_resources(monkeypatch, tmp_path):
             return tmp_path / sub_path
         return original_files(package)
 
+    class _NoEntryPoints:
+        def select(self, *, group):
+            return []
+
     monkeypatch.setattr(resources, "files", mock_files)
+    monkeypatch.setattr(importlib_metadata, "entry_points", lambda: _NoEntryPoints())
 
 
 @pytest.fixture
