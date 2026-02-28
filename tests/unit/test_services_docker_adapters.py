@@ -272,21 +272,30 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
 
 
 def test_otel_setup_check_and_read_telemetry(conn):
+    fake_exec = FakeExec()
+    fake_exec.files["otel.yaml"] = "exporters: [debug, file__OPTIONAL_EXPORTERS__]"
     service = _set_exec(
         OtelDockerService(
             **BASE,
             relic_endpoint="https://otlp.newrelic.example",
             relic_key="nr-key",
+            grafana_endpoint="https://otlp-gateway.grafana.net/otlp",
+            grafana_auth="Basic abc",
+            influx_endpoint="http://127.0.0.1:8086/api/v2/otlp",
+            influx_auth="Token xyz",
             config="otel.yaml",
             port_grpc="4317",
             port_http="4318",
             port_health="13133",
         ),
-        FakeExec(),
+        fake_exec,
     )
 
     service.setup(conn)
     assert service.service_ports["OTLP gRPC receiver"] == 4317
+    assert "otlphttp/newrelic" in service.exec.files["/tmp/stack/otel-collector-config.yaml"]
+    assert "otlphttp/grafana" in service.exec.files["/tmp/stack/otel-collector-config.yaml"]
+    assert "otlphttp/influxdb" in service.exec.files["/tmp/stack/otel-collector-config.yaml"]
     service.exec.service_states["otel-collector"] = "created"
     assert service.check(conn)["status"] == "starting"
 

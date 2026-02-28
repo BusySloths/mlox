@@ -313,6 +313,10 @@ SERVICE_CASES = [
         {
             "relic_endpoint": "https://otlp.nr.example.com",
             "relic_key": "nr-key",
+            "grafana_endpoint": "",
+            "grafana_auth": "",
+            "influx_endpoint": "",
+            "influx_auth": "",
             "config": "otel.yaml",
             "port_grpc": "4317",
             "port_http": "4318",
@@ -322,6 +326,36 @@ SERVICE_CASES = [
             "new_relic_exporter": {
                 "license_key": "nr-key",
                 "endpoint": "https://otlp.nr.example.com",
+            },
+        },
+        None,
+    ),
+    (
+        OtelDockerService,
+        {
+            "relic_endpoint": "https://otlp.nr.example.com",
+            "relic_key": "nr-key",
+            "grafana_endpoint": "https://otlp-gateway.grafana.net/otlp",
+            "grafana_auth": "Basic abc",
+            "influx_endpoint": "http://127.0.0.1:8086/api/v2/otlp",
+            "influx_auth": "Token xyz",
+            "config": "otel.yaml",
+            "port_grpc": "4317",
+            "port_http": "4318",
+            "port_health": "13133",
+        },
+        {
+            "new_relic_exporter": {
+                "license_key": "nr-key",
+                "endpoint": "https://otlp.nr.example.com",
+            },
+            "grafana_cloud_exporter": {
+                "endpoint": "https://otlp-gateway.grafana.net/otlp",
+                "authorization": "Basic abc",
+            },
+            "influxdb_exporter": {
+                "endpoint": "http://127.0.0.1:8086/api/v2/otlp",
+                "authorization": "Token xyz",
             },
         },
         None,

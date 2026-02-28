@@ -23,15 +23,26 @@ receivers:
       network:
 
 exporters:
-  otlphttp:
+  otlphttp/newrelic:
     endpoint: ${env:MY_OTEL_RELIC_ENDPOINT}
     headers:
       api-key: ${env:MY_OTEL_RELIC_KEY}
+
+  otlphttp/grafana:
+    endpoint: ${env:MY_OTEL_GRAFANA_ENDPOINT}
+    headers:
+      Authorization: ${env:MY_OTEL_GRAFANA_AUTH}
+
+  otlphttp/influxdb:
+    endpoint: ${env:MY_OTEL_INFLUX_ENDPOINT}
+    headers:
+      Authorization: ${env:MY_OTEL_INFLUX_AUTH}
+
   file:
-    path: /etc/otelcol/telemetry.json # Path inside the container where data will be written
+    path: /etc/otelcol/telemetry.json
     rotation:
-      max_megabytes: 10    # Rotate file when size exceeds 100MB
-      max_backups: 5        # Keep up to 5 rotated files
+      max_megabytes: 10
+      max_backups: 5
   debug:
     verbosity: detailed
 
@@ -40,36 +51,32 @@ processors:
   memory_limiter:
     check_interval: 1s
     limit_percentage: 65
-    spike_limit_percentage: 20  
-
-# connectors:
-#   spanmetrics:
-#     namespace: myspanmetrics
+    spike_limit_percentage: 20
 
 extensions:
   health_check:
-    endpoint: "0.0.0.0:13133" 
-    path: "/health/status" 
+    endpoint: "0.0.0.0:13133"
+    path: "/health/status"
     tls:
       cert_file: /etc/cert.pem
       key_file: /etc/key.pem
-    check_collector_pipeline: 
-      enabled: true 
-      interval: "5m" 
-      exporter_failure_threshold: 5   
+    check_collector_pipeline:
+      enabled: true
+      interval: "5m"
+      exporter_failure_threshold: 5
 
 service:
   extensions: [health_check]
   pipelines:
     traces:
-      receivers: [otlp]    
+      receivers: [otlp]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters: [debug, file__OPTIONAL_EXPORTERS__]
     metrics:
       receivers: [otlp, hostmetrics]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters: [debug, file__OPTIONAL_EXPORTERS__]
     logs:
       receivers: [otlp]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters: [debug, file__OPTIONAL_EXPORTERS__]

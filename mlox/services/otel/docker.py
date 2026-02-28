@@ -35,6 +35,10 @@ logging.basicConfig(
 class OtelDockerService(AbstractService):
     relic_endpoint: str
     relic_key: str
+    grafana_endpoint: str
+    grafana_auth: str
+    influx_endpoint: str
+    influx_auth: str
     config: str
     port_grpc: str | int
     port_http: str | int
@@ -66,15 +70,17 @@ class OtelDockerService(AbstractService):
         self.exec.fs_set_permissions(conn, telemetry_file, "777", sudo=True)
 
         self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
-        self.exec.fs_copy(conn, self.config, f"{self.target_path}/otel-collector-config.yaml")
-
-        if len(self.relic_key) > 4 and len(self.relic_endpoint) > 4:
-            self.exec.fs_find_and_replace(
-                conn,
-                f"{self.target_path}/otel-collector-config.yaml",
-                "file]",
-                "file, otlphttp]",
-            )
+        config_template = self.exec.fs_read_file(conn, self.config, format="txt/plain")
+        exporters = self._active_exporters()
+        config_rendered = config_template.replace(
+            "__OPTIONAL_EXPORTERS__",
+            f", {', '.join(exporters)}" if exporters else "",
+        )
+        self.exec.fs_write_file(
+            conn,
+            f"{self.target_path}/otel-collector-config.yaml",
+            config_rendered,
+        )
 
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
@@ -88,6 +94,18 @@ class OtelDockerService(AbstractService):
         self.exec.fs_append_line(conn, env_path, f"OTEL_PORT_HEALTH={self.port_health}")
         self.exec.fs_append_line(conn, env_path, f"OTEL_RELIC_KEY={self.relic_key}")
         self.exec.fs_append_line(conn, env_path, f"OTEL_RELIC_ENDPOINT={self.relic_endpoint}")
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_GRAFANA_ENDPOINT={self.grafana_endpoint}",
+        )
+        self.exec.fs_append_line(conn, env_path, f"OTEL_GRAFANA_AUTH={self.grafana_auth}")
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_INFLUX_ENDPOINT={self.influx_endpoint}",
+        )
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_AUTH={self.influx_auth}")
         self.service_url = f"https://{conn.host}:{self.port_grpc}"
         self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
         self.service_ports["OTLP HTTP receiver"] = int(self.port_http)
@@ -129,7 +147,9 @@ class OtelDockerService(AbstractService):
         return {"status": status, "docker_state": docker_state}
 
     def get_secrets(self) -> Dict[str, Dict]:
-        payload = {
+        secrets: Dict[str, Dict] = {}
+
+        relic_payload = {
             key: value
             for key, value in {
                 "license_key": self.relic_key,
@@ -137,6 +157,39 @@ class OtelDockerService(AbstractService):
             }.items()
             if value
         }
-        if not payload:
-            return {}
-        return {"new_relic_exporter": payload}
+        if relic_payload:
+            secrets["new_relic_exporter"] = relic_payload
+
+        grafana_payload = {
+            key: value
+            for key, value in {
+                "endpoint": self.grafana_endpoint,
+                "authorization": self.grafana_auth,
+            }.items()
+            if value
+        }
+        if grafana_payload:
+            secrets["grafana_cloud_exporter"] = grafana_payload
+
+        influx_payload = {
+            key: value
+            for key, value in {
+                "endpoint": self.influx_endpoint,
+                "authorization": self.influx_auth,
+            }.items()
+            if value
+        }
+        if influx_payload:
+            secrets["influxdb_exporter"] = influx_payload
+
+        return secrets
+
+    def _active_exporters(self) -> list[str]:
+        exporters: list[str] = []
+        if len(self.relic_key) > 4 and len(self.relic_endpoint) > 4:
+            exporters.append("otlphttp/newrelic")
+        if len(self.grafana_auth) > 4 and len(self.grafana_endpoint) > 4:
+            exporters.append("otlphttp/grafana")
+        if len(self.influx_auth) > 4 and len(self.influx_endpoint) > 4:
+            exporters.append("otlphttp/influxdb")
+        return exporters

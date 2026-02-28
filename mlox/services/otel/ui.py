@@ -435,6 +435,30 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict[str, str]:
         value="https://otlp.eu01.nr-data.net:4317",
         key="relic_endpoint",
     )
+
+    grafana_endpoint, grafana_auth = st.columns(2)
+    params["${MLOX_GRAFANA_ENDPOINT}"] = grafana_endpoint.text_input(
+        "Grafana Cloud OTLP Endpoint",
+        placeholder="https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
+        key="grafana_endpoint",
+    )
+    params["${MLOX_GRAFANA_AUTH}"] = grafana_auth.text_input(
+        "Grafana Cloud Authorization Header",
+        placeholder="Basic <base64 instance_id:api_token>",
+        key="grafana_auth",
+    )
+
+    influx_endpoint, influx_auth = st.columns(2)
+    params["${MLOX_INFLUX_ENDPOINT}"] = influx_endpoint.text_input(
+        "InfluxDB OTLP Endpoint",
+        placeholder="http://localhost:8086/api/v2/otlp",
+        key="influx_endpoint",
+    )
+    params["${MLOX_INFLUX_AUTH}"] = influx_auth.text_input(
+        "InfluxDB Authorization Header",
+        placeholder="Token <influxdb_token>",
+        key="influx_auth",
+    )
     return params
 
 

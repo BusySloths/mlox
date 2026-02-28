@@ -38,6 +38,10 @@ build:
     config: ${MLOX_STACKS_PATH}/otel/otel-collector-config-0.127.0.yaml
     relic_endpoint: ${MLOX_RELIC_ENDPOINT}
     relic_key: ${MLOX_RELIC_KEY}
+    grafana_endpoint: ${MLOX_GRAFANA_ENDPOINT}
+    grafana_auth: ${MLOX_GRAFANA_AUTH}
+    influx_endpoint: ${MLOX_INFLUX_ENDPOINT}
+    influx_auth: ${MLOX_INFLUX_AUTH}
     port_grpc: ${MLOX_AUTO_PORT_GRPC}
     port_http: ${MLOX_AUTO_PORT_HTTP}
     port_health: ${MLOX_AUTO_PORT_HEALTH}

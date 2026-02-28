@@ -28,6 +28,10 @@ def install_otel_service(ubuntu_docker_server):
         params={
             "${MLOX_RELIC_KEY}": "123",
             "${MLOX_RELIC_ENDPOINT}": "https://otlp.eu01.nr-data.net:4317",
+            "${MLOX_GRAFANA_ENDPOINT}": "",
+            "${MLOX_GRAFANA_AUTH}": "",
+            "${MLOX_INFLUX_ENDPOINT}": "",
+            "${MLOX_INFLUX_AUTH}": "",
         },
     )
     if not bundle_added:
