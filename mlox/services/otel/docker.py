@@ -35,18 +35,18 @@ logging.basicConfig(
 class OtelDockerService(AbstractService):
     relic_endpoint: str
     relic_key: str
-    grafana_endpoint: str
-    grafana_username: str
-    grafana_token: str
-    influx_endpoint: str
-    influx_token: str
-    influx_org: str
-    influx_bucket: str
-    influx_insecure_skip_verify: str
     config: str
     port_grpc: str | int
     port_http: str | int
     port_health: str | int
+    grafana_endpoint: str = ""
+    grafana_username: str = ""
+    grafana_token: str = ""
+    influx_endpoint: str = ""
+    influx_token: str = ""
+    influx_org: str = ""
+    influx_bucket: str = ""
+    influx_insecure_skip_verify: str = "false"
     service_url: str = field(init=False, default="")
     compose_service_names: Dict[str, str] = field(
         init=False,
@@ -191,6 +191,29 @@ class OtelDockerService(AbstractService):
         return {"status": status, "docker_state": docker_state}
 
     def get_secrets(self) -> Dict[str, Dict]:
+        has_relic = bool(self.relic_key and self.relic_endpoint)
+        has_extra_exporters = bool(
+            self.grafana_endpoint
+            or self.grafana_username
+            or self.grafana_token
+            or self.influx_endpoint
+            or self.influx_token
+            or self.influx_org
+            or self.influx_bucket
+        )
+
+        if not has_relic and not has_extra_exporters:
+            return {}
+
+        # Backward-compatible shape for existing New Relic-only consumers.
+        if has_relic and not has_extra_exporters:
+            return {
+                "new_relic_exporter": {
+                    "license_key": self.relic_key,
+                    "endpoint": self.relic_endpoint,
+                }
+            }
+
         payload = {
             key: value
             for key, value in {
@@ -206,6 +229,4 @@ class OtelDockerService(AbstractService):
             }.items()
             if value
         }
-        if not payload:
-            return {}
         return {"otel_exporters": payload}
