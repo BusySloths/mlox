@@ -10,6 +10,10 @@ services:
     environment:
       - MY_OTEL_RELIC_ENDPOINT=${OTEL_RELIC_ENDPOINT}
       - MY_OTEL_RELIC_KEY=${OTEL_RELIC_KEY}
+      - MY_OTEL_GRAFANA_ENDPOINT=${OTEL_GRAFANA_ENDPOINT}
+      - MY_OTEL_GRAFANA_AUTH=${OTEL_GRAFANA_AUTH}
+      - MY_OTEL_INFLUX_ENDPOINT=${OTEL_INFLUX_ENDPOINT}
+      - MY_OTEL_INFLUX_AUTH=${OTEL_INFLUX_AUTH}
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./otel-data:/etc/otelcol  # fix path to where the file exporter writes

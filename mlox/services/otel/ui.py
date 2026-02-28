@@ -426,6 +426,8 @@ def _plot_timeline(
 
 def setup(infra: Infrastructure, bundle: Bundle) -> dict[str, str]:
     params: dict[str, str] = {}
+
+    st.markdown("#### Optional New Relic forwarding")
     col_key, col_endpoint = st.columns(2)
     params["${MLOX_RELIC_KEY}"] = col_key.text_input(
         "New Relic OTLP Key", key="relic_key"
@@ -435,6 +437,33 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict[str, str]:
         value="https://otlp.eu01.nr-data.net:4317",
         key="relic_endpoint",
     )
+
+    st.markdown("#### Optional Grafana Cloud forwarding")
+    col_grafana_endpoint, col_grafana_username = st.columns(2)
+    params["${MLOX_GRAFANA_ENDPOINT}"] = col_grafana_endpoint.text_input(
+        "Grafana OTLP Endpoint",
+        value="https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
+        key="grafana_endpoint",
+    )
+    params["${MLOX_GRAFANA_USERNAME}"] = col_grafana_username.text_input(
+        "Grafana Instance ID / Username",
+        key="grafana_username",
+    )
+    params["${MLOX_GRAFANA_TOKEN}"] = st.text_input(
+        "Grafana API Token", key="grafana_token", type="password"
+    )
+
+    st.markdown("#### Optional InfluxDB (MLOX service) storage")
+    col_influx_endpoint, col_influx_token = st.columns(2)
+    params["${MLOX_INFLUX_ENDPOINT}"] = col_influx_endpoint.text_input(
+        "InfluxDB OTLP Endpoint",
+        value="http://influxdbv2:8086/api/v2/otlp",
+        key="influx_endpoint",
+    )
+    params["${MLOX_INFLUX_TOKEN}"] = col_influx_token.text_input(
+        "InfluxDB Token", key="influx_token", type="password"
+    )
+
     return params
 
 

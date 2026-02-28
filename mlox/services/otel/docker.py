@@ -16,6 +16,7 @@ Related modules (plain-text links):
 """
 
 import logging
+from base64 import b64encode
 
 from dataclasses import dataclass, field
 from typing import Dict, Any
@@ -35,6 +36,11 @@ logging.basicConfig(
 class OtelDockerService(AbstractService):
     relic_endpoint: str
     relic_key: str
+    grafana_endpoint: str
+    grafana_username: str
+    grafana_token: str
+    influx_endpoint: str
+    influx_token: str
     config: str
     port_grpc: str | int
     port_http: str | int
@@ -67,13 +73,32 @@ class OtelDockerService(AbstractService):
 
         self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
         self.exec.fs_copy(conn, self.config, f"{self.target_path}/otel-collector-config.yaml")
+        exporter_names: list[str] = []
+        otel_cfg_path = f"{self.target_path}/otel-collector-config.yaml"
 
         if len(self.relic_key) > 4 and len(self.relic_endpoint) > 4:
+            exporter_names.append("otlphttp/newrelic")
+
+        if (
+            len(self.grafana_token) > 4
+            and len(self.grafana_endpoint) > 4
+            and len(self.grafana_username) > 1
+        ):
+            exporter_names.append("otlphttp/grafana")
+
+        if len(self.influx_endpoint) > 4 and len(self.influx_token) > 4:
+            exporter_names.append("otlphttp/influx")
+
+        pipeline_exporters = ""
+        if exporter_names:
+            pipeline_exporters = ", " + ", ".join(exporter_names)
+
+        if pipeline_exporters:
             self.exec.fs_find_and_replace(
                 conn,
-                f"{self.target_path}/otel-collector-config.yaml",
-                "file]",
-                "file, otlphttp]",
+                otel_cfg_path,
+                "exporters: [debug, file]",
+                f"exporters: [debug, file{pipeline_exporters}]",
             )
 
         self.exec.tls_setup(conn, conn.host, self.target_path)
@@ -88,6 +113,21 @@ class OtelDockerService(AbstractService):
         self.exec.fs_append_line(conn, env_path, f"OTEL_PORT_HEALTH={self.port_health}")
         self.exec.fs_append_line(conn, env_path, f"OTEL_RELIC_KEY={self.relic_key}")
         self.exec.fs_append_line(conn, env_path, f"OTEL_RELIC_ENDPOINT={self.relic_endpoint}")
+        grafana_auth = ""
+        if self.grafana_username and self.grafana_token:
+            raw_auth = f"{self.grafana_username}:{self.grafana_token}".encode("utf-8")
+            grafana_auth = "Basic " + b64encode(raw_auth).decode("utf-8")
+        influx_auth = ""
+        if self.influx_token:
+            influx_auth = f"Token {self.influx_token}"
+        self.exec.fs_append_line(
+            conn, env_path, f"OTEL_GRAFANA_ENDPOINT={self.grafana_endpoint}"
+        )
+        self.exec.fs_append_line(conn, env_path, f"OTEL_GRAFANA_AUTH={grafana_auth}")
+        self.exec.fs_append_line(
+            conn, env_path, f"OTEL_INFLUX_ENDPOINT={self.influx_endpoint}"
+        )
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_AUTH={influx_auth}")
         self.service_url = f"https://{conn.host}:{self.port_grpc}"
         self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
         self.service_ports["OTLP HTTP receiver"] = int(self.port_http)
@@ -132,11 +172,16 @@ class OtelDockerService(AbstractService):
         payload = {
             key: value
             for key, value in {
-                "license_key": self.relic_key,
-                "endpoint": self.relic_endpoint,
+                "new_relic_license_key": self.relic_key,
+                "new_relic_endpoint": self.relic_endpoint,
+                "grafana_endpoint": self.grafana_endpoint,
+                "grafana_username": self.grafana_username,
+                "grafana_token": self.grafana_token,
+                "influx_endpoint": self.influx_endpoint,
+                "influx_token": self.influx_token,
             }.items()
             if value
         }
         if not payload:
             return {}
-        return {"new_relic_exporter": payload}
+        return {"otel_exporters": payload}
