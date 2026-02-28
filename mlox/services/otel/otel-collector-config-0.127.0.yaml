@@ -23,6 +23,11 @@ receivers:
       network:
 
 exporters:
+<<<<<<< ours
+__NEWRELIC_EXPORTER_BLOCK__
+__GRAFANA_EXPORTER_BLOCK__
+__INFLUX_EXPORTER_BLOCK__
+=======
   otlphttp/newrelic:
     endpoint: ${env:MY_OTEL_RELIC_ENDPOINT}
     headers:
@@ -37,6 +42,7 @@ exporters:
     endpoint: ${env:MY_OTEL_INFLUX_ENDPOINT}
     headers:
       Authorization: ${env:MY_OTEL_INFLUX_AUTH}
+>>>>>>> theirs
 
   file:
     path: /etc/otelcol/telemetry.json

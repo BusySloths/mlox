@@ -70,16 +70,24 @@ class OtelDockerService(AbstractService):
         self.exec.fs_set_permissions(conn, telemetry_file, "777", sudo=True)
 
         self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
-        config_template = self.exec.fs_read_file(conn, self.config, format="txt/plain")
+<<<<<<< ours
+        with open(self.config, "r", encoding="utf-8") as config_file:
+            config_template = config_file.read()
         exporters = self._active_exporters()
-        config_rendered = config_template.replace(
-            "__OPTIONAL_EXPORTERS__",
-            f", {', '.join(exporters)}" if exporters else "",
-        )
+        config_rendered = self._render_collector_config(config_template, exporters)
         self.exec.fs_write_file(
             conn,
             f"{self.target_path}/otel-collector-config.yaml",
             config_rendered,
+=======
+        collector_config_path = f"{self.target_path}/otel-collector-config.yaml"
+        self.exec.fs_copy(conn, self.config, collector_config_path)
+        self.exec.fs_find_and_replace(
+            conn,
+            collector_config_path,
+            "__OPTIONAL_EXPORTERS__",
+            self._optional_exporters_fragment(),
+>>>>>>> theirs
         )
 
         self.exec.tls_setup(conn, conn.host, self.target_path)
@@ -193,3 +201,71 @@ class OtelDockerService(AbstractService):
         if len(self.influx_auth) > 4 and len(self.influx_endpoint) > 4:
             exporters.append("otlphttp/influxdb")
         return exporters
+
+<<<<<<< ours
+    def _render_collector_config(self, *args) -> str:
+        """
+        Render collector config. Backwards-compatible signatures:
+        - _render_collector_config(config_template: str, active_exporters: list[str])
+        - _render_collector_config(conn, config_template: str, active_exporters: list[str])
+        If a conn is provided, upload the original config file to the target path first.
+        """
+        if len(args) == 3:
+            conn, config_template, active_exporters = args
+        elif len(args) == 2:
+            conn = None
+            config_template, active_exporters = args
+        else:
+            raise TypeError(
+                "_render_collector_config expects (config_template, active_exporters) "
+                "or (conn, config_template, active_exporters)"
+            )
+
+        if conn:
+            # upload original config to the remote target path (keep original name)
+            try:
+                basename = self.config.split("/")[-1]
+                self.exec.fs_copy(conn, self.config, f"{self.target_path}/{basename}")
+            except Exception as exc:  # keep non-fatal; rendering can still proceed
+                logging.warning("Failed to upload collector config %s: %s", self.config, exc)
+
+        optional_exporters = (
+            f", {', '.join(active_exporters)}" if active_exporters else ""
+        )
+        rendered = config_template.replace("__OPTIONAL_EXPORTERS__", optional_exporters)
+        blocks = {
+            "__NEWRELIC_EXPORTER_BLOCK__": (
+                "  otlphttp/newrelic:\n"
+                "    endpoint: ${env:MY_OTEL_RELIC_ENDPOINT}\n"
+                "    headers:\n"
+                "      api-key: ${env:MY_OTEL_RELIC_KEY}\n"
+                if "otlphttp/newrelic" in active_exporters
+                else ""
+            ),
+            "__GRAFANA_EXPORTER_BLOCK__": (
+                "  otlphttp/grafana:\n"
+                "    endpoint: ${env:MY_OTEL_GRAFANA_ENDPOINT}\n"
+                "    headers:\n"
+                "      Authorization: ${env:MY_OTEL_GRAFANA_AUTH}\n"
+                if "otlphttp/grafana" in active_exporters
+                else ""
+            ),
+            "__INFLUX_EXPORTER_BLOCK__": (
+                "  otlphttp/influxdb:\n"
+                "    endpoint: ${env:MY_OTEL_INFLUX_ENDPOINT}\n"
+                "    headers:\n"
+                "      Authorization: ${env:MY_OTEL_INFLUX_AUTH}\n"
+                if "otlphttp/influxdb" in active_exporters
+                else ""
+            ),
+        }
+        for marker, content in blocks.items():
+            rendered = rendered.replace(marker, content)
+        return rendered
+=======
+    def _optional_exporters_fragment(self) -> str:
+        exporters = self._active_exporters()
+        if not exporters:
+            return ""
+        return f", {', '.join(exporters)}"
+>>>>>>> theirs

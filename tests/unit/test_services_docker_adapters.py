@@ -271,9 +271,15 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
     assert isinstance(sm, OpenBaoSecretManager)
 
 
+<<<<<<< ours
+def test_otel_setup_check_and_read_telemetry(conn, tmp_path):
+    fake_exec = FakeExec()
+    otel_config = tmp_path / "otel.yaml"
+    otel_config.write_text("exporters: [debug, file__OPTIONAL_EXPORTERS__]", encoding="utf-8")
+=======
 def test_otel_setup_check_and_read_telemetry(conn):
     fake_exec = FakeExec()
-    fake_exec.files["otel.yaml"] = "exporters: [debug, file__OPTIONAL_EXPORTERS__]"
+>>>>>>> theirs
     service = _set_exec(
         OtelDockerService(
             **BASE,
@@ -283,7 +289,11 @@ def test_otel_setup_check_and_read_telemetry(conn):
             grafana_auth="Basic abc",
             influx_endpoint="http://127.0.0.1:8086/api/v2/otlp",
             influx_auth="Token xyz",
+<<<<<<< ours
+            config=str(otel_config),
+=======
             config="otel.yaml",
+>>>>>>> theirs
             port_grpc="4317",
             port_http="4318",
             port_health="13133",
@@ -293,9 +303,26 @@ def test_otel_setup_check_and_read_telemetry(conn):
 
     service.setup(conn)
     assert service.service_ports["OTLP gRPC receiver"] == 4317
+<<<<<<< ours
     assert "otlphttp/newrelic" in service.exec.files["/tmp/stack/otel-collector-config.yaml"]
     assert "otlphttp/grafana" in service.exec.files["/tmp/stack/otel-collector-config.yaml"]
     assert "otlphttp/influxdb" in service.exec.files["/tmp/stack/otel-collector-config.yaml"]
+=======
+    assert (
+        "fs_copy",
+        ("otel.yaml", "/tmp/stack/otel-collector-config.yaml"),
+        {},
+    ) in service.exec.calls
+    assert (
+        "fs_find_and_replace",
+        (
+            "/tmp/stack/otel-collector-config.yaml",
+            "__OPTIONAL_EXPORTERS__",
+            ", otlphttp/newrelic, otlphttp/grafana, otlphttp/influxdb",
+        ),
+        {},
+    ) in service.exec.calls
+>>>>>>> theirs
     service.exec.service_states["otel-collector"] = "created"
     assert service.check(conn)["status"] == "starting"
 
