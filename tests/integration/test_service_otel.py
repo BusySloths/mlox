@@ -21,13 +21,15 @@ def install_otel_service(ubuntu_docker_server):
     bundle = Bundle(name=ubuntu_docker_server.ip, server=ubuntu_docker_server)
     infra.bundles.append(bundle)
 
-    config = load_config(get_stacks_path(), "/otel", "mlox.otel.0.127.0.yaml")
+    config = load_config(get_stacks_path(), "/otel", "mlox.otel.0.146.1.yaml")
     bundle_added = infra.add_service(
         ubuntu_docker_server.ip,
         config,
         params={
             "${MLOX_RELIC_KEY}": "123",
             "${MLOX_RELIC_ENDPOINT}": "https://otlp.eu01.nr-data.net:4317",
+            "${MLOX_GRAFANA_CLOUD_KEY}": "",
+            "${MLOX_GRAFANA_CLOUD_ENDPOINT}": "",
         },
     )
     if not bundle_added:

@@ -313,6 +313,8 @@ SERVICE_CASES = [
         {
             "relic_endpoint": "https://otlp.nr.example.com",
             "relic_key": "nr-key",
+            "grafana_cloud_endpoint": "https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
+            "grafana_cloud_key": "Basic abc123",
             "config": "otel.yaml",
             "port_grpc": "4317",
             "port_http": "4318",
@@ -322,6 +324,10 @@ SERVICE_CASES = [
             "new_relic_exporter": {
                 "license_key": "nr-key",
                 "endpoint": "https://otlp.nr.example.com",
+            },
+            "grafana_cloud_exporter": {
+                "api_key": "Basic abc123",
+                "endpoint": "https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
             },
         },
         None,

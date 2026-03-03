@@ -3,6 +3,8 @@ import logging
 
 from typing import Dict, Any, Optional
 
+# WORK IN PROGRESS: OTel client API is still being refined.
+
 from opentelemetry import metrics, trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.metrics import MeterProvider
@@ -18,25 +20,55 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 
 class OTelClient:
     def __init__(
-        self, collector_url: str, trusted_certs: bytes, resource_attrs: Dict[str, Any]
+        self,
+        collector_url: Optional[str] = None,
+        trusted_certs: Optional[bytes | str] = None,
+        resource_attrs: Optional[Dict[str, Any]] = None,
+        otel_secret: Optional[Dict[str, Any]] = None,
     ):
-        self.collector_url = collector_url
-        self.trusted_certs = trusted_certs
-        self.resource = Resource.create(resource_attrs)
-        self.ssl_credentials = grpc.ssl_channel_credentials(
-            root_certificates=trusted_certs
-        )
+        secret_payload = dict(otel_secret or {})
+        if "otel_client_connection" in secret_payload:
+            secret_payload = dict(secret_payload["otel_client_connection"])
+
+        resolved_collector_url = collector_url or secret_payload.get("collector_url")
+        resolved_trusted_certs = trusted_certs or secret_payload.get("trusted_certs")
+        self.insecure_tls = bool(secret_payload.get("insecure_tls", False))
+
+        if not resolved_collector_url:
+            raise ValueError("collector_url is required (directly or via otel_secret)")
+        if not self.insecure_tls and not resolved_trusted_certs:
+            raise ValueError(
+                "trusted_certs is required when insecure_tls is False "
+                "(directly or via otel_secret)"
+            )
+
+        if isinstance(resolved_trusted_certs, str):
+            resolved_trusted_certs = resolved_trusted_certs.encode("utf-8")
+
+        self.collector_url = resolved_collector_url
+        self.trusted_certs = resolved_trusted_certs
+        self.resource = Resource.create(resource_attrs or {})
+        self.ssl_credentials = None
+        if not self.insecure_tls and self.trusted_certs:
+            self.ssl_credentials = grpc.ssl_channel_credentials(
+                root_certificates=self.trusted_certs
+            )
         self._setup_metrics()
         self._setup_tracing()
         self._setup_logs()
 
+    def _exporter_kwargs(self) -> Dict[str, Any]:
+        kwargs: Dict[str, Any] = {
+            "endpoint": self.collector_url,
+            "insecure": self.insecure_tls,
+        }
+        if self.ssl_credentials is not None:
+            kwargs["credentials"] = self.ssl_credentials
+        return kwargs
+
     def _setup_logs(self):
         # Configure the OTLP Log Exporter
-        self.log_exporter = OTLPLogExporter(
-            endpoint=self.collector_url,
-            credentials=self.ssl_credentials,
-            insecure=False,
-        )
+        self.log_exporter = OTLPLogExporter(**self._exporter_kwargs())
         # Configure the LoggerProvider
         self.logger_provider = LoggerProvider(resource=self.resource)
         self.logger_provider.add_log_record_processor(
@@ -53,11 +85,7 @@ class OTelClient:
         self.logger = logging.getLogger("otel_logger")
 
     def _setup_metrics(self):
-        self.metric_exporter = OTLPMetricExporter(
-            endpoint=self.collector_url,
-            credentials=self.ssl_credentials,
-            insecure=False,
-        )
+        self.metric_exporter = OTLPMetricExporter(**self._exporter_kwargs())
         self.metric_reader = PeriodicExportingMetricReader(
             exporter=self.metric_exporter,
             export_interval_millis=1000,
@@ -69,11 +97,7 @@ class OTelClient:
         self.meter = metrics.get_meter(__name__)
 
     def _setup_tracing(self):
-        self.span_exporter = OTLPSpanExporter(
-            endpoint=self.collector_url,
-            credentials=self.ssl_credentials,
-            insecure=False,
-        )
+        self.span_exporter = OTLPSpanExporter(**self._exporter_kwargs())
         self.tracer_provider = TracerProvider(resource=self.resource)
         self.tracer_provider.add_span_processor(BatchSpanProcessor(self.span_exporter))
         trace.set_tracer_provider(self.tracer_provider)

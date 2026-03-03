@@ -426,6 +426,7 @@ def _plot_timeline(
 
 def setup(infra: Infrastructure, bundle: Bundle) -> dict[str, str]:
     params: dict[str, str] = {}
+    st.markdown("#### New Relic Exporter")
     col_key, col_endpoint = st.columns(2)
     params["${MLOX_RELIC_KEY}"] = col_key.text_input(
         "New Relic OTLP Key", key="relic_key"
@@ -434,6 +435,19 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict[str, str]:
         "New Relic OTLP Endpoint",
         value="https://otlp.eu01.nr-data.net:4317",
         key="relic_endpoint",
+    )
+
+    st.markdown("#### Grafana Cloud Exporter")
+    col_grafana_key, col_grafana_endpoint = st.columns(2)
+    params["${MLOX_GRAFANA_CLOUD_KEY}"] = col_grafana_key.text_input(
+        "Grafana Cloud Authorization Header",
+        key="grafana_cloud_key",
+        help="Use full header value, e.g. Basic <base64(instance_id:token)>.",
+    )
+    params["${MLOX_GRAFANA_CLOUD_ENDPOINT}"] = col_grafana_endpoint.text_input(
+        "Grafana Cloud OTLP Endpoint",
+        key="grafana_cloud_endpoint",
+        value="",
     )
     return params
 

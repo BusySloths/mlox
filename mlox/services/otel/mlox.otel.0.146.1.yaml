@@ -1,6 +1,6 @@
-id: otel-0.127.0-docker
+id: otel-0.146.1-docker
 name: OpenTelemetry Collector
-version: "0.127.0"
+version: "0.146.1"
 maintainer: Your Name
 description_short: OpenTelemetry Collector is a service for collecting and exporting telemetry data.
 description: |
@@ -38,6 +38,8 @@ build:
     config: ${MLOX_STACKS_PATH}/otel/otel-collector-config-0.146.1.yaml
     relic_endpoint: ${MLOX_RELIC_ENDPOINT}
     relic_key: ${MLOX_RELIC_KEY}
+    grafana_cloud_endpoint: ${MLOX_GRAFANA_CLOUD_ENDPOINT}
+    grafana_cloud_key: ${MLOX_GRAFANA_CLOUD_KEY}
     port_grpc: ${MLOX_AUTO_PORT_GRPC}
     port_http: ${MLOX_AUTO_PORT_HTTP}
     port_health: ${MLOX_AUTO_PORT_HEALTH}

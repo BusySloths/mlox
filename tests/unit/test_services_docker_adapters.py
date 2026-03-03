@@ -277,6 +277,8 @@ def test_otel_setup_check_and_read_telemetry(conn):
             **BASE,
             relic_endpoint="https://otlp.newrelic.example",
             relic_key="nr-key",
+            grafana_cloud_endpoint="https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
+            grafana_cloud_key="Basic abc123",
             config="otel.yaml",
             port_grpc="4317",
             port_http="4318",
@@ -287,6 +289,38 @@ def test_otel_setup_check_and_read_telemetry(conn):
 
     service.setup(conn)
     assert service.service_ports["OTLP gRPC receiver"] == 4317
+    secrets = service.get_secrets()
+    assert secrets["otel_client_connection"]["collector_url"] == "https://example.test:4317"
+    assert secrets["otel_client_connection"]["trusted_certs"] == "CERT"
+    assert secrets["otel_client_connection"]["insecure_tls"] is False
+    assert secrets["otel_client_connection"]["protocol"] == "otlp_grpc"
+
+    replacements = [
+        call
+        for call in service.exec.calls
+        if call[0] == "fs_find_and_replace"
+        and call[1][0] == "/tmp/stack/otel-collector-config.yaml"
+    ]
+    assert len(replacements) == 5
+    pipeline_replacements = [
+        args
+        for _, args, _ in replacements
+        if args[1]
+        in {
+            "__TRACES_EXPORTER_LIST__",
+            "__METRICS_EXPORTER_LIST__",
+            "__LOGS_EXPORTER_LIST__",
+        }
+    ]
+    assert len(pipeline_replacements) == 3
+    for args in pipeline_replacements:
+        assert args[2] == "debug, file, otlphttp/new_relic, otlphttp/grafana_cloud"
+    block_replacements = {args[1]: args[2] for _, args, _ in replacements}
+    assert "otlphttp/new_relic" in block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"]
+    assert "api-key" in block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"]
+    assert "otlphttp/grafana_cloud" in block_replacements["__GRAFANA_CLOUD_EXPORTER_BLOCK__"]
+    assert "Authorization" in block_replacements["__GRAFANA_CLOUD_EXPORTER_BLOCK__"]
+
     service.exec.service_states["otel-collector"] = "created"
     assert service.check(conn)["status"] == "starting"
 
@@ -297,6 +331,127 @@ def test_otel_setup_check_and_read_telemetry(conn):
     service.exec.files["/tmp/stack/otel-data/telemetry.json"] = "{}"
     bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=lambda: _cm()))
     assert service.get_telemetry_data(bundle) == "{}"
+
+
+def test_otel_setup_without_relic_keeps_local_exporters(conn):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE,
+            relic_endpoint="",
+            relic_key="",
+            config="otel.yaml",
+            port_grpc="4317",
+            port_http="4318",
+            port_health="13133",
+        ),
+        FakeExec(),
+    )
+
+    service.setup(conn)
+    replacements = [
+        call
+        for call in service.exec.calls
+        if call[0] == "fs_find_and_replace"
+        and call[1][0] == "/tmp/stack/otel-collector-config.yaml"
+    ]
+    assert len(replacements) == 5
+    pipeline_replacements = [
+        args
+        for _, args, _ in replacements
+        if args[1]
+        in {
+            "__TRACES_EXPORTER_LIST__",
+            "__METRICS_EXPORTER_LIST__",
+            "__LOGS_EXPORTER_LIST__",
+        }
+    ]
+    assert len(pipeline_replacements) == 3
+    for args in pipeline_replacements:
+        assert args[2] == "debug, file"
+    block_replacements = {args[1]: args[2] for _, args, _ in replacements}
+    assert block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"] == ""
+    assert block_replacements["__GRAFANA_CLOUD_EXPORTER_BLOCK__"] == ""
+
+
+def test_otel_setup_with_grafana_cloud_only(conn):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE,
+            relic_endpoint="",
+            relic_key="",
+            grafana_cloud_endpoint="https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
+            grafana_cloud_key="Basic abc123",
+            config="otel.yaml",
+            port_grpc="4317",
+            port_http="4318",
+            port_health="13133",
+        ),
+        FakeExec(),
+    )
+
+    service.setup(conn)
+    replacements = [
+        call
+        for call in service.exec.calls
+        if call[0] == "fs_find_and_replace"
+        and call[1][0] == "/tmp/stack/otel-collector-config.yaml"
+    ]
+    assert len(replacements) == 5
+    pipeline_replacements = [
+        args
+        for _, args, _ in replacements
+        if args[1]
+        in {
+            "__TRACES_EXPORTER_LIST__",
+            "__METRICS_EXPORTER_LIST__",
+            "__LOGS_EXPORTER_LIST__",
+        }
+    ]
+    assert len(pipeline_replacements) == 3
+    for args in pipeline_replacements:
+        assert args[2] == "debug, file, otlphttp/grafana_cloud"
+    block_replacements = {args[1]: args[2] for _, args, _ in replacements}
+    assert block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"] == ""
+    assert "otlphttp/grafana_cloud" in block_replacements["__GRAFANA_CLOUD_EXPORTER_BLOCK__"]
+
+
+def test_otel_check_falls_back_to_underscored_name(conn):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE,
+            relic_endpoint="",
+            relic_key="",
+            config="otel.yaml",
+            port_grpc="4317",
+            port_http="4318",
+            port_health="13133",
+        ),
+        FakeExec(),
+    )
+
+    service.exec.service_states["otel_collector"] = "running"
+    assert service.check(conn) == {"status": "running", "docker_state": "running"}
+
+
+def test_otel_setup_normalizes_encoded_grafana_auth_header(conn):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE,
+            relic_endpoint="",
+            relic_key="",
+            grafana_cloud_endpoint="https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
+            grafana_cloud_key='"Basic%20abc123=="',
+            config="otel.yaml",
+            port_grpc="4317",
+            port_http="4318",
+            port_health="13133",
+        ),
+        FakeExec(),
+    )
+
+    service.setup(conn)
+    env_lines = service.exec.appended.get("/tmp/stack/service.env", [])
+    assert "OTEL_GRAFANA_CLOUD_KEY=Basic abc123==" in env_lines
 
 
 def test_mlflow_setup_check_and_list_models(conn, monkeypatch):

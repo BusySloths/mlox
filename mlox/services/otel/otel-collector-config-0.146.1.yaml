@@ -23,15 +23,13 @@ receivers:
       network:
 
 exporters:
-  otlphttp:
-    endpoint: ${env:MY_OTEL_RELIC_ENDPOINT}
-    headers:
-      api-key: ${env:MY_OTEL_RELIC_KEY}
+__NEW_RELIC_EXPORTER_BLOCK__
+__GRAFANA_CLOUD_EXPORTER_BLOCK__
   file:
     path: /etc/otelcol/telemetry.json # Path inside the container where data will be written
     rotation:
-      max_megabytes: 10    # Rotate file when size exceeds 100MB
-      max_backups: 5        # Keep up to 5 rotated files
+      max_megabytes: 10 # Rotate file when size exceeds 100MB
+      max_backups: 5 # Keep up to 5 rotated files
   debug:
     verbosity: detailed
 
@@ -40,7 +38,7 @@ processors:
   memory_limiter:
     check_interval: 1s
     limit_percentage: 65
-    spike_limit_percentage: 20  
+    spike_limit_percentage: 20
 
 # connectors:
 #   spanmetrics:
@@ -48,28 +46,31 @@ processors:
 
 extensions:
   health_check:
-    endpoint: "0.0.0.0:13133" 
-    path: "/health/status" 
+    endpoint: "0.0.0.0:13133"
+    path: "/health/status"
     tls:
       cert_file: /etc/cert.pem
       key_file: /etc/key.pem
-    check_collector_pipeline: 
-      enabled: true 
-      interval: "5m" 
-      exporter_failure_threshold: 5   
+    check_collector_pipeline:
+      enabled: true
+      interval: "5m"
+      exporter_failure_threshold: 5
 
 service:
+  telemetry:
+    logs:
+      level: debug
   extensions: [health_check]
   pipelines:
     traces:
-      receivers: [otlp]    
+      receivers: [otlp]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters: [__TRACES_EXPORTER_LIST__]
     metrics:
       receivers: [otlp, hostmetrics]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters: [__METRICS_EXPORTER_LIST__]
     logs:
       receivers: [otlp]
       processors: [batch, memory_limiter]
-      exporters: [debug, file]
+      exporters: [__LOGS_EXPORTER_LIST__]

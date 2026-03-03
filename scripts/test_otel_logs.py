@@ -14,12 +14,15 @@ from opentelemetry.trace import get_current_span
 
 from mlox.session import MloxSession
 
-password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
+mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
+mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
 # Make sure your environment variable is set!
-if not password:
-    print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
+if not mlox_password or not mlox_name:
+    print(
+        "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_NAME environment variable is not set."
+    )
     exit(1)
-session = MloxSession("mlox", password)
+session = MloxSession(mlox_name, mlox_password)
 infra = session.infra
 
 
@@ -29,8 +32,8 @@ if len(monitors) == 0:
     exit()
 # collector_url = f"{infra.bundles[0].server.ip}:{infra.bundles[0].services[2].service.service_ports['OTLP gRPC receiver']}"
 # trusted_certs = infra.bundles[0].services[2].service.certificate.encode("utf-8")
-collector_url = monitors[0].service_url
-trusted_certs = monitors[0].certificate.encode("utf-8")
+collector_url = monitors[-1].service_url
+trusted_certs = monitors[-1].certificate.encode("utf-8")
 
 # Define the resource with service name and other attributes
 resource = Resource.create(

@@ -42,8 +42,8 @@ if len(monitors) == 0:
     print("No monitors found.")
     exit()
 
-collector_url = monitors[0].service_url
-trusted_certs = monitors[0].certificate.encode("utf-8")
+collector_url = monitors[-1].service_url
+trusted_certs = monitors[-1].certificate.encode("utf-8")
 
 # Create SSL credentials with the self-signed certificate
 ssl_credentials = grpc.ssl_channel_credentials(root_certificates=trusted_certs)

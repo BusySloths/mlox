@@ -4,12 +4,14 @@ services:
 
   # Collector
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.127.0
+    image: otel/opentelemetry-collector-contrib:0.146.1
     container_name: otel-collector
     restart: always
     environment:
       - MY_OTEL_RELIC_ENDPOINT=${OTEL_RELIC_ENDPOINT}
       - MY_OTEL_RELIC_KEY=${OTEL_RELIC_KEY}
+      - MY_OTEL_GRAFANA_CLOUD_ENDPOINT=${OTEL_GRAFANA_CLOUD_ENDPOINT}
+      - MY_OTEL_GRAFANA_CLOUD_KEY=${OTEL_GRAFANA_CLOUD_KEY}
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./otel-data:/etc/otelcol  # fix path to where the file exporter writes
@@ -22,7 +24,7 @@ services:
       - "${OTEL_PORT_HTTP}:4318"   # OTLP HTTP receiver
       - "${OTEL_PORT_HEALTH}:13133"  # health check
     networks:
-      - otel_0_127_0_network
+      - otel_0_146_1_network
 
 networks:
-  otel_0_127_0_network:
+  otel_0_146_1_network:

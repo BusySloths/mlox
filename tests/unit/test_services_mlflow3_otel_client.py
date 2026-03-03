@@ -285,3 +285,104 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
     assert client.metric_exporter.shutdown_called is True
     assert client.span_exporter.shutdown_called is True
     assert client.log_exporter.shutdown_called is True
+
+
+def test_otel_client_init_from_service_secrets_dict(monkeypatch):
+    class _Exporter:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.shutdown_called = False
+
+        def shutdown(self):
+            self.shutdown_called = True
+
+    class _Reader:
+        def __init__(self, exporter, export_interval_millis):
+            self.exporter = exporter
+            self.export_interval_millis = export_interval_millis
+
+    class _MeterProvider:
+        def __init__(self, metric_readers, resource):
+            self.metric_readers = metric_readers
+            self.resource = resource
+
+    class _TracerProvider:
+        def __init__(self, resource):
+            self.resource = resource
+            self.processors = []
+
+        def add_span_processor(self, processor):
+            self.processors.append(processor)
+
+    class _BatchSpanProcessor:
+        def __init__(self, exporter):
+            self.exporter = exporter
+
+    class _BatchLogRecordProcessor:
+        def __init__(self, exporter):
+            self.exporter = exporter
+
+    class _LoggerProvider:
+        def __init__(self, resource):
+            self.resource = resource
+            self.processors = []
+
+        def add_log_record_processor(self, processor):
+            self.processors.append(processor)
+
+    class _LoggingHandler:
+        def __init__(self, logger_provider):
+            self.logger_provider = logger_provider
+
+    class _Meter:
+        def create_counter(self, *args, **kwargs):
+            return object()
+
+        def create_histogram(self, *args, **kwargs):
+            return object()
+
+        def create_observable_gauge(self, *args, **kwargs):
+            return None
+
+        def create_gauge(self, *args, **kwargs):
+            return object()
+
+    monkeypatch.setattr(
+        "mlox.services.otel.client.grpc.ssl_channel_credentials",
+        lambda root_certificates: "ssl-creds",
+    )
+    monkeypatch.setattr("mlox.services.otel.client.OTLPMetricExporter", _Exporter)
+    monkeypatch.setattr("mlox.services.otel.client.OTLPSpanExporter", _Exporter)
+    monkeypatch.setattr("mlox.services.otel.client.OTLPLogExporter", _Exporter)
+    monkeypatch.setattr("mlox.services.otel.client.PeriodicExportingMetricReader", _Reader)
+    monkeypatch.setattr("mlox.services.otel.client.MeterProvider", _MeterProvider)
+    monkeypatch.setattr("mlox.services.otel.client.TracerProvider", _TracerProvider)
+    monkeypatch.setattr("mlox.services.otel.client.BatchSpanProcessor", _BatchSpanProcessor)
+    monkeypatch.setattr(
+        "mlox.services.otel.client.BatchLogRecordProcessor", _BatchLogRecordProcessor
+    )
+    monkeypatch.setattr("mlox.services.otel.client.LoggerProvider", _LoggerProvider)
+    monkeypatch.setattr("mlox.services.otel.client.LoggingHandler", _LoggingHandler)
+    monkeypatch.setattr("mlox.services.otel.client.metrics.set_meter_provider", lambda provider: None)
+    monkeypatch.setattr("mlox.services.otel.client.metrics.get_meter", lambda name: _Meter())
+    monkeypatch.setattr("mlox.services.otel.client.trace.set_tracer_provider", lambda provider: None)
+    monkeypatch.setattr("mlox.services.otel.client.trace.get_tracer", lambda name: object())
+
+    service_secrets = {
+        "otel_client_connection": {
+            "collector_url": "https://collector.example:4317",
+            "trusted_certs": "PEM-CONTENT",
+            "insecure_tls": False,
+            "protocol": "otlp_grpc",
+        }
+    }
+    client = OTelClient(
+        otel_secret=service_secrets,
+        resource_attrs={"service.name": "unit-test"},
+    )
+
+    assert client.collector_url == "https://collector.example:4317"
+    assert client.trusted_certs == b"PEM-CONTENT"
+    assert client.metric_exporter.kwargs["endpoint"] == "https://collector.example:4317"
+    assert client.metric_exporter.kwargs["credentials"] == "ssl-creds"
+    assert client.metric_exporter.kwargs["insecure"] is False
