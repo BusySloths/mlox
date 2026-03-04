@@ -22,7 +22,6 @@ from typing import Dict
 from mlox.service import AbstractService
 
 
-
 # Configure logging (optional, but recommended)
 logging.basicConfig(
     level=logging.INFO,
@@ -45,7 +44,9 @@ class InfluxDockerService(AbstractService):
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
 
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
@@ -99,14 +100,14 @@ class InfluxDockerService(AbstractService):
 
     def get_secrets(self) -> Dict[str, Dict]:
         credentials = {
-            key: value
-            for key, value in {
-                "username": self.user,
-                "password": self.pw,
-                "token": self.token,
-            }.items()
-            if value
+            "username": self.user,
+            "password": self.pw,
+            "token": self.token,
+            "certificate": self.certificate,
+            "port": str(self.port),
+            "url": self.service_urls.get("InfluxDB", None),
+            "ip": self.service_urls.get("InfluxDB", "").split("//")[-1].split(":")[0],
         }
         if not credentials:
             return {}
-        return {"influx_admin_credentials": credentials}
+        return credentials

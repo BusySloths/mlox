@@ -6,12 +6,15 @@ from mlox.session import MloxSession
 
 
 def main():
-    password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
+    mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
+    mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
     # Make sure your environment variable is set!
-    if not password:
-        print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
+    if not mlox_password or not mlox_name:
+        print(
+            "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_NAME environment variable is not set."
+        )
         exit(1)
-    session = MloxSession("mlox", password)
+    session = MloxSession(mlox_name, mlox_password)
     infra = session.infra
 
     dbs = infra.filter_by_group("database")
@@ -21,18 +24,17 @@ def main():
         if "influx" in db.name.lower():
             my_influx = db
 
-    bundle = None
-    if my_influx:
-        bundle = infra.get_bundle_by_service(my_influx.service)
-    else:
+    if not my_influx:
         print("No InfluxDB service found in the infrastructure.")
         exit(1)
 
+    influx_secrets = my_influx.get_secrets()
+
     """Instantiate a connection to the InfluxDB."""
-    host = bundle.server.ip
-    port = my_influx.service.port
-    user = my_influx.service.user
-    password = my_influx.service.pw
+    host = influx_secrets.get("ip", None)
+    port = influx_secrets.get("port", None)
+    user = influx_secrets.get("username", None)
+    password = influx_secrets.get("password", None)
     dbname = "test_02_db"
     # dbuser = "smly"
     # dbuser_password = "my_secret_password"
