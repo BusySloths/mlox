@@ -169,3 +169,5 @@ services/llm/data/
 services/llm/ollama/
 services/features/feature_repo
 services/features/my_project
+
+CLAUDE.md

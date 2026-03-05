@@ -2,14 +2,14 @@
 title: "What can you do with MLOX?"
 features:
   - title: "Infrastructure"
-    icon: "🏗️"
+    icon: "[ ]"
     color: "cyan"
     items:
       - "Manage servers: administrate and secure"
       - "Choose your runtime: Native, Docker, or Kubernetes"
       - "Spin up and connect cluster: single node or multi‑node"
   - title: "Services"
-    icon: "🔧"
+    icon: "{}"
     color: "purple"
     items:
       - "Install, update, and remove services without fuss"
@@ -19,7 +19,7 @@ features:
       - "Connect services and deploy models with ease"
       - "Security included"
   - title: "Integrations"
-    icon: "☁️"
+    icon: "><"
     color: "pink"
     description: "Integrate existing solutions or seamlessly connect to your code:"
     items:

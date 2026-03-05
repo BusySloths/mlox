@@ -10,7 +10,7 @@ const navItems = [
 ];
 ---
 
-<header class="fixed top-0 left-0 right-0 z-50 border-b-2 border-black bg-[#d3a321]">
+<header class="fixed top-0 left-0 right-0 z-50 border-b-2 border-black bg-accent-yellow">
   <nav class="container mx-auto px-6 py-3">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center space-x-2">
@@ -23,7 +23,7 @@ const navItems = [
         {navItems.map((item) => (
           <a
             href={item.href}
-            class="font-bold text-sm px-3 py-1 border border-black bg-[#fbf7ee] hover:bg-black hover:text-white transition-colors"
+            class="font-bold text-sm px-3 py-1 border border-black bg-paper-bright hover:bg-black hover:text-white transition-colors"
             target={item.external ? '_blank' : undefined}
             rel={item.external ? 'noopener noreferrer' : undefined}
           >
@@ -34,8 +34,10 @@ const navItems = [
 
       <button
         id="mobile-menu-button"
-        class="md:hidden p-2 border border-black bg-[#fbf7ee] hover:bg-black hover:text-white transition-colors"
+        class="md:hidden p-2 border border-black bg-paper-bright hover:bg-black hover:text-white transition-colors"
         aria-label="Toggle menu"
+        aria-expanded="false"
+        aria-controls="mobile-menu"
       >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="square" stroke-linejoin="miter" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"></path>
@@ -47,7 +49,7 @@ const navItems = [
       {navItems.map((item) => (
         <a
           href={item.href}
-          class="block px-4 py-2 font-bold border border-black bg-[#fbf7ee] hover:bg-black hover:text-white transition-colors"
+          class="block px-4 py-2 font-bold border border-black bg-paper-bright hover:bg-black hover:text-white transition-colors"
           target={item.external ? '_blank' : undefined}
           rel={item.external ? 'noopener noreferrer' : undefined}
         >
@@ -60,30 +62,43 @@ const navItems = [
 
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    const menuButton = document.getElementById('mobile-menu-button');
+    const menuButton = document.getElementById('mobile-menu-button') as HTMLButtonElement | null;
     const mobileMenu = document.getElementById('mobile-menu');
 
     menuButton?.addEventListener('click', () => {
-      mobileMenu?.classList.toggle('hidden');
+      const isNowOpen = mobileMenu?.classList.toggle('hidden') === false;
+      menuButton.setAttribute('aria-expanded', String(isNowOpen));
     });
 
+    const closeMobileMenu = () => {
+      mobileMenu?.classList.add('hidden');
+      menuButton?.setAttribute('aria-expanded', 'false');
+    };
+
+    // Smooth-scroll hash links and close menu
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function (this: HTMLAnchorElement, e) {
         e.preventDefault();
         const target = document.querySelector(this.getAttribute('href') || '');
         if (target) {
-          const headerOffset = 120;
+          const header = document.querySelector('header');
+          const banner = document.getElementById('news-banner');
+          const headerHeight = header?.getBoundingClientRect().height ?? 72;
+          const bannerHeight = banner?.classList.contains('hidden') ? 0 : (banner?.getBoundingClientRect().height ?? 0);
+          const headerOffset = headerHeight + bannerHeight + 8;
+
           const elementPosition = target.getBoundingClientRect().top;
           const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
 
-          window.scrollTo({
-            top: offsetPosition,
-            behavior: 'smooth'
-          });
-
-          mobileMenu?.classList.add('hidden');
+          window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+          closeMobileMenu();
         }
       });
+    });
+
+    // Close mobile menu when clicking external/non-hash links inside it
+    mobileMenu?.querySelectorAll('a:not([href^="#"])').forEach(link => {
+      link.addEventListener('click', closeMobileMenu);
     });
   });
 </script>

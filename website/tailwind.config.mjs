@@ -2,16 +2,42 @@
 export default {
   content: ['./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}'],
   theme: {
+    // Override defaults to enforce brutalist design system (no border-radius, flat shadows)
+    borderRadius: {
+      'none': '0',
+      'sm': '0',
+      DEFAULT: '0',
+      'md': '0',
+      'lg': '0',
+      'xl': '0',
+      '2xl': '0',
+      '3xl': '0',
+      'full': '0',
+    },
+    boxShadow: {
+      'sm': '3px 3px 0 #1f1b16',
+      DEFAULT: '6px 6px 0 #1f1b16',
+      'md': '6px 6px 0 #1f1b16',
+      'lg': '6px 6px 0 #1f1b16',
+      'xl': '8px 8px 0 #1f1b16',
+      '2xl': '10px 10px 0 #1f1b16',
+      'inner': 'inset 0 2px 4px 0 rgb(0 0 0 / 0.05)',
+      'none': 'none',
+    },
     extend: {
       fontFamily: {
-        // Clean, minimalistic, elegant sans-serif font
-        // Change this to customize the site's font
-        sans: ['Roboto', 'Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-        // Monospace font for code blocks
-        mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', 'monospace'],
+        // Aligns with Google Fonts import in BaseLayout.astro
+        sans: ['Space Grotesk', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'monospace'],
       },
       colors: {
-        // Brutalist warm-paper color scheme
+        // Design tokens
+        ink: '#1f1b16',
+        paper: '#f6f1e6',
+        'paper-alt': '#e9dec7',
+        'paper-footer': '#e3d6bf',
+        'paper-bright': '#fbf7ee',
+        // Brutalist warm-paper surface tones
         dark: {
           900: '#f6f1e6', // Primary surface
           800: '#efe6d2', // Alternate section surface
