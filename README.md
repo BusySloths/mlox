@@ -1,148 +1,202 @@
-[![Logo](https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_sloth_logo.png?raw=true)](Logo)
-
 <p align="center">
-<strong>
-Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
-</strong>
+  <a href="https://github.com/BusySloths/mlox">
+    <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_sloth_logo.png?raw=true" alt="MLOX Logo" width="200px"/>
+  </a>
 </p>
 
-Tired of tangled configs, YAML jungles, and broken ML pipelines? So were we.
-MLOX gives you a calm, streamlined way to deploy, monitor, and maintain production-grade MLOps infrastructure—without rushing.
-It’s for engineers who prefer thoughtful systems over chaos. Powered by sloths. Backed by open source.
-
 <p align="center">
-<a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" /></a>
-<a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" /></a>
-<a href="https://github.com/BusySloths/mlox/issues" target="_blank">
-<img alt="GitHub Issues or Pull Requests" src="https://img.shields.io/github/issues/busysloths/mlox"></a>
-<a href="https://github.com/BusySloths/mlox/discussions" target="_blank">
-<img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox"></a>
-<a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing">
-  <img src="https://img.shields.io/badge/Slides-State_of_the_Union-9cf" alt="Slides: State of the Union" />
-</a>
+  <strong>Sovereign AI Infrastructure. Open by Design. Slothfully Simple.</strong>
 </p>
 
-## ATTENTION
+<p align="center">
+  A configuration-driven control plane for deploying production-grade MLOps on your own servers — without cloud lock-in.
+</p>
 
-MLOX is still in a very early development phase. If you like to contribute in any capacity, we would love to hear from you `contact[at]mlox.org`.
+<p align="center">
+  <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/maintainability.svg" alt="Maintainability" /></a>
+  <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" /></a>
+  <a href="https://github.com/BusySloths/mlox/issues" target="_blank"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/busysloths/mlox"></a>
+  <a href="https://github.com/BusySloths/mlox/discussions" target="_blank"><img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox"></a>
+  <a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing"><img src="https://img.shields.io/badge/Slides-State_of_the_Union-9cf" alt="Slides: State of the Union" /></a>
+</p>
 
-## What can you do with MLOX?
+---
 
-### 📑 Want the big picture?  
+## What is MLOX?
 
-Check out our **[MLOX – State of the Union (Sept 2025)](https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing)** —  
-a short slide overview of what MLOX is, what problem it solves, and where it’s heading.
+Cloud MLOps costs thousands per month. Setup is painful. Vendor lock-in is a trap.
 
-### Infrastructure
+MLOX is a calm, reproducible way to run production-grade ML infrastructure on your own servers or hybrid cloud. You define your stack in YAML, MLOX handles the rest — deploying services, managing secrets, and wiring dependencies across backends. Three interfaces (Web UI, TUI, CLI) share one inspectable config-driven core.
 
-- Manage servers: add, remove, tag, and name.
-- Choose your runtime: Native, Docker, or Kubernetes.
-- Spin up Kubernetes: single node or multi‑node clusters.
+It's for engineers who prefer thoughtful systems over chaos. Backed by open source. Powered by sloths.
 
-### Services
+> **[State of the Union (Sept 2025)](https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing)** — a short slide overview of what MLOX is, what problem it solves, and where it's heading.
 
-- Install, update, and remove services without fuss.
-- Centralized secrets and configuration, ready to use.
-- Secure Docker services: MLflow, Airflow, LiteLLM, Ollama, InfluxDB, Redis, and more.
-- Kubernetes add‑ons: Dashboard, Helm, Headlamp.
-- Import GitHub repositories — public or private — with ease.
-- Use GCP integrations in your code:
-  - BigQuery
-  - Secret Manager
-  - Cloud Storage
-  - Sheets
+---
 
-## Unnecessary Long Introduction
+## Current Status
 
-Machine Learning (ML) and Artificial Intelligence (AI) are revolutionizing businesses and industries. Despite its importance, many companies struggle to go from ML/AI prototype to production.
+MLOX is in **active alpha development (v0.x)**. Core infrastructure, all three backends (Native, Docker, Kubernetes), and the major services are functional. The project has been accepted at **CAIN 2026**.
 
-ML/AI systems consist of eight non-trivial sub-problems: data collection, data processing, feature engineering, data labeling, model design, model training and optimization, endpoint deployment, and endpoint monitoring. Each of these step require specialized expert knowledge and specialized software.
+We welcome contributors, early adopters, and honest feedback. If you hit something broken, please [open an issue](https://github.com/BusySloths/mlox/issues/new/choose) or reach out at `contact@mlox.org`.
 
-MLOps, short for **Machine Learning Operations,** is a paradigm that aims to tackle those problems and deploy and maintain machine learning models in production reliably and efficiently. The word is a compound of "machine learning" and the continuous delivery practice of DevOps in the software field.
+---
 
-Cloud provider such as Google Cloud Platform or Amazon AWS offer a wide range of solutions for each of the MLOps steps. However, solutions are complex and costs are notorious hard to control on these platforms and are prohibitive high for individuals and small businesses such as startups and SMBs. E.g. a common platform for data ingestion is Google Cloud Composer who’s monthly base rate is no less than 450 Euro for a meager 2GB RAM VPS. Solutions for model endpoint hosting are often worse and often cost thousands of euros p. month (cf. Databricks).
+## What Can You Do with MLOX?
 
-Interestingly, the basis of many cloud provider MLOps solutions is widely available open source software (e.g. Google Cloud Composer is based on Apache Airflow). However, these are  complex software packages were setup, deploy and maintaining is a non-trivial task.
+| Area | What's included |
+|------|----------------|
+| **Infrastructure** | Add/remove/tag servers; choose Native, Docker, or Kubernetes runtime; spin up single- or multi-node clusters |
+| **Services** | Deploy, update, and remove services; centralized secrets; dependency wiring between services |
+| **Code** | `busysloths-mlox` PyPI package with client integrations, SDK helpers, and example snippets |
+| **Lifecycle Management** | Migrate, upgrade, export, and decommission services *(planned)* |
 
-This is were the MLOX project comes in. The goal of MLOX is four-fold:
+---
 
-MLOX is for everyone — individuals, startups, and small teams.
+## Services Catalog
 
-1. [Infrastructure] MLOX provides an easy-to-use Web UI, TUI, and CLI to securely deploy, maintain, and monitor complete on‑premise MLOps infrastructures built from open‑source components and without vendor lock‑in.
-2. [Code] Use the MLOX PyPI package to connect your code to the infrastructure — ready-made integration helpers, SDK clients, and example snippets for common tasks.
-3. [Processes] MLOX provides fully-functional templates for dealing with data from ingestion, transformation, storing, model building, up until serving.
-4. [Lifecycle Management] Provide initial tooling to manage the lifecycle of services — migrate, upgrade, export, and decommission parts of your MLOps infrastructure*.
+| Category | Services | Status |
+|----------|----------|--------|
+| ML Platforms | MLflow 2.x, MLflow 3.x, Airflow 2.x, Airflow 3.x | ✅ Stable |
+| Model Serving | MLflow MLServer | ✅ Stable |
+| LLMs & Inference | LiteLLM | ✅ Stable |
+| Vector & Feature Stores | Milvus, Feast | ✅ Stable |
+| Data & Streaming | PostgreSQL, Redis, MinIO, Kafka | ✅ Stable |
+| Observability | InfluxDB, OpenTelemetry | ✅ Stable |
+| Secrets & Access | OpenBao, Tiny Secret Manager, Docker Registry | ✅ Stable |
+| Kubernetes Add-ons | K8s Dashboard, Headlamp, KubeApps | 🔄 Experimental |
+| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | 🔄 Experimental |
+| Source Control | GitHub repository import | ✅ Stable |
 
-*: planned for future releases
+---
 
-More Links:
+## Architecture in 30 Seconds
 
-1. [Wikipedia](https://en.wikipedia.org/wiki/MLOps)
-2. [Databricks](https://www.databricks.com/glossary/mlops)
-3. [Continuous Delivery for Machine Learning](https://martinfowler.com/articles/cd4ml.html)
+```
+YAML Configs ──► config.py ──► MloxSession ──► Infrastructure
+                                    │
+                              ┌─────┼─────┐
+                             CLI   TUI   Web UI
+```
+
+Three interfaces, one core. Session startup reads an encrypted project file, loads the secret manager, and reconstructs the infrastructure graph. All remote shell operations route through `UbuntuTaskExecutor` — nothing embeds raw subprocess logic in service code.
+
+For deeper reading:
+- [Architecture Guide (humans)](docs/ARCHITECTURE_HUMANS.md) — codebase walkthrough
+- [Architecture Guide (agents)](docs/ARCHITECTURE_AGENTS.md) — high-risk areas and invariants
+
+---
+
+## Quickstart
+
+```bash
+# 1. Install Task (https://taskfile.dev/installation/)
+
+# 2. Clone
+git clone https://github.com/BusySloths/mlox.git && cd mlox
+
+# 3. Set up environment (creates conda env 'mlox-dev' with Python 3.12.5)
+task first:steps
+
+# 4. Launch the Web UI
+task ui:streamlit
+
+# 5. Or try the CLI
+task ui:cli CLI_ARGS="--help"
+```
+
+See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough including Docker and Kubernetes setup.
+
+---
+
+## Project Structure
+
+```
+mlox/
+├── mlox/
+│   ├── services/       # 20+ deployable ML services (one directory each)
+│   ├── servers/        # Native and Ubuntu/SSH backends
+│   ├── cli.py          # Typer CLI entry point
+│   ├── tui/            # Textual terminal UI
+│   ├── view/           # Streamlit web UI
+│   ├── session.py      # Runtime state & persistence
+│   ├── infra.py        # Service/server graph
+│   ├── config.py       # YAML loading + plugin entry-point discovery
+│   └── executors.py    # All remote shell operations
+├── tests/
+│   ├── unit/           # Fast tests, no external deps
+│   └── integration/    # Multipass VM tests
+├── examples/           # OTel, MLflow tracking, DAG templates
+├── docs/               # Architecture, installation, contribution guides
+└── website/            # Astro landing page
+```
+
+---
 
 ## Contributing
 
 ### Sloth-Friendly Setup
 
-Easing into MLOX should feel like a lazy stretch on a sunny branch:
+```bash
+# 1. Install Task (https://taskfile.dev/installation/)
+# 2. Clone the repo
+git clone https://github.com/BusySloths/mlox.git && cd mlox
+# 3. Set up the dev environment
+task first:steps
+# 4. Install dev dependencies
+pip install -e .[dev]
+```
 
-1. Install [Task](https://taskfile.dev/installation/) – our go-powered task runner.
-2. Clone this repository.
-3. Mosey into the project and run:
+### Run Tests
 
-   ```bash
-   task first:steps
-   ```
+```bash
+task dev:lint                   # flake8
+task tests:unit:run             # unit tests (fast, no external deps)
+task tests:integration:run      # integration tests (requires Multipass VMs)
+```
 
-   This unhurried command crafts a conda environment and gathers every dependency for you.
-   For a more comprehensive guide on how to install and run the show, please have a look at our
-   **[Sloth's paced Guide to Installation Enlightment](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md)**.
-
-Once you're comfortably set up, there are many ways to contribute, and they are not limited to writing code. We welcome all contributions such as:
+### Ways to Contribute
 
 - [Bug reports](https://github.com/BusySloths/mlox/issues/new/choose)
 - [Documentation improvements](https://github.com/BusySloths/mlox/issues/new/choose)
-- [Enhancement suggestions](https://github.com/BusySloths/mlox/issues/new/choose)
 - [Feature requests](https://github.com/BusySloths/mlox/issues/new/choose)
-- [Expanding the tutorials and use case examples](https://github.com/BusySloths/mlox/issues/new/choose)
+- [New service implementations](docs/ARCHITECTURE_HUMANS.md)
+- [Examples and tutorials](examples/)
 
-Please see our [Contributing Guide](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) for details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and [docs/WORKFLOW_QUICK_REFERENCE.md](docs/WORKFLOW_QUICK_REFERENCE.md) for how we use GitHub Projects, Milestones, and Issues.
 
-### Project Organization
+---
 
-We use GitHub Projects, Milestones, and Issues to organize our development workflow:
+## Documentation
 
-- **[GitHub Projects](https://github.com/BusySloths/mlox/projects)**: High-level functional areas and strategic initiatives
-- **[Milestones](https://github.com/BusySloths/mlox/milestones)**: Release planning and goal tracking
-- **[Issues](https://github.com/BusySloths/mlox/issues)**: Specific features, bugs, and tasks
+| Document | Description |
+|----------|-------------|
+| [Installation Guide](docs/INSTALLATION.md) | Setup from scratch |
+| [Architecture (humans)](docs/ARCHITECTURE_HUMANS.md) | Codebase walkthrough |
+| [Architecture (agents)](docs/ARCHITECTURE_AGENTS.md) | High-risk areas and invariants |
+| [Contributing Guide](CONTRIBUTING.md) | How to contribute |
+| [Workflow Quick Reference](docs/WORKFLOW_QUICK_REFERENCE.md) | Labels, milestones, PRs |
+| [Plugin Guide](docs/PLUGIN_CONFIGS.md) | External service plugins |
+| [API Docs](https://busysloths.github.io/mlox/mlox.html) | Generated Python API reference |
 
-📚 **Documentation:**
+---
 
-- [GitHub Project Guide](https://github.com/BusySloths/mlox/blob/main/docs/GITHUB_PROJECT.md) - Understanding our project organization
-- [Project Planning Guide](https://github.com/BusySloths/mlox/blob/main/docs/PROJECT_PLANNING.md) - How to create and manage projects
-- [Labels Guide](https://github.com/BusySloths/mlox/blob/main/docs/LABELS.md) - Our issue categorization system
+## Sponsors
 
-## Big Thanks to our Sponsors
-
-MLOX is proudly funded by the following organizations:
+MLOX is proudly funded by:
 
 <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/BMFTR_logo.jpg?raw=true" alt="BMFTR" width="420px"/>
 
 ## Supporters
 
-We would not be here without the generous support of the following people and organizations:
-
 <p align="center">
-<img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_light.png?raw=true" alt="PrototypeFund" width="380px"/>
-<img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_dark.png?raw=true" alt="PrototypeFund" width="380px"/>
+  <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/PrototypeFund_logo_dark.png?raw=true" alt="PrototypeFund" width="380px"/>
 </p>
 
-## License  
+---
 
-MLOX is open-source and intended to be a community effort, and it wouldn't be possible without your support and enthusiasm.
-It is distributed under the terms of the MIT license. Any contribution made to this project will be subject to the same provisions.
+## License & Contact
 
-## Join Us
+MLOX is open-source, distributed under the [MIT License](LICENSE). Contributions are welcome and subject to the same terms.
 
-We are looking for nice people who are invested in the problem we are trying to solve.
+We are looking for people invested in the problem we're solving. Say hello at `contact@mlox.org` or start a conversation in [GitHub Discussions](https://github.com/BusySloths/mlox/discussions).
