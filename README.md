@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/BusySloths/mlox">
-    <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_sloth_logo.png?raw=true" alt="MLOX Logo" width="200px"/>
+    <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox_sloth_logo.png?raw=true" alt="MLOX Logo" width="400px"/>
   </a>
 </p>
 
@@ -82,6 +82,7 @@ YAML Configs ──► config.py ──► MloxSession ──► Infrastructure
 Three interfaces, one core. Session startup reads an encrypted project file, loads the secret manager, and reconstructs the infrastructure graph. All remote shell operations route through `UbuntuTaskExecutor` — nothing embeds raw subprocess logic in service code.
 
 For deeper reading:
+
 - [Architecture Guide (humans)](docs/ARCHITECTURE_HUMANS.md) — codebase walkthrough
 - [Architecture Guide (agents)](docs/ARCHITECTURE_AGENTS.md) — high-risk areas and invariants
 
