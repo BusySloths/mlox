@@ -40,6 +40,7 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
     tracking_pw: str
     user: str = "admin"
     pw: str = "s3cr3t"
+    start_script: str | None = None
     hashed_pw: str = field(default="", init=False)
     service_url: str = field(init=False, default="")
     compose_service_names: Dict[str, str] = field(init=False, default_factory=dict)
@@ -63,6 +64,7 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
+
         self.exec.fs_copy(
             conn, self.template, f"{self.target_path}/{self.target_docker_script}"
         )
@@ -71,6 +73,12 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
             self.dockerfile,
             f"{self.target_path}/{os.path.basename(self.dockerfile)}",
         )
+        if self.start_script:
+            self.exec.fs_copy(
+                conn,
+                self.start_script,
+                f"{self.target_path}/{os.path.basename(self.start_script)}",
+            )
         # self.exec.fs_copy(conn, self.settings, f"{self.target_path}/settings.json")
         # self.exec.tls_setup(conn, conn.host, self.target_path)
 

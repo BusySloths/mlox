@@ -77,7 +77,7 @@ services:
         echo \"Serving model on internal port 5002 (HTTP)\"
         echo \"Traefik will route external HTTPS traffic from Host: $${MLSERVER_URL}\"
         
-        mlflow models serve -m models:/$${MLFLOW_REMOTE_MODEL} -p 5002 -h 0.0.0.0 -w 1 --enable-mlserver
+        mlflow models serve -m models:/$${MLFLOW_REMOTE_MODEL} -p 5002 -h 0.0.0.0 -w 1 --enable-mlserver --env-manager virtualenv --install-mlflow
       "
 
 networks:

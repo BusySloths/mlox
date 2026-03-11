@@ -1,0 +1,4 @@
+mlflow==3.8.1
+numpy>=1.26
+pandas>=2.2
+sktime==0.40.1

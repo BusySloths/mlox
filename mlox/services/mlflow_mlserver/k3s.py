@@ -38,8 +38,13 @@ class MLFlowMLServerK3sService(MLFlowMLServerDockerService):
         startup_cmd = textwrap.dedent(
             """
             set -euo pipefail
-            pip install --no-cache-dir "mlflow==3.8.1" "mlflow[extras]==3.8.1" "mlserver~=1.7.1" "mlserver-mlflow~=1.7.1" "uvloop==0.21.0"
-            mlflow models serve -m models:/$MLFLOW_REMOTE_MODEL -p 5002 -h 0.0.0.0 -w 1 --enable-mlserver
+            pip install --no-cache-dir \
+              "mlflow==3.8.1" "mlflow[extras]==3.8.1" \
+              "mlserver~=1.7.1" "mlserver-mlflow~=1.7.1" \
+              "uvloop==0.21.0" "virtualenv>=20.26,<21"
+            mlflow models serve -m models:/$MLFLOW_REMOTE_MODEL \
+              -p 5002 -h 0.0.0.0 -w 1 \
+              --enable-mlserver --env-manager virtualenv --install-mlflow
             """
         ).strip()
 

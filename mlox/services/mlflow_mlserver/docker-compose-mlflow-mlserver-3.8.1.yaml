@@ -68,16 +68,7 @@ services:
       # Service definition for Traefik (how Traefik connects to this app)
       - "traefik.http.services.mlserver-service.loadbalancer.server.port=5002" # MLflow/MLServer internal HTTP port
       - "traefik.http.services.mlserver-service.loadbalancer.server.scheme=http" # Backend is HTTP
-    command: >
-      bash -c "
-        echo '--- MLflow Model Server Startup ---'
-        echo \"MLFLOW_TRACKING_URI: $${MLFLOW_TRACKING_URI}\"
-        echo \"MLFLOW_REMOTE_MODEL: $${MLFLOW_REMOTE_MODEL}\"
-        echo \"Serving model on internal port 5002 (HTTP)\"
-        echo \"Traefik will route external HTTPS traffic from Host: $${MLSERVER_URL}\"
-
-        mlflow models serve -m models:/$${MLFLOW_REMOTE_MODEL} -p 5002 -h 0.0.0.0 -w 1 --enable-mlserver
-      "
+    command: /root/start_mlserver.sh
 
 networks:
   mlox_mlserver_dynamic_net: # Static key for Docker Compose's internal reference

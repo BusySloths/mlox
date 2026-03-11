@@ -5,7 +5,13 @@ import logging.config
 
 from typing import Optional
 
-from textual.logging import TextualHandler
+try:
+    from textual.logging import TextualHandler
+
+    _HAS_TEXTUAL = True
+except Exception:
+    TextualHandler = None
+    _HAS_TEXTUAL = False
 
 # Try to use colorama on platforms that need it (optional dependency)
 try:
@@ -97,11 +103,16 @@ def configure_logging() -> None:
     """Configure logging for the project. Call once at startup.
     Set NO_COLOR=1 to disable colors, or install colorama for Windows support.
     """
-    if os.environ.get("MLOX_TUI") == "true":
+    if os.environ.get("MLOX_TUI") == "true" and _HAS_TEXTUAL and TextualHandler:
         logging.basicConfig(
             handlers=[TextualHandler(stderr=True, stdout=True)], level=logging.INFO
         )
         logging.info("Textual logging configured")
+    elif os.environ.get("MLOX_TUI") == "true":
+        logging.config.dictConfig(LOG_CONFIG)
+        logging.warning(
+            "MLOX_TUI is true but 'textual' is not installed; falling back to console logging."
+        )
     else:
         logging.config.dictConfig(LOG_CONFIG)
         logging.info("Logging configured")

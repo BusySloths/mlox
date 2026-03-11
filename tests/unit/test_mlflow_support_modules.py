@@ -70,7 +70,7 @@ def test_mlops_service_tracks_models_and_predicts(monkeypatch, tmp_path):
     svc.track_model(params={"x": 1}, input_example=sample, inference_params={"a": 1})
     assert calls["set_tracking_uri"] == ["https://mlflow.local"]
     assert calls["set_registry_uri"] == ["https://mlflow.local"]
-    assert logged["artifact_path"] == "DemoModel"
+    assert logged["name"] == "DemoModel"
     assert logged["registered_model_name"] == "demo-registry"
 
     ctx = SimpleNamespace(artifacts={"a": 1}, model_config={"b": 2})

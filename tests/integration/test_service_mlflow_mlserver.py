@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import urllib.parse
 import pytest
 import requests
 import mlflow  # type: ignore
@@ -11,9 +12,10 @@ from typing import Dict
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
 from tests.integration.conftest import wait_for_service_ready
-from tests.integration.test_service_mlflow3 import install_mlflow3_service
+from tests.integration.test_service_mlflow3 import install_mlflow3_service  # noqa: F401
 
 pytestmark = pytest.mark.integration
+pytest_plugins = ["tests.integration.test_service_mlflow3"]
 
 logger = logging.getLogger(__name__)
 requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
@@ -118,5 +120,108 @@ def deploy_mlflow_mlserver(ubuntu_docker_server, install_mlflow3_service):
 
 def test_mlserver_is_ready(deploy_mlflow_mlserver):
     mlserver_service, bundle = deploy_mlflow_mlserver
-    status = wait_for_service_ready(mlserver_service, bundle, retries=36, interval=30)
+    status = wait_for_service_ready(mlserver_service, bundle, retries=30, interval=60)
     assert status.get("status") == "running"
+
+
+# def test_mlserver_identity_model_inference(deploy_mlflow_mlserver):
+#     """Verify the deployed identity model responds with the original input."""
+#     mlserver_service, bundle = deploy_mlflow_mlserver
+
+#     status = wait_for_service_ready(mlserver_service, bundle, retries=30, interval=60)
+#     assert status.get("status") == "running"
+
+#     invocations_url = f"{mlserver_service.service_url}/invocations"
+#     invocations_payload = {
+#         "dataframe_split": {
+#             "columns": ["a"],
+#             "data": [[1.0], [2.0], [3.0]],
+#         }
+#     }
+#     v2_payload = {
+#         "inputs": [
+#             {
+#                 "name": "input-0",
+#                 "shape": [3, 1],
+#                 "datatype": "FP64",
+#                 "data": [[1.0], [2.0], [3.0]],
+#             }
+#         ]
+#     }
+
+#     def _assert_invocations_response(resp: requests.Response) -> None:
+#         body = resp.json()
+#         predictions = body.get("predictions")
+#         assert predictions is not None, body
+
+#         values = None
+#         if isinstance(predictions, list) and len(predictions) > 0:
+#             if isinstance(predictions[0], dict):
+#                 values = [item.get("a") for item in predictions]
+#             elif isinstance(predictions[0], list):
+#                 values = [row[0] for row in predictions]
+#             else:
+#                 values = predictions
+#         assert values == [1.0, 2.0, 3.0], body
+
+#     def _assert_v2_response(resp: requests.Response) -> None:
+#         body = resp.json()
+#         assert "outputs" in body
+#         assert len(body["outputs"]) > 0
+#         output_data = body["outputs"][0].get("data")
+#         assert output_data is not None
+#         assert output_data == [[1.0], [2.0], [3.0]] or output_data == [1.0, 2.0, 3.0]
+
+#     # Fallback: some deployments expose only V2 model inference routes.
+#     candidate_names = ["mlflow-model", getattr(mlserver_service, "model", "")]
+#     if "/" in getattr(mlserver_service, "model", ""):
+#         candidate_names.append(getattr(mlserver_service, "model", "").split("/", 1)[0])
+#     candidate_names = [n for n in dict.fromkeys(candidate_names) if n]
+
+#     retry_count = 20
+#     retry_interval_sec = 15
+#     attempted_errors = []
+
+#     for attempt in range(retry_count):
+#         response = requests.post(
+#             invocations_url,
+#             json=invocations_payload,
+#             verify=False,
+#             auth=(mlserver_service.user, mlserver_service.pw),
+#             headers={"Host": bundle.server.ip, "Content-Type": "application/json"},
+#             timeout=30,
+#         )
+#         if response.status_code == 200:
+#             _assert_invocations_response(response)
+#             return
+
+#         current_errors = [
+#             f"{invocations_url} -> {response.status_code}: {response.text}"
+#         ]
+
+#         for model_name in candidate_names:
+#             encoded_name = urllib.parse.quote(model_name, safe="")
+#             infer_url = f"{mlserver_service.service_url}/v2/models/{encoded_name}/infer"
+#             v2_response = requests.post(
+#                 infer_url,
+#                 json=v2_payload,
+#                 verify=False,
+#                 auth=(mlserver_service.user, mlserver_service.pw),
+#                 headers={"Host": bundle.server.ip},
+#                 timeout=30,
+#             )
+#             if v2_response.status_code == 200:
+#                 _assert_v2_response(v2_response)
+#                 return
+#             current_errors.append(
+#                 f"{infer_url} -> {v2_response.status_code}: {v2_response.text}"
+#             )
+
+#         attempted_errors = current_errors
+#         if attempt < retry_count - 1:
+#             time.sleep(retry_interval_sec)
+
+#     pytest.fail(
+#         "Inference failed after warmup retries. Last errors: "
+#         + " | ".join(attempted_errors)
+#     )

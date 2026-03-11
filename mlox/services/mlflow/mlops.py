@@ -110,9 +110,9 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
             mlflow.set_tag("python_class", str(self.model.__class__))
 
             mlflow.pyfunc.log_model(
-                artifact_path=self.model_class,
+                name=self.model_class,
                 python_model=self,
-                code_path=self._resolve_code_paths_for_logging(),
+                code_paths=self._resolve_code_paths_for_logging(),
                 conda_env=self.get_conda_env(),
                 signature=signature,
                 input_example=input_example,

@@ -165,7 +165,13 @@ def test_influx_setup_and_check(conn):
     assert service.service_urls["InfluxDB"] == "https://example.test:8086"
     assert service.check(conn) == {"status": "stopped"}
     assert service.get_secrets() == {
-        "influx_admin_credentials": {"username": "inf", "password": "pw", "token": "tok"}
+        "username": "inf",
+        "password": "pw",
+        "token": "tok",
+        "certificate": "CERT",
+        "port": "8086",
+        "url": "https://example.test:8086",
+        "ip": "example.test",
     }
 
 

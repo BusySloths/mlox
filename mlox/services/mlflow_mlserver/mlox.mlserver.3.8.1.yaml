@@ -34,6 +34,7 @@ build:
     name: mlflow-mlserver-3.8.1
     template: ${MLOX_STACKS_PATH}/mlflow_mlserver/docker-compose-mlflow-mlserver-3.8.1.yaml
     dockerfile: ${MLOX_STACKS_PATH}/mlflow_mlserver/dockerfile-mlflow-mlserver-3.8.1
+    start_script: ${MLOX_STACKS_PATH}/mlflow_mlserver/start_mlserver.sh
     target_path: ${MLOX_USER_HOME}/mlflow-mlserver-3.8.1
     port: ${MLOX_AUTO_PORT_REST}
     model: ${MODEL_NAME}

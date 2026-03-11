@@ -190,11 +190,13 @@ SERVICE_CASES = [
             "token": "influx-token",
         },
         {
-            "influx_admin_credentials": {
-                "username": "influx",
-                "password": "influx-pass",
-                "token": "influx-token",
-            },
+            "username": "influx",
+            "password": "influx-pass",
+            "token": "influx-token",
+            "certificate": "",
+            "port": "8086",
+            "url": None,
+            "ip": "",
         },
         None,
     ),

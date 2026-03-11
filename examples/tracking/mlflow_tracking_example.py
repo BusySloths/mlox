@@ -64,7 +64,7 @@ class MyTrackedModel(DeployableModel):
 
         mlflow.log_metrics(my_train_metrics)
 
-        dataset = mlflow.data.from_pandas(df_train)
+        dataset = mlflow.data.from_pandas(df_train)  # type: ignore
         mlflow.log_input(dataset=dataset, context="training")
 
         mlflow.set_tag("dataset", "artificial")
