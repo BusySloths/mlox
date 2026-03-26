@@ -25,6 +25,7 @@ MLOX gives you a calm, reproducible way to run production-grade ML infrastructur
 | [Architecture](Architecture) | Codebase walkthrough for human contributors |
 | [Installation](Installation) | Setup from scratch (local, Docker, Kubernetes) |
 | [Contributing](Contributing) | How to contribute to MLOX |
+| [Troubleshooting](Troubleshooting) | Known setup and runtime issues with fixes and workarounds |
 | [Services Catalog](Services-Catalog) | All supported MLOps services |
 | [Plugin Guide](Plugin-Guide) | External service plugins |
 

@@ -9,6 +9,7 @@
 - [Architecture](Architecture)
 - [Installation](Installation)
 - [Contributing](Contributing)
+- [Troubleshooting](Troubleshooting)
 
 ---
 
