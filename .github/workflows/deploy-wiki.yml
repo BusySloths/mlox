@@ -1,0 +1,42 @@
+name: Deploy GitHub Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'wiki/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Publish wiki pages
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clone the wiki repository.
+          # NOTE: The GitHub Wiki must be initialised at least once via the
+          # repository's Wiki tab before this workflow can push to it.
+          if ! git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git" _wiki; then
+            echo "::error::Failed to clone the wiki repository. Please initialise the wiki via the GitHub UI first."
+            exit 1
+          fi
+
+          # Sync wiki/ directory contents into the cloned wiki repo.
+          # --delete removes pages from the wiki that no longer exist in wiki/,
+          # keeping the wiki/ directory the single source of truth.
+          rsync -av --delete --exclude='.git' wiki/ _wiki/
+
+          # Commit and push if there are changes
+          cd _wiki
+          git add .
+          git diff --staged --quiet || git commit -m "docs: sync wiki from wiki/ directory [skip ci]"
+          git push
