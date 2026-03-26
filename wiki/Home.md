@@ -27,8 +27,7 @@ MLOX gives you a calm, reproducible way to run production-grade ML infrastructur
 | [Contributing](Contributing) | How to contribute to MLOX |
 | [Services Catalog](Services-Catalog) | All supported MLOps services |
 | [Plugin Guide](Plugin-Guide) | External service plugins |
-
-> **Note:** Pages marked as _placeholder_ are planned and will be added soon. In the meantime, refer to the corresponding file in [`docs/`](https://github.com/BusySloths/mlox/tree/main/docs).
+| [Troubleshooting](Troubleshooting) | Known issues, workarounds, and environment-specific fixes |
 
 ---
 

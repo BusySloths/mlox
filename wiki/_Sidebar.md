@@ -7,15 +7,21 @@
 ### 📖 Guides
 
 - [Architecture](Architecture)
-- [Installation](Installation) _(placeholder)_
-- [Contributing](Contributing) _(placeholder)_
+- [Installation](Installation)
+- [Contributing](Contributing)
 
 ---
 
 ### 🔧 Reference
 
-- [Services Catalog](Services-Catalog) _(placeholder)_
-- [Plugin Guide](Plugin-Guide) _(placeholder)_
+- [Services Catalog](Services-Catalog)
+- [Plugin Guide](Plugin-Guide)
+
+---
+
+### 🛠️ Troubleshooting
+
+- [Troubleshooting](Troubleshooting)
 
 ---
 
