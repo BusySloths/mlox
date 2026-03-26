@@ -54,7 +54,7 @@ MLOX gives you a calm, reproducible way to run production-grade ML infrastructur
 | Observability | InfluxDB, OpenTelemetry | ✅ Stable |
 | Secrets & Access | OpenBao, Tiny Secret Manager, Docker Registry | ✅ Stable |
 | Kubernetes Add-ons | K8s Dashboard, Headlamp, KubeApps | 🔄 Experimental |
-| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | 🔄 Experimental |
+| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | ✅ Stable |
 | Source Control | GitHub repository import | ✅ Stable |
 
 ---
@@ -118,7 +118,8 @@ We welcome contributors, early adopters, and honest feedback.
 | Contributing Guide | [`CONTRIBUTING.md`](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) |
 | Workflow Quick Reference | [`docs/WORKFLOW_QUICK_REFERENCE.md`](https://github.com/BusySloths/mlox/blob/main/docs/WORKFLOW_QUICK_REFERENCE.md) |
 | Plugin Guide | [`docs/PLUGIN_CONFIGS.md`](https://github.com/BusySloths/mlox/blob/main/docs/PLUGIN_CONFIGS.md) |
-| API Docs | [busysloths.github.io/mlox](https://busysloths.github.io/mlox/mlox.html) |
+| API Docs | [busysloths.github.io/mlox/docs](https://busysloths.github.io/mlox/docs/mlox.html) |
+| Website | [mlox.org](https://mlox.org) |
 
 ---
 
