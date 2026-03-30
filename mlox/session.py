@@ -90,6 +90,9 @@ class MloxSession:
     secrets: AbstractSecretManager | None = None
     migrations: List[MloxMigrations] | None = None
 
+    def _has_persisted_secret_manager(self) -> bool:
+        return bool(self.project.secret_manager_class)
+
     def __init__(
         self,
         project_name: str,
@@ -102,10 +105,15 @@ class MloxSession:
         self.migrations = migrations
         self.load_project(project_name)
         self.load_secret_manager()
+        if not self.secrets and self._has_persisted_secret_manager():
+            raise RuntimeError(
+                "Configured secret manager "
+                f"{self.project.secret_manager_class} could not be loaded."
+            )
         self.load_infrastructure()
         if not self.secrets:
             logger.info(
-                "No secret manager could be loaded. Initialising in-memory secret manager."
+                "No secret manager configured. Initialising in-memory secret manager."
             )
             self.set_secret_manager(InMemorySecretManager())
 

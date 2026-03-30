@@ -79,6 +79,18 @@ def test_load_secret_manager_instantiation_failure(minimal_session, monkeypatch)
     assert minimal_session.secrets is None
 
 
+def test_init_raises_for_unreachable_persisted_secret_manager(monkeypatch):
+    project = MloxProject(name="proj")
+    project.secret_manager_class = "tests.unit.test_session_unit._BrokenSecret"
+    project.secret_manager_info = {"remote": True}
+
+    monkeypatch.setattr(MloxSession, "load_project", lambda self, name: setattr(self, "project", project))
+    monkeypatch.setattr(MloxSession, "save_project", lambda self: None)
+
+    with pytest.raises(RuntimeError, match="Configured secret manager"):
+        MloxSession("proj", "pw")
+
+
 def test_save_infrastructure_no_secret_manager(minimal_session, caplog):
     minimal_session.secrets = None
 

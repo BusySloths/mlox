@@ -86,7 +86,12 @@ def test_tiny_secret_manager_list_save_load(monkeypatch):
         server_config_file="ignored",
         secrets_relative_path="secrets",
         master_token=token,
-        server_dict={"fake": 1},
+        server_dict={
+            "_module_name_": "mlox.servers.ubuntu.docker",
+            "_class_name_": "UbuntuDockerServer",
+            "service_config_id": "ubuntu-docker-24.04-server",
+            "backend": ["docker"],
+        },
         secrets_abs_path="/secrets",
     )
 
@@ -100,7 +105,18 @@ def test_tiny_secret_manager_list_save_load(monkeypatch):
 def test_tiny_secret_manager_load_secret_handles_errors(monkeypatch, caplog):
     server = _Server()
     monkeypatch.setattr("mlox.secret_manager.dict_to_dataclass", lambda data, hooks: server)
-    sm = TinySecretManager("", "secrets", "master", server_dict={"x": 1}, secrets_abs_path="/secrets")
+    sm = TinySecretManager(
+        "",
+        "secrets",
+        "master",
+        server_dict={
+            "_module_name_": "mlox.servers.ubuntu.docker",
+            "_class_name_": "UbuntuDockerServer",
+            "service_config_id": "ubuntu-docker-24.04-server",
+            "backend": ["docker"],
+        },
+        secrets_abs_path="/secrets",
+    )
 
     assert sm.load_secret("missing") is None
     assert "Error reading secret" in caplog.text
@@ -111,7 +127,16 @@ def test_tiny_secret_manager_instantiate_and_access(monkeypatch):
     monkeypatch.setattr("mlox.secret_manager.dict_to_dataclass", lambda data, hooks: server)
 
     sm = TinySecretManager.instantiate_secret_manager(
-        {"keyfile": {"srv": 1}, "secrets_master_token": "pw", "secrets_abs_path": "/secrets"}
+        {
+            "keyfile": {
+                "_module_name_": "mlox.servers.ubuntu.docker",
+                "_class_name_": "UbuntuDockerServer",
+                "service_config_id": "ubuntu-docker-24.04-server",
+                "backend": ["docker"],
+            },
+            "secrets_master_token": "pw",
+            "secrets_abs_path": "/secrets",
+        }
     )
 
     assert sm is not None
