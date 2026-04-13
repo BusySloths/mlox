@@ -119,6 +119,12 @@ class DummyServer(AbstractServer):
     def stop_backend_runtime(self):
         pass
 
+    def firewall_up(self, ports):
+        pass
+
+    def firewall_down(self):
+        pass
+
 
 def test_mlox_user_template():
     server = DummyServer(

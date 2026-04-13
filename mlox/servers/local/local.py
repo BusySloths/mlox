@@ -249,6 +249,12 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
     def stop_backend_runtime(self) -> None:
         logger.info("Local backend stop requested.")
 
+    def firewall_up(self, ports: list[int]) -> None:
+        logger.info("Firewall control is not supported for LocalhostServer. Ports=%s", ports)
+
+    def firewall_down(self) -> None:
+        logger.info("Firewall control is not supported for LocalhostServer.")
+
     def get_backend_status(self) -> dict[str, Any]:
         return {
             "backend.is_running": self.state == "running",

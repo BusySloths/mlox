@@ -1,10 +1,17 @@
 import streamlit as st
 
-from typing import Dict
+from typing import Dict, List
 
 from mlox.config import ServiceConfig
 from mlox.infra import Infrastructure, Bundle
 from mlox.servers.ubuntu.native import UbuntuNativeServer
+
+
+def _collect_firewall_ports(bundle: Bundle, server: UbuntuNativeServer) -> List[int]:
+    ports = {int(server.port)}
+    for service in bundle.services:
+        ports.update(int(port) for port in service.service_ports.values())
+    return sorted(port for port in ports if port > 0)
 
 
 def form_add_server(sid: str):
@@ -79,3 +86,17 @@ def settings(infra: Infrastructure, bundle: Bundle, server: UbuntuNativeServer):
 
     with tab_backend:
         st.write(server.get_backend_status())
+
+    with st.expander("Firewall", expanded=False):
+        ports = _collect_firewall_ports(bundle, server)
+        st.caption(
+            "Allowed ports are SSH plus all ports currently used by services on this server."
+        )
+        st.code(", ".join(str(port) for port in ports), language="text")
+        c1, c2 = st.columns(2)
+        if c1.button("Firewall Up", type="primary"):
+            server.firewall_up(ports)
+            st.success(f"Firewall enabled. Open ports: {ports}")
+        if c2.button("Firewall Down"):
+            server.firewall_down()
+            st.success("Firewall disabled.")

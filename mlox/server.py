@@ -383,6 +383,14 @@ class AbstractServer(ABC):
     def stop_backend_runtime(self) -> None:
         pass
 
+    @abstractmethod
+    def firewall_up(self, ports: List[int]) -> None:
+        pass
+
+    @abstractmethod
+    def firewall_down(self) -> None:
+        pass
+
 
 def sys_get_distro_info(
     conn: Connection, executor: UbuntuTaskExecutor

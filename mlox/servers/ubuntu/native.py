@@ -1,7 +1,7 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, ClassVar
+from typing import Dict, Any, ClassVar, List
 
 from mlox.executors import TaskGroup
 from mlox.server import AbstractServer, AbstractGitServer, sys_get_distro_info
@@ -142,7 +142,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 (
                     "DEBIAN_FRONTEND=noninteractive apt-get -yq "
                     "-o DPkg::Lock::Timeout=300 install "
-                    "mc git zsh host curl openssl || true"
+                    "mc git zsh host curl openssl ufw || true"
                 ),
                 group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
@@ -461,3 +461,11 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
 
     def stop_backend_runtime(self) -> None:
         logger.info("Native backend stop.")
+
+    def firewall_up(self, ports: List[int]) -> None:
+        with self.get_server_connection() as conn:
+            self.exec.firewall_up(conn, ports)
+
+    def firewall_down(self) -> None:
+        with self.get_server_connection() as conn:
+            self.exec.firewall_down(conn)

@@ -8,6 +8,7 @@ from mlox.servers.ubuntu.docker import UbuntuDockerServer
 from mlox.servers.ubuntu.k3s import UbuntuK3sServer
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 from mlox.servers.ubuntu.simple import UbuntuSimpleServer
+from mlox.servers.ubuntu.ui_native import _collect_firewall_ports
 
 
 class FakeExec:
@@ -55,6 +56,12 @@ class FakeExec:
     def sys_user_id(self, conn):
         self._record("sys_user_id")
         return self.user_id
+
+    def firewall_up(self, conn, ports):
+        self._record("firewall_up", tuple(ports))
+
+    def firewall_down(self, conn):
+        self._record("firewall_down")
 
 
 def _server_conn(server):
@@ -252,3 +259,29 @@ def test_ubuntu_simple_server_noops_and_debug(monkeypatch):
     server.disable_debug_access()
     assert server.is_debug_access_enabled is False
     assert isinstance(server.get_backend_status(), dict)
+
+
+def test_ubuntu_native_firewall_calls_and_port_collection():
+    server = _new_native_server()
+    fake_exec = FakeExec()
+    server.exec = fake_exec
+    _server_conn(server)
+
+    class DummyService:
+        def __init__(self, ports):
+            self.service_ports = ports
+
+    bundle = SimpleNamespace(
+        services=[
+            DummyService({"http": 8080, "grpc": 50051}),
+            DummyService({"ui": 8080, "metrics": 9090}),
+        ]
+    )
+    ports = _collect_firewall_ports(bundle, server)
+    assert ports == [22, 8080, 9090, 50051]
+
+    server.firewall_up(ports)
+    server.firewall_down()
+    call_names = [name for name, _, _ in fake_exec.calls]
+    assert "firewall_up" in call_names
+    assert "firewall_down" in call_names

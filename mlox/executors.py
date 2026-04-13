@@ -857,6 +857,32 @@ class UbuntuTaskExecutor(ExecutionRecorder):
             logger.warning("Failed to fetch logs for %s: %s", service_name, exc)
             return "Failed to fetch logs"
 
+    def firewall_up(
+        self, connection: Connection, ports: Sequence[int]
+    ) -> str | None:
+        unique_ports = sorted({int(port) for port in ports if int(port) > 0})
+        for port in unique_ports:
+            self._run_task(
+                connection,
+                group=TaskGroup.NETWORKING,
+                command=f"ufw allow {port}/tcp",
+                sudo=True,
+            )
+        return self._run_task(
+            connection,
+            group=TaskGroup.NETWORKING,
+            command="ufw --force enable",
+            sudo=True,
+        )
+
+    def firewall_down(self, connection: Connection) -> str | None:
+        return self._run_task(
+            connection,
+            group=TaskGroup.NETWORKING,
+            command="ufw --force disable",
+            sudo=True,
+        )
+
     def git_clone(
         self, connection: Connection, repo_url: str, install_path: str
     ) -> None:
