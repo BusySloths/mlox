@@ -1,7 +1,7 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, ClassVar, List
+from typing import Dict, Any, ClassVar, Mapping, Sequence
 
 from mlox.executors import TaskGroup
 from mlox.server import AbstractServer, AbstractGitServer, sys_get_distro_info
@@ -142,7 +142,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 (
                     "DEBIAN_FRONTEND=noninteractive apt-get -yq "
                     "-o DPkg::Lock::Timeout=300 install "
-                    "mc git zsh host curl openssl ufw || true"
+                    "mc git zsh host curl openssl iptables || true"
                 ),
                 group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
@@ -462,10 +462,26 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
     def stop_backend_runtime(self) -> None:
         logger.info("Native backend stop.")
 
-    def firewall_up(self, ports: List[int]) -> None:
+    def firewall_up(
+        self,
+        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
+        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
+    ) -> None:
         with self.get_server_connection() as conn:
-            self.exec.firewall_up(conn, ports)
+            self.exec.firewall_up(conn, ports, source_ips_by_port)
 
     def firewall_down(self) -> None:
         with self.get_server_connection() as conn:
             self.exec.firewall_down(conn)
+
+    def firewall_status(self) -> str | None:
+        with self.get_server_connection() as conn:
+            return self.exec.firewall_status(conn)
+
+    def firewall_update(
+        self,
+        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
+        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
+    ) -> None:
+        with self.get_server_connection() as conn:
+            self.exec.firewall_update(conn, ports, source_ips_by_port)

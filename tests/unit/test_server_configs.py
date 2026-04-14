@@ -61,6 +61,12 @@ class DummyServer(AbstractServer):
     def stop_backend_runtime(self):
         pass
 
+    def firewall_up(self, ports):
+        pass
+
+    def firewall_down(self):
+        pass
+
 
 # Dummy UI functions for testing
 def dummy_setup_func(infra: Infrastructure, config: ServiceConfig):

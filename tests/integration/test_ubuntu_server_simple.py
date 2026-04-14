@@ -31,11 +31,11 @@ def test_simple_server_debug_access_with_password(ubuntu_simple_server):
 def test_simple_server_firewall_toggle(ubuntu_simple_server):
     # Keep SSH open while firewall is enabled to avoid locking out remote access.
     ubuntu_simple_server.firewall_up([22])
-    with ubuntu_simple_server.get_server_connection() as conn:
-        status = conn.sudo("ufw status", hide=True, warn=True, pty=False)
-    assert "Status: active" in status.stdout
+    status = ubuntu_simple_server.firewall_status()
+    assert status is not None
+    assert "Status: active" in status
 
     ubuntu_simple_server.firewall_down()
-    with ubuntu_simple_server.get_server_connection() as conn:
-        status = conn.sudo("ufw status", hide=True, warn=True, pty=False)
-    assert "Status: inactive" in status.stdout
+    status = ubuntu_simple_server.firewall_status()
+    assert status is not None
+    assert "Status: inactive" in status
