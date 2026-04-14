@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 
 import pytest
 
-from mlox.secret_manager import InMemorySecretManager
+from mlox.secret_manager import AbstractSecretManager, InMemorySecretManager
 from mlox.session import MloxProject, MloxSession, load_mlox_session
 from mlox.infra import Infrastructure
+from mlox.utils import dataclass_to_dict
 
 
 @dataclass
@@ -24,15 +26,45 @@ class _BrokenSecret:
         return None
 
 
+class _RemoteLoadFailsSecret(AbstractSecretManager):
+    saved_secrets: list[tuple[str, object]] = []
+
+    @classmethod
+    def instantiate_secret_manager(cls, info):
+        return cls()
+
+    def is_working(self) -> bool:
+        return False
+
+    def list_secrets(self, keys_only: bool = False):
+        return {}
+
+    def save_secret(self, name: str, my_secret):
+        self.saved_secrets.append((name, my_secret))
+
+    def load_secret(self, name: str):
+        raise ConnectionError("temporary network issue")
+
+    def get_access_secrets(self):
+        return {"remote": "new"}
+
+
 @pytest.fixture
 def minimal_session(monkeypatch):
-    monkeypatch.setattr(MloxSession, "load_project", lambda self, name: setattr(self, "project", MloxProject(name=name)))
+    monkeypatch.setattr(
+        MloxSession,
+        "load_project",
+        lambda self, name: setattr(self, "project", MloxProject(name=name)),
+    )
     monkeypatch.setattr(MloxSession, "save_project", lambda self: None)
     return MloxSession("proj", "pw")
 
 
 def test_check_project_exists_and_loads_true(monkeypatch):
-    monkeypatch.setattr("mlox.session.load_from_json", lambda path, password, encrypted=True: {"ok": True})
+    monkeypatch.setattr(
+        "mlox.session.load_from_json",
+        lambda path, password, encrypted=True: {"ok": True},
+    )
     assert MloxSession.check_project_exists_and_loads("proj", "pw") is True
 
 
@@ -50,7 +82,9 @@ def test_set_secret_manager_updates_project(minimal_session):
     minimal_session.set_secret_manager(sm)
 
     assert minimal_session.secrets is sm
-    assert minimal_session.project.secret_manager_class.endswith("InMemorySecretManager")
+    assert minimal_session.project.secret_manager_class.endswith(
+        "InMemorySecretManager"
+    )
 
 
 def test_set_secret_manager_none_clears_project(minimal_session):
@@ -71,7 +105,9 @@ def test_load_secret_manager_import_failure(minimal_session, monkeypatch):
 
 
 def test_load_secret_manager_instantiation_failure(minimal_session, monkeypatch):
-    minimal_session.project.secret_manager_class = "tests.unit.test_session_unit._BrokenSecret"
+    minimal_session.project.secret_manager_class = (
+        "tests.unit.test_session_unit._BrokenSecret"
+    )
     minimal_session.project.secret_manager_info = {}
 
     minimal_session.load_secret_manager()
@@ -84,11 +120,81 @@ def test_init_raises_for_unreachable_persisted_secret_manager(monkeypatch):
     project.secret_manager_class = "tests.unit.test_session_unit._BrokenSecret"
     project.secret_manager_info = {"remote": True}
 
-    monkeypatch.setattr(MloxSession, "load_project", lambda self, name: setattr(self, "project", project))
+    monkeypatch.setattr(
+        MloxSession,
+        "load_project",
+        lambda self, name: setattr(self, "project", project),
+    )
     monkeypatch.setattr(MloxSession, "save_project", lambda self: None)
 
     with pytest.raises(RuntimeError, match="Configured secret manager"):
         MloxSession("proj", "pw")
+
+
+def test_init_keeps_persisted_secret_manager_when_remote_instantiation_fails(
+    monkeypatch,
+):
+    original_info = {"remote": True, "token": "old"}
+    project = MloxProject(name="proj")
+    project.secret_manager_class = "tests.unit.test_session_unit._BrokenSecret"
+    project.secret_manager_info = deepcopy(original_info)
+    project_payload = dataclass_to_dict(project)
+    saved_payloads = []
+
+    monkeypatch.setattr(
+        "mlox.session.load_from_json",
+        lambda path, password, encrypted=True: deepcopy(project_payload),
+    )
+    monkeypatch.setattr(
+        "mlox.session.save_to_json",
+        lambda data, path, password, encrypted=True: saved_payloads.append(
+            deepcopy(data)
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Configured secret manager"):
+        MloxSession("proj", "pw")
+
+    assert saved_payloads
+    for payload in saved_payloads:
+        assert (
+            payload["secret_manager_class"]
+            == "tests.unit.test_session_unit._BrokenSecret"
+        )
+        assert payload["secret_manager_info"] == original_info
+
+
+def test_init_keeps_persisted_secret_manager_when_remote_load_fails(monkeypatch):
+    _RemoteLoadFailsSecret.saved_secrets = []
+    original_info = {"remote": True, "token": "old"}
+    project = MloxProject(name="proj")
+    project.secret_manager_class = "tests.unit.test_session_unit._RemoteLoadFailsSecret"
+    project.secret_manager_info = deepcopy(original_info)
+    project_payload = dataclass_to_dict(project)
+    saved_payloads = []
+
+    monkeypatch.setattr(
+        "mlox.session.load_from_json",
+        lambda path, password, encrypted=True: deepcopy(project_payload),
+    )
+    monkeypatch.setattr(
+        "mlox.session.save_to_json",
+        lambda data, path, password, encrypted=True: saved_payloads.append(
+            deepcopy(data)
+        ),
+    )
+
+    with pytest.raises(ConnectionError, match="temporary network issue"):
+        MloxSession("proj", "pw")
+
+    assert _RemoteLoadFailsSecret.saved_secrets == []
+    assert saved_payloads
+    for payload in saved_payloads:
+        assert (
+            payload["secret_manager_class"]
+            == "tests.unit.test_session_unit._RemoteLoadFailsSecret"
+        )
+        assert payload["secret_manager_info"] == original_info
 
 
 def test_save_infrastructure_no_secret_manager(minimal_session, caplog):
@@ -117,10 +223,16 @@ def test_load_infrastructure_with_invalid_type_raises(minimal_session):
 
 
 def test_load_infrastructure_applies_migrations(monkeypatch):
-    monkeypatch.setattr(MloxSession, "load_project", lambda self, name: setattr(self, "project", MloxProject(name=name)))
+    monkeypatch.setattr(
+        MloxSession,
+        "load_project",
+        lambda self, name: setattr(self, "project", MloxProject(name=name)),
+    )
     monkeypatch.setattr(MloxSession, "save_project", lambda self: None)
     monkeypatch.setattr(MloxSession, "load_secret_manager", lambda self: None)
-    monkeypatch.setattr(MloxSession, "set_secret_manager", lambda self, sm: setattr(self, "secrets", sm))
+    monkeypatch.setattr(
+        MloxSession, "set_secret_manager", lambda self, sm: setattr(self, "secrets", sm)
+    )
     session = MloxSession("proj", "pw", migrations=[_Migration()])
 
     sm = InMemorySecretManager()
