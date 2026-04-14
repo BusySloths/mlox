@@ -26,7 +26,18 @@ import tempfile
 from datetime import datetime
 from dataclasses import dataclass, field
 from abc import abstractmethod, ABC
-from typing import Dict, Optional, List, Literal, Any, Tuple
+from enum import StrEnum
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from fabric import Connection, Config  # type: ignore
 from paramiko.ssh_exception import (  # type: ignore
@@ -37,7 +48,7 @@ from paramiko.ssh_exception import (  # type: ignore
 import socket
 
 from mlox.utils import generate_password
-from mlox.executors import TaskGroup, UbuntuTaskExecutor
+from mlox.executors import UbuntuTaskExecutor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -94,6 +105,18 @@ def close_connection(
         tmp_dir.cleanup()
         logger.debug("Temporary directory %s deleted.", tmp_dir_name)
     logger.debug("SSH connection closed and tmp dir deleted.")
+
+
+class ServerCapability(StrEnum):
+    """User-facing server capabilities advertised by configs and classes."""
+
+    GIT = "git"
+    FIREWALL = "firewall"
+    INITIAL_AUTH_PASSWORD = "initial_auth_password"
+    NATIVE = "native"
+    DOCKER = "docker"
+    KUBERNETES = "kubernetes"
+    LOCAL = "local"
 
 
 @dataclass
@@ -246,7 +269,98 @@ class AbstractGitServer(ABC):
 
 
 @dataclass
+class AbstractFirewallServer(ABC):
+    @abstractmethod
+    def firewall_up(
+        self,
+        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
+        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def firewall_down(self) -> None:
+        pass
+
+    @abstractmethod
+    def firewall_status(self) -> str | None:
+        pass
+
+    @abstractmethod
+    def firewall_update(
+        self,
+        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
+        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
+    ) -> None:
+        pass
+
+
+@dataclass
+class AbstractInitialPasswordAuthServer(ABC):
+    @abstractmethod
+    def add_mlox_user(self) -> None:
+        pass
+
+    @abstractmethod
+    def setup_users(self) -> None:
+        pass
+
+    @abstractmethod
+    def enable_password_authentication(self) -> None:
+        pass
+
+    @abstractmethod
+    def disable_password_authentication(self) -> None:
+        pass
+
+
+@dataclass
+class AbstractBackendServer(ABC):
+    @abstractmethod
+    def setup_backend(self) -> None:
+        pass
+
+    @abstractmethod
+    def teardown_backend(self) -> None:
+        pass
+
+    @abstractmethod
+    def get_backend_status(self) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def start_backend_runtime(self) -> None:
+        pass
+
+    @abstractmethod
+    def stop_backend_runtime(self) -> None:
+        pass
+
+
+@dataclass
+class AbstractNativeServer(AbstractBackendServer):
+    pass
+
+
+@dataclass
+class AbstractDockerServer(AbstractBackendServer):
+    pass
+
+
+@dataclass
+class AbstractKubernetesServer(AbstractBackendServer):
+    pass
+
+
+@dataclass
+class AbstractLocalServer(AbstractBackendServer):
+    pass
+
+
+@dataclass
 class AbstractServer(ABC):
+    capabilities: ClassVar[set[ServerCapability]] = set()
+
     ip: str
     root: str
     root_pw: str
@@ -258,12 +372,16 @@ class AbstractServer(ABC):
 
     uuid: str = field(default_factory=lambda: uuid.uuid4().hex, init=False)
 
+    # TODO(capabilities): keep this legacy runtime/display field until UI and
+    # matching code can rely on declared capabilities plus backend status.
     backend: List[str] = field(default_factory=list, init=False)
     state: Literal[
         "un-initialized", "no-backend", "starting", "running", "shutdown", "unknown"
     ] = "un-initialized"
     discovered: str | None = field(default=None, init=False)
 
+    # TODO(executors): avoid hard-coding the Ubuntu executor in the base server
+    # once executor selection is driven by server implementation/capabilities.
     exec: UbuntuTaskExecutor = field(default_factory=UbuntuTaskExecutor, init=False)
 
     def __post_init__(self):
@@ -362,7 +480,9 @@ class AbstractServer(ABC):
     def disable_debug_access(self) -> None:
         pass
 
-    # Backend
+    # TODO(capabilities): backend lifecycle belongs on AbstractNativeServer,
+    # AbstractDockerServer, AbstractKubernetesServer, and AbstractLocalServer.
+    # Keep these here until infra/UI call sites check backend capabilities.
     @abstractmethod
     def setup_backend(self) -> None:
         pass
@@ -373,6 +493,8 @@ class AbstractServer(ABC):
 
     @abstractmethod
     def get_backend_status(self) -> Dict[str, Any]:
+        # TODO(status): decide whether every server needs this universal method
+        # or whether it should become a generic get_status() outside backends.
         pass
 
     @abstractmethod
@@ -382,86 +504,3 @@ class AbstractServer(ABC):
     @abstractmethod
     def stop_backend_runtime(self) -> None:
         pass
-
-    @abstractmethod
-    def firewall_up(self, ports: List[int]) -> None:
-        pass
-
-    @abstractmethod
-    def firewall_down(self) -> None:
-        pass
-
-
-def sys_get_distro_info(
-    conn: Connection, executor: UbuntuTaskExecutor
-) -> Optional[Dict[str, str]]:
-    """
-    Attempts to get the Linux distribution name and version.
-
-    Tries reading /etc/os-release first, then falls back to lsb_release.
-
-    Returns:
-        A dictionary containing info like 'name', 'version', 'id', 'pretty_name'
-        or None if information couldn't be retrieved reliably.
-    """
-    info = {}
-    try:
-        # Try /etc/os-release first using fs_read_file
-        content = executor.fs_read_file(conn, "/etc/os-release", format="string")
-        # Parse the key="value" or key=value format
-        for line in content.strip().split("\n"):
-            if "=" in line:
-                key, value = line.split("=", 1)
-                key = key.strip().lower()  # Use lower-case keys
-                # Remove surrounding quotes if present
-                value = value.strip().strip('"')
-                info[key] = value
-        # Add a 'version' key, preferring 'version_id' if available
-        if "version_id" in info:
-            info["version"] = info["version_id"]
-        elif "version" in info:
-            # Keep existing 'version' if 'version_id' is not present
-            pass
-        # If we got at least a name or pretty_name, return it
-        if "name" in info or "pretty_name" in info:
-            logger.info(f"Distro info from /etc/os-release: {info}")
-            return info
-    except Exception as e:
-        logger.warning(f"Could not read /etc/os-release: {e}. Trying lsb_release.")
-        info = {}  # Reset info if os-release failed or was insufficient
-
-    # Fallback to lsb_release if /etc/os-release didn't work
-    try:
-        # Use lsb_release -a and parse common fields
-        lsb_output = executor.execute(
-            conn,
-            "lsb_release -a",
-            group=TaskGroup.NETWORKING,
-            sudo=False,
-            pty=False,
-        )
-        if lsb_output:
-            for line in lsb_output.strip().split("\n"):
-                if ":" in line:
-                    key, value = line.split(":", 1)
-                    key = (
-                        key.strip().lower().replace(" ", "_")
-                    )  # e.g., 'distributor id' -> 'distributor_id'
-                    value = value.strip()
-                    if key == "distributor_id":
-                        info["id"] = value
-                        info["name"] = value  # Use id as name
-                    if key == "release":
-                        info["version"] = value
-                    if key == "description":
-                        info["pretty_name"] = value
-                    if key == "codename":
-                        info["codename"] = value
-            if "name" in info and "version" in info:
-                logger.info(f"Distro info from lsb_release: {info}")
-                return info
-    except Exception as e:
-        logger.error(f"Could not get distro info using lsb_release: {e}")
-
-    logger.error("Unable to determine Linux distribution info.")
-    return None

@@ -8,7 +8,6 @@ from mlox.server import (
     AbstractServer,
     MloxUser,
     RemoteUser,
-    sys_get_distro_info,
 )
 
 
@@ -50,38 +49,6 @@ def test_server_connection_failure(mock_close, mock_open):
     with pytest.raises(Exception):
         with conn:
             pass
-
-
-def test_sys_get_distro_info_os_release():
-    conn = DummyConn()
-    executor = MagicMock()
-    executor.fs_read_file.return_value = 'NAME="Ubuntu"\nVERSION_ID="22.04"'
-    info = sys_get_distro_info(conn, executor)
-    assert info["name"] == "Ubuntu"
-    assert info["version"] == "22.04"
-
-
-def test_sys_get_distro_info_lsb_release():
-    conn = DummyConn()
-    executor = MagicMock()
-    executor.fs_read_file.side_effect = Exception("fail")
-    executor.execute.return_value = (
-        "Distributor ID: Ubuntu\nRelease: 22.04\nDescription: Ubuntu 22.04 LTS\nCodename: jammy"
-    )
-    info = sys_get_distro_info(conn, executor)
-    assert info["name"] == "Ubuntu"
-    assert info["version"] == "22.04"
-    assert info["pretty_name"] == "Ubuntu 22.04 LTS"
-    assert info["codename"] == "jammy"
-
-
-def test_sys_get_distro_info_failure():
-    conn = DummyConn()
-    executor = MagicMock()
-    executor.fs_read_file.side_effect = Exception("fail")
-    executor.execute.side_effect = Exception("fail")
-    info = sys_get_distro_info(conn, executor)
-    assert info is None
 
 
 # AbstractServer cannot be instantiated directly, but we can test its templates

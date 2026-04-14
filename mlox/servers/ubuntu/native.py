@@ -4,7 +4,14 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, ClassVar, Mapping, Sequence
 
 from mlox.executors import TaskGroup
-from mlox.server import AbstractServer, AbstractGitServer, sys_get_distro_info
+from mlox.server import (
+    AbstractFirewallServer,
+    AbstractGitServer,
+    AbstractInitialPasswordAuthServer,
+    AbstractNativeServer,
+    AbstractServer,
+    ServerCapability,
+)
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -14,7 +21,19 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class UbuntuNativeServer(AbstractServer, AbstractGitServer):
+class UbuntuNativeServer(
+    AbstractServer,
+    AbstractGitServer,
+    AbstractFirewallServer,
+    AbstractInitialPasswordAuthServer,
+    AbstractNativeServer,
+):
+    capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.NATIVE,
+    }
     DEFAULT_SERVER_INFO: ClassVar[Dict[str, str | int | float]] = {
         "host": "Unknown",
         "cpu_count": 0,
@@ -172,7 +191,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 group=TaskGroup.NETWORKING,
                 sudo=True,
             )
-            system_info = sys_get_distro_info(conn, self.exec)
+            system_info = self.exec.sys_get_distro_info(conn)
             host_info = self.exec.execute(
                 conn,
                 f"host {conn.host}",

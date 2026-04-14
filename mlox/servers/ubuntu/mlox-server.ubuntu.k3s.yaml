@@ -21,6 +21,13 @@ groups:
   backend:
     kubernetes:
       k3s:
+capabilities:
+  server:
+    - git
+    - firewall
+    - initial_auth_password
+  backend:
+    - kubernetes
 ui:
   setup: mlox.servers.ubuntu.ui_k3s.setup
   settings: mlox.servers.ubuntu.ui_k3s.settings

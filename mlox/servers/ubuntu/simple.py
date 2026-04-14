@@ -1,10 +1,10 @@
 import logging
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Any, ClassVar, Dict
 
 from mlox.servers.ubuntu.native import UbuntuNativeServer
-from mlox.server import RemoteUser
+from mlox.server import RemoteUser, ServerCapability
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,8 @@ class UbuntuSimpleServer(UbuntuNativeServer):
     No package installation, user creation or system updates are performed.
     The server can optionally connect using an existing SSH private key.
     """
+
+    capabilities: ClassVar[set[ServerCapability]] = {ServerCapability.NATIVE}
 
     root_private_key: str | None = None
     root_passphrase: str | None = None
@@ -48,10 +50,14 @@ class UbuntuSimpleServer(UbuntuNativeServer):
         logger.info("Skipping user setup for UbuntuSimpleServer.")
 
     def disable_password_authentication(self) -> None:
-        logger.info("Skipping password authentication configuration for UbuntuSimpleServer.")
+        logger.info(
+            "Skipping password authentication configuration for UbuntuSimpleServer."
+        )
 
     def enable_password_authentication(self) -> None:
-        logger.info("Skipping password authentication configuration for UbuntuSimpleServer.")
+        logger.info(
+            "Skipping password authentication configuration for UbuntuSimpleServer."
+        )
 
     def enable_debug_access(self) -> None:
         self.is_debug_access_enabled = True

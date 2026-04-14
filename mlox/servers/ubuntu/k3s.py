@@ -2,9 +2,10 @@ import re
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Any, ClassVar, Dict
 
 from mlox.executors import TaskGroup
+from mlox.server import AbstractKubernetesServer, ServerCapability
 from mlox.servers.ubuntu.docker import UbuntuDockerServer
 
 # Configure logging (optional, but recommended)
@@ -15,7 +16,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class UbuntuK3sServer(UbuntuDockerServer):
+class UbuntuK3sServer(
+    UbuntuDockerServer,
+    AbstractKubernetesServer,
+):
+    capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.KUBERNETES,
+    }
+
     controller_url: str = field(
         default="", metadata={"help": "Optional URL of the k3s controller node"}
     )

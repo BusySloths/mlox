@@ -17,14 +17,16 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, IO
+from typing import Any, ClassVar, IO
 
 from mlox.executors import UbuntuTaskExecutor
 from mlox.server import (
     AbstractGitServer,
+    AbstractLocalServer,
     AbstractServer,
     MloxUser,
     ServerConnection,
+    ServerCapability,
 )
 
 
@@ -158,8 +160,13 @@ class LocalServerConnection(ServerConnection):
 
 
 @dataclass
-class LocalhostServer(AbstractServer, AbstractGitServer):
+class LocalhostServer(AbstractServer, AbstractGitServer, AbstractLocalServer):
     """A server representation that targets the local machine."""
+
+    capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.GIT,
+        ServerCapability.LOCAL,
+    }
 
     docker_available: bool = field(default=False, init=False)
     base_path: str = field(default_factory=lambda: str(Path.cwd()), init=False)
@@ -248,12 +255,6 @@ class LocalhostServer(AbstractServer, AbstractGitServer):
 
     def stop_backend_runtime(self) -> None:
         logger.info("Local backend stop requested.")
-
-    def firewall_up(self, ports: list[int]) -> None:
-        logger.info("Firewall control is not supported for LocalhostServer. Ports=%s", ports)
-
-    def firewall_down(self) -> None:
-        logger.info("Firewall control is not supported for LocalhostServer.")
 
     def get_backend_status(self) -> dict[str, Any]:
         return {

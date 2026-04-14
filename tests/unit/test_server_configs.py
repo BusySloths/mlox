@@ -2,6 +2,7 @@ import pytest
 import yaml
 import os
 import importlib
+import logging
 
 from mlox.config import (
     ServiceConfig,
@@ -9,7 +10,12 @@ from mlox.config import (
     load_config,
     load_all_server_configs,
 )
-from mlox.server import AbstractServer
+from mlox.server import (
+    AbstractGitServer,
+    AbstractNativeServer,
+    AbstractServer,
+    ServerCapability,
+)
 from mlox.infra import Infrastructure
 
 
@@ -61,11 +67,22 @@ class DummyServer(AbstractServer):
     def stop_backend_runtime(self):
         pass
 
-    def firewall_up(self, ports):
+
+class CapabilityServer(DummyServer, AbstractGitServer, AbstractNativeServer):
+    capabilities = {ServerCapability.GIT, ServerCapability.NATIVE}
+
+    def git_clone(self, repo_url: str, path: str) -> None:
         pass
 
-    def firewall_down(self):
+    def git_pull(self, path: str) -> None:
         pass
+
+    def git_remove(self, path: str) -> None:
+        pass
+
+
+class MissingGitAbcServer(DummyServer):
+    capabilities = {ServerCapability.GIT}
 
 
 # Dummy UI functions for testing
@@ -77,6 +94,8 @@ def dummy_setup_func(infra: Infrastructure, config: ServiceConfig):
 def mock_dummy_modules(monkeypatch):
     class MockServerModule:
         DummyServer = DummyServer
+        CapabilityServer = CapabilityServer
+        MissingGitAbcServer = MissingGitAbcServer
 
     class MockUiModule:
         dummy_setup_func = staticmethod(dummy_setup_func)
@@ -198,3 +217,126 @@ class TestServerConfig:
 
         none_func = config.instantiate_ui("non_existent")
         assert none_func is None
+
+    def test_capability_helpers_parse_explicit_and_legacy(self, server_config_data):
+        explicit_data = dict(server_config_data)
+        explicit_data["build"] = BuildConfig(**server_config_data["build"])
+        explicit_data["capabilities"] = {
+            "server": ["git"],
+            "backend": ["kubernetes"],
+        }
+        explicit = ServiceConfig(**explicit_data)
+        assert explicit.server_capabilities() == {"git"}
+        assert explicit.backend_capabilities() == {"kubernetes"}
+
+        legacy_data = dict(server_config_data)
+        legacy_data["build"] = BuildConfig(**server_config_data["build"])
+        legacy_data["groups"] = {
+            "server": {"git": None},
+            "backend": {"kubernetes": {"k3s": None}},
+        }
+        legacy = ServiceConfig(**legacy_data)
+        assert legacy.server_capabilities() == {"git"}
+        assert legacy.backend_capabilities() == {"kubernetes"}
+
+    def test_capability_validation_accepts_matching_config(
+        self,
+        tmp_path,
+        server_config_data,
+        mock_dummy_modules,
+        mock_package_resources,
+        caplog,
+    ):
+        server_config_data["build"]["class_name"] = "dummy.servers.CapabilityServer"
+        server_config_data["capabilities"] = {
+            "server": ["git"],
+            "backend": ["native"],
+        }
+        create_yaml_file(tmp_path, "dummy", server_config_data)
+
+        with caplog.at_level(logging.WARNING):
+            configs = load_all_server_configs()
+
+        assert len(configs) == 1
+        assert "capabilities" not in caplog.text
+
+    def test_capability_validation_warns_and_still_loads(
+        self,
+        tmp_path,
+        server_config_data,
+        mock_dummy_modules,
+        mock_package_resources,
+        caplog,
+    ):
+        server_config_data["build"]["class_name"] = "dummy.servers.CapabilityServer"
+        server_config_data["capabilities"] = {
+            "server": ["git", "made_up"],
+            "backend": ["docker"],
+        }
+        create_yaml_file(tmp_path, "dummy", server_config_data)
+
+        with caplog.at_level(logging.WARNING):
+            configs = load_all_server_configs()
+
+        assert len(configs) == 1
+        assert "unknown capabilities" in caplog.text
+        assert "declares capabilities not supported" in caplog.text
+        assert "supports capabilities not advertised" in caplog.text
+
+    def test_capability_validation_warns_for_missing_abc(
+        self,
+        tmp_path,
+        server_config_data,
+        mock_dummy_modules,
+        mock_package_resources,
+        caplog,
+    ):
+        server_config_data["build"]["class_name"] = "dummy.servers.MissingGitAbcServer"
+        server_config_data["capabilities"] = {"server": ["git"]}
+        create_yaml_file(tmp_path, "dummy", server_config_data)
+
+        with caplog.at_level(logging.WARNING):
+            configs = load_all_server_configs()
+
+        assert len(configs) == 1
+        assert "does not implement AbstractGitServer" in caplog.text
+
+
+def test_builtin_server_config_capabilities_match_classes():
+    configs = load_all_server_configs(include_plugins=False)
+    by_id = {config.id: config for config in configs}
+    expected = {
+        "local-server": ({"git"}, {"local"}),
+        "ubuntu-simple-24.04-server": (set(), {"native"}),
+        "ubuntu-native-24.04-server": (
+            {"git", "firewall", "initial_auth_password"},
+            {"native"},
+        ),
+        "ubuntu-docker-24.04-server": (
+            {"git", "firewall", "initial_auth_password"},
+            {"docker"},
+        ),
+        "ubuntu-k3s-24.04-server": (
+            {"git", "firewall", "initial_auth_password"},
+            {"kubernetes"},
+        ),
+    }
+
+    for config_id, (server_capabilities, backend_capabilities) in expected.items():
+        config = by_id[config_id]
+        assert config.server_capabilities() == server_capabilities
+        assert config.backend_capabilities() == backend_capabilities
+        module_path, class_name = config.build.class_name.rsplit(".", 1)
+        server_class = getattr(importlib.import_module(module_path), class_name)
+        class_capabilities = {
+            (
+                capability.value
+                if isinstance(capability, ServerCapability)
+                else str(capability)
+            )
+            for capability in server_class.capabilities
+        }
+        assert (
+            config.server_capabilities() | config.backend_capabilities()
+            == class_capabilities
+        )

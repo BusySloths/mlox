@@ -6,6 +6,7 @@ from fabric import Connection  # type: ignore
 from mlox.service import AbstractService
 from mlox.infra import Infrastructure
 from mlox.config import ServiceConfig, BuildConfig, get_stacks_path, load_config
+from mlox.server import ServerCapability
 from mlox.servers.local.local import LocalhostServer, LocalConnection
 
 
@@ -39,6 +40,13 @@ def test_local_connection_sudo_falls_back(tmp_path):
             result = c.sudo("echo hi")
     assert result.return_code == 0
     assert "hi" in result.stdout
+
+
+def test_localhost_server_capabilities():
+    assert LocalhostServer.capabilities == {
+        ServerCapability.GIT,
+        ServerCapability.LOCAL,
+    }
 
 
 def test_localhost_server_adds_custom_service():

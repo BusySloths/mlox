@@ -20,6 +20,13 @@ groups:
     initial_auth_password:
   backend:
     docker:
+capabilities:
+  server:
+    - git
+    - firewall
+    - initial_auth_password
+  backend:
+    - docker
 ui:
   setup: mlox.servers.ubuntu.ui_docker.setup
   settings: mlox.servers.ubuntu.ui_docker.settings

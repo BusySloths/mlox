@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from types import SimpleNamespace
 
-from mlox.server import MloxUser, RemoteUser
+from mlox.server import MloxUser, RemoteUser, ServerCapability
 from mlox.servers.ubuntu.docker import UbuntuDockerServer
 from mlox.servers.ubuntu.k3s import UbuntuK3sServer
 from mlox.servers.ubuntu.native import UbuntuNativeServer
@@ -113,6 +113,28 @@ def _new_docker_server() -> UbuntuDockerServer:
     )
 
 
+def test_ubuntu_server_capabilities():
+    assert UbuntuNativeServer.capabilities == {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.NATIVE,
+    }
+    assert UbuntuDockerServer.capabilities == {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.DOCKER,
+    }
+    assert UbuntuK3sServer.capabilities == {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.KUBERNETES,
+    }
+    assert UbuntuSimpleServer.capabilities == {ServerCapability.NATIVE}
+
+
 def test_ubuntu_native_setup_users_and_auth_toggles(monkeypatch):
     server = _new_native_server()
     fake_exec = FakeExec()
@@ -163,10 +185,10 @@ def test_ubuntu_native_server_info_and_git_ops(monkeypatch):
             """
     ] = "8,16,120"
     fake_exec.responses["host 10.0.0.10"] = "10.0.0.10 has address 10.0.0.10."
-    monkeypatch.setattr(
-        "mlox.servers.ubuntu.native.sys_get_distro_info",
-        lambda conn, ex: {"pretty_name": "Ubuntu", "version": "24.04"},
-    )
+    fake_exec.sys_get_distro_info = lambda conn: {
+        "pretty_name": "Ubuntu",
+        "version": "24.04",
+    }
 
     assert server.get_server_info(no_cache=False)["host"] == "Unknown"
     info = server.get_server_info(no_cache=True)

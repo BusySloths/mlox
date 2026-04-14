@@ -2,9 +2,10 @@ import logging
 
 import json  # For parsing docker command JSON output
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Any, ClassVar, Dict
 
 from mlox.executors import TaskGroup
+from mlox.server import AbstractDockerServer, ServerCapability
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 
 # Configure logging (optional, but recommended)
@@ -15,7 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class UbuntuDockerServer(UbuntuNativeServer):
+class UbuntuDockerServer(UbuntuNativeServer, AbstractDockerServer):
+    capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.DOCKER,
+    }
+
     def __post_init__(self):
         super().__post_init__()
         self.backend = ["docker"]

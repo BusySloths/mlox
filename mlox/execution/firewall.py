@@ -13,6 +13,10 @@ from mlox.execution.base import TaskGroup, TaskRunnerABC
 
 class FirewallMixin(TaskRunnerABC):
     @staticmethod
+    def _root_shell_command(command: str) -> str:
+        return f"sh -c {shlex.quote(command)}"
+
+    @staticmethod
     def _normalize_firewall_source(source: str) -> str:
         source = str(source).strip()
         try:
@@ -58,7 +62,7 @@ class FirewallMixin(TaskRunnerABC):
 
     @classmethod
     def _iptables_setup_commands(cls) -> list[str]:
-        return [
+        commands = [
             f"iptables -N {cls.firewall_input_chain} 2>/dev/null || true",
             f"iptables -N {cls.firewall_docker_chain} 2>/dev/null || true",
             "iptables -N DOCKER-USER 2>/dev/null || true",
@@ -72,10 +76,11 @@ class FirewallMixin(TaskRunnerABC):
                 f"-j {cls.firewall_docker_chain}"
             ),
         ]
+        return [cls._root_shell_command(command) for command in commands]
 
     @classmethod
     def _iptables_teardown_commands(cls) -> list[str]:
-        return [
+        commands = [
             f"iptables -D INPUT -p tcp -j {cls.firewall_input_chain} 2>/dev/null || true",
             (
                 f"iptables -D DOCKER-USER -p tcp -j {cls.firewall_docker_chain} "
@@ -86,18 +91,20 @@ class FirewallMixin(TaskRunnerABC):
             f"iptables -X {cls.firewall_input_chain} 2>/dev/null || true",
             f"iptables -X {cls.firewall_docker_chain} 2>/dev/null || true",
         ]
+        return [cls._root_shell_command(command) for command in commands]
 
     @classmethod
     def _iptables_status_command(cls) -> str:
-        return (
+        command = (
             f"if iptables -C INPUT -p tcp -j {cls.firewall_input_chain} "
             f">/dev/null 2>&1 || iptables -C DOCKER-USER -p tcp "
             f"-j {cls.firewall_docker_chain} >/dev/null 2>&1; then "
-            "echo 'Status: active'; "
+            "echo Status: active; "
             f"iptables -S {cls.firewall_input_chain} 2>/dev/null || true; "
             f"iptables -S {cls.firewall_docker_chain} 2>/dev/null || true; "
-            "else echo 'Status: inactive'; fi"
+            "else echo Status: inactive; fi"
         )
+        return cls._root_shell_command(command)
 
     @classmethod
     def _iptables_input_allow_command(
@@ -170,7 +177,7 @@ class FirewallMixin(TaskRunnerABC):
                 ),
             ]
         )
-        return commands
+        return [cls._root_shell_command(command) for command in commands]
 
     def _iptables_apply_firewall_rules(
         self,

@@ -20,6 +20,13 @@ groups:
     initial_auth_password:
   backend:
     native:
+capabilities:
+  server:
+    - git
+    - firewall
+    - initial_auth_password
+  backend:
+    - native
 ui:
   setup: mlox.servers.ubuntu.ui_native.setup
   settings: mlox.servers.ubuntu.ui_native.settings
