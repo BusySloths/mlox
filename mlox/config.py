@@ -5,12 +5,146 @@ import importlib
 
 from importlib import resources, metadata as importlib_metadata
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Literal, Callable, TypedDict
+from typing import Any, Callable, Dict, List, Literal, TypedDict
 
 from mlox.service import AbstractService
-from mlox.server import AbstractServer
+from mlox.server import (
+    AbstractDockerServer,
+    AbstractFirewallServer,
+    AbstractGitServer,
+    AbstractInitialPasswordAuthServer,
+    AbstractKubernetesServer,
+    AbstractLocalServer,
+    AbstractNativeServer,
+    AbstractServer,
+    ServerCapability,
+)
 
 PluginKind = Literal["service", "server"]
+
+
+CAPABILITY_ABCS = {
+    ServerCapability.GIT.value: AbstractGitServer,
+    ServerCapability.FIREWALL.value: AbstractFirewallServer,
+    ServerCapability.INITIAL_AUTH_PASSWORD.value: AbstractInitialPasswordAuthServer,
+    ServerCapability.NATIVE.value: AbstractNativeServer,
+    ServerCapability.DOCKER.value: AbstractDockerServer,
+    ServerCapability.KUBERNETES.value: AbstractKubernetesServer,
+    ServerCapability.LOCAL.value: AbstractLocalServer,
+}
+
+
+def _normalize_capability_name(value: Any) -> str:
+    if isinstance(value, ServerCapability):
+        return value.value
+    return str(value).strip().lower()
+
+
+def _normalize_capability_values(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, dict):
+        return {_normalize_capability_name(key) for key in value.keys()}
+    if isinstance(value, (list, tuple, set)):
+        return {_normalize_capability_name(item) for item in value}
+    return {_normalize_capability_name(value)}
+
+
+def _normalize_capability_map(capabilities: Dict[str, Any]) -> Dict[str, set[str]]:
+    normalized: Dict[str, set[str]] = {}
+    for section, values in capabilities.items():
+        section_name = str(section).strip().lower()
+        normalized[section_name] = _normalize_capability_values(values)
+    return normalized
+
+
+def _capabilities_from_groups(groups: Dict[str, Any]) -> Dict[str, set[str]]:
+    derived: Dict[str, set[str]] = {"server": set(), "backend": set()}
+
+    server_groups = groups.get("server")
+    if isinstance(server_groups, dict):
+        derived["server"].update(_normalize_capability_values(server_groups))
+
+    backend_groups = groups.get("backend")
+    if isinstance(backend_groups, dict):
+        for backend in backend_groups.keys():
+            derived["backend"].add(_normalize_capability_name(backend))
+
+    return {section: values for section, values in derived.items() if values}
+
+
+def _load_build_class(config: "ServiceConfig") -> type | None:
+    try:
+        module_path, class_name = config.build.class_name.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        build_class = getattr(module, class_name)
+    except (ImportError, AttributeError, ValueError) as exc:
+        logging.warning(
+            "Could not load build class %s for capability validation: %s",
+            config.build.class_name,
+            exc,
+        )
+        return None
+    return build_class
+
+
+def _server_class_capabilities(server_class: type) -> set[str]:
+    return {
+        _normalize_capability_name(capability)
+        for capability in getattr(server_class, "capabilities", set())
+    }
+
+
+def _validate_server_config_capabilities(config: "ServiceConfig") -> None:
+    server_class = _load_build_class(config)
+    if server_class is None:
+        return
+    if not isinstance(server_class, type) or not issubclass(
+        server_class, AbstractServer
+    ):
+        return
+
+    declared = config.server_capabilities() | config.backend_capabilities()
+    known = {capability.value for capability in ServerCapability}
+    unknown = declared - known
+    if unknown:
+        logging.warning(
+            "Server config %s declares unknown capabilities: %s",
+            config.id,
+            sorted(unknown),
+        )
+
+    declared_known = declared & known
+    class_capabilities = _server_class_capabilities(server_class)
+
+    missing_from_class = declared_known - class_capabilities
+    if missing_from_class:
+        logging.warning(
+            "Server config %s declares capabilities not supported by %s: %s",
+            config.id,
+            server_class.__name__,
+            sorted(missing_from_class),
+        )
+
+    missing_from_config = class_capabilities - declared_known
+    if missing_from_config:
+        logging.warning(
+            "Server class %s supports capabilities not advertised by config %s: %s",
+            server_class.__name__,
+            config.id,
+            sorted(missing_from_config),
+        )
+
+    for capability in sorted(declared_known):
+        required_abc = CAPABILITY_ABCS.get(capability)
+        if required_abc and not issubclass(server_class, required_abc):
+            logging.warning(
+                "Server config %s declares capability %s but %s does not implement %s",
+                config.id,
+                capability,
+                server_class.__name__,
+                required_abc.__name__,
+            )
 
 
 @dataclass
@@ -30,10 +164,22 @@ class ServiceConfig:
     links: Dict[str, str]
     build: BuildConfig
     groups: Dict[str, Any] = field(default_factory=dict)
+    capabilities: Dict[str, list[str]] = field(default_factory=dict)
     ui: Dict[str, str] = field(default_factory=dict)
     requirements: Dict[str, float] = field(default_factory=dict)
     ports: Dict[str, int] = field(default_factory=dict)
     path: str = field(default="", init=False)
+
+    def declared_capabilities(self) -> Dict[str, set[str]]:
+        if self.capabilities:
+            return _normalize_capability_map(self.capabilities)
+        return _capabilities_from_groups(self.groups)
+
+    def server_capabilities(self) -> set[str]:
+        return self.declared_capabilities().get("server", set())
+
+    def backend_capabilities(self) -> set[str]:
+        return self.declared_capabilities().get("backend", set())
 
     def instantiate_ui(self, func_name: str) -> Callable | None:
         if func_name not in self.ui:
@@ -226,6 +372,8 @@ def load_config(
             service_data["build"] = BuildConfig(**raw_build_dict)
             service_config_instance = ServiceConfig(**service_data)
             service_config_instance.path = f"{service_dir}/{candidate}"
+            if candidate.startswith("mlox-server."):
+                _validate_server_config_capabilities(service_config_instance)
             return service_config_instance
 
         except yaml.YAMLError as e:

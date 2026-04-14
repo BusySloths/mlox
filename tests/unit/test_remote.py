@@ -30,7 +30,9 @@ def mock_connection() -> MagicMock:
     return conn
 
 
-def test_execute_ad_hoc_task(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_execute_ad_hoc_task(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
     mock_connection.run.return_value = FakeResult(stdout="test_output")
     result = executor.execute(
         mock_connection,
@@ -53,7 +55,9 @@ def test_execute_ad_hoc_task(mock_connection: MagicMock, executor: UbuntuTaskExe
     )
 
 
-def test_sys_disk_free(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_sys_disk_free(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
     mock_connection.run.side_effect = [
         FakeResult(stdout="Linux"),
         FakeResult(stdout="25%"),
@@ -68,19 +72,75 @@ def test_sys_disk_free(mock_connection: MagicMock, executor: UbuntuTaskExecutor)
     )
 
 
-def test_fs_create_dir(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_sys_get_distro_info(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    def mock_get(path: str, buffer: BytesIO) -> FakeResult:
+        buffer.write(b'NAME="Ubuntu"\nVERSION_ID="24.04"\n')
+        return FakeResult(stdout="")
+
+    mock_connection.get.side_effect = mock_get
+    result = executor.sys_get_distro_info(mock_connection)
+    assert result == {
+        "name": "Ubuntu",
+        "version_id": "24.04",
+        "version": "24.04",
+    }
+
+
+def test_sys_get_distro_info_lsb_release_fallback(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    mock_connection.get.side_effect = RuntimeError("missing")
+    mock_connection.run.return_value = FakeResult(
+        stdout=(
+            "Distributor ID:\tUbuntu\n"
+            "Release:\t22.04\n"
+            "Description:\tUbuntu 22.04 LTS\n"
+            "Codename:\tjammy"
+        )
+    )
+
+    result = executor.sys_get_distro_info(mock_connection)
+
+    assert result == {
+        "id": "Ubuntu",
+        "name": "Ubuntu",
+        "version": "22.04",
+        "pretty_name": "Ubuntu 22.04 LTS",
+        "codename": "jammy",
+    }
+    mock_connection.run.assert_called_once_with("lsb_release -a", hide=True)
+
+
+def test_sys_get_distro_info_failure(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    mock_connection.get.side_effect = RuntimeError("missing")
+    mock_connection.run.side_effect = RuntimeError("lsb failed")
+
+    assert executor.sys_get_distro_info(mock_connection) is None
+
+
+def test_fs_create_dir(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
     executor.fs_create_dir(mock_connection, "/test/path")
     mock_connection.run.assert_called_once_with("mkdir -p /test/path", hide=True)
 
 
-def test_fs_delete_dir(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_fs_delete_dir(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
     executor.fs_delete_dir(mock_connection, "/test/path")
     mock_connection.sudo.assert_called_once_with(
         "rm -rf /test/path", hide="stderr", pty=False
     )
 
 
-def test_fs_append_line(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_fs_append_line(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
     executor.fs_append_line(mock_connection, "/test/file", "test_line")
     mock_connection.run.assert_any_call("touch /test/file", hide=True)
     mock_connection.run.assert_called_with("echo 'test_line' >> /test/file", hide=True)
@@ -103,7 +163,9 @@ def test_fs_find_and_replace(
     )
 
 
-def test_fs_write_file(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_fs_write_file(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
     executor.fs_write_file(mock_connection, "/test/file", "test_content")
     mock_connection.put.assert_called_once_with(ANY, remote="/test/file")
     file_like_object = mock_connection.put.call_args[0][0]
@@ -122,7 +184,9 @@ def test_fs_read_file(mock_connection: MagicMock, executor: UbuntuTaskExecutor) 
     mock_connection.get.assert_called_once()
 
 
-def test_fs_list_files(mock_connection: MagicMock, executor: UbuntuTaskExecutor) -> None:
+def test_fs_list_files(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
     mock_connection.run.return_value = FakeResult(stdout="file1\nfile2\ndir1")
     result = executor.fs_list_files(mock_connection, "/test/path")
     assert result == ["file1", "file2", "dir1"]

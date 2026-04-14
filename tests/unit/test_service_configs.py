@@ -191,6 +191,17 @@ class TestServiceConfig:
         none_func = config.instantiate_ui("non_existent")
         assert none_func is None
 
+    def test_service_config_accepts_capabilities(self, service_config_data):
+        service_config_data["build"] = BuildConfig(**service_config_data["build"])
+        service_config_data["capabilities"] = {
+            "service": ["repository"],
+            "backend": ["docker"],
+        }
+        config = ServiceConfig(**service_config_data)
+
+        assert config.declared_capabilities()["service"] == {"repository"}
+        assert config.backend_capabilities() == {"docker"}
+
     def test_load_config_failures(
         self, tmp_path, caplog, mock_package_resources, service_config_data
     ):

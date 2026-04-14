@@ -3,11 +3,19 @@ from __future__ import annotations
 from contextlib import contextmanager
 from types import SimpleNamespace
 
-from mlox.server import MloxUser, RemoteUser
+from mlox.server import MloxUser, RemoteUser, ServerCapability
 from mlox.servers.ubuntu.docker import UbuntuDockerServer
 from mlox.servers.ubuntu.k3s import UbuntuK3sServer
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 from mlox.servers.ubuntu.simple import UbuntuSimpleServer
+from mlox.servers.ubuntu.ui_native import (
+    _collect_firewall_port_rows,
+    _collect_firewall_ports,
+    _filter_firewall_port_rows,
+    _firewall_status_message,
+    _is_firewall_up,
+    _parse_firewall_open_ports,
+)
 
 
 class FakeExec:
@@ -56,6 +64,19 @@ class FakeExec:
         self._record("sys_user_id")
         return self.user_id
 
+    def firewall_up(self, conn, ports, source_ips_by_port=None):
+        self._record("firewall_up", tuple(ports), source_ips_by_port)
+
+    def firewall_down(self, conn):
+        self._record("firewall_down")
+
+    def firewall_status(self, conn):
+        self._record("firewall_status")
+        return "Status: active"
+
+    def firewall_update(self, conn, ports, source_ips_by_port=None):
+        self._record("firewall_update", tuple(ports), source_ips_by_port)
+
 
 def _server_conn(server):
     conn = SimpleNamespace(host=server.ip)
@@ -92,6 +113,28 @@ def _new_docker_server() -> UbuntuDockerServer:
     )
 
 
+def test_ubuntu_server_capabilities():
+    assert UbuntuNativeServer.capabilities == {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.NATIVE,
+    }
+    assert UbuntuDockerServer.capabilities == {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.DOCKER,
+    }
+    assert UbuntuK3sServer.capabilities == {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.KUBERNETES,
+    }
+    assert UbuntuSimpleServer.capabilities == {ServerCapability.NATIVE}
+
+
 def test_ubuntu_native_setup_users_and_auth_toggles(monkeypatch):
     server = _new_native_server()
     fake_exec = FakeExec()
@@ -105,7 +148,9 @@ def test_ubuntu_native_setup_users_and_auth_toggles(monkeypatch):
         ssh_passphrase="mlox-pass",
     )
     monkeypatch.setattr(
-        server, "get_remote_user_template", lambda: RemoteUser(ssh_passphrase="remote-pass")
+        server,
+        "get_remote_user_template",
+        lambda: RemoteUser(ssh_passphrase="remote-pass"),
     )
     monkeypatch.setattr(server, "test_connection", lambda: True)
 
@@ -140,10 +185,10 @@ def test_ubuntu_native_server_info_and_git_ops(monkeypatch):
             """
     ] = "8,16,120"
     fake_exec.responses["host 10.0.0.10"] = "10.0.0.10 has address 10.0.0.10."
-    monkeypatch.setattr(
-        "mlox.servers.ubuntu.native.sys_get_distro_info",
-        lambda conn, ex: {"pretty_name": "Ubuntu", "version": "24.04"},
-    )
+    fake_exec.sys_get_distro_info = lambda conn: {
+        "pretty_name": "Ubuntu",
+        "version": "24.04",
+    }
 
     assert server.get_server_info(no_cache=False)["host"] == "Unknown"
     info = server.get_server_info(no_cache=True)
@@ -174,7 +219,9 @@ def test_ubuntu_docker_backend_lifecycle_and_status(monkeypatch):
 
     fake_exec.responses["systemctl is-active docker"] = "active"
     fake_exec.responses["systemctl is-enabled docker"] = "enabled"
-    fake_exec.responses["docker version --format '{{json .}}'"] = '{"Client":{"Version":"1"}}'
+    fake_exec.responses["docker version --format '{{json .}}'"] = (
+        '{"Client":{"Version":"1"}}'
+    )
     fake_exec.responses["docker ps -a --format '{{json .}}'"] = '{"ID":"1"}\n{"ID":"2"}'
     status = server.get_backend_status()
     assert status["backend.is_running"] is True
@@ -210,10 +257,11 @@ def test_ubuntu_k3s_backend_paths():
 
     fake_exec.responses["systemctl is-active k3s"] = "active"
     fake_exec.responses["systemctl is-active k3s-agent"] = None
-    fake_exec.responses["cat /var/lib/rancher/k3s/server/node-token"] = "password: super-token"
+    fake_exec.responses["cat /var/lib/rancher/k3s/server/node-token"] = (
+        "password: super-token"
+    )
     fake_exec.responses["kubectl get nodes -o wide"] = (
-        "NAME  STATUS  ROLES\n"
-        "node-1  Ready  control-plane\n"
+        "NAME  STATUS  ROLES\n" "node-1  Ready  control-plane\n"
     )
     info = server.get_backend_status()
     assert info["backend.is_running"] is True
@@ -239,7 +287,9 @@ def test_ubuntu_simple_server_noops_and_debug(monkeypatch):
     assert server.remote_user.ssh_key == "key-material"
 
     called = {"setup_backend": 0}
-    monkeypatch.setattr(server, "setup_backend", lambda: called.__setitem__("setup_backend", 1))
+    monkeypatch.setattr(
+        server, "setup_backend", lambda: called.__setitem__("setup_backend", 1)
+    )
     server.setup()
     assert called["setup_backend"] == 1
 
@@ -252,3 +302,77 @@ def test_ubuntu_simple_server_noops_and_debug(monkeypatch):
     server.disable_debug_access()
     assert server.is_debug_access_enabled is False
     assert isinstance(server.get_backend_status(), dict)
+
+
+def test_ubuntu_native_firewall_calls_and_port_collection():
+    server = _new_native_server()
+    fake_exec = FakeExec()
+    server.exec = fake_exec
+    _server_conn(server)
+
+    class DummyService:
+        def __init__(self, ports):
+            self.service_ports = ports
+
+    bundle = SimpleNamespace(
+        services=[
+            DummyService({"http": 8080, "grpc": 50051}),
+            DummyService({"ui": 8080, "metrics": 9090}),
+        ]
+    )
+    ports = _collect_firewall_ports(bundle, server)
+    assert ports == [22, 8080, 9090, 50051]
+    assert _collect_firewall_port_rows(bundle, server) == [
+        {"port_number": 22, "service": "Server", "port_name": "SSH"},
+        {"port_number": 8080, "service": "DummyService", "port_name": "http"},
+        {"port_number": 8080, "service": "DummyService", "port_name": "ui"},
+        {"port_number": 9090, "service": "DummyService", "port_name": "metrics"},
+        {"port_number": 50051, "service": "DummyService", "port_name": "grpc"},
+    ]
+
+    server.firewall_up(ports)
+    server.firewall_update(ports)
+    server.firewall_down()
+    call_names = [name for name, _, _ in fake_exec.calls]
+    assert "firewall_up" in call_names
+    assert "firewall_update" in call_names
+    assert "firewall_down" in call_names
+
+
+def test_ubuntu_native_firewall_status_parsing_and_filtering():
+    status = """Status: active
+-N MLOX-FIREWALL
+-A MLOX-FIREWALL -p tcp -m tcp --dport 22 -j ACCEPT
+-A MLOX-FIREWALL -p tcp -m tcp --dport 8080 -j ACCEPT
+-A MLOX-FIREWALL -p tcp -m tcp --dport 9090 -j DROP
+-A MLOX-DOCKER-FIREWALL -p tcp -m conntrack --ctorigdstport 50051 -j ACCEPT
+"""
+    assert _parse_firewall_open_ports(status) == {22, 8080, 50051}
+    assert _parse_firewall_open_ports("Status: inactive") == set()
+    assert _parse_firewall_open_ports(None) is None
+
+    rows = [
+        {"port_number": 22, "service": "Server", "port_name": "SSH"},
+        {"port_number": 8080, "service": "api", "port_name": "HTTP"},
+    ]
+    assert _filter_firewall_port_rows(rows, {22, 8080, 9999}) == [
+        {"port_number": 22, "service": "Server", "port_name": "SSH"},
+        {"port_number": 8080, "service": "api", "port_name": "HTTP"},
+        {"port_number": 9999, "service": "Unknown", "port_name": "iptables rule"},
+    ]
+    assert _filter_firewall_port_rows(rows, None) == rows
+    assert (
+        _firewall_status_message("Status: inactive", set(), [])
+        == "Firewall is not up. All ports are open."
+    )
+    assert (
+        _firewall_status_message(None, None, rows)
+        == "Could not read firewall status. Showing configured ports instead."
+    )
+    assert _firewall_status_message("Status: active", set(), []) == (
+        "No open firewall ports found."
+    )
+    assert _firewall_status_message("Status: active", {22}, rows) is None
+    assert _is_firewall_up("Status: active") is True
+    assert _is_firewall_up("Status: inactive") is False
+    assert _is_firewall_up(None) is False

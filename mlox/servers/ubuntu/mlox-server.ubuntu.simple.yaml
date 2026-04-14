@@ -16,6 +16,9 @@ groups:
   server:
   backend:
     native:
+capabilities:
+  backend:
+    - native
 ui:
   setup: mlox.servers.ubuntu.ui_simple.setup
   settings: mlox.servers.ubuntu.ui_simple.settings

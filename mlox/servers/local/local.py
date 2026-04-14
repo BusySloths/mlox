@@ -17,14 +17,16 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, IO
+from typing import Any, ClassVar, IO
 
 from mlox.executors import UbuntuTaskExecutor
 from mlox.server import (
     AbstractGitServer,
+    AbstractLocalServer,
     AbstractServer,
     MloxUser,
     ServerConnection,
+    ServerCapability,
 )
 
 
@@ -158,8 +160,13 @@ class LocalServerConnection(ServerConnection):
 
 
 @dataclass
-class LocalhostServer(AbstractServer, AbstractGitServer):
+class LocalhostServer(AbstractServer, AbstractGitServer, AbstractLocalServer):
     """A server representation that targets the local machine."""
+
+    capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.GIT,
+        ServerCapability.LOCAL,
+    }
 
     docker_available: bool = field(default=False, init=False)
     base_path: str = field(default_factory=lambda: str(Path.cwd()), init=False)

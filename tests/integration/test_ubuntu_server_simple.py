@@ -26,3 +26,16 @@ def test_simple_server_debug_access_with_password(ubuntu_simple_server):
 
     ubuntu_simple_server.disable_debug_access()
     assert not ubuntu_simple_server.is_debug_access_enabled
+
+
+def test_simple_server_firewall_toggle(ubuntu_simple_server):
+    # Keep SSH open while firewall is enabled to avoid locking out remote access.
+    ubuntu_simple_server.firewall_up([22])
+    status = ubuntu_simple_server.firewall_status()
+    assert status is not None
+    assert "Status: active" in status
+
+    ubuntu_simple_server.firewall_down()
+    status = ubuntu_simple_server.firewall_status()
+    assert status is not None
+    assert "Status: inactive" in status

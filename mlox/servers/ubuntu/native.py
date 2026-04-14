@@ -1,10 +1,17 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, ClassVar
+from typing import Dict, Any, ClassVar, Mapping, Sequence
 
 from mlox.executors import TaskGroup
-from mlox.server import AbstractServer, AbstractGitServer, sys_get_distro_info
+from mlox.server import (
+    AbstractFirewallServer,
+    AbstractGitServer,
+    AbstractInitialPasswordAuthServer,
+    AbstractNativeServer,
+    AbstractServer,
+    ServerCapability,
+)
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -14,7 +21,19 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class UbuntuNativeServer(AbstractServer, AbstractGitServer):
+class UbuntuNativeServer(
+    AbstractServer,
+    AbstractGitServer,
+    AbstractFirewallServer,
+    AbstractInitialPasswordAuthServer,
+    AbstractNativeServer,
+):
+    capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.GIT,
+        ServerCapability.FIREWALL,
+        ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.NATIVE,
+    }
     DEFAULT_SERVER_INFO: ClassVar[Dict[str, str | int | float]] = {
         "host": "Unknown",
         "cpu_count": 0,
@@ -142,7 +161,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 (
                     "DEBIAN_FRONTEND=noninteractive apt-get -yq "
                     "-o DPkg::Lock::Timeout=300 install "
-                    "mc git zsh host curl openssl || true"
+                    "mc git zsh host curl openssl iptables || true"
                 ),
                 group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
@@ -172,7 +191,7 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
                 group=TaskGroup.NETWORKING,
                 sudo=True,
             )
-            system_info = sys_get_distro_info(conn, self.exec)
+            system_info = self.exec.sys_get_distro_info(conn)
             host_info = self.exec.execute(
                 conn,
                 f"host {conn.host}",
@@ -461,3 +480,27 @@ class UbuntuNativeServer(AbstractServer, AbstractGitServer):
 
     def stop_backend_runtime(self) -> None:
         logger.info("Native backend stop.")
+
+    def firewall_up(
+        self,
+        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
+        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
+    ) -> None:
+        with self.get_server_connection() as conn:
+            self.exec.firewall_up(conn, ports, source_ips_by_port)
+
+    def firewall_down(self) -> None:
+        with self.get_server_connection() as conn:
+            self.exec.firewall_down(conn)
+
+    def firewall_status(self) -> str | None:
+        with self.get_server_connection() as conn:
+            return self.exec.firewall_status(conn)
+
+    def firewall_update(
+        self,
+        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
+        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
+    ) -> None:
+        with self.get_server_connection() as conn:
+            self.exec.firewall_update(conn, ports, source_ips_by_port)

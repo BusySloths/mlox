@@ -16,6 +16,11 @@ groups:
   server:
   backend:
     local:
+capabilities:
+  server:
+    - git
+  backend:
+    - local
 build:
   class_name: mlox.servers.local.local.LocalhostServer
   params:

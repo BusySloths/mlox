@@ -86,9 +86,8 @@ def settings(
                 ),
                 language="bash",
             )
-            st.caption(
-                f"Traefik basic auth hash: `{service.hashed_pw.replace('$', '\\$')}`",
-            )
+            escaped_hash = service.hashed_pw.replace("$", "\\$")
+            st.caption(f"Traefik basic auth hash: `{escaped_hash}`")
 
     with invoke_tab:
         st.subheader("Invoke via cURL")
