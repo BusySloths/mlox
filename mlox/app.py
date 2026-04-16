@@ -152,6 +152,11 @@ pages_infrastructure = [
         icon=":material/network_node:",
     ),
     st.Page(
+        "view/firewall.py",
+        title="Firewall",
+        icon=":material/gpp_good:",
+    ),
+    st.Page(
         "view/services.py",
         title="Services",
         icon=":material/linked_services:",
