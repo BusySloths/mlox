@@ -61,77 +61,85 @@ def _collect_firewall_port_rows(bundle: Bundle) -> List[Dict[str, Any]]:
     return sorted(rows, key=lambda row: (row["port_number"], row["service"]))
 
 
-def _parse_ports(raw: str) -> List[int]:
-    ports: set[int] = set()
-    if not raw.strip():
-        return []
-    for token in raw.replace(" ", "").split(","):
-        if not token:
+def _normalize_ip_values(values: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    ips: list[str] = []
+    for value in values:
+        ip = str(value).strip()
+        if not ip or ip in seen:
             continue
-        if not token.isdigit():
-            raise ValueError(f"Invalid port value: {token}")
-        port = int(token)
-        if port < 1 or port > 65535:
-            raise ValueError(f"Port out of range: {port}")
-        ports.add(port)
-    return sorted(ports)
+        seen.add(ip)
+        ips.append(ip)
+    return ips
 
 
-def _parse_source_whitelist(raw: str) -> Dict[int, Sequence[str] | None]:
-    whitelist: Dict[int, Sequence[str] | None] = {}
-    if not raw.strip():
-        return whitelist
-
-    for lineno, line in enumerate(raw.splitlines(), start=1):
-        text = line.strip()
-        if not text:
-            continue
-        if ":" not in text:
-            raise ValueError(
-                f"Invalid whitelist line {lineno}: '{line}'. Use '<port>: <ip1>,<ip2>'."
-            )
-        port_text, ips_text = text.split(":", 1)
-        port = int(port_text.strip())
-        if port < 1 or port > 65535:
-            raise ValueError(f"Port out of range on line {lineno}: {port}")
-
-        ip_values = [ip.strip() for ip in ips_text.split(",") if ip.strip()]
-        whitelist[port] = ip_values or None
-
-    return whitelist
-
-
-def _source_whitelist_to_text(
+def _normalize_whitelist_state(
     source_ips_by_port: Mapping[int, Sequence[str] | None] | None,
-) -> str:
+) -> Dict[int, list[str]]:
     if not source_ips_by_port:
-        return ""
-
-    lines: List[str] = []
-    for port in sorted(source_ips_by_port):
-        ips = source_ips_by_port[port]
-        if ips:
-            lines.append(f"{port}: {', '.join(ips)}")
-    return "\n".join(lines)
+        return {}
+    return {
+        int(port): _normalize_ip_values(ips or [])
+        for port, ips in source_ips_by_port.items()
+        if _normalize_ip_values(ips or [])
+    }
 
 
-def _filter_visible_rows(
-    port_rows: List[Dict[str, Any]], open_ports: set[int] | None
+def _build_port_table_rows(
+    recommended_rows: List[Dict[str, Any]],
+    open_ports: Sequence[int],
+    whitelist_by_port: Mapping[int, Sequence[str]],
 ) -> List[Dict[str, Any]]:
-    if open_ports is None:
-        return port_rows
+    rows_by_port: Dict[int, Dict[str, set[str] | bool]] = {}
 
-    visible_rows = [row for row in port_rows if row["port_number"] in open_ports]
-    known_ports = {row["port_number"] for row in visible_rows}
-    visible_rows.extend(
-        {
-            "port_number": port,
-            "service": "Unknown",
-            "port_name": "iptables rule",
-        }
-        for port in sorted(open_ports - known_ports)
-    )
-    return visible_rows
+    for row in recommended_rows:
+        port = int(row["port_number"])
+        port_row = rows_by_port.setdefault(
+            port,
+            {"services": set(), "port_names": set(), "custom": False},
+        )
+        cast(set[str], port_row["services"]).add(str(row["service"]))
+        cast(set[str], port_row["port_names"]).add(str(row["port_name"]))
+
+    known_ports = set(rows_by_port)
+    for port in sorted({int(port) for port in open_ports}):
+        port_row = rows_by_port.setdefault(
+            int(port),
+            {"services": set(), "port_names": set(), "custom": True},
+        )
+        if port not in known_ports:
+            port_row["custom"] = True
+            cast(set[str], port_row["services"]).add("Custom")
+            cast(set[str], port_row["port_names"]).add("Custom Port")
+
+    open_port_set = {int(port) for port in open_ports}
+    table_rows: List[Dict[str, Any]] = []
+    for port in sorted(rows_by_port):
+        if port not in open_port_set:
+            continue
+        row = rows_by_port[port]
+        whitelist = _normalize_ip_values(whitelist_by_port.get(port, []))
+        table_rows.append(
+            {
+                "Port": port,
+                "Service": ", ".join(sorted(cast(set[str], row["services"]))),
+                "Port Name": ", ".join(sorted(cast(set[str], row["port_names"]))),
+                "Whitelisted IPs": whitelist,
+            }
+        )
+    return table_rows
+
+
+def _source_rules_for_open_ports(
+    open_ports: Sequence[int],
+    whitelist_by_port: Mapping[int, Sequence[str]],
+) -> Dict[int, Sequence[str]]:
+    open_port_set = {int(port) for port in open_ports}
+    return {
+        port: ips
+        for port, ips in whitelist_by_port.items()
+        if port in open_port_set and _normalize_ip_values(ips)
+    }
 
 
 def _apply_firewall(
@@ -178,7 +186,9 @@ def firewall() -> None:
         server = bundle.server
         firewall_status = server.firewall_status()
         open_ports = UbuntuTaskExecutor._parse_iptables_allowed_ports(firewall_status)
-        allowed_rules = UbuntuTaskExecutor._parse_iptables_allowed_rules(firewall_status)
+        allowed_rules = UbuntuTaskExecutor._parse_iptables_allowed_rules(
+            firewall_status
+        )
         source_by_port: Dict[int, list[str]] = {}
         if allowed_rules:
             for port, source in allowed_rules:
@@ -204,7 +214,9 @@ def firewall() -> None:
                 "Name": bundle.name,
                 "IP": server.ip,
                 "State": server.state,
-                "Firewall": "🟢 Active" if _is_firewall_up(firewall_status) else "⚪ Inactive",
+                "Firewall": "🟢 Active"
+                if _is_firewall_up(firewall_status)
+                else "⚪ Inactive",
                 "Open Ports": len(open_ports or []),
                 "Recommended": len(recommended_ports),
                 "Server UUID": server.uuid,
@@ -245,90 +257,171 @@ def firewall() -> None:
 
     st.divider()
     st.subheader(f"Firewall settings · {bundle.name} ({server.ip})")
-    st.code(firewall_status or "Could not fetch firewall status", language="bash")
+    f_is_up = _is_firewall_up(firewall_status)
+    if not f_is_up:
+        st.info("This server has no firewall enabled.")
+        if st.button("Enable Firewall", type="primary"):
+            _apply_firewall(bundle, "up", recommended_ports, None)
+            st.success(
+                f"Firewall enabled for {bundle.name} with ports: {recommended_ports}"
+            )
+            st.rerun()
+        return
 
-    visible_rows = _filter_visible_rows(recommended_rows, open_ports)
     st.caption(
-        "Known ports include SSH plus service ports. Active iptables rules outside known services are shown as 'Unknown'."
+        "Every port in the table is open. Select ports to remove or whitelist them, "
+        "or add a custom port. Changes are applied immediately."
     )
-    st.dataframe(
-        visible_rows,
+
+    current_ports = sorted(open_ports or set())
+    whitelist_by_port = _normalize_whitelist_state(source_by_port)
+    custom_port_input_key = f"firewall-custom-port-input-{server.uuid}"
+
+    if custom_port_input_key not in st.session_state:
+        st.session_state[custom_port_input_key] = 8080
+
+    table_rows = _build_port_table_rows(
+        recommended_rows,
+        current_ports,
+        whitelist_by_port,
+    )
+    port_table = pd.DataFrame(
+        table_rows,
+        columns=["Port", "Service", "Port Name", "Whitelisted IPs"],
+    )
+    selection = st.dataframe(
+        port_table,
+        key=f"firewall-port-table-{server.uuid}",
         hide_index=True,
         use_container_width=True,
+        selection_mode="multi-row",
+        on_select="rerun",
+        column_order=[
+            "Port",
+            "Service",
+            "Port Name",
+            "Whitelisted IPs",
+        ],
         column_config={
-            "port_number": st.column_config.NumberColumn("Port"),
-            "service": st.column_config.TextColumn("Service"),
-            "port_name": st.column_config.TextColumn("Port Name"),
+            "Port": st.column_config.NumberColumn("Port"),
+            "Service": st.column_config.TextColumn("Service"),
+            "Port Name": st.column_config.TextColumn("Port Name"),
+            "Whitelisted IPs": st.column_config.ListColumn(
+                "Whitelisted IPs",
+                help="Source IPs or CIDRs allowed for this port. Empty means open to any source.",
+            ),
         },
     )
 
-    ports_key = f"firewall-ports-{server.uuid}"
-    whitelist_key = f"firewall-whitelist-{server.uuid}"
-    if ports_key not in st.session_state:
-        seeded_ports = sorted(set(recommended_ports) | set(open_ports or set()))
-        st.session_state[ports_key] = ", ".join(str(port) for port in seeded_ports)
-    if whitelist_key not in st.session_state:
-        st.session_state[whitelist_key] = _source_whitelist_to_text(source_by_port)
+    selected_indexes = selection.get("selection", {}).get("rows", [])
+    selected_ports = [int(table_rows[index]["Port"]) for index in selected_indexes]
 
-    st.markdown("#### Port Controls")
-    st.text_input(
-        "Allowed ports (comma-separated)",
-        key=ports_key,
-        help="Example: 22, 80, 443, 5000",
+    st.markdown("#### Selected Ports")
+    selected_label = (
+        f"Selected: {', '.join(str(port) for port in selected_ports)}"
+        if selected_ports
+        else "No ports selected"
     )
+    st.caption(selected_label)
 
-    quick_port_key = f"firewall-quick-port-{server.uuid}"
-    if quick_port_key not in st.session_state:
-        st.session_state[quick_port_key] = 8080
-    q1, q2, q3 = st.columns([2, 1, 1])
-    q1.number_input(
-        "Quick custom port",
-        key=quick_port_key,
+    if st.button(
+        "Remove Selected Ports",
+        disabled=not selected_ports,
+    ):
+        selected_port_set = set(selected_ports)
+        next_ports = [port for port in current_ports if port not in selected_port_set]
+        next_whitelist = _source_rules_for_open_ports(
+            next_ports,
+            whitelist_by_port,
+        )
+        _apply_firewall(
+            bundle,
+            "update",
+            next_ports,
+            next_whitelist or None,
+        )
+        st.success(f"Removed ports: {sorted(selected_port_set)}")
+        st.rerun()
+
+    current_ip_options = sorted(
+        {ip for ips in whitelist_by_port.values() for ip in _normalize_ip_values(ips)}
+    )
+    selected_ip_defaults = sorted(
+        {
+            ip
+            for port in selected_ports
+            for ip in _normalize_ip_values(whitelist_by_port.get(port, []))
+        }
+    )
+    selected_port_token = "-".join(str(port) for port in selected_ports) or "none"
+    selected_ips_key = f"firewall-selected-ips-{server.uuid}-{selected_port_token}"
+    st.markdown("#### Whitelist Selected Ports")
+    w1, w2 = st.columns([3, 1], vertical_alignment="bottom")
+    selected_ips = w1.multiselect(
+        "Source IPs or CIDRs",
+        options=sorted(set(current_ip_options) | set(selected_ip_defaults)),
+        default=selected_ip_defaults,
+        accept_new_options=True,
+        disabled=not selected_ports,
+        placeholder="Add IPs or CIDRs",
+        help="Applies the same whitelist to every selected port. Empty allows any source.",
+        key=selected_ips_key,
+    )
+    if w2.button(
+        "Apply Whitelist",
+        disabled=not selected_ports,
+        use_container_width=True,
+    ):
+        updated_whitelist = dict(whitelist_by_port)
+        ips = _normalize_ip_values(selected_ips)
+        for port in selected_ports:
+            if ips:
+                updated_whitelist[port] = ips
+            else:
+                updated_whitelist.pop(port, None)
+        next_whitelist = _source_rules_for_open_ports(
+            current_ports,
+            updated_whitelist,
+        )
+        _apply_firewall(
+            bundle,
+            "update",
+            current_ports,
+            next_whitelist or None,
+        )
+        st.success(f"Updated whitelist for ports: {selected_ports}")
+        st.rerun()
+
+    st.markdown("#### Add Custom Port")
+    c1, c2 = st.columns([1, 1], vertical_alignment="bottom")
+    c1.number_input(
+        "Port",
+        key=custom_port_input_key,
         min_value=1,
         max_value=65535,
         step=1,
     )
-    if q2.button("Open Port", type="primary", use_container_width=True):
-        ports = _parse_ports(st.session_state[ports_key])
-        ports = sorted(set(ports) | {int(st.session_state[quick_port_key])})
-        st.session_state[ports_key] = ", ".join(str(port) for port in ports)
-        st.rerun()
-    if q3.button("Close Port", use_container_width=True):
-        ports = _parse_ports(st.session_state[ports_key])
-        ports = [p for p in ports if p != int(st.session_state[quick_port_key])]
-        st.session_state[ports_key] = ", ".join(str(port) for port in ports)
-        st.rerun()
-
-    st.markdown("#### Source IP Whitelist (optional)")
-    st.text_area(
-        "Per-port whitelist",
-        key=whitelist_key,
-        help="One line per port. Format: '<port>: <ip-or-cidr>[, <ip-or-cidr>]'. Example: '22: 10.0.0.5/32'.",
-        height=120,
-    )
-
-    parsed_ports: List[int] = []
-    parsed_whitelist: Dict[int, Sequence[str] | None] = {}
-    try:
-        parsed_ports = _parse_ports(st.session_state[ports_key])
-        parsed_whitelist = _parse_source_whitelist(st.session_state[whitelist_key])
-    except ValueError as exc:
-        st.error(str(exc))
-
-    f_is_up = _is_firewall_up(firewall_status)
-    b1, b2, b3 = st.columns(3)
-    if b1.button("Enable Firewall", type="primary", disabled=f_is_up):
-        _apply_firewall(bundle, "up", parsed_ports, parsed_whitelist or None)
-        st.success(f"Firewall enabled for {bundle.name} with ports: {parsed_ports}")
+    if c2.button("Add Port", type="primary", use_container_width=True):
+        custom_port = int(st.session_state[custom_port_input_key])
+        next_ports = sorted(set(current_ports) | {custom_port})
+        next_whitelist = _source_rules_for_open_ports(
+            next_ports,
+            whitelist_by_port,
+        )
+        _apply_firewall(
+            bundle,
+            "update",
+            next_ports,
+            next_whitelist or None,
+        )
+        st.success(f"Added port: {custom_port}")
         st.rerun()
 
-    if b2.button("Update Rules", type="primary", disabled=not f_is_up):
-        _apply_firewall(bundle, "update", parsed_ports, parsed_whitelist or None)
-        st.success(f"Firewall updated for {bundle.name}. Allowed ports: {parsed_ports}")
-        st.rerun()
+    with st.expander("Raw firewall status"):
+        st.code(firewall_status or "Could not fetch firewall status", language="bash")
 
-    if b3.button("Disable Firewall", disabled=not f_is_up):
-        _apply_firewall(bundle, "down", parsed_ports, parsed_whitelist or None)
+    if st.button("Disable Firewall"):
+        _apply_firewall(bundle, "down", current_ports, whitelist_by_port or None)
         st.success(f"Firewall disabled for {bundle.name}.")
         st.rerun()
 
