@@ -35,7 +35,7 @@ from mlox.config import (
     load_all_service_configs,
 )
 from mlox.service_registry import register_service, get_service_registry
-from mlox.server import AbstractServer
+from mlox.server import AbstractServer, ServerCapability
 from mlox.service import AbstractService
 from mlox.utils import (
     dataclass_to_dict,
@@ -115,6 +115,24 @@ class Infrastructure:
                 if group in list(self.configs[s.service_config_id].groups.keys()):
                     services.append(s)
         return services
+
+    def filter_server_by_capability(
+        self, capability: ServerCapability | str
+    ) -> List[AbstractServer]:
+        capability_value = (
+            capability.value
+            if isinstance(capability, ServerCapability)
+            else str(capability).strip().lower()
+        )
+        servers: List[AbstractServer] = list()
+        for bundle in self.bundles:
+            server_capabilities = {
+                c.value if isinstance(c, ServerCapability) else str(c).strip().lower()
+                for c in getattr(bundle.server, "capabilities", set())
+            }
+            if capability_value in server_capabilities:
+                servers.append(bundle.server)
+        return servers
 
     def get_bundle_by_service(self, service: AbstractService) -> Optional[Bundle]:
         for bundle in self.bundles:
