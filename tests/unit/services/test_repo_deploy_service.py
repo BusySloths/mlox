@@ -57,6 +57,12 @@ class FakeExec:
     def fs_delete_dir(self, conn, path):
         self._record("fs_delete_dir", path)
 
+<<<<<<< ours
+=======
+    def execute(self, conn, command, group=None, description=""):
+        self._record("execute", command, group, description)
+
+>>>>>>> theirs
 
 def _svc(compose_file="docker-compose.yaml"):
     service = RepoDeployDockerService(
@@ -125,3 +131,41 @@ def test_check_service_states_and_save_env_vars():
     service.save_env_vars(conn, {"A": "1", "B": "2"})
     assert service.env_vars == {"A": "1", "B": "2"}
     assert service.exec.appended["/tmp/stack/.env"] == ["A=1", "B=2"]
+<<<<<<< ours
+=======
+
+
+def test_update_and_redeploy_pulls_repo_and_restarts_compose():
+    conn = SimpleNamespace(host="example.test")
+    pulled = {"called": False}
+
+    class _RepoSvc:
+        repo_name = "my-repo"
+        target_path = "/repos"
+
+        def git_pull(self, _conn):
+            pulled["called"] = True
+
+    service = RepoDeployDockerService(
+        **BASE,
+        repo_uuid="repo-uuid",
+        compose_file="compose/app.yaml",
+    )
+    service.exec = FakeExec()
+    service.env_vars = {"A": "1"}
+    service.get_dependent_service = lambda _uuid: _RepoSvc()
+    service.exec.files["/repos/my-repo/compose/app.yaml"] = {
+        "services": {"app": {"image": "demo", "ports": ["8080:8080"]}}
+    }
+
+    service.update_and_redeploy(conn, compose_service="app")
+
+    assert pulled["called"] is True
+    execute_calls = [c for c in service.exec.calls if c[0] == "execute"]
+    expected = (
+        "docker compose --env-file /tmp/stack/.env "
+        "-f /tmp/stack/docker-compose.yaml up --build -d app"
+    )
+    assert any(expected in c[1][0] for c in execute_calls)
+    assert service.state == "running"
+>>>>>>> theirs
