@@ -1,0 +1,151 @@
+import re
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Dict
+
+from mlox.service import AbstractService
+
+logger = logging.getLogger(__name__)
+
+_ENV_TOKEN_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(?::-?)([^}]*))?\}")
+
+
+@dataclass
+class RepoDeployDockerService(AbstractService):
+    repo_uuid: str
+    compose_file: str
+    env_vars: Dict[str, str] = field(default_factory=dict)
+
+    def _get_repo_root(self):
+        repo_service = self.get_dependent_service(self.repo_uuid)
+        if repo_service is None:
+            raise ValueError(
+                f"Dependent repository service could not be found for uuid '{self.repo_uuid}'"
+            )
+
+        repo_name = getattr(repo_service, "repo_name", "")
+        repo_target_path = getattr(repo_service, "target_path", "")
+        if not repo_name or not repo_target_path:
+            raise ValueError(
+                "Dependent repository service does not expose a usable repository path"
+            )
+        return f"{repo_target_path}/{repo_name}"
+
+    @staticmethod
+    def _extract_tokens(value: Any) -> Dict[str, str]:
+        found: Dict[str, str] = {}
+        if isinstance(value, str):
+            for key, default in _ENV_TOKEN_PATTERN.findall(value):
+                found[key] = default or ""
+        elif isinstance(value, dict):
+            for nested in value.values():
+                found.update(RepoDeployDockerService._extract_tokens(nested))
+        elif isinstance(value, list):
+            for nested in value:
+                found.update(RepoDeployDockerService._extract_tokens(nested))
+        return found
+
+    def _discover_from_compose(self, conn, compose_path: str) -> None:
+        compose_data = self.exec.fs_read_file(conn, compose_path, format="yaml")
+        if not isinstance(compose_data, dict):
+            raise ValueError(f"Compose file does not contain a YAML mapping: {compose_path}")
+
+        services = compose_data.get("services", {})
+        if not isinstance(services, dict) or not services:
+            raise ValueError(
+                f"Compose file does not contain a non-empty 'services' mapping: {compose_path}"
+            )
+
+        compose_labels: Dict[str, str] = {}
+        discovered_ports: Dict[str, int] = {}
+        discovered_env = dict(self.env_vars)
+
+        for service_name, service_cfg in services.items():
+            if not isinstance(service_cfg, dict):
+                continue
+
+            compose_labels[service_name] = service_name
+            token_defaults = self._extract_tokens(service_cfg)
+            for key, default in token_defaults.items():
+                discovered_env.setdefault(key, default)
+
+            for idx, entry in enumerate(service_cfg.get("ports", [])):
+                host_port: int | None = None
+                if isinstance(entry, int):
+                    host_port = entry
+                elif isinstance(entry, str):
+                    normalized = entry.split("/", 1)[0]
+                    token_match = _ENV_TOKEN_PATTERN.search(normalized)
+                    if token_match:
+                        token_name = token_match.group(1)
+                        token_default = token_match.group(2) or ""
+                        discovered_env.setdefault(token_name, token_default)
+                        candidate = discovered_env.get(token_name, token_default)
+                        if str(candidate).isdigit():
+                            host_port = int(candidate)
+                    else:
+                        parts = normalized.split(":")
+                        if len(parts) >= 2 and parts[-2].isdigit():
+                            host_port = int(parts[-2])
+                        elif len(parts) >= 1 and parts[0].isdigit():
+                            host_port = int(parts[0])
+
+                if host_port is not None:
+                    key = f"{service_name}:{idx + 1}"
+                    discovered_ports[key] = host_port
+
+        self.compose_service_names = compose_labels
+        self.service_ports = discovered_ports
+        self.env_vars = discovered_env
+
+    def setup(self, conn) -> None:
+        repo_root = self._get_repo_root()
+        compose_source = f"{repo_root}/{self.compose_file.lstrip('/')}"
+
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_copy_remote_file(
+            conn,
+            compose_source,
+            f"{self.target_path}/{self.target_docker_script}",
+        )
+
+        self._discover_from_compose(conn, compose_source)
+
+        env_file_path = f"{self.target_path}/{self.target_docker_env}"
+        self.exec.fs_create_empty_file(conn, env_file_path)
+        for key, value in self.env_vars.items():
+            self.exec.fs_append_line(conn, env_file_path, f"{key}={value}")
+
+    def teardown(self, conn) -> None:
+        self.compose_down(conn, remove_volumes=True)
+        self.exec.fs_delete_dir(conn, self.target_path)
+
+    def spin_up(self, conn) -> bool:
+        return self.compose_up(conn)
+
+    def spin_down(self, conn) -> bool:
+        return self.compose_down(conn, remove_volumes=True)
+
+    def check(self, conn) -> Dict[str, str]:
+        statuses = self.compose_service_status(conn)
+        if not statuses:
+            return {"status": "unknown", "services": {}}
+
+        service_states = [str(v).lower() for v in statuses.values()]
+        if all("running" in state for state in service_states):
+            return {"status": "running", "services": statuses}
+        if any(state in {"created", "restarting", "starting"} for state in service_states):
+            return {"status": "starting", "services": statuses}
+        if all(state in {"exited", "dead", "stopped"} for state in service_states):
+            return {"status": "stopped", "services": statuses}
+        return {"status": "unknown", "services": statuses}
+
+    def get_secrets(self) -> Dict[str, Dict]:
+        return {}
+
+    def save_env_vars(self, conn, env_vars: Dict[str, str]) -> None:
+        self.env_vars = dict(env_vars)
+        env_file_path = f"{self.target_path}/{self.target_docker_env}"
+        self.exec.fs_create_empty_file(conn, env_file_path)
+        for key, value in self.env_vars.items():
+            self.exec.fs_append_line(conn, env_file_path, f"{key}={value}")
