@@ -58,6 +58,12 @@ class FakeExec:
         self._record("fs_delete_dir", path)
 
 <<<<<<< ours
+<<<<<<< ours
+=======
+    def execute(self, conn, command, group=None, description=""):
+        self._record("execute", command, group, description)
+
+>>>>>>> theirs
 =======
     def execute(self, conn, command, group=None, description=""):
         self._record("execute", command, group, description)
@@ -132,7 +138,10 @@ def test_check_service_states_and_save_env_vars():
     assert service.env_vars == {"A": "1", "B": "2"}
     assert service.exec.appended["/tmp/stack/.env"] == ["A=1", "B=2"]
 <<<<<<< ours
+<<<<<<< ours
 =======
+=======
+>>>>>>> theirs
 
 
 def test_update_and_redeploy_pulls_repo_and_restarts_compose():
@@ -168,4 +177,7 @@ def test_update_and_redeploy_pulls_repo_and_restarts_compose():
     )
     assert any(expected in c[1][0] for c in execute_calls)
     assert service.state == "running"
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs

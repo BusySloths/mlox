@@ -1,6 +1,10 @@
 import re
 import logging
 <<<<<<< ours
+<<<<<<< ours
+=======
+import shlex
+>>>>>>> theirs
 =======
 import shlex
 >>>>>>> theirs
@@ -22,7 +26,11 @@ class RepoDeployDockerService(AbstractService):
     target_docker_env: str = field(default=".env", init=False)
 
 <<<<<<< ours
+<<<<<<< ours
     def _get_repo_root(self):
+=======
+    def _get_repo_service(self):
+>>>>>>> theirs
 =======
     def _get_repo_service(self):
 >>>>>>> theirs
@@ -32,12 +40,18 @@ class RepoDeployDockerService(AbstractService):
                 f"Dependent repository service could not be found for uuid '{self.repo_uuid}'"
             )
 <<<<<<< ours
+<<<<<<< ours
 
 =======
+=======
+>>>>>>> theirs
         return repo_service
 
     def _get_repo_root(self):
         repo_service = self._get_repo_service()
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
         repo_name = getattr(repo_service, "repo_name", "")
         repo_target_path = getattr(repo_service, "target_path", "")
@@ -168,7 +182,10 @@ class RepoDeployDockerService(AbstractService):
         for key, value in self.env_vars.items():
             self.exec.fs_append_line(conn, env_file_path, f"{key}={value}")
 <<<<<<< ours
+<<<<<<< ours
 =======
+=======
+>>>>>>> theirs
 
     def update_and_redeploy(self, conn, compose_service: str = "app") -> None:
         repo_service = self._get_repo_service()
@@ -194,4 +211,7 @@ class RepoDeployDockerService(AbstractService):
             compose_cmd = f"{compose_cmd} {shlex.quote(compose_service)}"
         self.exec.execute(conn, compose_cmd)
         self.state = "running"
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
