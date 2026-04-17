@@ -98,7 +98,7 @@ def test_setup_discovers_services_ports_and_env_tokens():
     assert service.env_vars["WEB_PORT"] == "8080"
     assert service.env_vars["TZ"] == "UTC"
 
-    env_lines = service.exec.appended["/tmp/stack/service.env"]
+    env_lines = service.exec.appended["/tmp/stack/.env"]
     assert "WEB_PORT=8080" in env_lines
     assert "TZ=UTC" in env_lines
 
@@ -124,4 +124,4 @@ def test_check_service_states_and_save_env_vars():
 
     service.save_env_vars(conn, {"A": "1", "B": "2"})
     assert service.env_vars == {"A": "1", "B": "2"}
-    assert service.exec.appended["/tmp/stack/service.env"] == ["A=1", "B=2"]
+    assert service.exec.appended["/tmp/stack/.env"] == ["A=1", "B=2"]

@@ -15,6 +15,7 @@ class RepoDeployDockerService(AbstractService):
     repo_uuid: str
     compose_file: str
     env_vars: Dict[str, str] = field(default_factory=dict)
+    target_docker_env: str = field(default=".env", init=False)
 
     def _get_repo_root(self):
         repo_service = self.get_dependent_service(self.repo_uuid)
@@ -103,6 +104,10 @@ class RepoDeployDockerService(AbstractService):
         compose_source = f"{repo_root}/{self.compose_file.lstrip('/')}"
 
         self.exec.fs_create_dir(conn, self.target_path)
+        # Compose requires the env file to exist before `docker compose up`.
+        env_file_path = f"{self.target_path}/{self.target_docker_env}"
+        self.exec.fs_create_empty_file(conn, env_file_path)
+
         self.exec.fs_copy_remote_file(
             conn,
             compose_source,
@@ -111,8 +116,6 @@ class RepoDeployDockerService(AbstractService):
 
         self._discover_from_compose(conn, compose_source)
 
-        env_file_path = f"{self.target_path}/{self.target_docker_env}"
-        self.exec.fs_create_empty_file(conn, env_file_path)
         for key, value in self.env_vars.items():
             self.exec.fs_append_line(conn, env_file_path, f"{key}={value}")
 
