@@ -42,20 +42,6 @@ def _find_compose_files(bundle: Bundle, repo_service: Any) -> list[str]:
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any] | None:
-<<<<<<< ours
-<<<<<<< ours
-    repos = [
-        repo
-        for repo in infra.filter_by_group("repository")
-        if infra.get_bundle_by_service(repo) == bundle
-    ]
-
-    if not repos:
-        st.info(
-            "No repository services are available on this server. Install a GitHub repository service first."
-=======
-=======
->>>>>>> theirs
     docker_bundles = infra.filter_bundles_by_backend("docker")
     repos = []
     repo_to_bundle: dict[str, Bundle] = {}
@@ -69,29 +55,12 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any] | None:
     if not repos:
         st.info(
             "No repository services are available on docker servers. Install a GitHub repository service first."
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
         )
         return None
 
     selected_repo = st.selectbox(
         "Repository service",
         options=repos,
-<<<<<<< ours
-<<<<<<< ours
-        format_func=lambda repo: f"{repo.name} ({repo.uuid[:8]})",
-        key="repo-deploy-select-repo",
-    )
-
-    compose_files = _find_compose_files(bundle, selected_repo)
-    if not compose_files:
-        st.warning("No docker compose files found in the selected repository.")
-
-=======
-=======
->>>>>>> theirs
         format_func=lambda repo: (
             f"{repo.name} ({repo.uuid[:8]}) "
             f"@ {repo_to_bundle[repo.uuid].name} ({repo_to_bundle[repo.uuid].server.ip})"
@@ -110,10 +79,6 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any] | None:
             f"`{selected_repo_bundle.server.ip}`."
         )
 
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
     compose_file = st.selectbox(
         "Compose file",
         options=compose_files,
@@ -134,14 +99,7 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any] | None:
         "${REPO_DEPLOY_NAME}": target_suffix,
         "${REPO_DEPLOY_REPO_UUID}": selected_repo.uuid,
         "${REPO_DEPLOY_COMPOSE_FILE}": compose_file,
-<<<<<<< ours
-<<<<<<< ours
-=======
         "__MLOX_TARGET_SERVER_IP": selected_repo_bundle.server.ip,
->>>>>>> theirs
-=======
-        "__MLOX_TARGET_SERVER_IP": selected_repo_bundle.server.ip,
->>>>>>> theirs
     }
 
 
@@ -191,11 +149,6 @@ def settings(infra: Infrastructure, bundle: Bundle, service: RepoDeployDockerSer
         save_infrastructure()
         st.success("Updated environment file.")
         st.rerun()
-<<<<<<< ours
-<<<<<<< ours
-=======
-=======
->>>>>>> theirs
 
     st.markdown("#### Update from repository")
     col_service, col_btn = st.columns([3, 1])
@@ -212,7 +165,3 @@ def settings(infra: Infrastructure, bundle: Bundle, service: RepoDeployDockerSer
             save_infrastructure()
         st.success("Updated repository and redeployed service.")
         st.rerun()
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs

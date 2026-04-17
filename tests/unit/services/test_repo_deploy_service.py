@@ -57,18 +57,12 @@ class FakeExec:
     def fs_delete_dir(self, conn, path):
         self._record("fs_delete_dir", path)
 
-<<<<<<< ours
-<<<<<<< ours
-=======
-    def execute(self, conn, command, group=None, description=""):
-        self._record("execute", command, group, description)
+    def execute(self, conn, command, **kwargs):
+        self._record("execute", command, kwargs)
 
->>>>>>> theirs
-=======
-    def execute(self, conn, command, group=None, description=""):
-        self._record("execute", command, group, description)
+    def git_run(self, conn, git_args, *, working_dir, env=None, sudo=False, pty=False):
+        self._record("git_run", git_args, working_dir, env, sudo, pty)
 
->>>>>>> theirs
 
 def _svc(compose_file="docker-compose.yaml"):
     service = RepoDeployDockerService(
@@ -137,11 +131,6 @@ def test_check_service_states_and_save_env_vars():
     service.save_env_vars(conn, {"A": "1", "B": "2"})
     assert service.env_vars == {"A": "1", "B": "2"}
     assert service.exec.appended["/tmp/stack/.env"] == ["A=1", "B=2"]
-<<<<<<< ours
-<<<<<<< ours
-=======
-=======
->>>>>>> theirs
 
 
 def test_update_and_redeploy_pulls_repo_and_restarts_compose():
@@ -176,8 +165,5 @@ def test_update_and_redeploy_pulls_repo_and_restarts_compose():
         "-f /tmp/stack/docker-compose.yaml up --build -d app"
     )
     assert any(expected in c[1][0] for c in execute_calls)
+    assert any(c[1][1]["sudo"] is True for c in execute_calls)
     assert service.state == "running"
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs

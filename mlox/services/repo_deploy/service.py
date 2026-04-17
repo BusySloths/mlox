@@ -1,21 +1,17 @@
 import re
 import logging
-<<<<<<< ours
-<<<<<<< ours
-=======
 import shlex
->>>>>>> theirs
-=======
-import shlex
->>>>>>> theirs
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
+from mlox.execution import TaskGroup
 from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
 
-_ENV_TOKEN_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(?::-?)([^}]*))?\}")
+_ENV_TOKEN_PATTERN = re.compile(
+    r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(?::-|-)([^}]*))?\}"
+)
 
 
 @dataclass
@@ -25,34 +21,16 @@ class RepoDeployDockerService(AbstractService):
     env_vars: Dict[str, str] = field(default_factory=dict)
     target_docker_env: str = field(default=".env", init=False)
 
-<<<<<<< ours
-<<<<<<< ours
-    def _get_repo_root(self):
-=======
     def _get_repo_service(self):
->>>>>>> theirs
-=======
-    def _get_repo_service(self):
->>>>>>> theirs
         repo_service = self.get_dependent_service(self.repo_uuid)
         if repo_service is None:
             raise ValueError(
                 f"Dependent repository service could not be found for uuid '{self.repo_uuid}'"
             )
-<<<<<<< ours
-<<<<<<< ours
-
-=======
-=======
->>>>>>> theirs
         return repo_service
 
     def _get_repo_root(self):
         repo_service = self._get_repo_service()
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
         repo_name = getattr(repo_service, "repo_name", "")
         repo_target_path = getattr(repo_service, "target_path", "")
         if not repo_name or not repo_target_path:
@@ -181,11 +159,6 @@ class RepoDeployDockerService(AbstractService):
         self.exec.fs_create_empty_file(conn, env_file_path)
         for key, value in self.env_vars.items():
             self.exec.fs_append_line(conn, env_file_path, f"{key}={value}")
-<<<<<<< ours
-<<<<<<< ours
-=======
-=======
->>>>>>> theirs
 
     def update_and_redeploy(self, conn, compose_service: str = "app") -> None:
         repo_service = self._get_repo_service()
@@ -195,8 +168,14 @@ class RepoDeployDockerService(AbstractService):
 
         if hasattr(repo_service, "git_pull"):
             repo_service.git_pull(conn)
+        elif hasattr(self.exec, "git_run"):
+            self.exec.git_run(conn, ["pull"], working_dir=repo_root)
         else:
-            self.exec.execute(conn, f"cd {shlex.quote(repo_root)} && git pull")
+            self.exec.execute(
+                conn,
+                f"cd {shlex.quote(repo_root)} && git pull",
+                group=TaskGroup.VERSION_CONTROL,
+            )
 
         self.exec.fs_copy_remote_file(conn, compose_source, compose_target)
         self._discover_from_compose(conn, compose_source)
@@ -209,9 +188,10 @@ class RepoDeployDockerService(AbstractService):
         )
         if compose_service:
             compose_cmd = f"{compose_cmd} {shlex.quote(compose_service)}"
-        self.exec.execute(conn, compose_cmd)
+        self.exec.execute(
+            conn,
+            compose_cmd,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            sudo=True,
+        )
         self.state = "running"
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
