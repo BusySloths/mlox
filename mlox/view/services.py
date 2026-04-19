@@ -484,10 +484,14 @@ def _render_add_service_dialog():
     if col1.button("Add Service", type="primary", use_container_width=True):
         if selected_bundle:
             with st.spinner(f"Adding {config.name}..."):
-                ret = infra.add_service(selected_bundle.server.ip, config, params or {})
+                setup_params = dict(params or {})
+                target_server_ip = setup_params.pop(
+                    "__MLOX_TARGET_SERVER_IP", selected_bundle.server.ip
+                )
+                ret = infra.add_service(target_server_ip, config, setup_params)
                 if ret:
                     st.success(
-                        f"Successfully added {config.name} to {selected_bundle.name}"
+                        f"Successfully added {config.name} to {ret.name}"
                     )
                     save_infra()
                     st.session_state.show_add_dialog = False

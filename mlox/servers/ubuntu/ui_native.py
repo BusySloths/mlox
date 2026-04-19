@@ -1,10 +1,90 @@
 import streamlit as st
 
-from typing import Dict
+from typing import Any, Dict, List, Sequence
 
 from mlox.config import ServiceConfig
+from mlox.executors import UbuntuTaskExecutor
 from mlox.infra import Infrastructure, Bundle
 from mlox.servers.ubuntu.native import UbuntuNativeServer
+
+
+def _is_firewall_up(firewall_status: str | None) -> bool:
+    return bool(firewall_status and "Status: active" in firewall_status)
+
+
+def _collect_firewall_port_rows(
+    bundle: Bundle, server: UbuntuNativeServer
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = [
+        {
+            "port_number": int(server.port),
+            "service": "Server",
+            "port_name": "SSH",
+        }
+    ]
+    seen = {(int(server.port), "Server", "SSH")}
+
+    for service in bundle.services:
+        service_name = getattr(service, "name", service.__class__.__name__)
+        for port_name, port in getattr(service, "service_ports", {}).items():
+            row_key = (int(port), service_name, str(port_name))
+            if row_key in seen:
+                continue
+            seen.add(row_key)
+            rows.append(
+                {
+                    "port_number": int(port),
+                    "service": service_name,
+                    "port_name": str(port_name),
+                }
+            )
+
+    return sorted(rows, key=lambda row: row["port_number"])
+
+
+def _collect_firewall_ports(bundle: Bundle, server: UbuntuNativeServer) -> List[int]:
+    rows = _collect_firewall_port_rows(bundle, server)
+    return sorted({int(row["port_number"]) for row in rows})
+
+
+def _parse_firewall_open_ports(firewall_status: str | None) -> set[int] | None:
+    return UbuntuTaskExecutor._parse_iptables_allowed_ports(firewall_status)
+
+
+def _filter_firewall_port_rows(
+    rows: List[Dict[str, Any]], open_ports: Sequence[int] | set[int] | None
+) -> List[Dict[str, Any]]:
+    if open_ports is None:
+        return rows
+
+    open_port_set = {int(port) for port in open_ports}
+    known_ports = {int(row["port_number"]) for row in rows}
+    filtered_rows = [
+        row for row in rows if int(row["port_number"]) in open_port_set
+    ]
+    for port in sorted(open_port_set - known_ports):
+        filtered_rows.append(
+            {
+                "port_number": port,
+                "service": "Unknown",
+                "port_name": "iptables rule",
+            }
+        )
+    return filtered_rows
+
+
+def _firewall_status_message(
+    firewall_status: str | None,
+    open_ports: set[int] | None,
+    rows: List[Dict[str, Any]],
+) -> str | None:
+    if firewall_status is None:
+        return "Could not read firewall status. Showing configured ports instead."
+    if not _is_firewall_up(firewall_status):
+        return "Firewall is not up. All ports are open."
+    if not open_ports and not rows:
+        return "No open firewall ports found."
+    return None
 
 
 def form_add_server(sid: str):

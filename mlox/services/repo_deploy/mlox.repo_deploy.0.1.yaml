@@ -1,0 +1,37 @@
+id: repo-deploy-0.1-beta-docker
+name: Repository Docker Deploy
+version: 0.1-beta
+maintainer: Busy Sloths
+description_short: Deploy a docker compose file from an existing repository service.
+description: |
+  Deploy any docker-compose file that already exists in a previously installed
+  repository service. The service runs the selected compose file in place from
+  the repository checkout and writes a .env file into the repository root.
+links:
+  project: https://mlox.org
+  documentation: https://github.com/busysloths/mlox/
+requirements:
+  cpus: 1.0
+  ram_gb: 1.0
+  disk_gb: 1.0
+groups:
+  service:
+  deployment:
+  backend:
+    docker:
+capabilities:
+  server:
+    - docker
+  backend:
+    - docker
+ui:
+  setup: mlox.services.repo_deploy.ui.setup
+  settings: mlox.services.repo_deploy.ui.settings
+build:
+  class_name: mlox.services.repo_deploy.service.RepoDeployDockerService
+  params:
+    name: RepoDeploy:${REPO_DEPLOY_NAME}@${MLOX_SERVER_IP}
+    template: ${MLOX_STACKS_PATH}/repo_deploy/mlox.repo_deploy.0.1.yaml
+    target_path: ${MLOX_USER_HOME}
+    repo_uuid: ${REPO_DEPLOY_REPO_UUID}
+    compose_file: ${REPO_DEPLOY_COMPOSE_FILE}
