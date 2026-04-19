@@ -39,6 +39,53 @@ class RepoDeployDockerService(AbstractService):
             )
         return f"{repo_target_path}/{repo_name}"
 
+    def _use_repo_runtime_paths(self, repo_root: str | None = None) -> str:
+        repo_root = repo_root or self._get_repo_root()
+        compose_file = self.compose_file.lstrip("/")
+        self.target_path = repo_root
+        self.target_docker_script = compose_file
+        return f"{repo_root}/{compose_file}"
+
+    def _env_file_path(self) -> str:
+        return f"{self.target_path}/{self.target_docker_env}"
+
+    def _compose_up(self, conn, compose_service: str = "") -> bool:
+        compose_path = self._use_repo_runtime_paths()
+        compose_cmd = (
+            f"docker compose --project-directory {shlex.quote(self.target_path)} "
+            f"--env-file {shlex.quote(self._env_file_path())} "
+            f"-f {shlex.quote(compose_path)} up --build -d"
+        )
+        if compose_service:
+            compose_cmd = f"{compose_cmd} {shlex.quote(compose_service)}"
+        self.exec.execute(
+            conn,
+            compose_cmd,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            sudo=True,
+        )
+        self.state = "running"
+        return True
+
+    def _compose_down(self, conn, *, remove_volumes: bool = False) -> bool:
+        compose_path = self._use_repo_runtime_paths()
+        compose_cmd = (
+            f"docker compose --project-directory {shlex.quote(self.target_path)} "
+            f"--env-file {shlex.quote(self._env_file_path())} "
+            f"-f {shlex.quote(compose_path)} down"
+        )
+        if remove_volumes:
+            compose_cmd = f"{compose_cmd} --volumes"
+        compose_cmd = f"{compose_cmd} --remove-orphans"
+        self.exec.execute(
+            conn,
+            compose_cmd,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            sudo=True,
+        )
+        self.state = "stopped"
+        return True
+
     @staticmethod
     def _extract_tokens(value: Any) -> Dict[str, str]:
         found: Dict[str, str] = {}
@@ -107,19 +154,11 @@ class RepoDeployDockerService(AbstractService):
         self.env_vars = discovered_env
 
     def setup(self, conn) -> None:
-        repo_root = self._get_repo_root()
-        compose_source = f"{repo_root}/{self.compose_file.lstrip('/')}"
+        compose_source = self._use_repo_runtime_paths()
 
-        self.exec.fs_create_dir(conn, self.target_path)
         # Compose requires the env file to exist before `docker compose up`.
-        env_file_path = f"{self.target_path}/{self.target_docker_env}"
+        env_file_path = self._env_file_path()
         self.exec.fs_create_empty_file(conn, env_file_path)
-
-        self.exec.fs_copy_remote_file(
-            conn,
-            compose_source,
-            f"{self.target_path}/{self.target_docker_script}",
-        )
 
         self._discover_from_compose(conn, compose_source)
 
@@ -127,14 +166,13 @@ class RepoDeployDockerService(AbstractService):
             self.exec.fs_append_line(conn, env_file_path, f"{key}={value}")
 
     def teardown(self, conn) -> None:
-        self.compose_down(conn, remove_volumes=True)
-        self.exec.fs_delete_dir(conn, self.target_path)
+        self._compose_down(conn, remove_volumes=True)
 
     def spin_up(self, conn) -> bool:
-        return self.compose_up(conn)
+        return self._compose_up(conn)
 
     def spin_down(self, conn) -> bool:
-        return self.compose_down(conn, remove_volumes=True)
+        return self._compose_down(conn, remove_volumes=True)
 
     def check(self, conn) -> Dict[str, str]:
         statuses = self.compose_service_status(conn)
@@ -155,16 +193,24 @@ class RepoDeployDockerService(AbstractService):
 
     def save_env_vars(self, conn, env_vars: Dict[str, str]) -> None:
         self.env_vars = dict(env_vars)
-        env_file_path = f"{self.target_path}/{self.target_docker_env}"
+        self._use_repo_runtime_paths()
+        env_file_path = self._env_file_path()
         self.exec.fs_create_empty_file(conn, env_file_path)
         for key, value in self.env_vars.items():
             self.exec.fs_append_line(conn, env_file_path, f"{key}={value}")
 
+    def save_env_text(self, conn, env_text: str, env_vars: Dict[str, str]) -> None:
+        self.env_vars = dict(env_vars)
+        self._use_repo_runtime_paths()
+        content = env_text
+        if content and not content.endswith("\n"):
+            content += "\n"
+        self.exec.fs_write_file(conn, self._env_file_path(), content)
+
     def update_and_redeploy(self, conn, compose_service: str = "app") -> None:
         repo_service = self._get_repo_service()
         repo_root = self._get_repo_root()
-        compose_source = f"{repo_root}/{self.compose_file.lstrip('/')}"
-        compose_target = f"{self.target_path}/{self.target_docker_script}"
+        compose_source = self._use_repo_runtime_paths(repo_root)
 
         if hasattr(repo_service, "git_pull"):
             repo_service.git_pull(conn)
@@ -177,21 +223,6 @@ class RepoDeployDockerService(AbstractService):
                 group=TaskGroup.VERSION_CONTROL,
             )
 
-        self.exec.fs_copy_remote_file(conn, compose_source, compose_target)
         self._discover_from_compose(conn, compose_source)
         self.save_env_vars(conn, self.env_vars)
-
-        env_file_path = f"{self.target_path}/{self.target_docker_env}"
-        compose_cmd = (
-            f"docker compose --env-file {shlex.quote(env_file_path)} "
-            f"-f {shlex.quote(compose_target)} up --build -d"
-        )
-        if compose_service:
-            compose_cmd = f"{compose_cmd} {shlex.quote(compose_service)}"
-        self.exec.execute(
-            conn,
-            compose_cmd,
-            group=TaskGroup.CONTAINER_RUNTIME,
-            sudo=True,
-        )
-        self.state = "running"
+        self._compose_up(conn, compose_service=compose_service)

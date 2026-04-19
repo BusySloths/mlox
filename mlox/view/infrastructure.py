@@ -239,15 +239,28 @@ def tab_server_management(infra: Infrastructure):
         )
         c3.write('<div style="height: 28px;"></div>', unsafe_allow_html=True)
 
-        if c3.button("Update", type="primary", help="Update", icon=":material/update:"):
+        if c3.button("Save", type="primary", help="Save", icon=":material/save:"):
             bundle.name = name
             bundle.tags = tags
             save_infra()
             st.rerun()
 
-        c1, c2, c3, _, c4, c5, c6 = st.columns([10, 15, 10, 17, 18, 15, 25])
+        c1, c2, c3, _, c4, c5, c6 = st.columns([10, 12, 18, 10, 18, 12, 25])
         if c4.button("Refresh Status", icon=":material/refresh:"):
             with st.spinner("Refreshing server status...", show_time=True):
+                check_server_status(bundle.server)
+                save_infra()
+                st.rerun()
+
+        if c3.button(
+            "Update Packages",
+            help="Install available operating system package updates.",
+            icon=":material/system_update_alt:",
+            disabled=bundle.server.state == "starting",
+        ):
+            st.info(f"Installing package updates on server with IP {selected_server}.")
+            with st.spinner("Updating server packages...", show_time=True):
+                bundle.server.update()
                 check_server_status(bundle.server)
                 save_infra()
                 st.rerun()

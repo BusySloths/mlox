@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from mlox.services.repo_deploy.service import RepoDeployDockerService
+from mlox.services.repo_deploy.ui import _env_vars_to_text, _parse_env_text
 
 
 BASE = {
@@ -40,6 +41,10 @@ class FakeExec:
         self._record("fs_append_line", path, line)
         self.appended.setdefault(path, []).append(line)
 
+    def fs_write_file(self, conn, path, content):
+        self._record("fs_write_file", path, content)
+        self.files[path] = content
+
     def docker_up(self, conn, compose_path, env_path):
         self._record("docker_up", compose_path, env_path)
 
@@ -78,6 +83,24 @@ def _svc(compose_file="docker-compose.yaml"):
     return service
 
 
+def test_env_text_helpers_parse_dotenv_style_content():
+    text = "\n".join(
+        [
+            "# ignored",
+            "A=1",
+            "export B=two",
+            "C=value=with=equals",
+            "NO_EQUALS",
+            "",
+        ]
+    )
+
+    parsed = _parse_env_text(text)
+
+    assert parsed == {"A": "1", "B": "two", "C": "value=with=equals"}
+    assert _env_vars_to_text({"B": "2", "A": "1"}) == "A=1\nB=2"
+
+
 def test_setup_discovers_services_ports_and_env_tokens():
     conn = SimpleNamespace(host="example.test")
     service = _svc("compose/app.yaml")
@@ -103,8 +126,13 @@ def test_setup_discovers_services_ports_and_env_tokens():
     assert service.service_ports["worker:2"] == 9123
     assert service.env_vars["WEB_PORT"] == "8080"
     assert service.env_vars["TZ"] == "UTC"
+    assert service.target_path == "/repos/my-repo"
+    assert service.target_docker_script == "compose/app.yaml"
 
-    env_lines = service.exec.appended["/tmp/stack/.env"]
+    assert not any(c[0] == "fs_create_dir" for c in service.exec.calls)
+    assert not any(c[0] == "fs_copy_remote_file" for c in service.exec.calls)
+
+    env_lines = service.exec.appended["/repos/my-repo/.env"]
     assert "WEB_PORT=8080" in env_lines
     assert "TZ=UTC" in env_lines
 
@@ -130,7 +158,35 @@ def test_check_service_states_and_save_env_vars():
 
     service.save_env_vars(conn, {"A": "1", "B": "2"})
     assert service.env_vars == {"A": "1", "B": "2"}
-    assert service.exec.appended["/tmp/stack/.env"] == ["A=1", "B=2"]
+    assert service.exec.appended["/repos/my-repo/.env"] == ["A=1", "B=2"]
+
+
+def test_save_env_text_writes_raw_content_and_updates_env_vars():
+    conn = SimpleNamespace(host="example.test")
+    service = _svc()
+    content = "# keep comment\nA=1\nexport B=two"
+
+    service.save_env_text(conn, content, _parse_env_text(content))
+
+    assert service.env_vars == {"A": "1", "B": "two"}
+    assert service.exec.files["/repos/my-repo/.env"] == f"{content}\n"
+    assert any(c[0] == "fs_write_file" for c in service.exec.calls)
+
+
+def test_teardown_stops_compose_without_deleting_repo_dir():
+    conn = SimpleNamespace(host="example.test")
+    service = _svc("compose/app.yaml")
+
+    service.teardown(conn)
+
+    execute_calls = [c for c in service.exec.calls if c[0] == "execute"]
+    expected = (
+        "docker compose --project-directory /repos/my-repo "
+        "--env-file /repos/my-repo/.env "
+        "-f /repos/my-repo/compose/app.yaml down --volumes --remove-orphans"
+    )
+    assert any(expected in c[1][0] for c in execute_calls)
+    assert not any(c[0] == "fs_delete_dir" for c in service.exec.calls)
 
 
 def test_update_and_redeploy_pulls_repo_and_restarts_compose():
@@ -161,9 +217,11 @@ def test_update_and_redeploy_pulls_repo_and_restarts_compose():
     assert pulled["called"] is True
     execute_calls = [c for c in service.exec.calls if c[0] == "execute"]
     expected = (
-        "docker compose --env-file /tmp/stack/.env "
-        "-f /tmp/stack/docker-compose.yaml up --build -d app"
+        "docker compose --project-directory /repos/my-repo "
+        "--env-file /repos/my-repo/.env "
+        "-f /repos/my-repo/compose/app.yaml up --build -d app"
     )
     assert any(expected in c[1][0] for c in execute_calls)
     assert any(c[1][1]["sudo"] is True for c in execute_calls)
+    assert service.exec.appended["/repos/my-repo/.env"] == ["A=1"]
     assert service.state == "running"

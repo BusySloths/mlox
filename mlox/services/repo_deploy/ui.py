@@ -41,6 +41,50 @@ def _find_compose_files(bundle: Bundle, repo_service: Any) -> list[str]:
     return sorted(set(files))
 
 
+def _env_vars_to_text(env_vars: Dict[str, str] | None) -> str:
+    return "\n".join(
+        f"{key}={value}" for key, value in sorted((env_vars or {}).items())
+    )
+
+
+def _parse_env_text(env_text: str) -> Dict[str, str]:
+    env_vars: Dict[str, str] = {}
+    for line in env_text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("export "):
+            stripped = stripped[len("export ") :].lstrip()
+        if "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        if key:
+            env_vars[key] = value
+    return env_vars
+
+
+def _read_env_text(
+    bundle: Bundle, service: RepoDeployDockerService
+) -> tuple[str, str, str | None]:
+    fallback = _env_vars_to_text(service.env_vars)
+    env_path = ""
+    try:
+        with bundle.server.get_server_connection() as conn:
+            service._use_repo_runtime_paths()
+            env_path = f"{service.target_path}/{service.target_docker_env}"
+            content = service.exec.fs_read_file(
+                conn,
+                env_path,
+                format="string",
+            )
+            if isinstance(content, str):
+                return content.rstrip("\n"), env_path, None
+    except Exception as exc:
+        return fallback, env_path or service.target_docker_env, str(exc)
+    return fallback, env_path or service.target_docker_env, None
+
+
 def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any] | None:
     docker_bundles = infra.filter_bundles_by_backend("docker")
     repos = []
@@ -88,7 +132,7 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict[str, Any] | None:
     )
 
     target_suffix = st.text_input(
-        "Deployment folder name",
+        "Deployment name",
         value=f"repo-deploy-{getattr(selected_repo, 'repo_name', 'service')}",
     )
 
@@ -121,31 +165,33 @@ def settings(infra: Infrastructure, bundle: Bundle, service: RepoDeployDockerSer
         )
 
     st.markdown("#### Environment variables (.env)")
-    env_rows = [
-        {"key": key, "value": value}
-        for key, value in sorted((service.env_vars or {}).items())
-    ]
-    edited_df = st.data_editor(
-        pd.DataFrame(env_rows or [{"key": "", "value": ""}]),
-        num_rows="dynamic",
-        use_container_width=True,
-        key=f"repo-deploy-env-editor-{service.uuid}",
-        column_config={
-            "key": st.column_config.TextColumn("Key", required=True),
-            "value": st.column_config.TextColumn("Value"),
-        },
-        hide_index=True,
+    env_text_default, env_path, env_read_error = _read_env_text(bundle, service)
+    env_editor_key = f"repo-deploy-env-text-{service.uuid}"
+    if env_editor_key not in st.session_state:
+        st.session_state[env_editor_key] = env_text_default
+
+    if env_read_error:
+        st.warning(f"Could not read `{env_path}`. Showing saved environment values.")
+
+    col_reload, _ = st.columns([1, 4])
+    if col_reload.button(
+        "Reload .env",
+        type="secondary",
+        key=f"repo-deploy-reload-env-{service.uuid}",
+    ):
+        st.session_state[env_editor_key] = env_text_default
+        st.rerun()
+
+    env_text = st.text_area(
+        ".env",
+        height=240,
+        key=env_editor_key,
     )
 
     if st.button("Save .env", type="primary", key=f"repo-deploy-save-env-{service.uuid}"):
-        rows = edited_df.to_dict("records")
-        new_env = {
-            str(row.get("key", "")).strip(): str(row.get("value", ""))
-            for row in rows
-            if str(row.get("key", "")).strip()
-        }
+        new_env = _parse_env_text(env_text)
         with bundle.server.get_server_connection() as conn:
-            service.save_env_vars(conn, new_env)
+            service.save_env_text(conn, env_text, new_env)
         save_infrastructure()
         st.success("Updated environment file.")
         st.rerun()

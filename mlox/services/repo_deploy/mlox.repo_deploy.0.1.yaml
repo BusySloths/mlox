@@ -5,8 +5,8 @@ maintainer: Busy Sloths
 description_short: Deploy a docker compose file from an existing repository service.
 description: |
   Deploy any docker-compose file that already exists in a previously installed
-  repository service. The service copies the selected compose file into its
-  deployment folder, writes a colocated .env file, and runs docker compose.
+  repository service. The service runs the selected compose file in place from
+  the repository checkout and writes a .env file into the repository root.
 links:
   project: https://mlox.org
   documentation: https://github.com/busysloths/mlox/
@@ -32,6 +32,6 @@ build:
   params:
     name: RepoDeploy:${REPO_DEPLOY_NAME}@${MLOX_SERVER_IP}
     template: ${MLOX_STACKS_PATH}/repo_deploy/mlox.repo_deploy.0.1.yaml
-    target_path: ${MLOX_USER_HOME}/services/${REPO_DEPLOY_NAME}
+    target_path: ${MLOX_USER_HOME}
     repo_uuid: ${REPO_DEPLOY_REPO_UUID}
     compose_file: ${REPO_DEPLOY_COMPOSE_FILE}

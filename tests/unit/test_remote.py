@@ -72,6 +72,45 @@ def test_sys_disk_free(
     )
 
 
+def test_sys_update_system_packages_runs_apt_sequence(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    mock_connection.sudo.return_value = FakeResult(stdout="ok")
+
+    executor.sys_update_system_packages(mock_connection)
+
+    commands = [call_args.args[0] for call_args in mock_connection.sudo.call_args_list]
+    assert commands == [
+        "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+        (
+            "bash -lc '"
+            "while pgrep -x apt >/dev/null || pgrep -x apt-get >/dev/null || "
+            "pgrep -x unattended-upgrade >/dev/null || "
+            "fuser /var/lib/dpkg/lock >/dev/null 2>&1 || "
+            "fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do "
+            'echo "[apt-wait] Waiting for other apt/dpkg processes..."; sleep 3; done\''
+        ),
+        "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+        (
+            "DEBIAN_FRONTEND=noninteractive apt-get -yq "
+            "-o DPkg::Lock::Timeout=300 update"
+        ),
+        (
+            "bash -lc '"
+            "while pgrep -x apt >/dev/null || pgrep -x apt-get >/dev/null || "
+            "pgrep -x unattended-upgrade >/dev/null || "
+            "fuser /var/lib/dpkg/lock >/dev/null 2>&1 || "
+            "fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do "
+            'echo "[apt-wait] Waiting for other apt/dpkg processes..."; sleep 3; done\''
+        ),
+        "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+        (
+            "DEBIAN_FRONTEND=noninteractive apt-get -yq "
+            "-o DPkg::Lock::Timeout=300 upgrade"
+        ),
+    ]
+
+
 def test_sys_get_distro_info(
     mock_connection: MagicMock, executor: UbuntuTaskExecutor
 ) -> None:

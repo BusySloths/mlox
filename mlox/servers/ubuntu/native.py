@@ -50,30 +50,8 @@ class UbuntuNativeServer(
 
     def _apt_wait(self, conn) -> None:
         """Wait until apt/dpkg locks are free to avoid contention errors."""
-        wait_cmd = (
-            "bash -lc '"
-            "while pgrep -x apt >/dev/null || pgrep -x apt-get >/dev/null || "
-            "pgrep -x unattended-upgrade >/dev/null || "
-            "fuser /var/lib/dpkg/lock >/dev/null 2>&1 || "
-            "fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do "
-            'echo "[apt-wait] Waiting for other apt/dpkg processes..."; sleep 3; done\''
-        )
         try:
-            self.exec.execute(
-                conn,
-                wait_cmd,
-                group=TaskGroup.SYSTEM_PACKAGES,
-                sudo=True,
-                pty=False,
-            )
-            # Fix partially configured packages if previous runs were interrupted
-            self.exec.execute(
-                conn,
-                "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
-                group=TaskGroup.SYSTEM_PACKAGES,
-                sudo=True,
-                pty=False,
-            )
+            self.exec.sys_apt_wait(conn)
         except Exception as e:
             logger.warning(f"apt-wait encountered an issue (continuing): {e}")
 
@@ -107,33 +85,7 @@ class UbuntuNativeServer(
 
     def update(self):
         with self.get_server_connection() as conn:
-            # Clean up partial states and wait for apt locks to clear
-            self.exec.execute(
-                conn,
-                "DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
-                group=TaskGroup.SYSTEM_PACKAGES,
-                sudo=True,
-            )
-            self._apt_wait(conn)
-            self.exec.execute(
-                conn,
-                (
-                    "DEBIAN_FRONTEND=noninteractive apt-get -yq "
-                    "-o DPkg::Lock::Timeout=300 update"
-                ),
-                group=TaskGroup.SYSTEM_PACKAGES,
-                sudo=True,
-            )
-            self._apt_wait(conn)
-            self.exec.execute(
-                conn,
-                (
-                    "DEBIAN_FRONTEND=noninteractive apt-get -yq "
-                    "-o DPkg::Lock::Timeout=300 upgrade"
-                ),
-                group=TaskGroup.SYSTEM_PACKAGES,
-                sudo=True,
-            )
+            self.exec.sys_update_system_packages(conn)
             logger.info("Done updating")
 
     def install_packages(self):

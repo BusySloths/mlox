@@ -95,6 +95,62 @@ class SystemMixin(TaskRunnerABC):
         logger.error("No idea how to get disk space on %s!", uname)
         return 0
 
+    def sys_apt_wait(self, connection: Connection) -> None:
+        """Wait until apt/dpkg locks are free and repair partial package state."""
+
+        wait_cmd = (
+            "bash -lc '"
+            "while pgrep -x apt >/dev/null || pgrep -x apt-get >/dev/null || "
+            "pgrep -x unattended-upgrade >/dev/null || "
+            "fuser /var/lib/dpkg/lock >/dev/null 2>&1 || "
+            "fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do "
+            'echo "[apt-wait] Waiting for other apt/dpkg processes..."; sleep 3; done\''
+        )
+        self._run_task(
+            connection,
+            group=TaskGroup.SYSTEM_PACKAGES,
+            command=wait_cmd,
+            sudo=True,
+            pty=False,
+        )
+        self._run_task(
+            connection,
+            group=TaskGroup.SYSTEM_PACKAGES,
+            command="DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+            sudo=True,
+            pty=False,
+        )
+
+    def sys_update_system_packages(self, connection: Connection) -> None:
+        """Refresh package metadata and upgrade installed OS packages."""
+
+        self._run_task(
+            connection,
+            group=TaskGroup.SYSTEM_PACKAGES,
+            command="DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true",
+            sudo=True,
+        )
+        self.sys_apt_wait(connection)
+        self._run_task(
+            connection,
+            group=TaskGroup.SYSTEM_PACKAGES,
+            command=(
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq "
+                "-o DPkg::Lock::Timeout=300 update"
+            ),
+            sudo=True,
+        )
+        self.sys_apt_wait(connection)
+        self._run_task(
+            connection,
+            group=TaskGroup.SYSTEM_PACKAGES,
+            command=(
+                "DEBIAN_FRONTEND=noninteractive apt-get -yq "
+                "-o DPkg::Lock::Timeout=300 upgrade"
+            ),
+            sudo=True,
+        )
+
     def sys_root_apt_install(
         self, connection: Connection, param: str, upgrade: bool = False
     ) -> str | None:
