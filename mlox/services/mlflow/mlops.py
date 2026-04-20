@@ -54,7 +54,7 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
         self.model_config = None
         self.tracking_uri = os.environ["MLFLOW_URI"]
         self.registry_uri = os.environ["MLFLOW_URI"]
-        self.code_paths = list(code_paths) if code_paths is not None else ["./airml"]
+        self.code_paths = list(code_paths) if code_paths is not None else ["."]
         self.registered_model_name = None
         self.requirements_file = requirements_file
         self.requirements_python_version = requirements_python_version
