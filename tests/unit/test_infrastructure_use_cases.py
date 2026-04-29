@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from mlox.application.use_cases import infrastructure as infra_use_cases
+from mlox.application import infrastructure_ops as infra_use_cases
 from mlox.infra import Infrastructure
 
 

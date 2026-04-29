@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from mlox.application.use_cases import infrastructure as infra_use_cases
+from mlox.application import infrastructure_ops as infra_use_cases
 from mlox.application.result import OperationResult
 from mlox.utils import dataclass_to_dict
 
