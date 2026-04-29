@@ -87,12 +87,6 @@ class Infrastructure:
     def __post_init__(self):
         self.populate_configs()
 
-    def clear_service_registry(self) -> None:
-        """Clear bound service lookups (legacy compatibility name)."""
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.clear_service_lookups(self)
-
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
     ) -> List[AbstractService]:
@@ -139,33 +133,6 @@ class Infrastructure:
                 return bundle
         return None
 
-    def remove_bundle(self, bundle: Bundle) -> None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.remove_bundle(self, bundle)
-        return None
-
-    def setup_service(self, service: AbstractService) -> None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.setup_service(self, service)
-
-    def teardown_service(self, service: AbstractService) -> None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.teardown_service(self, service)
-
-    def add_service(
-        self,
-        ip: str,
-        config: ServiceConfig,
-        params: Dict[str, Any],
-        service: AbstractService | None = None,
-    ) -> Bundle | None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        return infra_use_cases.add_service(self, ip, config, params, service=service)
-
     def list_service_names(self) -> List[str]:
         return [s.name for bundle in self.bundles for s in bundle.services]
 
@@ -197,20 +164,6 @@ class Infrastructure:
                 return bundle.server
         return None
 
-    def get_service_config(
-        self, service: AbstractService | AbstractServer
-    ) -> ServiceConfig | None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        return infra_use_cases.get_service_config(self, service)
-
-    def add_server(
-        self, config: ServiceConfig, params: Dict[str, str]
-    ) -> Bundle | None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        return infra_use_cases.add_server(self, config, params)
-
     def list_kubernetes_controller(self) -> List[Bundle]:
         return [
             bundle
@@ -235,6 +188,58 @@ class Infrastructure:
         infra.populate_configs()
         infra.populate_service_registry()
         return infra
+
+    # -------------------------------------------------------------------------
+    # Legacy compatibility wrappers around application-level infrastructure ops.
+    # These methods remain on Infrastructure temporarily and will be removed
+    # once callers use the application layer directly.
+
+    def clear_service_registry(self) -> None:
+        """Clear bound service lookups (legacy compatibility name)."""
+        from mlox.application import infrastructure_ops as infra_use_cases
+
+        infra_use_cases.clear_service_lookups(self)
+
+    def remove_bundle(self, bundle: Bundle) -> None:
+        from mlox.application import infrastructure_ops as infra_use_cases
+
+        infra_use_cases.remove_bundle(self, bundle)
+        return None
+
+    def setup_service(self, service: AbstractService) -> None:
+        from mlox.application import infrastructure_ops as infra_use_cases
+
+        infra_use_cases.setup_service(self, service)
+
+    def teardown_service(self, service: AbstractService) -> None:
+        from mlox.application import infrastructure_ops as infra_use_cases
+
+        infra_use_cases.teardown_service(self, service)
+
+    def add_service(
+        self,
+        ip: str,
+        config: ServiceConfig,
+        params: Dict[str, Any],
+        service: AbstractService | None = None,
+    ) -> Bundle | None:
+        from mlox.application import infrastructure_ops as infra_use_cases
+
+        return infra_use_cases.add_service(self, ip, config, params, service=service)
+
+    def get_service_config(
+        self, service: AbstractService | AbstractServer
+    ) -> ServiceConfig | None:
+        from mlox.application import infrastructure_ops as infra_use_cases
+
+        return infra_use_cases.get_service_config(self, service)
+
+    def add_server(
+        self, config: ServiceConfig, params: Dict[str, str]
+    ) -> Bundle | None:
+        from mlox.application import infrastructure_ops as infra_use_cases
+
+        return infra_use_cases.add_server(self, config, params)
 
     def populate_service_registry(self) -> None:
         """Bind service lookup context to loaded services (legacy compatibility name)."""
