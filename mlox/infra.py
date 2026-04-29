@@ -30,19 +30,12 @@ from typing import Optional, List, Literal, Dict, Any
 
 from mlox.config import (
     ServiceConfig,
-    get_stacks_path,
-    load_service_config_by_id,
-    load_all_service_configs,
 )
-from mlox.service_registry import register_service, get_service_registry
 from mlox.server import AbstractServer, ServerCapability
 from mlox.service import AbstractService
 from mlox.utils import (
     dataclass_to_dict,
     dict_to_dataclass,
-    auto_map_ports,
-    generate_pw,
-    generate_username,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,9 +90,9 @@ class Infrastructure:
 
     def clear_service_registry(self) -> None:
         """Clear the singleton service registry (useful for testing)"""
-        from mlox.service_registry import get_service_registry
+        from mlox.application.use_cases import infrastructure as infra_use_cases
 
-        get_service_registry().clear()
+        infra_use_cases.clear_service_registry()
 
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
@@ -148,36 +141,20 @@ class Infrastructure:
         return None
 
     def remove_bundle(self, bundle: Bundle) -> None:
-        registry = get_service_registry()
-        for service in bundle.services:
-            registry.unregister_service(service.uuid)
+        from mlox.application.use_cases import infrastructure as infra_use_cases
 
-        try:
-            self.bundles.remove(bundle)
-        except ValueError:
-            logging.warning(f"Could not find bundle {bundle.server.ip}")
+        infra_use_cases.remove_bundle(self, bundle)
         return None
 
     def setup_service(self, service: AbstractService) -> None:
-        bundle = self.get_bundle_by_service(service)
-        if not bundle:
-            logging.warning("Could not find bundle.")
-            return
-        with bundle.server.get_server_connection() as conn:
-            service.setup(conn)
-            service.spin_up(conn)
+        from mlox.application.use_cases import infrastructure as infra_use_cases
+
+        infra_use_cases.setup_service(self, service)
 
     def teardown_service(self, service: AbstractService) -> None:
-        bundle = self.get_bundle_by_service(service)
-        if not bundle:
-            logging.warning("Could not find bundle.")
-            return
-        with bundle.server.get_server_connection() as conn:
-            service.spin_down(conn)
-            service.teardown(conn)
-        bundle.services.remove(service)
-        # UNREGISTER SERVICE FROM SINGLETON REGISTRY
-        get_service_registry().unregister_service(service.uuid)
+        from mlox.application.use_cases import infrastructure as infra_use_cases
+
+        infra_use_cases.teardown_service(self, service)
 
     def add_service(
         self,
@@ -186,73 +163,9 @@ class Infrastructure:
         params: Dict[str, Any],
         service: AbstractService | None = None,
     ) -> Bundle | None:
-        bundle = next((v for v in self.bundles if v.server.ip == ip), None)
-        if not bundle:
-            logger.warning("No bundle found for server.")
-            return None
-        if not bundle.server:
-            logger.warning("No server found for bundle.")
-            return None
-        if not bundle.server.mlox_user:
-            logger.warning("No mlox user found for bundle.")
-            return None
+        from mlox.application.use_cases import infrastructure as infra_use_cases
 
-        if not service:
-            # PART I: FILL PLACEHOLDERS
-            mlox_params = {
-                "${MLOX_STACKS_PATH}": get_stacks_path(),
-                "${MLOX_USER}": bundle.server.mlox_user.name,
-                "${MLOX_USER_HOME}": bundle.server.mlox_user.home,
-                "${MLOX_AUTO_USER}": generate_username(),
-                "${MLOX_AUTO_PW}": generate_pw(),
-                "${MLOX_AUTO_API_KEY}": generate_pw(),
-                "${MLOX_SERVER_IP}": bundle.server.ip,
-                "${MLOX_SERVER_UUID}": bundle.server.uuid,
-            }
-
-            # PART II: ASSIGN PORTS
-            port_prefix = "${MLOX_AUTO_PORT_"
-            port_postfix = "}"
-            restricted_ports: Any = config.ports.pop("restricted", [])
-            if not isinstance(restricted_ports, list):
-                restricted_ports = list()
-                logger.warning(
-                    f"Restricted ports should be a list, got {type(restricted_ports)}"
-                )
-            used_ports: list = restricted_ports
-            for s in bundle.services:
-                used_ports.extend(list(s.service_ports.values()))
-            assigned_ports = auto_map_ports(used_ports, config.ports)
-            mlox_params.update(
-                {
-                    f"{port_prefix}{name.upper()}{port_postfix}": str(port)
-                    for name, port in assigned_ports.items()
-                }
-            )
-            params.update(mlox_params)
-
-            # PART III: INSTANTIATE SERVICE
-            _service = config.instantiate_service(params=params)
-            if not _service:
-                logger.warning("Could not instantiate service.")
-                return None
-            service = _service
-
-        # ENSURE UNIQUE NAME AND CACHE CONFIG
-        self.configs[str(type(service))] = config
-        cntr = 0
-        service_names = self.list_service_names()
-        while service.name in service_names:
-            service.name = service.name + "_" + str(cntr)
-            cntr += 1
-
-        # SET TASK EXECUTOR
-        service.set_task_executor(bundle.server.create_new_task_executor())
-        # REGISTER SERVICE IN SINGLETON REGISTRY FOR DEPENDENCY RESOLUTION
-        register_service(service.uuid, service)
-        # REGISTER SERVICE IN INFRASTRUCTURE
-        bundle.services.append(service)
-        return bundle
+        return infra_use_cases.add_service(self, ip, config, params, service=service)
 
     def list_service_names(self) -> List[str]:
         return [s.name for bundle in self.bundles for s in bundle.services]
@@ -285,39 +198,16 @@ class Infrastructure:
     def get_service_config(
         self, service: AbstractService | AbstractServer
     ) -> ServiceConfig | None:
-        if service.service_config_id in self.configs:
-            return self.configs[service.service_config_id]
-        else:
-            config = load_service_config_by_id(service.service_config_id)
-            if config:
-                self.configs[service.service_config_id] = config
-                return config
-            else:
-                logger.error(
-                    f"Could not find service config for {service.service_config_id}"
-                )
-        return None
+        from mlox.application.use_cases import infrastructure as infra_use_cases
+
+        return infra_use_cases.get_service_config(self, service)
 
     def add_server(
         self, config: ServiceConfig, params: Dict[str, str]
     ) -> Bundle | None:
-        server = config.instantiate_server(params=params)
-        if not server:
-            logging.warning("Could not instantiate server.")
-            return None
-        for bundle in self.bundles:
-            if bundle.server.ip == server.ip:
-                logging.warning("Server already exists.")
-                return None
-        if not server.test_connection():
-            logging.warning("Could not connect to server.")
-            return None
+        from mlox.application.use_cases import infrastructure as infra_use_cases
 
-        self.configs[str(type(server))] = config
-        bundle = Bundle(name=server.ip, server=server)
-        self.bundles.append(bundle)
-        bundle.server.discovered = datetime.now().isoformat()
-        return bundle
+        return infra_use_cases.add_server(self, config, params)
 
     def list_kubernetes_controller(self) -> List[Bundle]:
         return [
@@ -345,12 +235,11 @@ class Infrastructure:
         return infra
 
     def populate_service_registry(self) -> None:
-        registry = get_service_registry()
-        for service in self.services():
-            registry.register_service(service.uuid, service)
+        from mlox.application.use_cases import infrastructure as infra_use_cases
+
+        infra_use_cases.populate_service_registry(self)
 
     def populate_configs(self) -> None:
-        configs = load_all_service_configs(prefix="mlox")
-        configs.extend(load_all_service_configs(prefix="mlox-server"))
-        for config in configs:
-            self.configs[config.id] = config
+        from mlox.application.use_cases import infrastructure as infra_use_cases
+
+        infra_use_cases.populate_configs(self)

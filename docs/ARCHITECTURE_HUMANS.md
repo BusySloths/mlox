@@ -6,7 +6,7 @@ This document gives a practical, contributor-first map of the MLOX codebase.
 
 MLOX is a Python project that manages MLOps infrastructure through three user interfaces:
 
-- **CLI** (`mlox/cli.py`)
+- **CLI** (`mlox/cli/`)
 - **TUI** (`mlox/tui/`)
 - **Web app (Streamlit)** (`mlox/view/`)
 
@@ -52,7 +52,7 @@ The `mlox/` package contains:
 - `servers/`: backend/server abstractions and implementations
 - `tui/`: Textual terminal UI
 - `view/`: Streamlit web app
-- `cli.py`: Typer CLI
+- `cli/`: Typer CLI package
 - `assets/`: includes some outdated scripts/assets (not always canonical)
 
 ### Configuration-driven building

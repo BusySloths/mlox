@@ -69,23 +69,27 @@ Suggested structure:
 
 Result: CLI remains easy to navigate and test with command-focused unit tests.
 
-## B) Replace monolithic operations module with use-case classes
+## B) Replace monolithic operations module with focused use-case modules
 
 Instead of one long `operations.py`, split by domain capabilities.
 
 Example pattern:
 
-- `ListServersUseCase`
-- `AddServerUseCase`
-- `SetupServiceUseCase`
+- `application/use_cases/servers.py`
+- `application/use_cases/services.py`
+- `application/use_cases/models.py`
 
-Each use-case depends on interfaces (ports), e.g.:
+Each module should expose small, explicit functions, for example:
 
-- `SessionRepositoryPort`
-- `ConfigCatalogPort`
-- `ExecutionPort`
+- `list_servers(load_session, project, password)`
+- `add_server(load_session, load_server_config, ...)`
+- `setup_service(load_session, project, password, name=...)`
 
-This makes CLI/TUI/Web consumers interchangeable and improves testability.
+Prefer passing a small number of concrete helper functions over introducing
+ports/protocols unless the abstraction is already paying for itself.
+
+This keeps CLI/TUI/Web consumers interchangeable while staying easy to read
+and test.
 
 ## C) Make `Infrastructure` the single source of truth (remove parallel registry)
 

@@ -1,21 +1,12 @@
-"""Core operations for interacting with MLOX projects.
-
-This module centralises the business logic used by the different user
-interfaces (CLI, TUI, web UI, ...). Each operation returns an
-``OperationResult`` which carries a success flag, an error code, a
-human-readable message and optional payload data.
-
-The functions are designed to be side-effect free outside of their
-intended purpose and expose a small cache to avoid repeated session
-initialisation for the same project credentials.
-"""
+"""Facade over the MLOX application use-cases."""
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
+from mlox.application.result import OperationResult
+from mlox.application.use_cases import models, project, servers, services
 from mlox.config import (
     get_stacks_path,
     load_all_server_configs,
@@ -23,24 +14,10 @@ from mlox.config import (
     load_config,
     load_service_config_by_id,
 )
-from mlox.infra import ModelRegistry, ModelServer
 from mlox.session import MloxSession
-from mlox.utils import dataclass_to_dict, save_to_json
+from mlox.utils import save_to_json
 
 DEFAULT_MLSERVER_TEMPLATE_ID = "mlflow-mlserver-2.22.0-docker"
-
-
-@dataclass
-class OperationResult:
-    """Container describing the outcome of an operation."""
-
-    success: bool
-    code: int
-    message: str
-    data: Any | None = None
-
-    def __bool__(self) -> bool:  # pragma: no cover - syntactic sugar
-        return self.success
 
 
 class _SessionCache:
@@ -59,17 +36,13 @@ class _SessionCache:
         if project is None:
             self._sessions.clear()
             return
+
         keys_to_remove = [key for key in self._sessions if key[0] == project]
         for key in keys_to_remove:
             self._sessions.pop(key, None)
 
 
 _SESSION_CACHE = _SessionCache()
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _load_session(
@@ -111,30 +84,12 @@ def _load_config_from_path(path: str):
     return load_config(stacks, service_dir, candidate)
 
 
-# ---------------------------------------------------------------------------
-# Project operations
-# ---------------------------------------------------------------------------
-
-
 def create_project(name: str, password: str) -> OperationResult:
-    """Create or load a project by initialising a session."""
-
-    result = _load_session(name, password, refresh=True)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-    return OperationResult(True, 0, f"Created project '{name}'.", {"session": session})
-
-
-# ---------------------------------------------------------------------------
-# Server operations
-# ---------------------------------------------------------------------------
+    return project.create_project(_load_session, name, password)
 
 
 def list_servers(project: str, password: str) -> OperationResult:
-    from mlox.operations_usecases import ListServersUseCase
-    return ListServersUseCase(sessions=type("Repo", (), {"load": staticmethod(_load_session)})()).execute(project, password)
+    return servers.list_servers(_load_session, project, password)
 
 
 def add_server(
@@ -148,43 +103,26 @@ def add_server(
     root_password: str,
     extra_params: Optional[Dict[str, str]] = None,
 ) -> OperationResult:
-    from mlox.operations_usecases import AddServerUseCase
-    repo = type("Repo", (), {"load": staticmethod(_load_session)})()
-    catalog = type("Catalog", (), {"load_server": staticmethod(_load_config_from_path), "load_service": staticmethod(load_service_config_by_id)})()
-    return AddServerUseCase(sessions=repo, catalog=catalog).execute(project, password, template_path=template_path, ip=ip, port=port, root_user=root_user, root_password=root_password, extra_params=extra_params)
+    return servers.add_server(
+        _load_session,
+        _load_config_from_path,
+        project,
+        password,
+        template_path=template_path,
+        ip=ip,
+        port=port,
+        root_user=root_user,
+        root_password=root_password,
+        extra_params=extra_params,
+    )
 
 
 def setup_server(project: str, password: str, *, ip: str) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    bundle = session.infra.get_bundle_by_ip(ip)
-    if not bundle:
-        return OperationResult(False, 5, "Server not found in infrastructure.")
-
-    bundle.server.setup()
-    session.save_infrastructure()
-    return OperationResult(True, 0, f"Server {ip} set up.")
+    return servers.setup_server(_load_session, project, password, ip=ip)
 
 
 def teardown_server(project: str, password: str, *, ip: str) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    bundle = session.infra.get_bundle_by_ip(ip)
-    if not bundle:
-        return OperationResult(False, 5, "Server not found in infrastructure.")
-
-    bundle.server.teardown()
-    session.infra.remove_bundle(bundle)
-    session.save_infrastructure()
-    return OperationResult(True, 0, f"Server {ip} removed from infrastructure.")
+    return servers.teardown_server(_load_session, project, password, ip=ip)
 
 
 def save_server_key(
@@ -194,56 +132,18 @@ def save_server_key(
     ip: str,
     output_path: str,
 ) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    bundle = session.infra.get_bundle_by_ip(ip)
-    if not bundle:
-        return OperationResult(False, 5, "Server not found in infrastructure.")
-
-    server_dict = dataclass_to_dict(bundle.server)
-    save_to_json(server_dict, output_path, password, True)
-    return OperationResult(True, 0, f"Saved key for {ip} to {output_path}.")
-
-
-# ---------------------------------------------------------------------------
-# Service operations
-# ---------------------------------------------------------------------------
+    return servers.save_server_key(
+        _load_session,
+        save_to_json,
+        project,
+        password,
+        ip=ip,
+        output_path=output_path,
+    )
 
 
 def list_services(project: str, password: str) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    services: List[Dict[str, Any]] = []
-    for bundle in session.infra.bundles:
-        for svc in bundle.services:
-            labels = list(getattr(svc, "compose_service_names", {}).keys())
-            ports_dict = getattr(svc, "service_ports", {}) or {}
-            ports = [f"{name}:{port}" for name, port in ports_dict.items()]
-            urls_dict = getattr(svc, "service_urls", {}) or {}
-            urls = [f"{name}: {url}" for name, url in urls_dict.items()]
-            services.append(
-                {
-                    "name": svc.name,
-                    "service_config_id": getattr(svc, "service_config_id", "unknown"),
-                    "server_ip": bundle.server.ip,
-                    "state": getattr(svc, "state", "unknown"),
-                    "labels": labels,
-                    "ports": ports,
-                    "urls": urls,
-                }
-            )
-    message = (
-        "No services found." if not services else "Services retrieved successfully."
-    )
-    return OperationResult(True, 0, message, {"services": services})
+    return services.list_services(_load_session, project, password)
 
 
 def add_service(
@@ -254,57 +154,23 @@ def add_service(
     template_id: str,
     params: Optional[Dict[str, str]] = None,
 ) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    config = load_service_config_by_id(template_id)
-    if not config:
-        return OperationResult(False, 6, "Service template not found.")
-
-    bundle = session.infra.add_service(server_ip, config, params or {})
-    if not bundle:
-        return OperationResult(False, 7, "Failed to add service to server.")
-
-    session.save_infrastructure()
-    svc = bundle.services[-1]
-    return OperationResult(
-        True, 0, f"Added service {svc.name} to {server_ip}.", {"service": svc}
+    return services.add_service(
+        _load_session,
+        load_service_config_by_id,
+        project,
+        password,
+        server_ip=server_ip,
+        template_id=template_id,
+        params=params,
     )
 
 
 def setup_service(project: str, password: str, *, name: str) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    svc = session.infra.get_service(name)
-    if not svc:
-        return OperationResult(False, 8, "Service not found in infrastructure.")
-
-    session.infra.setup_service(svc)
-    session.save_infrastructure()
-    return OperationResult(True, 0, f"Service {name} set up.", data={"service": svc})
+    return services.setup_service(_load_session, project, password, name=name)
 
 
 def teardown_service(project: str, password: str, *, name: str) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    svc = session.infra.get_service(name)
-    if not svc:
-        return OperationResult(False, 8, "Service not found in infrastructure.")
-
-    session.infra.teardown_service(svc)
-    session.save_infrastructure()
-    return OperationResult(True, 0, f"Service {name} removed.", data={"service": svc})
+    return services.teardown_service(_load_session, project, password, name=name)
 
 
 def service_logs(
@@ -315,40 +181,14 @@ def service_logs(
     label: Optional[str] = None,
     tail: int = 200,
 ) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    svc = session.infra.get_service(name)
-    if not svc:
-        return OperationResult(False, 8, "Service not found in infrastructure.")
-
-    chosen_label = label
-    if chosen_label is None:
-        if svc.compose_service_names:
-            chosen_label = next(iter(svc.compose_service_names.keys()))
-        else:
-            return OperationResult(
-                False,
-                9,
-                "No compose service labels configured for this service.",
-            )
-
-    bundle = session.infra.get_bundle_by_service(svc)
-    if not bundle:
-        return OperationResult(False, 10, "Could not find server bundle for service.")
-
-    with bundle.server.get_server_connection() as conn:
-        logs = svc.compose_service_log_tail(conn, label=chosen_label, tail=tail)
-
-    return OperationResult(True, 0, "Fetched service logs.", {"logs": logs})
-
-
-# ---------------------------------------------------------------------------
-# Model operations
-# ---------------------------------------------------------------------------
+    return services.service_logs(
+        _load_session,
+        project,
+        password,
+        name=name,
+        label=label,
+        tail=tail,
+    )
 
 
 def list_models(
@@ -357,56 +197,12 @@ def list_models(
     *,
     registry_name: Optional[str] = None,
 ) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    # select registry services
-    model_server = session.infra.filter_by_group("model-server")
-    registries = session.infra.filter_by_group("model-registry")
-    if len(registries) == 0:
-        return OperationResult(
-            False, 11, "No model registry service found in the project."
-        )
-
-    # filter registries by name if provided
-    if registry_name:
-        registry_service = next(
-            (svc for svc in registries if svc.name == registry_name), None
-        )
-        if not registry_service:
-            return OperationResult(
-                False,
-                13,
-                f"Registry service '{registry_name}' not found in the project.",
-            )
-
-    models = list()
-    for r in registries:
-        assert isinstance(r, ModelRegistry)
-
-        r_models = r.list_models()
-        for m in r_models:
-            is_deployed = False
-
-            for s in model_server:
-                if isinstance(s, ModelServer):
-                    model_name = f"{r.name}:{m.get('Model', '')}:{m.get('Version', '')}"
-                    is_deployed = s.is_model(model_name)
-                    if is_deployed:
-                        break
-
-            m["registry_name"] = r.name
-            m["is_deployed"] = is_deployed
-            models.append(m)
-    message = (
-        "No registered models found."
-        if len(models) == 0
-        else "Registered models retrieved."
+    return models.list_models(
+        _load_session,
+        project,
+        password,
+        registry_name=registry_name,
     )
-    return OperationResult(True, 0, message, {"models": models})
 
 
 def deploy_model(
@@ -419,97 +215,26 @@ def deploy_model(
     server_ip: str,
     template_id: str = DEFAULT_MLSERVER_TEMPLATE_ID,
 ) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    target_bundle = session.infra.get_bundle_by_ip(server_ip)
-    if not target_bundle:
-        return OperationResult(
-            False, 14, f"Server {server_ip} not found in infrastructure."
-        )
-
-    registries = session.infra.filter_by_group("model-registry")
-    registry_service = None
-    for svc in registries:
-        if svc.name == registry_name:
-            registry_service = svc
-            break
-
-    if not registry_service:
-        return OperationResult(
-            False, 11, "No MLflow registry service found in the project."
-        )
-
-    secrets = registry_service.get_secrets()
-
-    params: Dict[str, str] = {
-        "${MODEL_NAME}": f"{model_name}/{model_version}",
-        "${TRACKING_URI}": str(secrets.get("service_url", "")),
-        "${TRACKING_USER}": str(secrets.get("username", "")),
-        "${TRACKING_PW}": str(secrets.get("password", "")),
-    }
-
-    # 1. Add service
-    op_res = add_service(
-        project=project,
-        password=password,
+    return models.deploy_model(
+        _load_session,
+        add_service,
+        setup_service,
+        project,
+        password,
+        registry_name=registry_name,
+        model_name=model_name,
+        model_version=model_version,
         server_ip=server_ip,
         template_id=template_id,
-        params=params,
     )
-    # 2. Setup service
-    if not op_res.success:
-        return op_res
-    if not op_res.data:
-        return OperationResult(False, 15, "Failed to retrieve deployed service.")
-    if "service" not in op_res.data:
-        return OperationResult(False, 15, "Failed to retrieve deployed service.")
-    svc = op_res.data.get("service", None)
-    if not svc:
-        return OperationResult(False, 15, "Failed to retrieve deployed service.")
-    assert isinstance(svc, ModelServer)
-    return setup_service(project, password, name=svc.name)
-
-
-# ---------------------------------------------------------------------------
-# Config operations
-# ---------------------------------------------------------------------------
 
 
 def list_server_configs() -> OperationResult:
-    configs = load_all_server_configs()
-    payload = [
-        {
-            "id": cfg.id,
-            "path": cfg.path,
-        }
-        for cfg in configs
-    ]
-    message = "No server configs found." if not payload else "Server configs retrieved."
-    return OperationResult(True, 0, message, {"configs": payload})
+    return servers.list_server_configs(load_all_server_configs)
 
 
 def list_service_configs() -> OperationResult:
-    configs = load_all_service_configs()
-    payload = [
-        {
-            "id": cfg.id,
-            "path": cfg.path,
-        }
-        for cfg in configs
-    ]
-    message = (
-        "No service configs found." if not payload else "Service configs retrieved."
-    )
-    return OperationResult(True, 0, message, {"configs": payload})
-
-
-# ---------------------------------------------------------------------------
-# Cache control
-# ---------------------------------------------------------------------------
+    return services.list_service_configs(load_all_service_configs)
 
 
 def invalidate_session_cache(project: Optional[str] = None) -> None:

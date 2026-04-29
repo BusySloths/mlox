@@ -137,7 +137,7 @@ def test_add_server_template_not_found(monkeypatch, patch_session_type):
 def test_add_service_and_list_services(monkeypatch, patch_session_type):
     session = _Session()
 
-    svc = SimpleNamespace(
+    existing_svc = SimpleNamespace(
         name="svc1",
         service_config_id="cfg",
         state="running",
@@ -145,16 +145,26 @@ def test_add_service_and_list_services(monkeypatch, patch_session_type):
         service_ports={"http": 8080},
         service_urls={"ui": "http://localhost"},
     )
-    session.infra.bundles = [SimpleNamespace(server=SimpleNamespace(ip="1.1.1.1"), services=[svc])]
+    new_svc = SimpleNamespace(name="svc-new")
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(ip="1.1.1.1"),
+        services=[existing_svc, new_svc],
+    )
+    session.infra.bundles = [bundle]
     session.save_infrastructure = lambda: None
 
     monkeypatch.setattr("mlox.operations._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
     monkeypatch.setattr("mlox.operations.load_service_config_by_id", lambda _id: {"id": _id})
+    monkeypatch.setattr(
+        "mlox.application.use_cases.services.infra_use_cases.add_service",
+        lambda infra, server_ip, config, params: bundle,
+    )
 
     add_result = add_service("p", "pw", server_ip="1.1.1.1", template_id="svc-template")
     list_result = list_services("p", "pw")
 
     assert add_result.success
+    assert add_result.data["service"] is new_svc
     assert list_result.data["services"][0]["ports"] == ["http:8080"]
 
 
@@ -208,6 +218,32 @@ def test_list_models_and_deploy_model(monkeypatch, patch_session_type):
 
     deployed = deploy_model("p", "pw", registry_name="reg", model_name="m", model_version="1", server_ip="10.0.0.1")
     assert deployed.success
+
+
+def test_list_models_filters_registry(monkeypatch, patch_session_type):
+    class Registry:
+        def __init__(self, name):
+            self.name = name
+
+        def list_models(self):
+            return [{"Model": self.name, "Version": "1"}]
+
+    infra = SimpleNamespace(
+        filter_by_group=lambda group: []
+        if group == "model-server"
+        else [Registry("keep"), Registry("skip")],
+    )
+    session = _Session()
+    session.infra = infra
+    monkeypatch.setattr(
+        "mlox.operations._load_session",
+        lambda *args, **kwargs: OperationResult(True, 0, "ok", session),
+    )
+
+    result = list_models("p", "pw", registry_name="keep")
+
+    assert result.success
+    assert [model["registry_name"] for model in result.data["models"]] == ["keep"]
 
 
 def test_list_config_operations(monkeypatch):
