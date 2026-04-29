@@ -6,12 +6,7 @@ from mlox.application.use_cases import infrastructure as infra_use_cases
 from mlox.application.result import OperationResult
 
 
-def list_services(load_session, project: str, password: str) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
+def list_services(session) -> OperationResult:
     services: List[Dict[str, Any]] = []
     for bundle in session.infra.bundles:
         for svc in bundle.services:
@@ -37,20 +32,13 @@ def list_services(load_session, project: str, password: str) -> OperationResult:
 
 
 def add_service(
-    load_session,
+    session,
     load_service_config,
-    project: str,
-    password: str,
     *,
     server_ip: str,
     template_id: str,
     params: Optional[Dict[str, str]] = None,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
     config = load_service_config(template_id)
     if not config:
         return OperationResult(False, 6, "Service template not found.")
@@ -75,17 +63,10 @@ def add_service(
 
 
 def setup_service(
-    load_session,
-    project: str,
-    password: str,
+    session,
     *,
     name: str,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
     service = session.infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")
@@ -96,17 +77,10 @@ def setup_service(
 
 
 def teardown_service(
-    load_session,
-    project: str,
-    password: str,
+    session,
     *,
     name: str,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
     service = session.infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")
@@ -117,19 +91,12 @@ def teardown_service(
 
 
 def service_logs(
-    load_session,
-    project: str,
-    password: str,
+    session,
     *,
     name: str,
     label: Optional[str] = None,
     tail: int = 200,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
     service = session.infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")

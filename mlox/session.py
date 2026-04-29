@@ -24,7 +24,7 @@ import logging
 
 from datetime import datetime, timezone
 
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 from dataclasses import dataclass, field
 
 from mlox.migrations.base import MloxMigrations
@@ -36,33 +36,8 @@ from mlox.utils import (
     load_from_json,
     dict_to_dataclass,
 )
-from mlox.scheduler import ProcessScheduler
 
 logger = logging.getLogger(__name__)
-
-
-class GlobalProcessScheduler:
-    """
-    Global process scheduler instance for managing background jobs.
-    This is a singleton to ensure only one instance is used across the application.
-    """
-
-    _instance: Optional["GlobalProcessScheduler"] = None
-    scheduler: ProcessScheduler
-
-    def init_scheduler(self):
-        self.scheduler = ProcessScheduler(
-            max_processes=2,
-            watchdog_wakeup_sec=1.0,
-            watchdog_timeout_sec=1500.0,
-            disable_garbage_collection=False,
-        )
-
-    def __new__(cls) -> "GlobalProcessScheduler":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.init_scheduler()
-        return cls._instance
 
 
 @dataclass
@@ -99,7 +74,6 @@ class MloxSession:
         password: str,
         migrations: List[MloxMigrations] | None = None,
     ):
-        # self.scheduler = GlobalProcessScheduler().scheduler
         self.secrets = None
         self.password = password
         self.migrations = migrations

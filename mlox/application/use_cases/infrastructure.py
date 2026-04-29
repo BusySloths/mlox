@@ -10,7 +10,6 @@ from mlox.config import (
     load_all_service_configs,
     load_service_config_by_id,
 )
-from mlox.service_registry import get_service_registry, register_service
 from mlox.utils import auto_map_ports, generate_pw, generate_username
 
 if TYPE_CHECKING:
@@ -23,14 +22,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def clear_service_registry() -> None:
-    get_service_registry().clear()
+def bind_service_lookups(infra: Infrastructure) -> None:
+    for service in infra.services():
+        service.bind_service_lookup(infra)
+
+
+def clear_service_lookups(infra: Infrastructure) -> None:
+    for service in infra.services():
+        service.clear_service_lookup()
 
 
 def remove_bundle(infra: Infrastructure, bundle: Bundle) -> None:
-    registry = get_service_registry()
     for service in bundle.services:
-        registry.unregister_service(service.uuid)
+        service.clear_service_lookup()
 
     try:
         infra.bundles.remove(bundle)
@@ -68,7 +72,7 @@ def teardown_service(infra: Infrastructure, service: AbstractService) -> None:
         service.teardown(conn)
 
     bundle.services.remove(service)
-    get_service_registry().unregister_service(service.uuid)
+    service.clear_service_lookup()
 
 
 def add_service(
@@ -136,7 +140,7 @@ def add_service(
         counter += 1
 
     service.set_task_executor(bundle.server.create_new_task_executor())
-    register_service(service.uuid, service)
+    service.bind_service_lookup(infra)
     bundle.services.append(service)
     return bundle
 
@@ -184,9 +188,7 @@ def add_server(
 
 
 def populate_service_registry(infra: Infrastructure) -> None:
-    registry = get_service_registry()
-    for service in infra.services():
-        registry.register_service(service.uuid, service)
+    bind_service_lookups(infra)
 
 
 def populate_configs(infra: Infrastructure) -> None:

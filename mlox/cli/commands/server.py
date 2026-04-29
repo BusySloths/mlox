@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import typer
 
-from mlox import operations as ops
+from mlox.application import facade as ops
 from mlox.cli.common import handle_result, parse_kv
 from mlox.cli.context import resolve_credentials
 from mlox.cli.rendering.table import render_table

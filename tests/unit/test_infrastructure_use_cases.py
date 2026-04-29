@@ -26,6 +26,7 @@ class _Service:
         self.calls: list[str] = []
         self.task_executor = None
         self.service_ports = {}
+        self._service_lookup = None
 
     def setup(self, conn) -> None:
         self.calls.append("setup")
@@ -42,6 +43,12 @@ class _Service:
     def set_task_executor(self, executor) -> None:
         self.task_executor = executor
 
+    def bind_service_lookup(self, lookup) -> None:
+        self._service_lookup = lookup
+
+    def clear_service_lookup(self) -> None:
+        self._service_lookup = None
+
 
 def test_setup_service_use_case_runs_runtime_steps():
     service = _Service()
@@ -55,25 +62,23 @@ def test_setup_service_use_case_runs_runtime_steps():
     assert service.calls == ["setup", "spin_up"]
 
 
-def test_teardown_service_use_case_unregisters_and_removes(monkeypatch):
+def test_teardown_service_use_case_clears_lookup_and_removes():
     service = _Service()
+    service.bind_service_lookup(object())
     bundle = SimpleNamespace(
         server=SimpleNamespace(get_server_connection=_ServerConnectionFactory()),
         services=[service],
     )
     infra = SimpleNamespace(get_bundle_by_service=lambda current: bundle)
-    unregistered: list[str] = []
-    registry = SimpleNamespace(unregister_service=lambda uuid: unregistered.append(uuid))
-    monkeypatch.setattr(infra_use_cases, "get_service_registry", lambda: registry)
 
     infra_use_cases.teardown_service(infra, service)
 
     assert service.calls == ["spin_down", "teardown"]
     assert bundle.services == []
-    assert unregistered == ["svc-1"]
+    assert service._service_lookup is None
 
 
-def test_add_service_use_case_registers_and_attaches_service(monkeypatch):
+def test_add_service_use_case_binds_lookup_and_attaches_service(monkeypatch):
     existing = _Service(name="svc")
     created = _Service(name="svc")
     config = SimpleNamespace(
@@ -92,7 +97,6 @@ def test_add_service_use_case_registers_and_attaches_service(monkeypatch):
         configs={},
         list_service_names=lambda: ["svc"],
     )
-    registered: list[tuple[str, object]] = []
     monkeypatch.setattr(infra_use_cases, "get_stacks_path", lambda: "/stacks")
     monkeypatch.setattr(infra_use_cases, "generate_username", lambda: "auto-user")
     monkeypatch.setattr(infra_use_cases, "generate_pw", lambda: "auto-pw")
@@ -101,11 +105,6 @@ def test_add_service_use_case_registers_and_attaches_service(monkeypatch):
         "auto_map_ports",
         lambda used, ports: {"http": 8080},
     )
-    monkeypatch.setattr(
-        infra_use_cases,
-        "register_service",
-        lambda uuid, service: registered.append((uuid, service)),
-    )
 
     result = infra_use_cases.add_service(infra, "1.2.3.4", config, params={})
 
@@ -113,7 +112,18 @@ def test_add_service_use_case_registers_and_attaches_service(monkeypatch):
     assert bundle.services[-1] is created
     assert created.name == "svc_0"
     assert created.task_executor == "executor"
-    assert registered == [("svc-1", created)]
+    assert created._service_lookup is infra
+
+
+def test_bind_service_lookups_binds_all_services():
+    service_one = _Service(uuid="a")
+    service_two = _Service(uuid="b")
+    infra = SimpleNamespace(services=lambda: iter([service_one, service_two]))
+
+    infra_use_cases.bind_service_lookups(infra)
+
+    assert service_one._service_lookup is infra
+    assert service_two._service_lookup is infra
 
 
 def test_add_server_use_case_appends_bundle_and_sets_discovered():

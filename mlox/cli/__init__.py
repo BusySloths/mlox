@@ -1,4 +1,4 @@
-from mlox import operations as ops
+from mlox.application import facade as ops
 from mlox.cli.app import app, subprocess, sys
 from mlox.cli.common import handle_result, parse_kv
 

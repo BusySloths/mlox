@@ -4,7 +4,7 @@ from typing import Optional
 
 import typer
 
-from mlox import operations as ops
+from mlox.application import facade as ops
 from mlox.cli.common import handle_result
 from mlox.cli.context import PASSWORD_ENVVAR, PROJECT_ENVVAR, resolve_password
 

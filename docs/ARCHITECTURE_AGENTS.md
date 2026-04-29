@@ -72,7 +72,7 @@ When changing config behavior:
 
 In `mlox/infra.py`, service/server changes must preserve:
 
-- registration in singleton service registry
+- binding services to infrastructure-backed dependency lookup
 - unique service naming policy
 - dynamic port assignment (collision avoidance)
 - compatibility with persisted infrastructure reload (`to_dict`/`from_dict`)
@@ -103,7 +103,7 @@ For each service/server:
 ## 8) Legacy and partial features to treat carefully
 
 - `mlox/scheduler.py`: legacy/obsolete path for most new work.
-- `mlox/operations.py`: newer operations layer used by CLI.
+- `mlox/application/facade.py`: stateless application facade used by CLI and other callers that need session/context loading.
 - YAML `requirements`: present in schema but not fully enforced today.
 - YAML `groups`: partly descriptive; partly intended as functional mapping. Current implementation is inconsistent—avoid over-assuming strict semantics.
 

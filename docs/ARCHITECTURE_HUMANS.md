@@ -116,7 +116,7 @@ CLI/TUI/Web all call into session/infrastructure flows, so behavior should stay 
 ## 7) Design notes / current limitations
 
 - `mlox/scheduler.py` exists but is effectively legacy/obsolete in day-to-day architecture.
-- `mlox/operations.py` is newer and centralizes business operations used by CLI.
+- `mlox/application/facade.py` is the stateless application facade used by CLI and other callers that need session/context loading.
 - YAML `requirements` are present in config schema but currently not fully enforced in runtime.
 - YAML `groups` are partly descriptive today; some map to functional behavior/classes (e.g., git), but this is not yet fully consistent.
 

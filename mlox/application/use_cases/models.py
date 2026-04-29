@@ -6,17 +6,10 @@ from mlox.application.result import OperationResult
 
 
 def list_models(
-    load_session,
-    project: str,
-    password: str,
+    session,
     *,
     registry_name: Optional[str] = None,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
     model_servers = session.infra.filter_by_group("model-server")
     registries = session.infra.filter_by_group("model-registry")
     if not registries:
@@ -54,11 +47,9 @@ def list_models(
 
 
 def deploy_model(
-    load_session,
+    session,
     add_service,
     setup_service,
-    project: str,
-    password: str,
     *,
     registry_name: Optional[str],
     model_name: str,
@@ -66,11 +57,6 @@ def deploy_model(
     server_ip: str,
     template_id: str,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
     target_bundle = session.infra.get_bundle_by_ip(server_ip)
     if not target_bundle:
         return OperationResult(False, 14, f"Server {server_ip} not found in infrastructure.")
@@ -92,8 +78,7 @@ def deploy_model(
     }
 
     add_result = add_service(
-        project=project,
-        password=password,
+        session,
         server_ip=server_ip,
         template_id=template_id,
         params=params,
@@ -104,4 +89,4 @@ def deploy_model(
         return OperationResult(False, 15, "Failed to retrieve deployed service.")
 
     service = add_result.data["service"]
-    return setup_service(project=project, password=password, name=service.name)
+    return setup_service(session, name=service.name)

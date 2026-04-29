@@ -1,4 +1,4 @@
-"""Facade over the MLOX application use-cases."""
+"""Stateless facade that loads session context and dispatches application use-cases."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from mlox.config import (
     load_config,
     load_service_config_by_id,
 )
+from mlox.infra import ModelRegistry, ModelServer
 from mlox.session import MloxSession
 from mlox.utils import save_to_json
 
@@ -85,11 +86,17 @@ def _load_config_from_path(path: str):
 
 
 def create_project(name: str, password: str) -> OperationResult:
-    return project.create_project(_load_session, name, password)
+    result = _load_session(name, password, refresh=True)
+    if not result.success:
+        return result
+    return project.create_project(result.data, name)
 
 
 def list_servers(project: str, password: str) -> OperationResult:
-    return servers.list_servers(_load_session, project, password)
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    return servers.list_servers(result.data)
 
 
 def add_server(
@@ -103,11 +110,12 @@ def add_server(
     root_password: str,
     extra_params: Optional[Dict[str, str]] = None,
 ) -> OperationResult:
+    result = _load_session(project, password)
+    if not result.success:
+        return result
     return servers.add_server(
-        _load_session,
+        result.data,
         _load_config_from_path,
-        project,
-        password,
         template_path=template_path,
         ip=ip,
         port=port,
@@ -118,11 +126,17 @@ def add_server(
 
 
 def setup_server(project: str, password: str, *, ip: str) -> OperationResult:
-    return servers.setup_server(_load_session, project, password, ip=ip)
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    return servers.setup_server(result.data, ip=ip)
 
 
 def teardown_server(project: str, password: str, *, ip: str) -> OperationResult:
-    return servers.teardown_server(_load_session, project, password, ip=ip)
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    return servers.teardown_server(result.data, ip=ip)
 
 
 def save_server_key(
@@ -132,10 +146,12 @@ def save_server_key(
     ip: str,
     output_path: str,
 ) -> OperationResult:
+    result = _load_session(project, password)
+    if not result.success:
+        return result
     return servers.save_server_key(
-        _load_session,
+        result.data,
         save_to_json,
-        project,
         password,
         ip=ip,
         output_path=output_path,
@@ -143,7 +159,10 @@ def save_server_key(
 
 
 def list_services(project: str, password: str) -> OperationResult:
-    return services.list_services(_load_session, project, password)
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    return services.list_services(result.data)
 
 
 def add_service(
@@ -154,11 +173,12 @@ def add_service(
     template_id: str,
     params: Optional[Dict[str, str]] = None,
 ) -> OperationResult:
+    result = _load_session(project, password)
+    if not result.success:
+        return result
     return services.add_service(
-        _load_session,
+        result.data,
         load_service_config_by_id,
-        project,
-        password,
         server_ip=server_ip,
         template_id=template_id,
         params=params,
@@ -166,11 +186,17 @@ def add_service(
 
 
 def setup_service(project: str, password: str, *, name: str) -> OperationResult:
-    return services.setup_service(_load_session, project, password, name=name)
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    return services.setup_service(result.data, name=name)
 
 
 def teardown_service(project: str, password: str, *, name: str) -> OperationResult:
-    return services.teardown_service(_load_session, project, password, name=name)
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    return services.teardown_service(result.data, name=name)
 
 
 def service_logs(
@@ -181,10 +207,11 @@ def service_logs(
     label: Optional[str] = None,
     tail: int = 200,
 ) -> OperationResult:
+    result = _load_session(project, password)
+    if not result.success:
+        return result
     return services.service_logs(
-        _load_session,
-        project,
-        password,
+        result.data,
         name=name,
         label=label,
         tail=tail,
@@ -197,12 +224,10 @@ def list_models(
     *,
     registry_name: Optional[str] = None,
 ) -> OperationResult:
-    return models.list_models(
-        _load_session,
-        project,
-        password,
-        registry_name=registry_name,
-    )
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+    return models.list_models(result.data, registry_name=registry_name)
 
 
 def deploy_model(
@@ -215,12 +240,22 @@ def deploy_model(
     server_ip: str,
     template_id: str = DEFAULT_MLSERVER_TEMPLATE_ID,
 ) -> OperationResult:
+    result = _load_session(project, password)
+    if not result.success:
+        return result
+
+    def _add_service_for_session(session, **kwargs) -> OperationResult:
+        del session
+        return add_service(project=project, password=password, **kwargs)
+
+    def _setup_service_for_session(session, *, name: str) -> OperationResult:
+        del session
+        return setup_service(project=project, password=password, name=name)
+
     return models.deploy_model(
-        _load_session,
-        add_service,
-        setup_service,
-        project,
-        password,
+        result.data,
+        _add_service_for_session,
+        _setup_service_for_session,
         registry_name=registry_name,
         model_name=model_name,
         model_version=model_version,

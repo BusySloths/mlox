@@ -1,1 +1,1 @@
-"""Application-layer types and use-cases for MLOX."""
+"""Application-layer types, use-cases, and stateless facade for MLOX."""

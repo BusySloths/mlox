@@ -184,7 +184,9 @@ class ServerConnection:
                 RETRYABLE_EXCEPTIONS_FOR_CONNECTION
             ) as e:  # Catch only specified retryable exceptions
                 logging.warning(
-                    f"Failed to open connection to {host} (attempt {current_attempt + 1}/{self.retries + 1}): {type(e).__name__} - {e}"
+                    f"Failed to open connection to {host} "
+                    f"(attempt {current_attempt + 1}/{self.retries + 1}): "
+                    f"{type(e).__name__} - {e}"
                 )
                 if current_attempt == self.retries:
                     logging.error(f"Max connection retries reached for {host}.")

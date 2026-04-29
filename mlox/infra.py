@@ -17,7 +17,6 @@ Related modules (plain-text links):
 - mlox.service
 - mlox.config
 - mlox.session
-- mlox.service_registry
 """
 
 from abc import abstractmethod
@@ -89,10 +88,10 @@ class Infrastructure:
         self.populate_configs()
 
     def clear_service_registry(self) -> None:
-        """Clear the singleton service registry (useful for testing)"""
+        """Clear bound service lookups (legacy compatibility name)."""
         from mlox.application.use_cases import infrastructure as infra_use_cases
 
-        infra_use_cases.clear_service_registry()
+        infra_use_cases.clear_service_lookups(self)
 
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
@@ -182,6 +181,9 @@ class Infrastructure:
                     return s
         return None
 
+    def get_service_by_name(self, service_name: str) -> AbstractService | None:
+        return self.get_service(service_name)
+
     def get_service_by_uuid(self, service_uuid: str) -> AbstractService | None:
         for bundle in self.bundles:
             for s in bundle.services:
@@ -235,6 +237,7 @@ class Infrastructure:
         return infra
 
     def populate_service_registry(self) -> None:
+        """Bind service lookup context to loaded services (legacy compatibility name)."""
         from mlox.application.use_cases import infrastructure as infra_use_cases
 
         infra_use_cases.populate_service_registry(self)

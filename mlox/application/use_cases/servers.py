@@ -7,12 +7,7 @@ from mlox.application.result import OperationResult
 from mlox.utils import dataclass_to_dict
 
 
-def list_servers(load_session, project: str, password: str) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
+def list_servers(session) -> OperationResult:
     servers = []
     for bundle in session.infra.bundles:
         servers.append(
@@ -32,10 +27,8 @@ def list_servers(load_session, project: str, password: str) -> OperationResult:
 
 
 def add_server(
-    load_session,
+    session,
     load_server_config,
-    project: str,
-    password: str,
     *,
     template_path: str,
     ip: str,
@@ -44,15 +37,10 @@ def add_server(
     root_password: str,
     extra_params: Optional[Dict[str, str]] = None,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
     config = load_server_config(template_path)
     if config is None:
         return OperationResult(False, 3, "Server template not found.")
 
-    session = result.data
     params = {
         "${MLOX_IP}": ip,
         "${MLOX_PORT}": str(port),
@@ -74,12 +62,7 @@ def add_server(
     return OperationResult(True, 0, f"Added server {ip}.", {"bundle": bundle})
 
 
-def setup_server(load_session, project: str, password: str, *, ip: str) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
+def setup_server(session, *, ip: str) -> OperationResult:
     bundle = session.infra.get_bundle_by_ip(ip)
     if not bundle:
         return OperationResult(False, 5, "Server not found in infrastructure.")
@@ -90,17 +73,10 @@ def setup_server(load_session, project: str, password: str, *, ip: str) -> Opera
 
 
 def teardown_server(
-    load_session,
-    project: str,
-    password: str,
+    session,
     *,
     ip: str,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
     bundle = session.infra.get_bundle_by_ip(ip)
     if not bundle:
         return OperationResult(False, 5, "Server not found in infrastructure.")
@@ -112,19 +88,13 @@ def teardown_server(
 
 
 def save_server_key(
-    load_session,
+    session,
     save_json,
-    project: str,
     password: str,
     *,
     ip: str,
     output_path: str,
 ) -> OperationResult:
-    result = load_session(project, password)
-    if not result.success:
-        return result
-
-    session = result.data
     bundle = session.infra.get_bundle_by_ip(ip)
     if not bundle:
         return OperationResult(False, 5, "Server not found in infrastructure.")

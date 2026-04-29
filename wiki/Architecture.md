@@ -188,7 +188,7 @@ All low-level command execution is routed through task executors:
 | Area | Notes |
 |------|-------|
 | `mlox/scheduler.py` | Effectively legacy/obsolete — not part of the active architecture |
-| `mlox/operations.py` | Newer; centralizes business operations used by the CLI |
+| `mlox/application/facade.py` | Stateless application facade used by CLI and other callers without an existing session |
 | YAML `requirements` | Present in the config schema but **not yet fully enforced** at runtime |
 | YAML `groups` | Partly descriptive today; some map to functional classes (e.g., `git`), but this is not yet fully consistent |
 

@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import typer
 
-from mlox import operations as ops
+from mlox.application import facade as ops
 from mlox.cli.common import handle_result, parse_kv
 from mlox.cli.context import resolve_credentials
 from mlox.cli.rendering.table import render_table
@@ -103,7 +103,9 @@ def service_setup(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.setup_service(project=resolved_project, password=resolved_password, name=name)
+        ops.setup_service(
+            project=resolved_project, password=resolved_password, name=name
+        )
     )
     typer.echo(result.message)
     service = result.data.get("service") if result.data else None

@@ -4,7 +4,7 @@ from unittest import mock
 from typer.testing import CliRunner
 
 from mlox import cli
-from mlox.operations import OperationResult
+from mlox.application.result import OperationResult
 
 typer = pytest.importorskip("typer")
 runner = CliRunner()
