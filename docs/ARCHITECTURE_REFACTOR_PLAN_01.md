@@ -5,9 +5,9 @@
 The current codebase already states a shared flow through `MloxSession` and `Infrastructure`, but several responsibilities are still mixed:
 
 - `mlox/cli.py` is very large and contains both command wiring and presentation/formatting concerns.
-- `mlox/operations.py` centralizes use-cases but is currently a broad, flat module.
+- `mlox/application/facade.py` is the stateless application facade above the session-based use-cases.
 - `mlox/infra.py` mixes topology state with orchestration/runtime tasks.
-- A singleton `service_registry` exists in parallel to `Infrastructure`, creating two sources of truth for services.
+- Service dependency lookup has historically lived outside `Infrastructure`, creating two sources of truth for services.
 
 This plan proposes a clean architecture that keeps the strengths of the current model while reducing coupling.
 
@@ -69,27 +69,31 @@ Suggested structure:
 
 Result: CLI remains easy to navigate and test with command-focused unit tests.
 
-## B) Replace monolithic operations module with use-case classes
+## B) Replace monolithic facade logic with focused use-case modules
 
-Instead of one long `operations.py`, split by domain capabilities.
+Instead of one broad facade module owning business flow, split behavior by domain capabilities and keep the facade thin.
 
 Example pattern:
 
-- `ListServersUseCase`
-- `AddServerUseCase`
-- `SetupServiceUseCase`
+- `application/use_cases/servers.py`
+- `application/use_cases/services.py`
+- `application/use_cases/models.py`
 
-Each use-case depends on interfaces (ports), e.g.:
+Each module should expose small, explicit functions, for example:
 
-- `SessionRepositoryPort`
-- `ConfigCatalogPort`
-- `ExecutionPort`
+- `list_servers(session)`
+- `add_server(session, load_server_config, ...)`
+- `setup_service(session, name=...)`
 
-This makes CLI/TUI/Web consumers interchangeable and improves testability.
+Prefer passing a small number of concrete helper functions over introducing
+ports/protocols unless the abstraction is already paying for itself.
+
+This keeps CLI/TUI/Web consumers interchangeable while staying easy to read
+and test.
 
 ## C) Make `Infrastructure` the single source of truth (remove parallel registry)
 
-Current singleton `service_registry` duplicates service indexing.
+Service dependency lookup should live on `Infrastructure`, not in a parallel registry.
 
 Refactor plan:
 
@@ -134,13 +138,13 @@ Then implement adapters over existing modules (`session.py`, `config.py`, server
 ### Phase 1: CLI decomposition (no behavior change)
 
 - Move command groups and rendering helpers into new files.
-- Keep delegating to existing operations functions.
+- Keep delegating to the application facade during the transition.
 
-### Phase 2: Operations decomposition
+### Phase 2: Facade decomposition
 
 - Create `application/use_cases/*` modules.
 - Migrate one command family at a time (servers first, then services, then models).
-- Keep `operations.py` as deprecated facade calling new use-cases.
+- Keep `application/facade.py` as a thin stateless adapter that loads context and calls session-based use-cases.
 
 ### Phase 3: Registry unification
 

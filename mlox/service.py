@@ -23,12 +23,18 @@ import json
 import uuid
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, Literal, Optional
+from typing import Dict, Literal, Optional, Protocol
 from dataclasses import dataclass, field, asdict
 
 from mlox.executors import UbuntuTaskExecutor
 
 logger = logging.getLogger(__name__)
+
+
+class ServiceLookup(Protocol):
+    def get_service_by_uuid(self, service_uuid: str) -> Optional["AbstractService"]: ...
+
+    def get_service_by_name(self, service_name: str) -> Optional["AbstractService"]: ...
 
 
 @dataclass
@@ -54,11 +60,22 @@ class AbstractService(ABC):
 
     exec: UbuntuTaskExecutor = field(default_factory=UbuntuTaskExecutor, init=False)
 
+    def __post_init__(self) -> None:
+        # Runtime-only lookup context. Intentionally not a dataclass field so it is
+        # excluded from persistence and debug snapshots based on dataclass export.
+        self._service_lookup: ServiceLookup | None = None
+
     def set_task_executor(self, exec: UbuntuTaskExecutor) -> None:
         logger.info(
             f"Setting task executor for service {self.name} supporting {exec.supported_os_ids}"
         )
         self.exec = exec
+
+    def bind_service_lookup(self, lookup: ServiceLookup) -> None:
+        self._service_lookup = lookup
+
+    def clear_service_lookup(self) -> None:
+        self._service_lookup = None
 
     @abstractmethod
     def setup(self, conn) -> None:
@@ -194,18 +211,22 @@ class AbstractService(ABC):
         return f"Service with label {label} ({service}) not found"
 
     def get_dependent_service(self, service_uuid: str) -> Optional["AbstractService"]:
-        """Get a dependent service by UUID using singleton registry."""
-        from mlox.service_registry import get_dependent_service
+        """Get a dependent service by UUID via the bound service lookup."""
 
-        return get_dependent_service(service_uuid)
+        lookup = self._service_lookup
+        if lookup is None:
+            return None
+        return lookup.get_service_by_uuid(service_uuid)
 
     def get_dependent_service_by_name(
         self, service_name: str
     ) -> Optional["AbstractService"]:
-        """Get a dependent service by UUID using singleton registry."""
-        from mlox.service_registry import get_dependent_service_by_name
+        """Get a dependent service by name via the bound service lookup."""
 
-        return get_dependent_service_by_name(service_name)
+        lookup = self._service_lookup
+        if lookup is None:
+            return None
+        return lookup.get_service_by_name(service_name)
 
     def dump_state(self, conn) -> None:
         """Persist service debugging artifacts to the target directory."""

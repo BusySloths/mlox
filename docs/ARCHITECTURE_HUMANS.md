@@ -6,7 +6,7 @@ This document gives a practical, contributor-first map of the MLOX codebase.
 
 MLOX is a Python project that manages MLOps infrastructure through three user interfaces:
 
-- **CLI** (`mlox/cli.py`)
+- **CLI** (`mlox/cli/`)
 - **TUI** (`mlox/tui/`)
 - **Web app (Streamlit)** (`mlox/view/`)
 
@@ -52,7 +52,7 @@ The `mlox/` package contains:
 - `servers/`: backend/server abstractions and implementations
 - `tui/`: Textual terminal UI
 - `view/`: Streamlit web app
-- `cli.py`: Typer CLI
+- `cli/`: Typer CLI package
 - `assets/`: includes some outdated scripts/assets (not always canonical)
 
 ### Configuration-driven building
@@ -116,7 +116,7 @@ CLI/TUI/Web all call into session/infrastructure flows, so behavior should stay 
 ## 7) Design notes / current limitations
 
 - `mlox/scheduler.py` exists but is effectively legacy/obsolete in day-to-day architecture.
-- `mlox/operations.py` is newer and centralizes business operations used by CLI.
+- `mlox/application/facade.py` is the stateless application facade used by CLI and other callers that need session/context loading.
 - YAML `requirements` are present in config schema but currently not fully enforced in runtime.
 - YAML `groups` are partly descriptive today; some map to functional behavior/classes (e.g., git), but this is not yet fully consistent.
 

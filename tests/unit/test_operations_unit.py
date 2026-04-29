@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mlox.operations import (
+from mlox.application.facade import (
     OperationResult,
     _SessionCache,
     _load_session,
@@ -50,7 +50,7 @@ class _Session:
 
 @pytest.fixture
 def patch_session_type(monkeypatch):
-    monkeypatch.setattr("mlox.operations.MloxSession", _Session)
+    monkeypatch.setattr("mlox.application.facade.MloxSession", _Session)
 
 
 def test_session_cache_invalidate_by_project():
@@ -65,11 +65,11 @@ def test_session_cache_invalidate_by_project():
 
 
 def test_load_session_from_cache(monkeypatch):
-    from mlox import operations
+    from mlox.application import facade
 
     cached = _Session(_Secrets(ok=True))
-    operations._SESSION_CACHE.invalidate()
-    operations._SESSION_CACHE.set("p", "pw", cached)
+    facade._SESSION_CACHE.invalidate()
+    facade._SESSION_CACHE.set("p", "pw", cached)
 
     result = _load_session("p", "pw")
 
@@ -78,12 +78,12 @@ def test_load_session_from_cache(monkeypatch):
 
 
 def test_load_session_invalidates_non_working_cached_secret(monkeypatch):
-    from mlox import operations
+    from mlox.application import facade
 
     cached = _Session(_Secrets(ok=False))
-    operations._SESSION_CACHE.invalidate()
-    operations._SESSION_CACHE.set("p", "pw", cached)
-    monkeypatch.setattr("mlox.operations.MloxSession", lambda project_name, password: _Session(_Secrets(ok=True)))
+    facade._SESSION_CACHE.invalidate()
+    facade._SESSION_CACHE.set("p", "pw", cached)
+    monkeypatch.setattr("mlox.application.facade.MloxSession", lambda project_name, password: _Session(_Secrets(ok=True)))
 
     result = _load_session("p", "pw")
 
@@ -95,7 +95,7 @@ def test_load_session_failure(monkeypatch):
     def _boom(*_args, **_kwargs):
         raise RuntimeError("no")
 
-    monkeypatch.setattr("mlox.operations.MloxSession", _boom)
+    monkeypatch.setattr("mlox.application.facade.MloxSession", _boom)
 
     result = _load_session("p", "pw", refresh=True)
 
@@ -104,7 +104,7 @@ def test_load_session_failure(monkeypatch):
 
 
 def test_create_project_success(monkeypatch, patch_session_type):
-    monkeypatch.setattr("mlox.operations._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", _Session()))
+    monkeypatch.setattr("mlox.application.facade._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", _Session()))
 
     result = create_project("p", "pw")
 
@@ -117,7 +117,7 @@ def test_list_servers_formats_payload(monkeypatch, patch_session_type):
     bundle = SimpleNamespace(server=srv, services=[1, 2])
     session = _Session()
     session.infra.bundles = [bundle]
-    monkeypatch.setattr("mlox.operations._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
+    monkeypatch.setattr("mlox.application.facade._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
 
     result = list_servers("p", "pw")
 
@@ -126,8 +126,8 @@ def test_list_servers_formats_payload(monkeypatch, patch_session_type):
 
 
 def test_add_server_template_not_found(monkeypatch, patch_session_type):
-    monkeypatch.setattr("mlox.operations._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", _Session()))
-    monkeypatch.setattr("mlox.operations._load_config_from_path", lambda p: None)
+    monkeypatch.setattr("mlox.application.facade._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", _Session()))
+    monkeypatch.setattr("mlox.application.facade._load_config_from_path", lambda p: None)
 
     result = add_server("p", "pw", template_path="a/b", ip="1.1.1.1", port=22, root_user="u", root_password="pw")
 
@@ -137,7 +137,7 @@ def test_add_server_template_not_found(monkeypatch, patch_session_type):
 def test_add_service_and_list_services(monkeypatch, patch_session_type):
     session = _Session()
 
-    svc = SimpleNamespace(
+    existing_svc = SimpleNamespace(
         name="svc1",
         service_config_id="cfg",
         state="running",
@@ -145,16 +145,26 @@ def test_add_service_and_list_services(monkeypatch, patch_session_type):
         service_ports={"http": 8080},
         service_urls={"ui": "http://localhost"},
     )
-    session.infra.bundles = [SimpleNamespace(server=SimpleNamespace(ip="1.1.1.1"), services=[svc])]
+    new_svc = SimpleNamespace(name="svc-new")
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(ip="1.1.1.1"),
+        services=[existing_svc, new_svc],
+    )
+    session.infra.bundles = [bundle]
     session.save_infrastructure = lambda: None
 
-    monkeypatch.setattr("mlox.operations._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
-    monkeypatch.setattr("mlox.operations.load_service_config_by_id", lambda _id: {"id": _id})
+    monkeypatch.setattr("mlox.application.facade._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
+    monkeypatch.setattr("mlox.application.facade.load_service_config_by_id", lambda _id: {"id": _id})
+    monkeypatch.setattr(
+        "mlox.application.use_cases.services.infra_use_cases.add_service",
+        lambda infra, server_ip, config, params: bundle,
+    )
 
     add_result = add_service("p", "pw", server_ip="1.1.1.1", template_id="svc-template")
     list_result = list_services("p", "pw")
 
     assert add_result.success
+    assert add_result.data["service"] is new_svc
     assert list_result.data["services"][0]["ports"] == ["http:8080"]
 
 
@@ -163,7 +173,7 @@ def test_service_logs_without_labels(monkeypatch, patch_session_type):
     infra = SimpleNamespace(get_service=lambda name: svc)
     session = _Session()
     session.infra = infra
-    monkeypatch.setattr("mlox.operations._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
+    monkeypatch.setattr("mlox.application.facade._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
 
     result = service_logs("p", "pw", name="svc")
 
@@ -192,9 +202,9 @@ def test_list_models_and_deploy_model(monkeypatch, patch_session_type):
     )
     session = _Session()
     session.infra = infra
-    monkeypatch.setattr("mlox.operations._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
-    monkeypatch.setattr("mlox.operations.ModelRegistry", object)
-    monkeypatch.setattr("mlox.operations.ModelServer", object)
+    monkeypatch.setattr("mlox.application.facade._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
+    monkeypatch.setattr("mlox.application.facade.ModelRegistry", object)
+    monkeypatch.setattr("mlox.application.facade.ModelServer", object)
 
     models = list_models("p", "pw")
 
@@ -202,17 +212,43 @@ def test_list_models_and_deploy_model(monkeypatch, patch_session_type):
     assert models.data["models"][0]["is_deployed"] is True
 
     svc = SimpleNamespace(name="ms")
-    monkeypatch.setattr("mlox.operations.add_service", lambda **kwargs: OperationResult(True, 0, "ok", {"service": svc}))
-    monkeypatch.setattr("mlox.operations.setup_service", lambda project, password, name: OperationResult(True, 0, "ok", {"name": name}))
-    monkeypatch.setattr("mlox.operations.ModelServer", object)
+    monkeypatch.setattr("mlox.application.facade.add_service", lambda **kwargs: OperationResult(True, 0, "ok", {"service": svc}))
+    monkeypatch.setattr("mlox.application.facade.setup_service", lambda project, password, name: OperationResult(True, 0, "ok", {"name": name}))
+    monkeypatch.setattr("mlox.application.facade.ModelServer", object)
 
     deployed = deploy_model("p", "pw", registry_name="reg", model_name="m", model_version="1", server_ip="10.0.0.1")
     assert deployed.success
 
 
+def test_list_models_filters_registry(monkeypatch, patch_session_type):
+    class Registry:
+        def __init__(self, name):
+            self.name = name
+
+        def list_models(self):
+            return [{"Model": self.name, "Version": "1"}]
+
+    infra = SimpleNamespace(
+        filter_by_group=lambda group: []
+        if group == "model-server"
+        else [Registry("keep"), Registry("skip")],
+    )
+    session = _Session()
+    session.infra = infra
+    monkeypatch.setattr(
+        "mlox.application.facade._load_session",
+        lambda *args, **kwargs: OperationResult(True, 0, "ok", session),
+    )
+
+    result = list_models("p", "pw", registry_name="keep")
+
+    assert result.success
+    assert [model["registry_name"] for model in result.data["models"]] == ["keep"]
+
+
 def test_list_config_operations(monkeypatch):
-    monkeypatch.setattr("mlox.operations.load_all_server_configs", lambda: [SimpleNamespace(id="s1", path="/s1")])
-    monkeypatch.setattr("mlox.operations.load_all_service_configs", lambda: [SimpleNamespace(id="v1", path="/v1")])
+    monkeypatch.setattr("mlox.application.facade.load_all_server_configs", lambda: [SimpleNamespace(id="s1", path="/s1")])
+    monkeypatch.setattr("mlox.application.facade.load_all_service_configs", lambda: [SimpleNamespace(id="v1", path="/v1")])
 
     servers = list_server_configs()
     services = list_service_configs()
