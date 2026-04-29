@@ -10,10 +10,22 @@ MLOX is a Python project that manages MLOps infrastructure through three user in
 - **TUI** (`mlox/tui/`)
 - **Web app (Streamlit)** (`mlox/view/`)
 
-All three interfaces ultimately work on the same core runtime objects:
+The current CLI architecture routes through a thin application layer before it reaches the core runtime objects:
 
+- **`mlox/application/facade.py`**: stateless session loader/dispatcher
+- **`mlox/application/use_cases/`**: session-based application actions grouped by domain
 - **`MloxSession`** (`mlox/session.py`): project/session state and persistence
 - **`Infrastructure`** (`mlox/infra.py`): servers, bundles, services
+
+```text
+CLI (`mlox/cli/app.py` + `mlox/cli/commands/*`)
+    └─► `mlox/application/facade.py`
+          └─► `mlox/application/use_cases/*`
+                └─► `MloxSession`
+                      └─► `Infrastructure`
+
+YAML configs are loaded through `mlox/config.py` into that flow.
+```
 
 ## 2) Setup, tests, and repo surroundings
 
@@ -50,9 +62,10 @@ The `mlox/` package contains:
 
 - `services/`: deployable MLOps services
 - `servers/`: backend/server abstractions and implementations
+- `application/`: facade plus session-based use-cases
 - `tui/`: Textual terminal UI
 - `view/`: Streamlit web app
-- `cli/`: Typer CLI package
+- `cli/`: Typer CLI package (`app.py` + `commands/*`)
 - `assets/`: includes some outdated scripts/assets (not always canonical)
 
 ### Configuration-driven building
@@ -101,7 +114,9 @@ The `MloxProject` metadata stores which secret manager class is used and how to 
 
 ### Shared control flow
 
-CLI/TUI/Web all call into session/infrastructure flows, so behavior should stay aligned across interfaces.
+The CLI now goes through `mlox/cli/commands/*` -> `mlox/application/facade.py` -> `mlox/application/use_cases/*` -> `MloxSession` -> `Infrastructure`.
+
+TUI and Web UI should preserve the same session/infrastructure behavior even where they do not yet share the exact same presentation-layer wiring.
 
 ### Executors do system calls
 
@@ -116,7 +131,8 @@ CLI/TUI/Web all call into session/infrastructure flows, so behavior should stay 
 ## 7) Design notes / current limitations
 
 - `mlox/scheduler.py` exists but is effectively legacy/obsolete in day-to-day architecture.
-- `mlox/application/facade.py` is the stateless application facade used by CLI and other callers that need session/context loading.
+- `mlox/application/facade.py` is now a thin stateless facade that loads/caches session context and dispatches to `application/use_cases/*`.
+- `mlox/application/infrastructure_ops.py` holds orchestration helpers used by the session-based use-cases for setup/teardown-style side effects.
 - YAML `requirements` are present in config schema but currently not fully enforced in runtime.
 - YAML `groups` are partly descriptive today; some map to functional behavior/classes (e.g., git), but this is not yet fully consistent.
 

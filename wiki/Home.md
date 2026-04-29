@@ -61,14 +61,17 @@ MLOX gives you a calm, reproducible way to run production-grade ML infrastructur
 
 ## Architecture at a Glance
 
-```
-YAML Configs ──► config.py ──► MloxSession ──► Infrastructure
-                                    │
-                              ┌─────┼─────┐
-                             CLI   TUI   Web UI
+```text
+CLI (`mlox/cli/app.py` + `mlox/cli/commands/*`)
+    └─► `mlox/application/facade.py`
+          └─► `mlox/application/use_cases/*`
+                └─► `MloxSession`
+                      └─► `Infrastructure`
+
+YAML configs are loaded through `mlox/config.py` into that flow.
 ```
 
-Three interfaces, one core. Session startup reads an encrypted project file, loads the secret manager, and reconstructs the infrastructure graph. All remote shell operations route through `UbuntuTaskExecutor` — nothing embeds raw subprocess logic in service code.
+The CLI is now split into command-focused submodules, and the application layer is organized around session-based use-cases instead of one broad operations module. TUI and Web UI still need to preserve the same session/infrastructure behavior. All remote shell operations route through executors rather than ad-hoc subprocess logic in service code.
 
 → Read the full [Architecture](Architecture) page for a deep dive.
 

@@ -25,22 +25,27 @@ MLOX is a Python project that manages MLOps infrastructure through **three user 
 
 | Interface | Entry Point |
 |-----------|------------|
-| **CLI** | [`mlox/cli.py`](https://github.com/BusySloths/mlox/blob/main/mlox/cli.py) |
+| **CLI** | [`mlox/cli/app.py`](https://github.com/BusySloths/mlox/blob/main/mlox/cli/app.py) + [`mlox/cli/commands/`](https://github.com/BusySloths/mlox/blob/main/mlox/cli/commands/) |
 | **TUI** (terminal UI) | [`mlox/tui/`](https://github.com/BusySloths/mlox/blob/main/mlox/tui/) |
 | **Web App** (Streamlit) | [`mlox/view/`](https://github.com/BusySloths/mlox/blob/main/mlox/view/) |
 
-All three interfaces ultimately work on the same **core runtime objects**:
+The current CLI architecture routes through a thin application layer before it reaches the core runtime objects:
 
 | Object | File | Role |
 |--------|------|------|
+| Application facade | [`mlox/application/facade.py`](https://github.com/BusySloths/mlox/blob/main/mlox/application/facade.py) | Loads/caches session context and dispatches use-cases |
+| Use-case modules | [`mlox/application/use_cases/`](https://github.com/BusySloths/mlox/blob/main/mlox/application/use_cases/) | Session-based application actions grouped by domain |
 | `MloxSession` | [`mlox/session.py`](https://github.com/BusySloths/mlox/blob/main/mlox/session.py) | Project/session state and persistence |
 | `Infrastructure` | [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py) | Servers, bundles, services for a project |
 
-```
-YAML Configs ──► config.py ──► MloxSession ──► Infrastructure
-                                    │
-                              ┌─────┼─────┐
-                             CLI   TUI   Web UI
+```text
+CLI (`mlox/cli/app.py` + `mlox/cli/commands/*`)
+    └─► `mlox/application/facade.py`
+          └─► `mlox/application/use_cases/*`
+                └─► `MloxSession`
+                      └─► `Infrastructure`
+
+YAML configs are loaded through `mlox/config.py` into that flow.
 ```
 
 ---
@@ -92,15 +97,17 @@ Key tasks:
 
 ```
 mlox/
+├── application/    # facade + session-based use_cases
+├── cli/            # Typer CLI package (root app + command modules)
 ├── services/       # 20+ deployable ML services (one directory each)
 ├── servers/        # Native and Ubuntu/SSH backends
-├── cli.py          # Typer CLI entry point
 ├── tui/            # Textual terminal UI
 ├── view/           # Streamlit web UI
 ├── session.py      # Runtime state & persistence
 ├── infra.py        # Service/server graph
 ├── config.py       # YAML loading + plugin entry-point discovery
-├── executors.py    # All remote shell operations
+├── execution/      # backend/system execution helpers
+├── executors.py    # remote task executor layer used by services/servers
 └── assets/         # Outdated scripts/assets (not canonical)
 ```
 
@@ -165,7 +172,9 @@ MLOX supports multiple secret-manager backends:
 
 ### Shared Control Flow
 
-CLI, TUI, and Web UI all call into the same session/infrastructure flows — **behavior must stay aligned** across interfaces.
+The CLI now goes through `mlox/cli/commands/*` -> `mlox/application/facade.py` -> `mlox/application/use_cases/*` -> `MloxSession` -> `Infrastructure`.
+
+TUI and Web UI must preserve the same session/infrastructure behavior even where they do not yet share the exact same presentation-layer wiring.
 
 ### Executors Handle System Calls
 
@@ -188,7 +197,8 @@ All low-level command execution is routed through task executors:
 | Area | Notes |
 |------|-------|
 | `mlox/scheduler.py` | Effectively legacy/obsolete — not part of the active architecture |
-| `mlox/application/facade.py` | Stateless application facade used by CLI and other callers without an existing session |
+| `mlox/application/facade.py` | Thin stateless facade that loads/caches session context and dispatches to `application/use_cases/*` |
+| `mlox/application/infrastructure_ops.py` | Orchestration helpers used by session-based use-cases for setup/teardown-style side effects |
 | YAML `requirements` | Present in the config schema but **not yet fully enforced** at runtime |
 | YAML `groups` | Partly descriptive today; some map to functional classes (e.g., `git`), but this is not yet fully consistent |
 

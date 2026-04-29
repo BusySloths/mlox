@@ -72,14 +72,17 @@ We welcome contributors, early adopters, and honest feedback. If you hit somethi
 
 ## Architecture in 30 Seconds
 
-```
-YAML Configs ──► config.py ──► MloxSession ──► Infrastructure
-                                    │
-                              ┌─────┼─────┐
-                             CLI   TUI   Web UI
+```text
+CLI (`mlox/cli/app.py` + `mlox/cli/commands/*`)
+    └─► `mlox/application/facade.py`
+          └─► `mlox/application/use_cases/*`
+                └─► `MloxSession`
+                      └─► `Infrastructure`
+
+YAML configs are loaded through `mlox/config.py` into that flow.
 ```
 
-Three interfaces, one core. Session startup reads an encrypted project file, loads the secret manager, and reconstructs the infrastructure graph. All remote shell operations route through `UbuntuTaskExecutor` — nothing embeds raw subprocess logic in service code.
+The CLI is now split into command-focused submodules, and the application layer is organized around session-based use-cases instead of one broad operations module. TUI and Web UI still need to preserve the same session/infrastructure behavior. All remote shell operations route through executors rather than ad-hoc subprocess logic in service code.
 
 For deeper reading:
 
@@ -115,15 +118,17 @@ See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough includin
 ```
 mlox/
 ├── mlox/
+│   ├── application/    # facade + session-based use_cases
+│   ├── cli/            # Typer CLI package (root app + command modules)
 │   ├── services/       # 20+ deployable ML services (one directory each)
 │   ├── servers/        # Native and Ubuntu/SSH backends
-│   ├── cli.py          # Typer CLI entry point
 │   ├── tui/            # Textual terminal UI
 │   ├── view/           # Streamlit web UI
 │   ├── session.py      # Runtime state & persistence
 │   ├── infra.py        # Service/server graph
 │   ├── config.py       # YAML loading + plugin entry-point discovery
-│   └── executors.py    # All remote shell operations
+│   ├── execution/      # backend/system execution helpers
+│   └── executors.py    # remote task executor layer used by services/servers
 ├── tests/
 │   ├── unit/           # Fast tests, no external deps
 │   └── integration/    # Multipass VM tests

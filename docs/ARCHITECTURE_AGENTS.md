@@ -8,9 +8,12 @@ Treat MLOX as a **configuration-driven control plane**:
 
 1. Config YAML (`mlox/services/**/mlox.*.yaml`, `mlox/servers/**/mlox-server.*.yaml`) describes capabilities.
 2. `mlox/config.py` loads config + plugin entry points and maps `build.class_name` to implementation classes.
-3. `MloxSession` (`mlox/session.py`) loads project + secret manager + infrastructure.
-4. `Infrastructure` (`mlox/infra.py`) mutates server/service graph and persists state through secret manager.
-5. CLI/TUI/Web are shells over the same session/infrastructure behavior.
+3. CLI presentation is split across `mlox/cli/app.py` and `mlox/cli/commands/*`.
+4. `mlox/application/facade.py` loads/caches session context and dispatches to `mlox/application/use_cases/*`.
+5. `MloxSession` (`mlox/session.py`) loads project + secret manager + infrastructure.
+6. `Infrastructure` (`mlox/infra.py`) owns the server/service graph and persists it through the session secret manager.
+7. `mlox/application/infrastructure_ops.py` contains side-effectful orchestration helpers used by session-based use-cases.
+8. TUI/Web are alternative shells that must preserve the same session/infrastructure behavior.
 
 If you change core behavior, validate impact across **all three interfaces**.
 
@@ -103,7 +106,8 @@ For each service/server:
 ## 8) Legacy and partial features to treat carefully
 
 - `mlox/scheduler.py`: legacy/obsolete path for most new work.
-- `mlox/application/facade.py`: stateless application facade used by CLI and other callers that need session/context loading.
+- `mlox/application/facade.py`: thin stateless facade that loads/caches session context and dispatches to `application/use_cases/*`.
+- `mlox/application/infrastructure_ops.py`: orchestration helpers used by session-based use-cases; treat this as application-layer runtime logic, not pure domain state.
 - YAML `requirements`: present in schema but not fully enforced today.
 - YAML `groups`: partly descriptive; partly intended as functional mapping. Current implementation is inconsistent—avoid over-assuming strict semantics.
 
@@ -131,7 +135,7 @@ Architecture intent is backend-agnostic; when adding a backend:
 Before coding:
 
 - identify whether change touches config/session/infra (high risk)
-- map likely blast radius: CLI + TUI + web + persistence + tests
+- map likely blast radius: CLI command modules + facade/use-cases + TUI + web + persistence + tests
 
 During coding:
 

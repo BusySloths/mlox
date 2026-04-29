@@ -1,11 +1,13 @@
 # Core Architecture Simplification Plan
 
+> Status as of 2026-04-29: items A and B from this plan are implemented. The CLI now lives under `mlox/cli/app.py` + `mlox/cli/commands/*`, and the application layer now uses session-based `mlox/application/use_cases/*`. This document remains useful as a record of the refactor and for the still-open follow-up items.
+
 ## Why now
 
-The current codebase already states a shared flow through `MloxSession` and `Infrastructure`, but several responsibilities are still mixed:
+At the start of this refactor, the codebase already stated a shared flow through `MloxSession` and `Infrastructure`, but several responsibilities were mixed:
 
-- `mlox/cli.py` is very large and contains both command wiring and presentation/formatting concerns.
-- `mlox/application/facade.py` is the stateless application facade above the session-based use-cases.
+- `mlox/cli.py` was very large and contained both command wiring and presentation/formatting concerns.
+- `mlox/application/facade.py` has since been reduced to a thin stateless facade above the session-based use-cases.
 - `mlox/infra.py` mixes topology state with orchestration/runtime tasks.
 - Service dependency lookup has historically lived outside `Infrastructure`, creating two sources of truth for services.
 
@@ -55,7 +57,7 @@ This layer must not depend on Typer, subprocess, YAML loaders, or singleton regi
 
 ## Key structural decisions
 
-## A) Split `cli.py` into command modules
+## A) Split `cli.py` into command modules [completed]
 
 Suggested structure:
 
@@ -69,7 +71,7 @@ Suggested structure:
 
 Result: CLI remains easy to navigate and test with command-focused unit tests.
 
-## B) Replace monolithic facade logic with focused use-case modules
+## B) Replace monolithic facade logic with focused use-case modules [completed]
 
 Instead of one broad facade module owning business flow, split behavior by domain capabilities and keep the facade thin.
 
@@ -135,12 +137,12 @@ Then implement adapters over existing modules (`session.py`, `config.py`, server
 - Add architecture tests around current critical workflows (create project, add server, add/setup service).
 - Add snapshot/contract tests for CLI output where needed.
 
-### Phase 1: CLI decomposition (no behavior change)
+### Phase 1: CLI decomposition (no behavior change) [completed]
 
 - Move command groups and rendering helpers into new files.
 - Keep delegating to the application facade during the transition.
 
-### Phase 2: Facade decomposition
+### Phase 2: Facade decomposition [completed]
 
 - Create `application/use_cases/*` modules.
 - Migrate one command family at a time (servers first, then services, then models).
