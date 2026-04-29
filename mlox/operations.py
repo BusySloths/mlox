@@ -133,30 +133,8 @@ def create_project(name: str, password: str) -> OperationResult:
 
 
 def list_servers(project: str, password: str) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-    servers: List[Dict[str, Any]] = []
-    for bundle in session.infra.bundles:
-        backend = getattr(bundle.server, "backend", None)
-        discovered = getattr(bundle.server, "discovered", None)
-        template_id = getattr(bundle.server, "service_config_id", None)
-        port = getattr(bundle.server, "port", None)
-        servers.append(
-            {
-                "ip": bundle.server.ip,
-                "state": getattr(bundle.server, "state", "unknown"),
-                "service_count": len(bundle.services),
-                "service_config_id": template_id,
-                "port": port,
-                "discovered": discovered,
-                "backend": backend or [],
-            }
-        )
-    message = "No servers found." if not servers else "Servers retrieved successfully."
-    return OperationResult(True, 0, message, {"servers": servers})
+    from mlox.operations_usecases import ListServersUseCase
+    return ListServersUseCase(sessions=type("Repo", (), {"load": staticmethod(_load_session)})()).execute(project, password)
 
 
 def add_server(
@@ -170,33 +148,10 @@ def add_server(
     root_password: str,
     extra_params: Optional[Dict[str, str]] = None,
 ) -> OperationResult:
-    result = _load_session(project, password)
-    if not result.success:
-        return result
-    session = result.data
-    assert isinstance(session, MloxSession)
-
-    config = _load_config_from_path(template_path)
-    if config is None:
-        return OperationResult(False, 3, "Server template not found.")
-
-    params = {
-        "${MLOX_IP}": ip,
-        "${MLOX_PORT}": str(port),
-        "${MLOX_ROOT}": root_user,
-        "${MLOX_ROOT_PW}": root_password,
-    }
-    if extra_params:
-        params.update(extra_params)
-
-    bundle = session.infra.add_server(config=config, params=params)
-    if not bundle:
-        return OperationResult(
-            False, 4, "Failed to add server to the project infrastructure."
-        )
-
-    session.save_infrastructure()
-    return OperationResult(True, 0, f"Added server {ip}.", {"bundle": bundle})
+    from mlox.operations_usecases import AddServerUseCase
+    repo = type("Repo", (), {"load": staticmethod(_load_session)})()
+    catalog = type("Catalog", (), {"load_server": staticmethod(_load_config_from_path), "load_service": staticmethod(load_service_config_by_id)})()
+    return AddServerUseCase(sessions=repo, catalog=catalog).execute(project, password, template_path=template_path, ip=ip, port=port, root_user=root_user, root_password=root_password, extra_params=extra_params)
 
 
 def setup_server(project: str, password: str, *, ip: str) -> OperationResult:
