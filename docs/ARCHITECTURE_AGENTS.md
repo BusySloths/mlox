@@ -8,12 +8,13 @@ Treat MLOX as a **configuration-driven control plane**:
 
 1. Config YAML (`mlox/services/**/mlox.*.yaml`, `mlox/servers/**/mlox-server.*.yaml`) describes capabilities.
 2. `mlox/config.py` loads config + plugin entry points and maps `build.class_name` to implementation classes.
-3. `mlox/application/use_cases/*` is the important shared application layer for session-based logic. All UIs should converge on it.
-4. `MloxSession` (`mlox/session.py`) is the runtime container: project metadata + secret manager + `Infrastructure`.
-5. `Infrastructure` (`mlox/infra.py`) is the topology root for one project/session and holds `Bundle` objects.
-6. A `Bundle` groups one compute/server plus the services deployed onto it.
-7. Anything executed on a compute/server must go through the execution layer (`mlox/executors.py` + `mlox/execution/*`).
-8. `mlox/application/facade.py` is a current adapter for CLI/session loading, and `mlox/application/infrastructure_ops.py` contains side-effectful orchestration helpers used by the use-cases.
+3. Frontend-specific UI handlers live in the frontend packages and are resolved through `mlox/ui/registry.py`; do not model them back into YAML.
+4. `mlox/application/use_cases/*` is the important shared application layer for session-based logic. All UIs should converge on it.
+5. `MloxSession` (`mlox/session.py`) is the runtime container: project metadata + secret manager + `Infrastructure`.
+6. `Infrastructure` (`mlox/infra.py`) is the topology root for one project/session and holds `Bundle` objects.
+7. A `Bundle` groups one compute/server plus the services deployed onto it.
+8. Anything executed on a compute/server must go through the execution layer (`mlox/executors.py` + `mlox/execution/*`).
+9. `mlox/application/facade.py` is a current adapter for CLI/session loading, and `mlox/application/infrastructure_ops.py` contains side-effectful orchestration helpers used by the use-cases.
 
 If you change core behavior, validate impact across **all three interfaces**.
 
@@ -73,6 +74,7 @@ When changing config behavior:
 1. keep backward compatibility for existing YAML keys where possible
 2. preserve plugin discovery paths (`mlox.service_plugins`, `mlox.server_plugins`)
 3. verify service + server loading (not just one)
+4. keep UI lookup behavior aligned with `ServiceConfig.get_ui_handler(...)` and `mlox/ui/registry.py`
 
 ## 5) Infrastructure mutation rules
 
@@ -103,10 +105,11 @@ For each service/server:
 1. Provide MLOX YAML config.
 2. Map YAML `build.class_name` to concrete Python class.
 3. Keep backend-specific deployment assets with the service/server (compose/manifests/scripts).
-4. Ensure compute/server capabilities remain accurate (`git`, `docker`, `kubernetes`, `firewall`, etc.).
-5. Ensure service exposes `get_secret()` with all access-critical data.
-6. If service depends on other services, maintain dependency UUIDs and load through dependency resolver helper (`get_dependend_service` pattern).
-7. If user-facing Python integration is needed, expose client wrapper (`client.py` or equivalent).
+4. Keep frontend-specific UI handlers in frontend-owned modules (`mlox/view/...`, `mlox/tui/...`) and register them through `mlox/ui/registry.py`.
+5. Ensure compute/server capabilities remain accurate (`git`, `docker`, `kubernetes`, `firewall`, etc.).
+6. Ensure service exposes `get_secret()` with all access-critical data.
+7. If service depends on other services, maintain dependency UUIDs and load through dependency resolver helper (`get_dependend_service` pattern).
+8. If user-facing Python integration is needed, expose client wrapper (`client.py` or equivalent).
 
 ## 7) Execution boundary rules
 
@@ -121,6 +124,7 @@ For each service/server:
 - `mlox/application/use_cases/*`: important shared session-based application layer; prefer extending this over recreating broad operations modules.
 - `mlox/application/facade.py`: thin stateless adapter that loads/caches session context and dispatches to `application/use_cases/*`.
 - `mlox/application/infrastructure_ops.py`: orchestration helpers used by session-based use-cases; treat this as application-layer runtime logic, not pure domain state.
+- `mlox/ui/registry.py`: bootstrap/lookup layer for frontend-owned UI handlers; keep config concerns and UI concerns separated.
 - YAML `requirements`: present in schema but not fully enforced today.
 - server capabilities: real and important
 - service capabilities: emerging; today the signal is incomplete and partly represented through YAML groups and typed interfaces

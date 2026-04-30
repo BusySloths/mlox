@@ -14,7 +14,7 @@ MLOX is a configuration-driven control plane for deploying production-grade MLOp
 
 Cloud MLOps costs thousands per month. Setup is painful. Vendor lock-in is a trap.
 
-MLOX gives you a calm, reproducible way to run production-grade ML infrastructure on your own servers or hybrid cloud. Three interfaces (Web UI, TUI, CLI) share one inspectable, config-driven core. It's for engineers who prefer thoughtful systems over chaos.
+MLOX gives you a calm, reproducible way to run production-grade ML infrastructure on your own servers or hybrid cloud. Three interfaces (Web UI, TUI, CLI) share one inspectable, config-driven core, while frontend-specific UI handlers are registered separately. It's for engineers who prefer thoughtful systems over chaos.
 
 ---
 
@@ -27,7 +27,7 @@ MLOX gives you a calm, reproducible way to run production-grade ML infrastructur
 | [Contributing](Contributing) | How to contribute to MLOX |
 | [Troubleshooting](Troubleshooting) | Known setup and runtime issues with fixes and workarounds |
 | [Services Catalog](Services-Catalog) | All supported MLOps services |
-| [Plugin Guide](Plugin-Guide) | External service plugins |
+| [Plugin Guide](Plugin-Guide) | External service and server config plugins |
 
 ---
 
@@ -87,6 +87,8 @@ CLI     TUI     Streamlit Web UI     Other UIs
 ```
 
 `MloxSession` is the runtime center: it always carries project metadata, an encrypted key-value secret manager, and the current `Infrastructure`. The important shared application layer is `mlox/application/use_cases/*`; CLI already routes through it, and TUI/Web/future UIs should do the same. `Infrastructure` models topology through bundles, where each bundle groups one compute/server with its services. Anything executed on a compute goes through the execution layer, while compute capabilities already exist (`git`, `docker`, `kubernetes`, ...) and service capabilities are an emerging architectural direction.
+
+YAML stays focused on deployable configs and Python build classes. Streamlit and TUI-specific setup/settings handlers live in the frontend packages and are resolved through `mlox/ui/registry.py`, which keeps UI code out of the service/server config layer and prepares a future plugin extension point.
 
 → Read the full [Architecture](Architecture) page for a deep dive.
 

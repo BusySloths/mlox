@@ -26,7 +26,7 @@
 
 Cloud MLOps costs thousands per month. Setup is painful. Vendor lock-in is a trap.
 
-MLOX is a calm, reproducible way to run production-grade ML infrastructure on your own servers or hybrid cloud. You define your stack in YAML, MLOX handles the rest — deploying services, managing secrets, and wiring dependencies across backends. Three interfaces (Web UI, TUI, CLI) share one inspectable config-driven core.
+MLOX is a calm, reproducible way to run production-grade ML infrastructure on your own servers or hybrid cloud. You define your stack in YAML, MLOX handles the rest — deploying services, managing secrets, and wiring dependencies across backends. Three interfaces (Web UI, TUI, CLI) share one inspectable config-driven core, while frontend-specific UI handlers are registered separately.
 
 It's for engineers who prefer thoughtful systems over chaos. Backed by open source. Powered by sloths.
 
@@ -99,6 +99,8 @@ CLI     TUI     Streamlit Web UI     Other UIs
 
 `MloxSession` is the runtime center: it always carries project metadata, an encrypted key-value secret manager, and the current `Infrastructure`. The important shared application layer is `mlox/application/use_cases/*`; CLI already routes through it, and TUI/Web/future UIs should do the same. `Infrastructure` models topology through bundles, where each bundle groups one compute/server with its services. Anything executed on a compute goes through the execution layer, while compute capabilities already exist (`git`, `docker`, `kubernetes`, ...) and service capabilities are an emerging architectural direction.
 
+YAML stays focused on deployable configs and Python build classes. Frontend-specific setup/settings components live in the frontend packages (`mlox/view/*`, `mlox/tui/*`) and are resolved through `mlox/ui/registry.py`, which keeps UI code out of service/server config definitions and creates a future extension point for plugin-provided UI handlers.
+
 For deeper reading:
 
 - [Architecture Guide (humans)](docs/ARCHITECTURE_HUMANS.md) — codebase walkthrough
@@ -137,11 +139,12 @@ mlox/
 │   ├── cli/            # Typer CLI package (root app + command modules)
 │   ├── services/       # 20+ deployable ML services (one directory each)
 │   ├── servers/        # Native and Ubuntu/SSH backends
-│   ├── tui/            # Textual terminal UI
-│   ├── view/           # Streamlit web UI
+│   ├── tui/            # Textual terminal UI + TUI-specific UI handlers
+│   ├── ui/             # frontend UI handler registry
+│   ├── view/           # Streamlit web UI + Streamlit-specific UI handlers
 │   ├── session.py      # Runtime state & persistence
 │   ├── infra.py        # Service/server graph
-│   ├── config.py       # YAML loading + plugin entry-point discovery
+│   ├── config.py       # YAML loading + plugin discovery + UI handler lookup
 │   ├── execution/      # backend/system execution helpers
 │   └── executors.py    # remote task executor layer used by services/servers
 ├── tests/
@@ -197,7 +200,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and [docs/WORKFLOW_QUI
 | [Architecture (agents)](docs/ARCHITECTURE_AGENTS.md) | High-risk areas and invariants |
 | [Contributing Guide](CONTRIBUTING.md) | How to contribute |
 | [Workflow Quick Reference](docs/WORKFLOW_QUICK_REFERENCE.md) | Labels, milestones, PRs |
-| [Plugin Guide](docs/PLUGIN_CONFIGS.md) | External service plugins |
+| [Plugin Guide](docs/PLUGIN_CONFIGS.md) | External service and server config plugins |
 | [API Docs](https://busysloths.github.io/mlox/mlox.html) | Generated Python API reference |
 
 ---

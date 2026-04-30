@@ -7,6 +7,8 @@ MLOX discovers third-party template plugins through Python entry points:
 
 Each entry point must return a `ServiceConfig` instance.
 
+These entry points currently cover deployable service/server configs only. Frontend-specific UI handlers are intentionally kept outside YAML and are registered separately through `mlox/ui/registry.py`.
+
 ## Minimal package example
 
 ```toml
@@ -66,3 +68,15 @@ With this integration, existing template-loading paths automatically include ent
 - `load_all_server_configs()`
 
 So most callers do not need any code changes to benefit from external plugins.
+
+## UI registration note
+
+Custom setup/settings panels for Streamlit or TUI are not declared in the YAML config and are not currently part of the plugin entry-point API documented here.
+
+The active pattern in the core codebase is:
+
+- YAML defines the deployable service/server config
+- frontend modules implement custom UI handlers
+- `mlox/ui/registry.py` registers handlers by `config_id`, `frontend`, and `function_name`
+
+That registry shape is the intended future hook for plugin-contributed UI handlers, but today this guide only documents config plugins.

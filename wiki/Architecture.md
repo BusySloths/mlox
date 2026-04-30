@@ -123,11 +123,12 @@ mlox/
 ├── cli/            # Typer CLI package (root app + command modules)
 ├── services/       # 20+ deployable ML services (one directory each)
 ├── servers/        # Native and Ubuntu/SSH backends
-├── tui/            # Textual terminal UI
-├── view/           # Streamlit web UI
+├── tui/            # Textual terminal UI + TUI-specific UI handlers
+├── ui/             # frontend UI handler registry
+├── view/           # Streamlit web UI + Streamlit-specific UI handlers
 ├── session.py      # Runtime state & persistence
 ├── infra.py        # Service/server graph
-├── config.py       # YAML loading + plugin entry-point discovery
+├── config.py       # YAML loading + plugin discovery + UI handler lookup
 ├── execution/      # backend/system execution helpers
 ├── executors.py    # remote task executor layer used by services/servers
 └── assets/         # Outdated scripts/assets (not canonical)
@@ -142,10 +143,12 @@ Services and servers are built from **YAML configurations** loaded through [`mlo
 | `build.class_name` | Maps a config to its Python implementation class |
 | `ports` | Declares intended port bindings (remappable at setup time) |
 | `groups` | Partly descriptive; some map to functional classes (e.g., `git`) |
-| `ui` | Controls how the service appears in the interfaces |
+| `capabilities` | Declares backend/server capability metadata when needed |
 | `requirements` | Declares service dependencies (not yet fully enforced at runtime) |
 
 Plugin loading is also wired in `config.py` via **entry-point discovery**.
+
+Frontend-specific UI handlers are no longer modeled in YAML. They live in frontend modules and are resolved through `mlox/ui/registry.py` by config ID, frontend namespace, and function name.
 
 ---
 
@@ -218,6 +221,8 @@ The CLI currently reaches that shared layer through `mlox/application/facade.py`
 
 `Infrastructure` is primarily the topology model, but it still exposes compatibility wrappers that delegate some lifecycle work into `mlox/application/infrastructure_ops.py`.
 
+For custom setup/settings panels, the ownership moved to the frontend packages. Built-in Streamlit and TUI handlers are bootstrapped into `mlox/ui/registry.py`, which keeps deployable configs UI-agnostic and creates a later extension point for plugin UI contributions.
+
 ### Executors Handle System Calls
 
 Anything that executes on a compute/server should route through the execution layer:
@@ -244,6 +249,7 @@ Anything that executes on a compute/server should route through the execution la
 | `mlox/application/facade.py` | Thin stateless adapter that loads/caches session context and dispatches to `application/use_cases/*` |
 | `mlox/application/infrastructure_ops.py` | Orchestration helpers used by session-based use-cases for setup/teardown-style side effects |
 | YAML `requirements` | Present in the config schema but **not yet fully enforced** at runtime |
+| UI registration | Frontend-owned via `mlox/ui/registry.py`; keep UI definitions out of service/server YAML |
 | Server capabilities | Already explicit in code/config |
 | Service capabilities | Still emerging; today some of that intent is represented through YAML groups and service-type interfaces |
 
@@ -270,6 +276,7 @@ Each service lives in its own directory under `mlox/services/` and follows these
 - **YAML config** — defines service identity, ports, groups, requirements, and build class
 - **Backend-specific implementation classes** — one per supported backend (native, docker, k8s)
 - **Deployment files** — e.g., Docker Compose templates bundled with the service
+- **Frontend-specific UI handlers** — live in frontend packages and register through `mlox/ui/registry.py`
 - **`client.py`** _(optional)_ — helper client so users can consume the service from Python code
 - **`get_secret()`** — every service should expose this method, returning access credentials (user, password, endpoint, etc.)
 
@@ -285,6 +292,8 @@ Services can depend on other services:
 ### Server Conventions
 
 Servers also have MLOX YAML configs and follow the same configuration-driven model.
+
+Today the built-in registry bootstraps handlers from `mlox.view.services`, `mlox.view.servers.ubuntu`, and `mlox.tui.services`. Plugin-provided deployable configs are supported through entry points; plugin-provided UI handlers are a likely next step, but not yet part of the documented plugin API.
 
 ---
 
