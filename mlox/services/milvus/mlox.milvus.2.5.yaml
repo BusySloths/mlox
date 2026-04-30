@@ -1,13 +1,14 @@
 id: milvus-2.5-docker
 name: Milvus
-version: "2.5"
+version: '2.5'
 maintainer: Your Name
-description_short: Milvus is an open-source vector database designed for scalable similarity search.
-description: |
-  Milvus is an open-source vector database designed for scalable similarity search and AI applications. 
-  It supports high-dimensional vector data and provides efficient indexing and querying capabilities. 
-  In MLOX, Milvus can be used for tasks such as image and text similarity search, recommendation systems, 
-  and other machine learning applications that require fast and scalable vector operations.
+description_short: Milvus is an open-source vector database designed for scalable
+  similarity search.
+description: "Milvus is an open-source vector database designed for scalable similarity\
+  \ search and AI applications. \nIt supports high-dimensional vector data and provides\
+  \ efficient indexing and querying capabilities. \nIn MLOX, Milvus can be used for\
+  \ tasks such as image and text similarity search, recommendation systems, \nand\
+  \ other machine learning applications that require fast and scalable vector operations.\n"
 links:
   project: https://milvus.io/
   news: https://milvus.io/
@@ -19,16 +20,13 @@ requirements:
   ram_gb: 4.0
   disk_gb: 10.0
 groups:
-  service:
+  service: null
   database:
-    vector:
+    vector: null
   backend:
-    docker:
-ports: # These are 'preferred' ports, they can and possibly will be changed by automation
+    docker: null
+ports:
   service: 19530
-ui:
-  setup: mlox.services.milvus.ui.setup
-  settings: mlox.services.milvus.ui.settings
 build:
   class_name: mlox.services.milvus.docker.MilvusDockerService
   params:

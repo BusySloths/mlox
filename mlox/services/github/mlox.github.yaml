@@ -3,8 +3,10 @@ name: Github Repository
 version: 0.1-beta
 maintainer: Your Name
 description_short: Clone and pull Github Repositories on your servers.
-description: |
-  Clone and pull Github Repositories on your servers. Make your repositories accessible for installed services.
+description: 'Clone and pull Github Repositories on your servers. Make your repositories
+  accessible for installed services.
+
+  '
 links:
   project: https://mlox.org
   documentation: https://github.com/busysloths/mlox/
@@ -13,17 +15,14 @@ requirements:
   ram_gb: 1.0
   disk_gb: 1.0
 groups:
-  service:
-  resource:
-  git:
-  repository:
+  service: null
+  resource: null
+  git: null
+  repository: null
   backend:
-    kubernetes:
-    docker:
-    native:
-ui:
-  setup: mlox.services.github.ui.setup
-  settings: mlox.services.github.ui.settings
+    kubernetes: null
+    docker: null
+    native: null
 build:
   class_name: mlox.services.github.service.GithubRepoService
   params:

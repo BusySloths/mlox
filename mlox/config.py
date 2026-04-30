@@ -20,6 +20,12 @@ from mlox.server import (
     ServerCapability,
 )
 
+from mlox.ui.registry import (
+    get_settings_renderer,
+    get_setup_renderer,
+    get_tui_settings_renderer,
+)
+
 PluginKind = Literal["service", "server"]
 
 
@@ -182,15 +188,29 @@ class ServiceConfig:
         return self.declared_capabilities().get("backend", set())
 
     def instantiate_ui(self, func_name: str) -> Callable | None:
+        registry_lookup = {
+            "settings": get_settings_renderer,
+            "setup": get_setup_renderer,
+            "tui_settings": get_tui_settings_renderer,
+        }
+        renderer = registry_lookup.get(func_name, lambda _config_id: None)(self.id)
+        if renderer:
+            return renderer
+
         if func_name not in self.ui:
-            # This is normal behavior
             return None
+
+        logging.warning(
+            "ServiceConfig.ui is deprecated for %s (%s). Register UI adapters in mlox.ui.registry.",
+            self.name,
+            self.id,
+        )
+
         callable_settings_func = None
         try:
-            # Split the string into module path and function name
-            module_path, func_name = self.ui[func_name].rsplit(".", 1)
+            module_path, callable_name = self.ui[func_name].rsplit(".", 1)
             module = importlib.import_module(module_path)
-            callable_settings_func = getattr(module, func_name)
+            callable_settings_func = getattr(module, callable_name)
         except (ImportError, AttributeError) as e:
             logging.error(f"Could not load callable {func_name} for {self.name}: {e}")
         except Exception as e:

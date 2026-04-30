@@ -1,13 +1,21 @@
 id: gcp-bigquery-0.1.0
 name: GCP BigQuery
-version: "0.1.0"
+version: 0.1.0
 maintainer: Your Name
-description_short: GCP BigQuery is a fully managed, serverless data warehouse that enables scalable analysis over petabytes of data.
-description: |
-  The GCP BigQuery is a fully managed, serverless data warehouse that enables scalable analysis over petabytes of data.
-  It allows users to store, manage, and analyze massive datasets with built-in machine learning capabilities.
-  In MLOX, GCP BigQuery can be used as a data source or sink for various services and applications,
+description_short: GCP BigQuery is a fully managed, serverless data warehouse that
+  enables scalable analysis over petabytes of data.
+description: 'The GCP BigQuery is a fully managed, serverless data warehouse that
+  enables scalable analysis over petabytes of data.
+
+  It allows users to store, manage, and analyze massive datasets with built-in machine
+  learning capabilities.
+
+  In MLOX, GCP BigQuery can be used as a data source or sink for various services
+  and applications,
+
   facilitating large-scale data processing and analytical workflows.
+
+  '
 links:
   project: https://cloud.google.com/bigquery
   news: https://cloud.google.com/bigquery
@@ -19,19 +27,16 @@ requirements:
   ram_gb: 1.0
   disk_gb: 1.0
 groups:
-  service:
+  service: null
   cloud:
-    gcp:
+    gcp: null
   database:
-    warehouse:
+    warehouse: null
   backend:
-    kubernetes:
-    docker:
-    native:
-    connector:
-ui:
-  setup: mlox.services.gcp.bq_ui.setup
-  settings: mlox.services.gcp.bq_ui.settings
+    kubernetes: null
+    docker: null
+    native: null
+    connector: null
 build:
   class_name: mlox.services.gcp.bq_service.GCPBigQueryService
   params:

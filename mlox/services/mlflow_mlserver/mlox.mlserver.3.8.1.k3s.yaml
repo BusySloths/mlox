@@ -1,12 +1,17 @@
 id: mlflow-mlserver-3.8.1-k3s
 name: MLFlow-MLServer
-version: "3.8.1"
+version: 3.8.1
 maintainer: Your Name
 description_short: Deploy an MLflow registry model with MLServer on Kubernetes (k3s).
-description: |
-  Deploys an MLflow registry model as an MLServer workload on Kubernetes (k3s) using
-  native Deployment/Service manifests. The service installs MLflow and MLServer in the
+description: 'Deploys an MLflow registry model as an MLServer workload on Kubernetes
+  (k3s) using
+
+  native Deployment/Service manifests. The service installs MLflow and MLServer in
+  the
+
   serving pod and exposes the v2 inference API via a NodePort.
+
+  '
 links:
   project: https://mlserver.readthedocs.io/en/stable/
   news: https://mlserver.readthedocs.io/en/stable/
@@ -18,15 +23,12 @@ requirements:
   ram_gb: 4.0
   disk_gb: 1.0
 groups:
-  service:
-  model-server:
+  service: null
+  model-server: null
   backend:
-    kubernetes:
+    kubernetes: null
 ports:
   rest: 30432
-ui:
-  setup: mlox.services.mlflow_mlserver.ui.setup
-  settings: mlox.services.mlflow_mlserver.ui.settings
 build:
   class_name: mlox.services.mlflow_mlserver.k3s.MLFlowMLServerK3sService
   params:

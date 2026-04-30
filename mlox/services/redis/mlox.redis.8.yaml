@@ -3,13 +3,12 @@ name: Redis
 version: 8-bookworm
 maintainer: Your Name
 description_short: Redis is an open-source, in-memory data structure store.
-description: |
-  Redis an open-source, in-memory data structure store, used as a database, 
-  cache, and message broker. It supports various data structures such as strings, 
-  hashes, lists, sets, sorted sets with range queries, bitmaps, hyperloglogs, and 
-  geospatial indexes with radius queries. In MLOX, Redis can be used for caching, 
-  session management, real-time analytics, and as a message queue for distributed 
-  machine learning tasks, enhancing the performance and scalability of your applications.
+description: "Redis an open-source, in-memory data structure store, used as a database,\
+  \ \ncache, and message broker. It supports various data structures such as strings,\
+  \ \nhashes, lists, sets, sorted sets with range queries, bitmaps, hyperloglogs,\
+  \ and \ngeospatial indexes with radius queries. In MLOX, Redis can be used for caching,\
+  \ \nsession management, real-time analytics, and as a message queue for distributed\
+  \ \nmachine learning tasks, enhancing the performance and scalability of your applications.\n"
 links:
   project: https://redis.io/
   news: https://redis.io/
@@ -21,16 +20,14 @@ requirements:
   ram_gb: 2.0
   disk_gb: 1.0
 groups:
-  service:
+  service: null
   database:
-    in-memory:
-    nosql:
+    in-memory: null
+    nosql: null
   backend:
-    docker:
-ports: # These are 'preferred' ports, they can and possibly will be changed by automation
+    docker: null
+ports:
   service: 6379
-ui:
-  settings: mlox.services.redis.ui.settings
 build:
   class_name: mlox.services.redis.docker.RedisDockerService
   params:
