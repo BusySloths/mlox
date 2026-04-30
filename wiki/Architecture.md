@@ -29,23 +29,45 @@ MLOX is a Python project that manages MLOps infrastructure through **three user 
 | **TUI** (terminal UI) | [`mlox/tui/`](https://github.com/BusySloths/mlox/blob/main/mlox/tui/) |
 | **Web App** (Streamlit) | [`mlox/view/`](https://github.com/BusySloths/mlox/blob/main/mlox/view/) |
 
-The current CLI architecture routes through a thin application layer before it reaches the core runtime objects:
+The shared architecture is centered on a session container and session-based use-cases:
 
 | Object | File | Role |
 |--------|------|------|
-| Application facade | [`mlox/application/facade.py`](https://github.com/BusySloths/mlox/blob/main/mlox/application/facade.py) | Loads/caches session context and dispatches use-cases |
-| Use-case modules | [`mlox/application/use_cases/`](https://github.com/BusySloths/mlox/blob/main/mlox/application/use_cases/) | Session-based application actions grouped by domain |
-| `MloxSession` | [`mlox/session.py`](https://github.com/BusySloths/mlox/blob/main/mlox/session.py) | Project/session state and persistence |
-| `Infrastructure` | [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py) | Servers, bundles, services for a project |
+| Use-case modules | [`mlox/application/use_cases/`](https://github.com/BusySloths/mlox/blob/main/mlox/application/use_cases/) | Session-based application actions that should be shared by all UIs |
+| `MloxSession` | [`mlox/session.py`](https://github.com/BusySloths/mlox/blob/main/mlox/session.py) | Project/session container holding metadata, secret manager, and infrastructure |
+| `Infrastructure` | [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py) | Project topology made of bundles, compute, and services |
+| Application facade | [`mlox/application/facade.py`](https://github.com/BusySloths/mlox/blob/main/mlox/application/facade.py) | Current stateless adapter used mainly by the CLI and callers that need session loading/caching |
 
 ```text
-CLI (`mlox/cli/app.py` + `mlox/cli/commands/*`)
-    └─► `mlox/application/facade.py`
-          └─► `mlox/application/use_cases/*`
-                └─► `MloxSession`
-                      └─► `Infrastructure`
-
-YAML configs are loaded through `mlox/config.py` into that flow.
+CLI     TUI     Streamlit Web UI     Other UIs
+  \      |             |                /
+   \     |             |               /
+    +----+-------------+--------------+
+                    |
+                    v
+      `mlox/application/use_cases/*`
+         shared session-based logic
+                    |
+                    v
+              `MloxSession`
+   project + encrypted secret manager + infrastructure
+             /                               \
+            v                                 v
+ secret-manager backend                `Infrastructure`
+ (InMemory/TinySM/OpenBao/GCP)      topology for one project
+                                            |
+                                            v
+                           `Bundle` = compute/server + services[*]
+                              |                            |
+                              v                            v
+                server capabilities               service capabilities
+             (`git`, `docker`, ...)           (emerging: `registry`, `db`, `model`, ...)
+                              \                            /
+                               \                          /
+                                +------------------------+
+                                             |
+                                             v
+                   execution via `mlox/executors.py` + `mlox/execution/*`
 ```
 
 ---
@@ -138,12 +160,23 @@ Plugin loading is also wired in `config.py` via **entry-point discovery**.
 - Loads or creates a project
 - Wires the secret manager
 - Loads and saves the project infrastructure
+- Gives the runtime one place to find project metadata, secrets, and topology
 
 ### `Infrastructure` — Active Project Topology
 
 [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py)
 
 `Infrastructure` holds one project's server bundles and services for a given session.
+
+### `Bundle` — One Compute plus Its Services
+
+`Bundle` is the operational unit inside `Infrastructure`:
+
+- one bundle contains one compute/server object
+- that compute advertises capabilities such as `git`, `docker`, `kubernetes`, `firewall`, or local/native runtime support
+- the same bundle also contains the services deployed onto that compute
+
+This makes `Infrastructure` the topology root for "what runs where".
 
 ### Persistent Storage
 
@@ -166,21 +199,31 @@ MLOX supports multiple secret-manager backends:
 
 `MloxProject` metadata stores which secret manager class is used and how to reconnect to it across sessions.
 
+In practice, `MloxSession` is the persistence boundary around `Infrastructure`, and the secret manager is the encrypted key-value store behind that boundary.
+
 ---
 
 ## 6. Service Lifecycle and Execution Model
 
 ### Shared Control Flow
 
-The CLI now goes through `mlox/cli/commands/*` -> `mlox/application/facade.py` -> `mlox/application/use_cases/*` -> `MloxSession` -> `Infrastructure`.
+The intended control flow is:
 
-TUI and Web UI must preserve the same session/infrastructure behavior even where they do not yet share the exact same presentation-layer wiring.
+- UI layer (`cli`, `tui`, `view`, future UIs)
+- shared application layer (`mlox/application/use_cases/*`)
+- session container (`MloxSession`)
+- topology root (`Infrastructure`)
+
+The CLI currently reaches that shared layer through `mlox/application/facade.py`. TUI and Streamlit should converge on the same use-cases so behavior stays aligned across interfaces.
+
+`Infrastructure` is primarily the topology model, but it still exposes compatibility wrappers that delegate some lifecycle work into `mlox/application/infrastructure_ops.py`.
 
 ### Executors Handle System Calls
 
-All low-level command execution is routed through task executors:
+Anything that executes on a compute/server should route through the execution layer:
 
-- [`mlox/executors.py`](https://github.com/BusySloths/mlox/blob/main/mlox/executors.py) — base executor logic
+- [`mlox/executors.py`](https://github.com/BusySloths/mlox/blob/main/mlox/executors.py) — task executor entry point
+- [`mlox/execution/`](https://github.com/BusySloths/mlox/blob/main/mlox/execution/) — backend/system helper modules
 - Server-specific executors (e.g., `UbuntuTaskExecutor`) — remote shell operations
 
 > ⚠️ **Architectural rule:** operational system calls must _not_ be scattered inside service logic. Always route through executors.
@@ -197,10 +240,12 @@ All low-level command execution is routed through task executors:
 | Area | Notes |
 |------|-------|
 | `mlox/scheduler.py` | Effectively legacy/obsolete — not part of the active architecture |
-| `mlox/application/facade.py` | Thin stateless facade that loads/caches session context and dispatches to `application/use_cases/*` |
+| `mlox/application/use_cases/*` | Important shared session-based application layer; keep growing behavior here instead of reintroducing broad operations modules |
+| `mlox/application/facade.py` | Thin stateless adapter that loads/caches session context and dispatches to `application/use_cases/*` |
 | `mlox/application/infrastructure_ops.py` | Orchestration helpers used by session-based use-cases for setup/teardown-style side effects |
 | YAML `requirements` | Present in the config schema but **not yet fully enforced** at runtime |
-| YAML `groups` | Partly descriptive today; some map to functional classes (e.g., `git`), but this is not yet fully consistent |
+| Server capabilities | Already explicit in code/config |
+| Service capabilities | Still emerging; today some of that intent is represented through YAML groups and service-type interfaces |
 
 ---
 
@@ -234,6 +279,8 @@ Services can depend on other services:
 
 - Dependency UUIDs are stored on service objects.
 - Dependent services are resolved via helper methods (e.g., the `get_dependent_service` pattern).
+- Services are attached to a bundle and therefore run on a specific compute/server.
+- A first-class service capability model is a likely next architectural step; current services already express parts of that through configs and typed interfaces.
 
 ### Server Conventions
 

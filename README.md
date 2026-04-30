@@ -73,16 +73,31 @@ We welcome contributors, early adopters, and honest feedback. If you hit somethi
 ## Architecture in 30 Seconds
 
 ```text
-CLI (`mlox/cli/app.py` + `mlox/cli/commands/*`)
-    └─► `mlox/application/facade.py`
-          └─► `mlox/application/use_cases/*`
-                └─► `MloxSession`
-                      └─► `Infrastructure`
-
-YAML configs are loaded through `mlox/config.py` into that flow.
+CLI     TUI     Streamlit Web UI     Other UIs
+  \      |             |                /
+   \     |             |               /
+    +----+-------------+--------------+
+                    |
+                    v
+      `mlox/application/use_cases/*`
+         shared session-based logic
+                    |
+                    v
+              `MloxSession`
+   project + encrypted secret manager + infrastructure
+             /                               \
+            v                                 v
+ secret-manager backend                `Infrastructure`
+ (InMemory/TinySM/OpenBao/GCP)      topology for one project
+                                            |
+                                            v
+                           `Bundle` = compute/server + services[*]
+                                      |
+                                      v
+                    execution via `mlox/executors.py` + `mlox/execution/*`
 ```
 
-The CLI is now split into command-focused submodules, and the application layer is organized around session-based use-cases instead of one broad operations module. TUI and Web UI still need to preserve the same session/infrastructure behavior. All remote shell operations route through executors rather than ad-hoc subprocess logic in service code.
+`MloxSession` is the runtime center: it always carries project metadata, an encrypted key-value secret manager, and the current `Infrastructure`. The important shared application layer is `mlox/application/use_cases/*`; CLI already routes through it, and TUI/Web/future UIs should do the same. `Infrastructure` models topology through bundles, where each bundle groups one compute/server with its services. Anything executed on a compute goes through the execution layer, while compute capabilities already exist (`git`, `docker`, `kubernetes`, ...) and service capabilities are an emerging architectural direction.
 
 For deeper reading:
 
