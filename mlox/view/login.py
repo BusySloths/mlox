@@ -127,7 +127,7 @@ def project_settings_and_logout():
             icon=":material/computer:",
         )
         st.page_link(
-            "view/services.py",
+            "view/services_page.py",
             use_container_width=True,
             label="Open Services",
             icon=":material/linked_services:",

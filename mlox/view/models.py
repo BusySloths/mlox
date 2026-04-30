@@ -144,7 +144,7 @@ def models():
         st.markdown("----")
         st.markdown(f"### {service.name} settings")
         if config:
-            callable_settings_func = config.instantiate_ui("settings")
+            callable_settings_func = config.get_ui_handler("streamlit", "settings")
             if callable_settings_func and service.state == "running":
                 callable_settings_func(infra, bundle, service)
             else:

@@ -194,7 +194,7 @@ def secrets() -> None:
             )
 
     config = infra.get_service_config(secret_manager_service)
-    callable_settings_func = config.instantiate_ui("settings")
+    callable_settings_func = config.get_ui_handler("streamlit", "settings")
     if callable_settings_func and secret_manager_service.state == "running":
         st.divider()
         st.subheader("Service Settings")

@@ -44,6 +44,7 @@ def manage_repositories():
             {
                 "ip": bundle.server.ip,
                 "server": bundle.name,
+                "bundle": bundle,
                 "name": r.name,
                 "state": r.state,
                 "link": r.link,
@@ -87,10 +88,10 @@ def manage_repositories():
 
         config = infra.get_service_config(repo)
 
-        callable_settings_func = config.instantiate_ui("settings")
+        callable_settings_func = config.get_ui_handler("streamlit", "settings")
         # if callable_settings_func and repo.state == "running":
         if callable_settings_func:
-            callable_settings_func(infra, bundle, repo)
+            callable_settings_func(infra, my_repos[idx]["bundle"], repo)
 
         # if st.button("Delete"):
         #     with st.spinner(f"Deleting {name}..."):

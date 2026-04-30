@@ -3,7 +3,7 @@ import streamlit as st
 from mlox.services.redis.docker import RedisDockerService
 from mlox.infra import Infrastructure, Bundle
 
-from mlox.services.utils_ui import save_to_secret_store
+from mlox.view.services.common import save_to_secret_store
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: RedisDockerService):

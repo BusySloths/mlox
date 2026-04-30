@@ -8,7 +8,7 @@ from mlox.servers.ubuntu.docker import UbuntuDockerServer
 from mlox.servers.ubuntu.k3s import UbuntuK3sServer
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 from mlox.servers.ubuntu.simple import UbuntuSimpleServer
-from mlox.servers.ubuntu.ui_native import (
+from mlox.view.servers.ubuntu.native import (
     _collect_firewall_port_rows,
     _collect_firewall_ports,
     _filter_firewall_port_rows,

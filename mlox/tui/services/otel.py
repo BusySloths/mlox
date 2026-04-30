@@ -19,7 +19,7 @@ from textual.widgets import Select, Sparkline, Static
 
 from mlox.infra import Bundle, Infrastructure
 from mlox.services.otel.docker import OtelDockerService
-from mlox.services.otel.ui import (
+from mlox.view.services.otel import (
     STANDARD_METRIC_GROUPS,
     _build_metric_frames,
     _extract_log_records,
@@ -394,7 +394,7 @@ class OtelTelemetryPanel(VerticalScroll):
         self._update_metric_view(event.value)
 
 
-def tui_settings(
+def settings(
     infra: Infrastructure,
     bundle: Bundle,
     service: OtelDockerService,

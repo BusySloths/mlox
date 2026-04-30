@@ -106,7 +106,6 @@ def get_server_infos(infra: Infrastructure) -> List[Dict[str, Any]]:
                 "description_short": service.description_short,
                 "links": [f"{k}: {v}" for k, v in service.links.items()],
                 "requirements": [f"{k}: {v}" for k, v in service.requirements.items()],
-                "ui": [f"{k}" for k, v in service.ui.items()],
                 # "groups": [f"{k}" for k, v in service.groups.items() if k != "backend"],
                 "groups": format_groups(service.groups),
                 "backend": [
@@ -311,7 +310,7 @@ def tab_server_management(infra: Infrastructure):
                     },
                 )
 
-                callable_settings_func = config.instantiate_ui("settings")
+                callable_settings_func = config.get_ui_handler("streamlit", "settings")
                 if callable_settings_func:
                     callable_settings_func(infra, bundle, bundle.server)
 
@@ -390,7 +389,7 @@ def tab_server_templates(infra: Infrastructure):
             config = srv["config"]
 
             params: Dict[str, Any] | None = {}
-            callable_setup_func = config.instantiate_ui("setup")
+            callable_setup_func = config.get_ui_handler("streamlit", "setup")
             if callable_setup_func:
                 with st.expander("", icon=":material/settings:"):
                     params = callable_setup_func(infra, config)

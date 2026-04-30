@@ -20,11 +20,7 @@ from mlox.server import (
     ServerCapability,
 )
 
-from mlox.ui.registry import (
-    get_settings_renderer,
-    get_setup_renderer,
-    get_tui_settings_renderer,
-)
+from mlox.ui.registry import get_handler
 
 PluginKind = Literal["service", "server"]
 
@@ -171,7 +167,6 @@ class ServiceConfig:
     build: BuildConfig
     groups: Dict[str, Any] = field(default_factory=dict)
     capabilities: Dict[str, list[str]] = field(default_factory=dict)
-    ui: Dict[str, str] = field(default_factory=dict)
     requirements: Dict[str, float] = field(default_factory=dict)
     ports: Dict[str, int] = field(default_factory=dict)
     path: str = field(default="", init=False)
@@ -187,37 +182,12 @@ class ServiceConfig:
     def backend_capabilities(self) -> set[str]:
         return self.declared_capabilities().get("backend", set())
 
-    def instantiate_ui(self, func_name: str) -> Callable | None:
-        registry_lookup = {
-            "settings": get_settings_renderer,
-            "setup": get_setup_renderer,
-            "tui_settings": get_tui_settings_renderer,
-        }
-        renderer = registry_lookup.get(func_name, lambda _config_id: None)(self.id)
-        if renderer:
-            return renderer
-
-        if func_name not in self.ui:
-            return None
-
-        logging.warning(
-            "ServiceConfig.ui is deprecated for %s (%s). Register UI adapters in mlox.ui.registry.",
-            self.name,
-            self.id,
+    def get_ui_handler(self, frontend: str, function_name: str) -> Callable | None:
+        return get_handler(
+            config_id=self.id,
+            frontend=frontend,
+            function_name=function_name,
         )
-
-        callable_settings_func = None
-        try:
-            module_path, callable_name = self.ui[func_name].rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            callable_settings_func = getattr(module, callable_name)
-        except (ImportError, AttributeError) as e:
-            logging.error(f"Could not load callable {func_name} for {self.name}: {e}")
-        except Exception as e:
-            logging.error(
-                f"An error occurred while getting the callable {func_name} for {self.name}: {e}"
-            )
-        return callable_settings_func
 
     def instantiate_server(self, params: Dict[str, Any]) -> AbstractServer | None:
         res = self.instantiate_build(params)

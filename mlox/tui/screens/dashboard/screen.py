@@ -106,7 +106,7 @@ class DashboardScreen(Screen):
             )
             return
 
-        callable_settings = config.instantiate_ui("tui_settings")
+        callable_settings = config.get_ui_handler("tui", "settings")
         if not callable_settings:
             self._mount_placeholder(
                 container,

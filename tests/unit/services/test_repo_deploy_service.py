@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from mlox.services.repo_deploy.service import RepoDeployDockerService
-from mlox.services.repo_deploy.ui import _env_vars_to_text, _parse_env_text
+from mlox.view.services.repo_deploy import _env_vars_to_text, _parse_env_text
 
 
 BASE = {
