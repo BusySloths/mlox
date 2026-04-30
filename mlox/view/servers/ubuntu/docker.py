@@ -5,8 +5,8 @@ from typing import Dict
 from mlox.infra import Infrastructure, Bundle
 from mlox.config import ServiceConfig
 from mlox.servers.ubuntu.docker import UbuntuDockerServer
-from mlox.servers.ubuntu.ui_native import setup as setup_native
-from mlox.servers.ubuntu.ui_native import settings as settings_native
+from mlox.view.servers.ubuntu.native import setup as setup_native
+from mlox.view.servers.ubuntu.native import settings as settings_native
 
 
 def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:

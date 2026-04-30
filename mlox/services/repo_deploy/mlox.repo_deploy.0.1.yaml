@@ -3,10 +3,13 @@ name: Repository Docker Deploy
 version: 0.1-beta
 maintainer: Busy Sloths
 description_short: Deploy a docker compose file from an existing repository service.
-description: |
-  Deploy any docker-compose file that already exists in a previously installed
+description: 'Deploy any docker-compose file that already exists in a previously installed
+
   repository service. The service runs the selected compose file in place from
+
   the repository checkout and writes a .env file into the repository root.
+
+  '
 links:
   project: https://mlox.org
   documentation: https://github.com/busysloths/mlox/
@@ -15,18 +18,15 @@ requirements:
   ram_gb: 1.0
   disk_gb: 1.0
 groups:
-  service:
-  deployment:
+  service: null
+  deployment: null
   backend:
-    docker:
+    docker: null
 capabilities:
   server:
-    - docker
+  - docker
   backend:
-    - docker
-ui:
-  setup: mlox.services.repo_deploy.ui.setup
-  settings: mlox.services.repo_deploy.ui.settings
+  - docker
 build:
   class_name: mlox.services.repo_deploy.service.RepoDeployDockerService
   params:

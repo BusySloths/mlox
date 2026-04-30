@@ -120,7 +120,7 @@ def manage_monitors() -> None:
         st.code(selected["ip"], language="bash")
 
     config = infra.get_service_config(monitor)
-    callable_settings_func = config.instantiate_ui("settings")
+    callable_settings_func = config.get_ui_handler("streamlit", "settings")
     if callable_settings_func and monitor.state == "running":
         st.divider()
         st.subheader("Service Settings")

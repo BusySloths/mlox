@@ -157,7 +157,7 @@ pages_infrastructure = [
         icon=":material/gpp_good:",
     ),
     st.Page(
-        "view/services.py",
+        "view/services_page.py",
         title="Services",
         icon=":material/linked_services:",
     ),

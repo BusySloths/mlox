@@ -1,4 +1,4 @@
-from mlox.migrations.base import MloxMigrations, load_mlox_session
+from mlox.migrations.base import MloxMigrations
 
 
 class AddFieldModelServerRegistryUUID(MloxMigrations):
@@ -16,6 +16,8 @@ class AddFieldModelServerRegistryUUID(MloxMigrations):
 
 
 if __name__ == "__main__":
+    from mlox.session import load_mlox_session
+
     print("Loading MLOX project...")
     print(
         "Make sure MLOX_PROJECT_NAME and MLOX_PROJECT_PASSWORD environment variables are set and a project exists."

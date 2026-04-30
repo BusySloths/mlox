@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from mlox.infra import Infrastructure, Bundle
-from mlox.services.utils_ui import save_to_secret_store
+from mlox.view.services.common import save_to_secret_store
 from mlox.utils import generate_password
 
 from .docker import OpenBaoDockerService

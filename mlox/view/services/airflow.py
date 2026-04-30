@@ -5,7 +5,7 @@ import streamlit as st
 from typing import cast
 from datetime import datetime
 
-from mlox.services.utils_ui import save_infrastructure
+from mlox.view.services.common import save_infrastructure
 from mlox.services.airflow.docker import AirflowDockerService
 from mlox.services.github.service import GithubRepoService
 from mlox.infra import Infrastructure, Bundle, Repo

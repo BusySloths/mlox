@@ -3,9 +3,12 @@ name: Ubuntu (no setup)
 version: 24.04
 maintainer: Your Name
 description_short: Ubuntu with pre-configured access.
-description: |
-  Ubuntu is a popular Linux distribution based on Debian.
-  This stack assumes the server already has an accessible user via password or SSH key.
+description: 'Ubuntu is a popular Linux distribution based on Debian.
+
+  This stack assumes the server already has an accessible user via password or SSH
+  key.
+
+  '
 links:
   project: https://ubuntu.com/
   news: https://ubuntu.com/
@@ -13,15 +16,12 @@ links:
   documentation: https://ubuntu.com/
   changelog: https://ubuntu.com/
 groups:
-  server:
+  server: null
   backend:
-    native:
+    native: null
 capabilities:
   backend:
-    - native
-ui:
-  setup: mlox.servers.ubuntu.ui_simple.setup
-  settings: mlox.servers.ubuntu.ui_simple.settings
+  - native
 build:
   class_name: mlox.servers.ubuntu.simple.UbuntuSimpleServer
   params:

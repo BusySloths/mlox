@@ -1,15 +1,26 @@
 id: feast-0.54.0
 name: Feast Feature Store
-version: "0.54.0"
+version: 0.54.0
 maintainer: Your Name
-description_short: Feast is an open-source feature store for managing and serving machine learning features.
-description: |
-  Feast is an open-source feature store designed to help data scientists and engineers manage
+description_short: Feast is an open-source feature store for managing and serving
+  machine learning features.
+description: 'Feast is an open-source feature store designed to help data scientists
+  and engineers manage
+
   and serve machine learning features. It provides a centralized repository for features,
-  enabling teams to share and reuse them across different models and projects. Feast supports
-  both online and offline feature retrieval, making it suitable for real-time inference as well
-  as batch processing. It integrates seamlessly with various data sources and can be deployed
+
+  enabling teams to share and reuse them across different models and projects. Feast
+  supports
+
+  both online and offline feature retrieval, making it suitable for real-time inference
+  as well
+
+  as batch processing. It integrates seamlessly with various data sources and can
+  be deployed
+
   on-premises or in the cloud.
+
+  '
 links:
   project: https://feast.dev/
   news: https://feast.dev/blog/
@@ -20,15 +31,12 @@ requirements:
   ram_gb: 4.0
   disk_gb: 1.0
 groups:
-  service:
-  feature-store:
+  service: null
+  feature-store: null
   backend:
-    docker:
+    docker: null
 ports:
   registry: 6564
-ui:
-  setup: mlox.services.feast.ui.setup
-  settings: mlox.services.feast.ui.settings
 build:
   class_name: mlox.services.feast.docker.FeastDockerService
   params:

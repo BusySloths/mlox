@@ -20,6 +20,8 @@ from mlox.server import (
     ServerCapability,
 )
 
+from mlox.ui.registry import get_handler
+
 PluginKind = Literal["service", "server"]
 
 
@@ -165,7 +167,6 @@ class ServiceConfig:
     build: BuildConfig
     groups: Dict[str, Any] = field(default_factory=dict)
     capabilities: Dict[str, list[str]] = field(default_factory=dict)
-    ui: Dict[str, str] = field(default_factory=dict)
     requirements: Dict[str, float] = field(default_factory=dict)
     ports: Dict[str, int] = field(default_factory=dict)
     path: str = field(default="", init=False)
@@ -181,23 +182,12 @@ class ServiceConfig:
     def backend_capabilities(self) -> set[str]:
         return self.declared_capabilities().get("backend", set())
 
-    def instantiate_ui(self, func_name: str) -> Callable | None:
-        if func_name not in self.ui:
-            # This is normal behavior
-            return None
-        callable_settings_func = None
-        try:
-            # Split the string into module path and function name
-            module_path, func_name = self.ui[func_name].rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            callable_settings_func = getattr(module, func_name)
-        except (ImportError, AttributeError) as e:
-            logging.error(f"Could not load callable {func_name} for {self.name}: {e}")
-        except Exception as e:
-            logging.error(
-                f"An error occurred while getting the callable {func_name} for {self.name}: {e}"
-            )
-        return callable_settings_func
+    def get_ui_handler(self, frontend: str, function_name: str) -> Callable | None:
+        return get_handler(
+            config_id=self.id,
+            frontend=frontend,
+            function_name=function_name,
+        )
 
     def instantiate_server(self, params: Dict[str, Any]) -> AbstractServer | None:
         res = self.instantiate_build(params)

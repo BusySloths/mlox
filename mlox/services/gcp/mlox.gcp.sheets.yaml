@@ -1,17 +1,18 @@
 id: gcp-sheets-0.1.0
 name: GCP Sheets
-version: "0.1.0"
+version: 0.1.0
 maintainer: Your Name
-description_short: Google Spreadsheets is a secure and scalable service for managing sheets in Google Cloud Platform.
-description: |
-  Google Spreadsheets is a secure and scalable service for managing sheets in Google Cloud Platform.
-  It allows users to store, manage, and share information and data and is widely used in a business 
-  context to collaborate on documents, track projects, and perform data analysis.
-  In MLOX, Google Spreadsheets can be used as a data source or sink for various services and applications,
-  facilitating data exchange and collaborative workflows.
+description_short: Google Spreadsheets is a secure and scalable service for managing
+  sheets in Google Cloud Platform.
+description: "Google Spreadsheets is a secure and scalable service for managing sheets\
+  \ in Google Cloud Platform.\nIt allows users to store, manage, and share information\
+  \ and data and is widely used in a business \ncontext to collaborate on documents,\
+  \ track projects, and perform data analysis.\nIn MLOX, Google Spreadsheets can be\
+  \ used as a data source or sink for various services and applications,\nfacilitating\
+  \ data exchange and collaborative workflows.\n"
 links:
   project: https://workspace.google.com/intl/en_au/products/sheets/
-  news: https://workspace.google.com/ißntl/en_au/products/sheets/
+  news: "https://workspace.google.com/i\xDFntl/en_au/products/sheets/"
   security: https://workspace.google.com/intl/en_au/products/sheets/
   documentation: https://workspace.google.com/intl/en_au/products/sheets/
   changelog: https://workspace.google.com/intl/en_au/products/sheets/
@@ -20,19 +21,16 @@ requirements:
   ram_gb: 1.0
   disk_gb: 1.0
 groups:
-  service:
+  service: null
   cloud:
-    gcp:
+    gcp: null
   database:
-    spreadsheets:
+    spreadsheets: null
   backend:
-    kubernetes:
-    docker:
-    native:
-    connector:
-ui:
-  setup: mlox.services.gcp.sheet_ui.setup
-  settings: mlox.services.gcp.sheet_ui.settings
+    kubernetes: null
+    docker: null
+    native: null
+    connector: null
 build:
   class_name: mlox.services.gcp.sheet_service.GCPSpreadsheetsService
   params:

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from mlox.services.otel.tui import MetricGroup, OtelTelemetryPanel, _build_snapshot, tui_settings
+from mlox.tui.services.otel import MetricGroup, OtelTelemetryPanel, _build_snapshot, settings
 
 
 @dataclass
@@ -128,7 +128,7 @@ def test_build_snapshot_groups_metrics() -> None:
 
 def test_tui_settings_returns_panel() -> None:
     telemetry = _jsonl({"resourceMetrics": []})
-    panel = tui_settings(
+    panel = settings(
         infra=None,  # type: ignore[arg-type]
         bundle=DummyBundle(),
         service=DummyService(telemetry=telemetry),

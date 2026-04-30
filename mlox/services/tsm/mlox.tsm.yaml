@@ -1,15 +1,16 @@
 id: tsm-0.1-beta
 name: TinySecretManager (TSM)
-version: "0.1-beta"
+version: 0.1-beta
 maintainer: Your Name
-description_short: TinySecretManager is a lightweight, file-based secret management service.
-description: |
-  TinySecretManager (TSM) is a lightweight, file-based secret management service designed to 
-  securely store and manage sensitive information such as API keys, passwords, and configuration 
-  settings. It provides a simple interface for storing and retrieving secrets, making it easy to 
-  integrate into applications and workflows. TSM is particularly useful in environments where a 
-  full-fledged secret management solution is not required, but secure storage of sensitive data 
-  is still necessary.
+description_short: TinySecretManager is a lightweight, file-based secret management
+  service.
+description: "TinySecretManager (TSM) is a lightweight, file-based secret management\
+  \ service designed to \nsecurely store and manage sensitive information such as\
+  \ API keys, passwords, and configuration \nsettings. It provides a simple interface\
+  \ for storing and retrieving secrets, making it easy to \nintegrate into applications\
+  \ and workflows. TSM is particularly useful in environments where a \nfull-fledged\
+  \ secret management solution is not required, but secure storage of sensitive data\
+  \ \nis still necessary.\n"
 links:
   project: https://mlox.org
   documentation: https://github.com/busysloths/mlox/
@@ -18,14 +19,12 @@ requirements:
   ram_gb: 1.0
   disk_gb: 1.0
 groups:
-  service:
-  secret-manager:
+  service: null
+  secret-manager: null
   backend:
-    kubernetes:
-    docker:
-    native:
-ui:
-  settings: mlox.services.tsm.ui.settings
+    kubernetes: null
+    docker: null
+    native: null
 build:
   class_name: mlox.services.tsm.service.TSMService
   params:

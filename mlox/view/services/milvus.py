@@ -5,7 +5,7 @@ from typing import Dict
 from mlox.services.milvus.docker import MilvusDockerService
 from mlox.infra import Infrastructure, Bundle
 
-from mlox.services.utils_ui import save_to_secret_store
+from mlox.view.services.common import save_to_secret_store
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> Dict:

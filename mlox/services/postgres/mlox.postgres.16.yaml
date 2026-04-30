@@ -2,14 +2,14 @@ id: postgres-16-bullseye-docker
 name: Postgres
 version: 16-bullseye
 maintainer: Your Name
-description_short: Postgres is a powerful, open-source object-relational database system.
-description: |
-  PostgresSQL is a powerful, open-source object-relational database system known for its 
-  reliability, feature robustness, and performance. It supports both SQL (relational) and 
-  JSON (non-relational) querying. In MLOX, PostgreSQL can be used as a backend database for 
-  various services, including MLFlow, Airflow, and custom applications, providing a reliable 
-  and scalable data storage solution for machine learning metadata, experiment results, and 
-  operational data.
+description_short: Postgres is a powerful, open-source object-relational database
+  system.
+description: "PostgresSQL is a powerful, open-source object-relational database system\
+  \ known for its \nreliability, feature robustness, and performance. It supports\
+  \ both SQL (relational) and \nJSON (non-relational) querying. In MLOX, PostgreSQL\
+  \ can be used as a backend database for \nvarious services, including MLFlow, Airflow,\
+  \ and custom applications, providing a reliable \nand scalable data storage solution\
+  \ for machine learning metadata, experiment results, and \noperational data.\n"
 links:
   project: https://www.postgresql.org/
   news: https://www.postgresql.org/
@@ -21,16 +21,13 @@ requirements:
   ram_gb: 4.0
   disk_gb: 10.0
 groups:
-  service:
+  service: null
   database:
-    relational:
+    relational: null
   backend:
-    docker:
-ports: # These are 'preferred' ports, they can and possibly will be changed by automation
+    docker: null
+ports:
   service: 5432
-ui:
-  setup: mlox.services.postgres.ui.setup
-  settings: mlox.services.postgres.ui.settings
 build:
   class_name: mlox.services.postgres.docker.PostgresDockerService
   params:

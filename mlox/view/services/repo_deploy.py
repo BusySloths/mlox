@@ -7,7 +7,7 @@ import streamlit as st
 from typing import Any, Dict
 
 from mlox.infra import Infrastructure, Bundle
-from mlox.services.utils_ui import save_infrastructure
+from mlox.view.services.common import save_infrastructure
 from mlox.services.repo_deploy.service import RepoDeployDockerService
 
 

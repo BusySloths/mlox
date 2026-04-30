@@ -2,10 +2,17 @@ id: otel-0.146.1-docker
 name: OpenTelemetry Collector
 version: "0.146.1"
 maintainer: Your Name
-description_short: OpenTelemetry Collector is a service for collecting and exporting telemetry data.
-description: |
-  OpenTelemetry Collector is an open-source service that collects, processes, and exports telemetry data such as traces, metrics, and logs. It supports various protocols and can be configured to send data to multiple backends. In MLOX, it is used to monitor and trace machine learning workflows, providing insights into performance and reliability.
+description_short: OpenTelemetry Collector is a service for collecting and exporting
+  telemetry data.
+description: 'OpenTelemetry Collector is an open-source service that collects, processes,
+  and exports telemetry data such as traces, metrics, and logs. It supports various
+  protocols and can be configured to send data to multiple backends. In MLOX, it is
+  used to monitor and trace machine learning workflows, providing insights into performance
+  and reliability.
+
   For more information, visit the [OpenTelemetry documentation](https://opentelemetry.io/docs/collector/).
+
+  '
 links:
   project: https://opentelemetry.io/docs/collector/
   news: https://opentelemetry.io/docs/collector/
@@ -17,18 +24,14 @@ requirements:
   ram_gb: 4.0
   disk_gb: 1.0
 groups:
-  service:
-  monitor:
+  service: null
+  monitor: null
   backend:
-    docker:
+    docker: null
 ports:
   grpc: 4317
   http: 4318
   health: 13133
-ui:
-  setup: mlox.services.otel.ui.setup
-  settings: mlox.services.otel.ui.settings
-  tui_settings: mlox.services.otel.tui.tui_settings
 build:
   class_name: mlox.services.otel.docker.OtelDockerService
   params:

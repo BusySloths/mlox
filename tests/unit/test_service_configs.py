@@ -12,6 +12,7 @@ from mlox.config import (
 )
 from mlox.service import AbstractService
 from mlox.infra import Infrastructure, Bundle
+from mlox.ui.registry import clear_handlers, register
 
 
 # Dummy Service Implementation for testing
@@ -63,18 +64,31 @@ def mock_dummy_modules(monkeypatch):
     class MockServiceModule:
         DummyService = DummyService
 
-    class MockUiModule:
-        dummy_settings_func = staticmethod(dummy_settings_func)
-        dummy_setup_func = staticmethod(dummy_setup_func)
-
     def mock_import_module(name):
         if name == "dummy.services":
             return MockServiceModule()
-        if name == "dummy.ui":
-            return MockUiModule()
         return importlib.__import__(name, fromlist=["object"])
 
     monkeypatch.setattr(importlib, "import_module", mock_import_module)
+
+
+@pytest.fixture
+def mock_dummy_ui_registry():
+    clear_handlers(bootstrapped=True)
+    register(
+        config_id="test-config-id",
+        frontend="streamlit",
+        function_name="settings",
+        handler=dummy_settings_func,
+    )
+    register(
+        config_id="test-config-id",
+        frontend="streamlit",
+        function_name="setup",
+        handler=dummy_setup_func,
+    )
+    yield
+    clear_handlers()
 
 
 @pytest.fixture
@@ -126,7 +140,6 @@ def service_config_data():
             },
         },
         "ports": {"http": 8080},
-        "ui": {"settings": "dummy.ui.dummy_settings_func"},
     }
 
 
@@ -177,18 +190,20 @@ class TestServiceConfig:
         assert len(configs) == 2
         assert {c.name for c in configs} == {"TestService", "TestService2"}
 
-    def test_instantiate_ui(self, service_config_data, mock_dummy_modules):
+    def test_get_ui_handler(
+        self, service_config_data, mock_dummy_modules, mock_dummy_ui_registry
+    ):
         config = ServiceConfig(
             build=BuildConfig(**service_config_data.pop("build")), **service_config_data
         )
 
-        settings_func = config.instantiate_ui("settings")
+        settings_func = config.get_ui_handler("streamlit", "settings")
         assert callable(settings_func)
         assert settings_func(None, None, None) == {
             "ui_param_settings": "settings_value"
         }
 
-        none_func = config.instantiate_ui("non_existent")
+        none_func = config.get_ui_handler("streamlit", "non_existent")
         assert none_func is None
 
     def test_service_config_accepts_capabilities(self, service_config_data):

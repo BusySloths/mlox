@@ -17,6 +17,7 @@ from mlox.server import (
     ServerCapability,
 )
 from mlox.infra import Infrastructure
+from mlox.ui.registry import clear_handlers, register
 
 
 # Dummy Server Implementation for testing
@@ -97,17 +98,25 @@ def mock_dummy_modules(monkeypatch):
         CapabilityServer = CapabilityServer
         MissingGitAbcServer = MissingGitAbcServer
 
-    class MockUiModule:
-        dummy_setup_func = staticmethod(dummy_setup_func)
-
     def mock_import_module(name):
         if name == "dummy.servers":
             return MockServerModule()
-        if name == "dummy.ui":
-            return MockUiModule()
         return importlib.__import__(name, fromlist=["object"])
 
     monkeypatch.setattr(importlib, "import_module", mock_import_module)
+
+
+@pytest.fixture
+def mock_dummy_ui_registry():
+    clear_handlers(bootstrapped=True)
+    register(
+        config_id="test-config-id",
+        frontend="streamlit",
+        function_name="setup",
+        handler=dummy_setup_func,
+    )
+    yield
+    clear_handlers()
 
 
 @pytest.fixture
@@ -152,7 +161,6 @@ def server_config_data():
                 "custom_server_param": "build_value",
             },
         },
-        "ui": {"setup": "dummy.ui.dummy_setup_func"},
     }
 
 
@@ -206,16 +214,18 @@ class TestServerConfig:
         assert len(configs) == 2
         assert {c.name for c in configs} == {"TestServer", "TestServer2"}
 
-    def test_instantiate_ui(self, server_config_data, mock_dummy_modules):
+    def test_get_ui_handler(
+        self, server_config_data, mock_dummy_modules, mock_dummy_ui_registry
+    ):
         config = ServiceConfig(
             build=BuildConfig(**server_config_data.pop("build")), **server_config_data
         )
 
-        setup_func = config.instantiate_ui("setup")
+        setup_func = config.get_ui_handler("streamlit", "setup")
         assert callable(setup_func)
         assert setup_func(None, None) == {"ui_param_setup": "setup_value"}
 
-        none_func = config.instantiate_ui("non_existent")
+        none_func = config.get_ui_handler("streamlit", "non_existent")
         assert none_func is None
 
     def test_capability_helpers_parse_explicit_and_legacy(self, server_config_data):

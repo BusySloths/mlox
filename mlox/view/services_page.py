@@ -280,7 +280,9 @@ def installed_services():
                 lcols[i % 4].link_button(label, url, use_container_width=True)
                 i += 1
 
-        callable_settings_func = cfg.instantiate_ui("settings") if cfg else None
+        callable_settings_func = (
+            cfg.get_ui_handler("streamlit", "settings") if cfg else None
+        )
         if callable_settings_func and svc.state == "running":
             with st.expander("Settings"):
                 if isinstance(svc, AbstractSecretManagerService) and st.button(
@@ -353,7 +355,6 @@ def available_services():
                 "description_short": service.description_short,
                 "links": service.links,
                 "requirements": service.requirements,
-                "ui": list(service.ui.keys()),
                 "groups": [
                     k for k in service.groups.keys() if k not in {"backend", "service"}
                 ],
@@ -473,7 +474,7 @@ def _render_add_service_dialog():
 
     # Configuration parameters
     params = {}
-    callable_setup_func = config.instantiate_ui("setup")
+    callable_setup_func = config.get_ui_handler("streamlit", "setup")
     if callable_setup_func and selected_bundle:
         st.markdown("**Configuration**")
         params = callable_setup_func(infra, selected_bundle)
