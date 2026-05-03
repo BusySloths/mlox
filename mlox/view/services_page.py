@@ -187,7 +187,7 @@ def installed_services():
     df = pd.DataFrame(df_rows)
     sel = st.dataframe(
         df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         selection_mode="single-row",
         on_select="rerun",
@@ -277,7 +277,7 @@ def installed_services():
             lcols = st.columns(4)
             i = 0
             for label, url in links.items():
-                lcols[i % 4].link_button(label, url, use_container_width=True)
+                lcols[i % 4].link_button(label, url, width="stretch")
                 i += 1
 
         callable_settings_func = (
@@ -315,7 +315,7 @@ def installed_services():
                     else:
                         st.dataframe(
                             df_hist,
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True,
                             column_config={
                                 "timestamp": st.column_config.TextColumn(
@@ -410,7 +410,7 @@ def available_services():
                 "Add Service",
                 type="primary",
                 key=f"add-{i}",
-                use_container_width=True,
+                width="stretch",
             ):
                 _show_add_service_dialog(infra, config, supported_backends)
 
@@ -482,7 +482,7 @@ def _render_add_service_dialog():
     # Action buttons
     col1, col2 = st.columns(2)
 
-    if col1.button("Add Service", type="primary", use_container_width=True):
+    if col1.button("Add Service", type="primary", width="stretch"):
         if selected_bundle:
             with st.spinner(f"Adding {config.name}..."):
                 setup_params = dict(params or {})
@@ -501,7 +501,7 @@ def _render_add_service_dialog():
                     st.error("Failed to add service")
 
     with col2:
-        if st.button("Cancel", use_container_width=True):
+        if st.button("Cancel", width="stretch"):
             st.session_state.show_add_dialog = False
             st.rerun()
 

@@ -91,7 +91,7 @@ def manage_monitors() -> None:
         table[["server", "name", "state"]],
         hide_index=True,
         selection_mode="single-row",
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
     )
 

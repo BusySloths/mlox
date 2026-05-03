@@ -307,7 +307,7 @@ def _render_metric_charts(
             .sort_index()
         )
         chart_df = _strip_common_prefix(chart_df)
-        st.line_chart(chart_df, use_container_width=True, height=280)
+        st.line_chart(chart_df, width="stretch", height=280)
     else:
         st.caption("Selected metrics do not contain numeric datapoints.")
 
@@ -327,7 +327,7 @@ def _render_metric_charts(
             ).sort_index()
 
             chart_df = _strip_common_prefix(chart_df)
-            st.line_chart(chart_df, use_container_width=True, height=220)
+            st.line_chart(chart_df, width="stretch", height=220)
         if not found_standard:
             st.caption("Standard CPU, memory, or network metrics were not detected.")
 
@@ -354,7 +354,7 @@ def _render_metrics_section(display_df: pd.DataFrame, numeric_df: pd.DataFrame) 
         table_df[
             ["timestamp", "name", "type", "value", "unit", "attributes", "description"]
         ],
-        use_container_width=True,
+        width="stretch",
     )
     _render_metric_charts(numeric_df, selected_names)
 

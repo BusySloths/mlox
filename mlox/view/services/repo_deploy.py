@@ -161,7 +161,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: RepoDeployDockerSer
                 ]
             ),
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
     st.markdown("#### Environment variables (.env)")

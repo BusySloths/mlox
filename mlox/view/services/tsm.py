@@ -23,7 +23,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: TSMService):
         df,
         hide_index=True,
         selection_mode="single-row",
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
     )
     if len(selection["selection"]["rows"]) > 0:

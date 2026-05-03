@@ -197,7 +197,7 @@ def tab_server_management(infra: Infrastructure):
     df = pd.DataFrame(df_rows)
     select_server = st.dataframe(
         df,
-        use_container_width=True,
+        width="stretch",
         selection_mode="single-row",
         hide_index=True,
         on_select="rerun",
@@ -321,7 +321,7 @@ def tab_server_management(infra: Infrastructure):
             else:
                 st.dataframe(
                     df_hist,
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                     column_config={
                         "timestamp": st.column_config.TextColumn(

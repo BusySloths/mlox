@@ -92,7 +92,7 @@ def _render_section(
     selection = st.dataframe(
         df,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         selection_mode="single-row",
         on_select="rerun",
         column_config={

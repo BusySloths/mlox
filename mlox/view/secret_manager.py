@@ -102,7 +102,6 @@ def secrets() -> None:
         selection_mode="single-row",
         width="stretch",
         on_select="rerun",
-        use_container_width=True,
     )
 
     selected_rows = selection.get("selection", {}).get("rows", [])
@@ -173,7 +172,7 @@ def secrets() -> None:
         if st.button(
             "Collect service secrets",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             key=f"collect-secrets-{secret_manager_service.uuid}",
         ):
             secrets_cnt = 0

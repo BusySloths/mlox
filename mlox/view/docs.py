@@ -111,14 +111,14 @@ def help():
             with btn_cols[0]:
                 url = links.get("documentation") or links.get("docs") or ""
                 if url:
-                    st.link_button("Documentation", url, use_container_width=True)
+                    st.link_button("Documentation", url, width="stretch")
             with btn_cols[1]:
                 url = links.get("project") or links.get("homepage") or ""
                 if url:
-                    st.link_button("Project", url, use_container_width=True)
+                    st.link_button("Project", url, width="stretch")
             with btn_cols[2]:
                 if primary_url:
-                    st.link_button("Open", primary_url, use_container_width=True)
+                    st.link_button("Open", primary_url, width="stretch")
 
 
 help()

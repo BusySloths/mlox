@@ -91,16 +91,16 @@ def welcome():
     # External links
     l1, l2, l3 = st.columns(3)
     with l1:
-        st.link_button("Project Site", "https://mlox.org", use_container_width=True)
+        st.link_button("Project Site", "https://mlox.org", width="stretch")
     with l2:
         st.link_button(
             "Documentation",
             "https://github.com/BusySloths/mlox#readme",
-            use_container_width=True,
+            width="stretch",
         )
     with l3:
         st.link_button(
-            "GitHub", "https://github.com/BusySloths/mlox", use_container_width=True
+            "GitHub", "https://github.com/BusySloths/mlox", width="stretch"
         )
 
 

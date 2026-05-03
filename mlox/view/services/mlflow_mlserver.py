@@ -140,6 +140,6 @@ def settings(
             st.dataframe(
                 pd.DataFrame(names),
                 height=400,
-                use_container_width=True,
+                width="stretch",
                 column_config={"Tags": st.column_config.ListColumn(width="small")},
             )

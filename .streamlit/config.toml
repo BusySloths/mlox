@@ -46,28 +46,6 @@ chartSequentialColors = [
     "#6A6F82"
 ]
 
-greenColor = "#00F5D4"
-greenBackgroundColor = "#0E2E2C"
-greenTextColor = "#E4FFF9"
-yellowColor = "#FFBE0B"
-yellowBackgroundColor = "#332A12"
-yellowTextColor = "#140F04"
-violetColor = "#9B5DE5"
-violetBackgroundColor = "#261C36"
-violetTextColor = "#F8F3FF"
-blueColor = "#00BBF9"
-blueBackgroundColor = "#142C38"
-blueTextColor = "#E5F9FF"
-orangeColor = "#FF9F1C"
-orangeBackgroundColor = "#331F10"
-orangeTextColor = "#FFF0E0"
-redColor = "#F15BB5"
-redBackgroundColor = "#341226"
-redTextColor = "#FFE6F4"
-grayColor = "#8892A6"
-grayBackgroundColor = "#2B2E36"
-grayTextColor = "#F2F3F8"
-
 [theme.sidebar]
 primaryColor = "#F15BB5"
 backgroundColor = "#1C1F24"
@@ -82,13 +60,6 @@ showWidgetBorder = true
 baseRadius = "0.65rem"
 buttonRadius = "1.3rem"
 
-greenColor = "#42FFD9"
-yellowColor = "#FFD45C"
-violetColor = "#B58DFF"
-blueColor = "#6AD9FF"
-orangeColor = "#FFB97A"
-redColor = "#FF7FBF"
-grayColor = "#9CA6B8"
 [client]
 # Change the visibility of items in the toolbar, options menu,
 # and settings dialog (top right of the app).

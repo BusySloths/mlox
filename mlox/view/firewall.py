@@ -233,7 +233,7 @@ def firewall() -> None:
     selection = st.dataframe(
         df[["Name", "IP", "State", "Firewall", "Open Ports", "Recommended"]],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         selection_mode="single-row",
         on_select="rerun",
     )
@@ -293,7 +293,7 @@ def firewall() -> None:
         port_table,
         key=f"firewall-port-table-{server.uuid}",
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         selection_mode="multi-row",
         on_select="rerun",
         column_order=[
@@ -370,7 +370,7 @@ def firewall() -> None:
     if w2.button(
         "Apply Whitelist",
         disabled=not selected_ports,
-        use_container_width=True,
+        width="stretch",
     ):
         updated_whitelist = dict(whitelist_by_port)
         ips = _normalize_ip_values(selected_ips)
@@ -401,7 +401,7 @@ def firewall() -> None:
         max_value=65535,
         step=1,
     )
-    if c2.button("Add Port", type="primary", use_container_width=True):
+    if c2.button("Add Port", type="primary", width="stretch"):
         custom_port = int(st.session_state[custom_port_input_key])
         next_ports = sorted(set(current_ports) | {custom_port})
         next_whitelist = _source_rules_for_open_ports(

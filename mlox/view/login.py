@@ -122,13 +122,13 @@ def project_settings_and_logout():
     with c3.container(border=True):
         st.page_link(
             "view/infrastructure.py",
-            use_container_width=True,
+            width="stretch",
             label="Open Infrastructure",
             icon=":material/computer:",
         )
         st.page_link(
             "view/services_page.py",
-            use_container_width=True,
+            width="stretch",
             label="Open Services",
             icon=":material/linked_services:",
         )
@@ -147,14 +147,14 @@ def project_settings_and_logout():
             "Close Project",
             key="close_project",
             help="Close and remove the current project session",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state.is_logged_in = False
             st.session_state.pop("mlox", None)
             st.success("Project closed.")
             st.rerun()
     with col_cancel:
-        if st.button("Cancel", key="cancel_close", use_container_width=True):
+        if st.button("Cancel", key="cancel_close", width="stretch"):
             st.info("Close cancelled.")
 
     # Admin section
@@ -288,7 +288,7 @@ def project_settings_and_logout():
             data=json.dumps(debug, indent=2).encode("utf-8"),
             file_name=f"mlox_debug_{session.project.name}.json",
             mime="application/json",
-            use_container_width=True,
+            width="stretch",
         )
 
 

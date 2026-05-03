@@ -72,7 +72,7 @@ def tab_repositories(
         df[df["is_in_dags"] == False][["name", "link", "path", "created"]],
         hide_index=True,
         selection_mode="single-row",
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
         key="airflow-repo-select",
     )
@@ -110,7 +110,7 @@ def tab_repositories(
         df[df["is_in_dags"] == True][["name", "link", "path", "created"]],
         hide_index=True,
         selection_mode="single-row",
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
         key="airflow-repo-associated",
     )

@@ -12,7 +12,7 @@ from mlox.infra import Infrastructure, Bundle
 from mlox.view.services.common import save_to_secret_store
 from mlox.utils import generate_password
 
-from .docker import OpenBaoDockerService
+from mlox.services.openbao import OpenBaoDockerService
 
 
 def _format_secret_value(value: Any) -> str:
@@ -53,7 +53,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
         df,
         hide_index=True,
         selection_mode="single-row",
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
     )
 

@@ -34,7 +34,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService
             st.dataframe(
                 pd.DataFrame(models).drop(columns=["Tags"]),
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
                 column_config={
                     "Open": st.column_config.LinkColumn(display_text="Open in UI"),
                 },
@@ -64,7 +64,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: MLFlowDockerService
             st.dataframe(
                 pd.DataFrame(registry_rows),
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
                 column_config={
                     "Tags": st.column_config.ListColumn(),
                 },
