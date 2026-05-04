@@ -22,6 +22,11 @@ def _resolved_text(value: str) -> str:
     return value
 
 
+def _resolved_setting(value: str | int | float, default: str) -> str:
+    resolved = _resolved_text(str(value))
+    return resolved or default
+
+
 @dataclass
 class MLFlowGatewayDockerService(AbstractService, ModelServer):
     dockerfile: str
@@ -32,6 +37,8 @@ class MLFlowGatewayDockerService(AbstractService, ModelServer):
     tracking_user: str
     tracking_pw: str
     requirements_txt: str = ""
+    cache_max_models: str | int = "10"
+    cache_ttl_days: str | int | float = "10"
     user: str = "admin"
     pw: str = "s3cr3t"
     hashed_pw: str = field(default="", init=False)
@@ -85,6 +92,17 @@ class MLFlowGatewayDockerService(AbstractService, ModelServer):
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_USER={self.tracking_user}")
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_PW={self.tracking_pw}")
         self.exec.fs_append_line(conn, env_path, "MLFLOW_REMOTE_INSECURE=true")
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            "MLOX_GATEWAY_CACHE_MAX_MODELS="
+            f"{_resolved_setting(self.cache_max_models, '10')}",
+        )
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"MLOX_GATEWAY_CACHE_TTL_DAYS={_resolved_setting(self.cache_ttl_days, '10')}",
+        )
 
         self.service_ports["MLflow Gateway REST API"] = int(self.port)
         self.service_urls["MLflow Gateway REST API"] = f"https://{conn.host}:{self.port}"
@@ -147,6 +165,8 @@ class MLFlowGatewayDockerService(AbstractService, ModelServer):
             "username": self.tracking_user,
             "password": self.tracking_pw,
             "tracking_uri": self.tracking_uri,
+            "cache_max_models": str(self.cache_max_models),
+            "cache_ttl_days": str(self.cache_ttl_days),
         }
         return secrets
 

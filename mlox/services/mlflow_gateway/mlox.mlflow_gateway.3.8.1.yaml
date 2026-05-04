@@ -38,6 +38,8 @@ build:
     tracking_user: ${TRACKING_USER}
     tracking_pw: ${TRACKING_PW}
     requirements_txt: ${GATEWAY_REQUIREMENTS_TXT}
+    cache_max_models: ${GATEWAY_CACHE_MAX_MODELS}
+    cache_ttl_days: ${GATEWAY_CACHE_TTL_DAYS}
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}
     registry_uuid: ${MODEL_REGISTRY_UUID}

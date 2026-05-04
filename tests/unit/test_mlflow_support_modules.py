@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from mlox.services.mlflow import mlops
 from mlox.services.mlflow_gateway import serve
@@ -256,6 +257,77 @@ def test_serve_run_predict_and_list_models(monkeypatch):
     models = serve.list_models("Demo")
     assert models["model"] == "Demo"
     assert len(models["versions"]) == 2
+
+
+def test_serve_model_uri_supports_version_or_alias():
+    version_req = serve.PredictionRequest(
+        input_data=[[1.0]],
+        registry_model_name="Demo",
+        registry_model_version=1,
+    )
+    alias_req = serve.PredictionRequest(
+        input_data=[[1.0]],
+        registry_model_name="Demo",
+        registry_model_alias="champion",
+    )
+
+    assert serve._model_uri(version_req) == "models:/Demo/1"
+    assert serve._model_uri(alias_req) == "models:/Demo@champion"
+
+    with pytest.raises(ValueError):
+        serve.PredictionRequest(
+            input_data=[[1.0]],
+            registry_model_name="Demo",
+        )
+    with pytest.raises(ValueError):
+        serve.PredictionRequest(
+            input_data=[[1.0]],
+            registry_model_name="Demo",
+            registry_model_version=1,
+            registry_model_alias="champion",
+        )
+
+
+def test_serve_cache_evicts_by_ttl_and_lru(monkeypatch):
+    serve.model_cache.clear()
+    monkeypatch.setenv("MLOX_GATEWAY_CACHE_MAX_MODELS", "2")
+    monkeypatch.setenv("MLOX_GATEWAY_CACHE_TTL_DAYS", "10")
+
+    now = datetime(2026, 5, 4, 12, 0, 0)
+    serve.model_cache["models:/Demo/old"] = serve.ModelCacheEntry(
+        model=object(),
+        sys_path=[],
+        model_uri="models:/Demo/old",
+        last_call=now - pd.Timedelta(days=11),
+    )
+    serve.model_cache["models:/Demo/1"] = serve.ModelCacheEntry(
+        model=object(),
+        sys_path=[],
+        model_uri="models:/Demo/1",
+        last_call=now - pd.Timedelta(days=2),
+    )
+    serve.model_cache["models:/Demo@champion"] = serve.ModelCacheEntry(
+        model=object(),
+        sys_path=[],
+        model_uri="models:/Demo@champion",
+        last_call=now - pd.Timedelta(days=1),
+    )
+    serve.model_cache["models:/Demo/2"] = serve.ModelCacheEntry(
+        model=object(),
+        sys_path=[],
+        model_uri="models:/Demo/2",
+        last_call=now,
+    )
+
+    evicted = serve._evict_cache(now=now)
+    assert evicted["ttl"] == ["models:/Demo/old"]
+    assert evicted["lru"] == ["models:/Demo/1"]
+    assert set(serve.model_cache) == {"models:/Demo@champion", "models:/Demo/2"}
+    assert serve.model_cache["models:/Demo@champion"].is_alias_uri is True
+
+    cache_response = serve.list_cached_models()
+    assert cache_response["cache"] == {"max_models": 2, "ttl_days": 10.0}
+    assert len(cache_response["cached_models"]) == 2
 
 
 def test_serve_predict_error_mapping(monkeypatch):

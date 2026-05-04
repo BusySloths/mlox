@@ -547,6 +547,8 @@ def test_mlflow_gateway_setup_check_and_is_model(conn):
             tracking_user="u",
             tracking_pw="p",
             requirements_txt="scikit-learn==1.7.2\n",
+            cache_max_models="3",
+            cache_ttl_days="10",
             user="api",
             pw="pw",
         ),
@@ -561,6 +563,9 @@ def test_mlflow_gateway_setup_check_and_is_model(conn):
         == "scikit-learn==1.7.2\n"
     )
     assert service.service_url == "https://example.test:8081"
+    env_lines = service.exec.appended["/tmp/stack-8081/service.env"]
+    assert "MLOX_GATEWAY_CACHE_MAX_MODELS=3" in env_lines
+    assert "MLOX_GATEWAY_CACHE_TTL_DAYS=10" in env_lines
 
     service.exec.service_states[service.compose_service_names["MLflow Gateway"]] = "running"
     service.exec.execute_result = "200"
@@ -590,12 +595,17 @@ def test_mlflow_gateway_setup_ignores_unresolved_requirements_placeholder(conn):
             tracking_user="u",
             tracking_pw="p",
             requirements_txt="${GATEWAY_REQUIREMENTS_TXT}",
+            cache_max_models="${GATEWAY_CACHE_MAX_MODELS}",
+            cache_ttl_days="${GATEWAY_CACHE_TTL_DAYS}",
         ),
         FakeExec(),
     )
 
     service.setup(conn)
     assert service.exec.files["/tmp/stack-8082/gateway-requirements.txt"] == ""
+    env_lines = service.exec.appended["/tmp/stack-8082/service.env"]
+    assert "MLOX_GATEWAY_CACHE_MAX_MODELS=10" in env_lines
+    assert "MLOX_GATEWAY_CACHE_TTL_DAYS=10" in env_lines
 
 
 def test_airflow_setup_and_check(conn, monkeypatch):

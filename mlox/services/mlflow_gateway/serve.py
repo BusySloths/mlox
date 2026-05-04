@@ -7,12 +7,12 @@ import numpy as np
 import pandas as pd
 
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SYS_PATH = list(sys.path)
 
@@ -24,6 +24,39 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_CACHE_MAX_MODELS = 10
+DEFAULT_CACHE_TTL_DAYS = 10.0
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        logger.warning("Invalid integer for %s; using default %s", name, default)
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        logger.warning("Invalid float for %s; using default %s", name, default)
+        return default
+
+
+def _cache_settings() -> Dict[str, int | float]:
+    return {
+        "max_models": max(
+            1,
+            _env_int("MLOX_GATEWAY_CACHE_MAX_MODELS", DEFAULT_CACHE_MAX_MODELS),
+        ),
+        "ttl_days": max(
+            0.0,
+            _env_float("MLOX_GATEWAY_CACHE_TTL_DAYS", DEFAULT_CACHE_TTL_DAYS),
+        ),
+    }
+
+
 class ModelCacheEntry(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -32,8 +65,13 @@ class ModelCacheEntry(BaseModel):
     model_uri: str
     requirements: List[str] = Field(default_factory=list)
     num_calls: int = Field(default=0)
+    loaded_at: datetime = Field(default_factory=datetime.now)
     last_call: datetime = Field(default_factory=datetime.now)
     first_call: datetime = Field(default_factory=datetime.now)
+
+    @property
+    def is_alias_uri(self) -> bool:
+        return "@" in self.model_uri.rsplit("/", 1)[-1]
 
 
 model_cache: Dict[str, ModelCacheEntry] = dict()
@@ -62,11 +100,13 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
+    _evict_cache()
     return {
         "timestamp": datetime.now().isoformat(),
         "cached_models_count": len(model_cache),
         "tracking_uri": mlflow.get_tracking_uri(),
         "registry_uri": mlflow.get_registry_uri(),
+        "cache": _cache_settings(),
     }
 
 
@@ -74,7 +114,8 @@ class PredictionRequest(BaseModel):
     input_data: List
     params: Dict | None = None
     registry_model_name: str
-    registry_model_version: int | str
+    registry_model_version: int | str | None = None
+    registry_model_alias: str | None = None
 
     @field_validator("registry_model_name")
     @classmethod
@@ -84,8 +125,30 @@ class PredictionRequest(BaseModel):
             raise ValueError("registry_model_name must not be empty")
         return value
 
+    @field_validator("registry_model_alias")
+    @classmethod
+    def _model_alias_must_not_be_empty(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("registry_model_alias must not be empty")
+        return value
+
+    @model_validator(mode="after")
+    def _requires_version_or_alias(self):
+        has_version = self.registry_model_version is not None
+        has_alias = self.registry_model_alias is not None
+        if has_version == has_alias:
+            raise ValueError(
+                "Provide exactly one of registry_model_version or registry_model_alias"
+            )
+        return self
+
 
 def _model_uri(data: PredictionRequest) -> str:
+    if data.registry_model_alias is not None:
+        return f"models:/{data.registry_model_name}@{data.registry_model_alias}"
     return f"models:/{data.registry_model_name}/{data.registry_model_version}"
 
 
@@ -110,7 +173,43 @@ def _read_requirements(model_uri: str) -> List[str]:
         return []
 
 
+def _evict_cache(
+    *, protected_uri: str | None = None, now: datetime | None = None
+) -> Dict[str, List[str]]:
+    settings = _cache_settings()
+    max_models = int(settings["max_models"])
+    ttl_days = float(settings["ttl_days"])
+    now = now or datetime.now()
+    evicted: Dict[str, List[str]] = {"ttl": [], "lru": []}
+
+    if ttl_days > 0:
+        expires_before = now - timedelta(days=ttl_days)
+        for uri, entry in list(model_cache.items()):
+            if uri == protected_uri:
+                continue
+            if entry.last_call < expires_before:
+                model_cache.pop(uri, None)
+                evicted["ttl"].append(uri)
+
+    while len(model_cache) > max_models:
+        candidates = [
+            (uri, entry)
+            for uri, entry in model_cache.items()
+            if uri != protected_uri
+        ]
+        if not candidates:
+            break
+        uri, _ = min(candidates, key=lambda item: item[1].last_call)
+        model_cache.pop(uri, None)
+        evicted["lru"].append(uri)
+
+    if evicted["ttl"] or evicted["lru"]:
+        logger.info("Evicted cache entries: %s", evicted)
+    return evicted
+
+
 def _load_model(model_uri: str) -> tuple[Any, bool]:
+    _evict_cache(protected_uri=model_uri)
     if model_uri not in model_cache:
         loaded_model = mlflow.pyfunc.load_model(model_uri=model_uri)
         model_cache[model_uri] = ModelCacheEntry(
@@ -119,6 +218,7 @@ def _load_model(model_uri: str) -> tuple[Any, bool]:
             sys_path=list(sys.path),
             requirements=_read_requirements(model_uri),
         )
+        _evict_cache(protected_uri=model_uri)
         return loaded_model, False
 
     mce = model_cache[model_uri]
@@ -133,6 +233,7 @@ def runandget(data: PredictionRequest):
     logger.info(f"Input data: {data}")
     logger.info(f"Input model_name: {data.registry_model_name}")
     logger.info(f"Input model_version: {data.registry_model_version}")
+    logger.info(f"Input model_alias: {data.registry_model_alias}")
 
     model_uri = _model_uri(data)
     logger.info(f"Load model from = {model_uri}")
@@ -153,6 +254,7 @@ def runandget(data: PredictionRequest):
     logger.info(f"sys.path.AFTER_PREDICT {sys.path}")
     sys.path = list(SYS_PATH)
     logger.info(f"sys.path.RESET {sys.path}")
+    _evict_cache(protected_uri=model_uri)
     return parsed, is_cached_model
 
 
@@ -212,13 +314,20 @@ def list_models(model_name: str):
 
 @app.get("/cache")
 def list_cached_models():
+    _evict_cache()
+    now = datetime.now()
     return {
+        "cache": _cache_settings(),
         "cached_models": [
             {
                 "model_uri": key,
+                "is_alias_uri": entry.is_alias_uri,
                 "num_calls": entry.num_calls,
+                "loaded_at": entry.loaded_at.isoformat(),
                 "first_call": entry.first_call.isoformat(),
                 "last_call": entry.last_call.isoformat(),
+                "age_days": (now - entry.loaded_at).total_seconds() / 86400,
+                "idle_days": (now - entry.last_call).total_seconds() / 86400,
                 "requirements": entry.requirements,
             }
             for key, entry in model_cache.items()

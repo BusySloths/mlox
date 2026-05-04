@@ -42,11 +42,29 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
             "Use this for shared lightweight dependencies needed by multiple models."
         ),
     )
+    cache_max_models = st.number_input(
+        "Max cached models",
+        min_value=1,
+        max_value=100,
+        value=10,
+        step=1,
+        help="LRU limit for loaded model objects kept in the gateway process.",
+    )
+    cache_ttl_days = st.number_input(
+        "Cache TTL days",
+        min_value=0.0,
+        max_value=365.0,
+        value=10.0,
+        step=1.0,
+        help="Models not used for this many days are retired from the cache. Use 0 to disable TTL eviction.",
+    )
 
     params["${TRACKING_URI}"] = registry_secrets["service_url"]
     params["${TRACKING_USER}"] = registry_secrets["username"]
     params["${TRACKING_PW}"] = registry_secrets["password"]
     params["${GATEWAY_REQUIREMENTS_TXT}"] = requirements_txt
+    params["${GATEWAY_CACHE_MAX_MODELS}"] = str(int(cache_max_models))
+    params["${GATEWAY_CACHE_TTL_DAYS}"] = str(cache_ttl_days)
     params["${MODEL_REGISTRY_UUID}"] = svc.uuid
     return params
 
@@ -69,6 +87,8 @@ def settings(
                         f"- **Service URL:** `{service.service_url}`",
                         f"- **Tracking URI:** `{service.tracking_uri}`",
                         f"- **Target Path:** `{service.target_path}`",
+                        f"- **Max Cached Models:** `{service.cache_max_models}`",
+                        f"- **Cache TTL Days:** `{service.cache_ttl_days}`",
                     ]
                 )
             )
@@ -110,6 +130,13 @@ def settings(
             "registry_model_name": model_name,
             "registry_model_version": model_version,
         }
+        alias_payload = {
+            "input_data": [[0.0, 1.0, 2.0]],
+            "params": {},
+            "registry_model_name": model_name,
+            "registry_model_alias": "champion",
+        }
+        st.caption("Version-based request")
         st.code(
             "\n".join(
                 [
@@ -117,6 +144,18 @@ def settings(
                     f"  {service.service_url.rstrip('/')}/prod/predict \\",
                     "  -H 'Content-Type: application/json' \\",
                     f"  -d '{json.dumps(payload)}'",
+                ]
+            ),
+            language="bash",
+        )
+        st.caption("Alias-based request")
+        st.code(
+            "\n".join(
+                [
+                    f"curl -k -u '{service.user}:{service.pw}' \\",
+                    f"  {service.service_url.rstrip('/')}/prod/predict \\",
+                    "  -H 'Content-Type: application/json' \\",
+                    f"  -d '{json.dumps(alias_payload)}'",
                 ]
             ),
             language="bash",
@@ -134,6 +173,12 @@ def settings(
                 timeout=10,
             )
             if response.ok:
+                cache_cfg = response.json().get("cache", {})
+                if cache_cfg:
+                    st.caption(
+                        f"max_models={cache_cfg.get('max_models')} | "
+                        f"ttl_days={cache_cfg.get('ttl_days')}"
+                    )
                 cached = response.json().get("cached_models", [])
                 if cached:
                     st.dataframe(pd.DataFrame(cached), hide_index=True, width="stretch")
