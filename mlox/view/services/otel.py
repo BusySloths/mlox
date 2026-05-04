@@ -1,5 +1,6 @@
 import json
 import os
+from inspect import signature
 from datetime import datetime
 from typing import Any
 
@@ -16,6 +17,13 @@ STANDARD_METRIC_GROUPS: dict[str, tuple[str, ...]] = {
     "Network Throughput": ("network.packets", "net.packets"),
 }
 MAX_LOGS_DISPLAYED = 20
+_LINE_CHART_WIDTH_DEFAULT = signature(st.line_chart).parameters["width"].default
+
+
+def _line_chart_kwargs(height: int) -> dict[str, Any]:
+    if isinstance(_LINE_CHART_WIDTH_DEFAULT, str):
+        return {"width": "stretch", "height": height}
+    return {"use_container_width": True, "height": height}
 
 
 def _load_jsonl(raw: str | None) -> tuple[list[dict[str, Any]], int]:
@@ -307,7 +315,7 @@ def _render_metric_charts(
             .sort_index()
         )
         chart_df = _strip_common_prefix(chart_df)
-        st.line_chart(chart_df, width="stretch", height=280)
+        st.line_chart(chart_df, **_line_chart_kwargs(280))
     else:
         st.caption("Selected metrics do not contain numeric datapoints.")
 
@@ -327,7 +335,7 @@ def _render_metric_charts(
             ).sort_index()
 
             chart_df = _strip_common_prefix(chart_df)
-            st.line_chart(chart_df, width="stretch", height=220)
+            st.line_chart(chart_df, **_line_chart_kwargs(220))
         if not found_standard:
             st.caption("Standard CPU, memory, or network metrics were not detected.")
 

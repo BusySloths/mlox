@@ -1,12 +1,15 @@
 import os
 import logging
+import shutil
+import tempfile
 from pathlib import Path
+from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd  # type: ignore
 
 from datetime import datetime
-from typing import List, Dict, Sequence
+from typing import List, Dict, Sequence, Iterator
 from abc import ABC, abstractmethod
 
 import mlflow  # type: ignore
@@ -19,6 +22,18 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 logger = logging.getLogger(__name__)
+
+_EXCLUDED_CODE_PATH_NAMES = frozenset(
+    {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "venv",
+    }
+)
 
 
 class DeployableModel(ABC):
@@ -58,7 +73,7 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
         self.model_config = None
         self.tracking_uri = os.environ["MLFLOW_URI"]
         self.registry_uri = os.environ["MLFLOW_URI"]
-        self.code_paths = list(code_paths) if code_paths is not None else ["."]
+        self.code_paths = list(code_paths) if code_paths is not None else []
         self.registered_model_name = None
         self.registered_model_version = None
         self.requirements_file = requirements_file
@@ -116,16 +131,17 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
 
             mlflow.set_tag("python_class", str(self.model.__class__))
 
-            model_info = mlflow.pyfunc.log_model(
-                name=self.model_class,
-                python_model=self,
-                code_paths=self._resolve_code_paths_for_logging(),
-                conda_env=self.get_conda_env(),
-                signature=signature,
-                input_example=input_example,
-                registered_model_name=self.registered_model_name,
-                artifacts=artifacts,
-            )
+            with self._prepared_code_paths_for_logging() as prepared_code_paths:
+                model_info = mlflow.pyfunc.log_model(
+                    name=self.model_class,
+                    python_model=self,
+                    code_paths=prepared_code_paths or None,
+                    conda_env=self.get_conda_env(),
+                    signature=signature,
+                    input_example=input_example,
+                    registered_model_name=self.registered_model_name,
+                    artifacts=artifacts,
+                )
             self._store_logged_model_info(model_info)
             return model_info
 
@@ -194,11 +210,11 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
 
     def _resolve_code_paths_for_logging(self) -> List[str]:
         resolved_paths: List[str] = []
-        repo_root = Path(__file__).resolve().parents[1]
+        base_dir = Path.cwd()
         for path_str in self.code_paths:
-            path = Path(path_str)
+            path = Path(path_str).expanduser()
             if not path.is_absolute():
-                path = (repo_root / path).resolve()
+                path = (base_dir / path).resolve()
             if path.exists():
                 resolved_paths.append(str(path))
             else:
@@ -209,12 +225,41 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
                     path,
                 )
         if not resolved_paths:
-            logger.warning(
-                "No valid code paths found; defaulting to repository root %s.",
-                repo_root,
-            )
-            resolved_paths.append(str(repo_root))
+            logger.info("No valid code paths configured for MLflow model logging.")
         return resolved_paths
+
+    def _ignore_code_path_entries(
+        self,
+        _directory: str,
+        names: list[str],
+    ) -> set[str]:
+        return {name for name in names if name in _EXCLUDED_CODE_PATH_NAMES}
+
+    @contextmanager
+    def _prepared_code_paths_for_logging(self) -> Iterator[List[str]]:
+        prepared_paths: List[str] = []
+        temp_dirs: list[tempfile.TemporaryDirectory[str]] = []
+        try:
+            for path_str in self._resolve_code_paths_for_logging():
+                path = Path(path_str)
+                if path.is_dir():
+                    temp_dir = tempfile.TemporaryDirectory(
+                        prefix="mlox-mlflow-code-path-"
+                    )
+                    temp_dirs.append(temp_dir)
+                    staged_path = Path(temp_dir.name) / path.name
+                    shutil.copytree(
+                        path,
+                        staged_path,
+                        ignore=self._ignore_code_path_entries,
+                    )
+                    prepared_paths.append(str(staged_path))
+                else:
+                    prepared_paths.append(str(path))
+            yield prepared_paths
+        finally:
+            for temp_dir in reversed(temp_dirs):
+                temp_dir.cleanup()
 
     def _store_logged_model_info(self, model_info: ModelInfo) -> None:
         self.logged_model_info = model_info

@@ -1,0 +1,26 @@
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir \
+    "mlflow==3.8.1" \
+    "mlflow[extras]==3.8.1" \
+    "fastapi==0.115.0" \
+    "uvicorn[standard]==0.30.6" \
+    "pandas>=2.2" \
+    "numpy>=1.26"
+
+COPY serve.py /app/serve.py
+COPY gateway-requirements.txt /app/gateway-requirements.txt
+COPY start_gateway.sh /app/start_gateway.sh
+
+RUN chmod +x /app/start_gateway.sh
+
+CMD ["/app/start_gateway.sh"]

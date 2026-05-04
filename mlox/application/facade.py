@@ -18,7 +18,7 @@ from mlox.infra import ModelRegistry, ModelServer
 from mlox.session import MloxSession
 from mlox.utils import save_to_json
 
-DEFAULT_MLSERVER_TEMPLATE_ID = "mlflow-mlserver-2.22.0-docker"
+DEFAULT_MLSERVER_TEMPLATE_ID = "mlflow-mlserver-3.8.1-docker"
 
 
 class _SessionCache:

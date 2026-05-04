@@ -13,6 +13,7 @@ from mlox.services.litellm.docker import LiteLLMDockerService
 from mlox.services.milvus.docker import MilvusDockerService, _generate_htpasswd_sha1
 from mlox.services.minio.docker import MinioDockerService
 from mlox.services.mlflow.docker import MLFlowDockerService
+from mlox.services.mlflow_gateway.docker import MLFlowGatewayDockerService
 from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
 from mlox.services.openbao.client import OpenBaoSecretManager
 from mlox.services.openbao.docker import OpenBaoDockerService
@@ -532,6 +533,69 @@ def test_mlflow_mlserver_setup_check_and_is_model(conn):
     service.get_dependent_service_by_name = lambda name: object()
     assert service.is_model("registry:my-model:1") is True
     assert service.is_model("registry:my-model") is False
+
+
+def test_mlflow_gateway_setup_check_and_is_model(conn):
+    service = _set_exec(
+        MLFlowGatewayDockerService(
+            **BASE,
+            dockerfile="Dockerfile",
+            serve_script="serve.py",
+            start_script="start_gateway.sh",
+            port="8081",
+            tracking_uri="https://tracking.example",
+            tracking_user="u",
+            tracking_pw="p",
+            requirements_txt="scikit-learn==1.7.2\n",
+            user="api",
+            pw="pw",
+        ),
+        FakeExec(),
+    )
+
+    assert service.target_path.endswith("-8081")
+
+    service.setup(conn)
+    assert (
+        service.exec.files["/tmp/stack-8081/gateway-requirements.txt"]
+        == "scikit-learn==1.7.2\n"
+    )
+    assert service.service_url == "https://example.test:8081"
+
+    service.exec.service_states[service.compose_service_names["MLflow Gateway"]] = "running"
+    service.exec.execute_result = "200"
+    assert service.check(conn) == {"status": "running"}
+
+    service.exec.execute_result = "503"
+    assert service.check(conn)["status"] == "unknown"
+
+    service.exec.service_states[service.compose_service_names["MLflow Gateway"]] = "exited"
+    assert service.check(conn) == {"status": "stopped"}
+
+    service.get_dependent_service_by_name = lambda name: object()
+    assert service.is_model("registry:my-model:1") is True
+    assert service.is_model("registry:my-model") is False
+    assert service.is_model("my-model/1") is False
+
+
+def test_mlflow_gateway_setup_ignores_unresolved_requirements_placeholder(conn):
+    service = _set_exec(
+        MLFlowGatewayDockerService(
+            **BASE,
+            dockerfile="Dockerfile",
+            serve_script="serve.py",
+            start_script="start_gateway.sh",
+            port="8082",
+            tracking_uri="https://tracking.example",
+            tracking_user="u",
+            tracking_pw="p",
+            requirements_txt="${GATEWAY_REQUIREMENTS_TXT}",
+        ),
+        FakeExec(),
+    )
+
+    service.setup(conn)
+    assert service.exec.files["/tmp/stack-8082/gateway-requirements.txt"] == ""
 
 
 def test_airflow_setup_and_check(conn, monkeypatch):

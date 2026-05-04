@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 
-from mlox.services.mlflow import mlops, serve
+from mlox.services.mlflow import mlops
+from mlox.services.mlflow_gateway import serve
 
 
 class _Span:
@@ -112,6 +114,82 @@ def test_mlops_service_tracks_models_and_predicts(monkeypatch, tmp_path):
     assert "-r requirements.txt" in req_env["dependencies"][1]["pip"][0]
 
 
+def test_mlops_code_paths_resolve_relative_to_cwd(monkeypatch, tmp_path):
+    monkeypatch.setenv("MLFLOW_URI", "https://mlflow.local")
+    project_dir = tmp_path / "project"
+    code_dir = project_dir / "airml"
+    code_dir.mkdir(parents=True)
+    monkeypatch.chdir(project_dir)
+
+    svc = mlops.MLFlowDeployableModelService(
+        model=_TrackedModel(),
+        model_class="DemoModel",
+        code_paths=["./airml"],
+    )
+
+    resolved = svc._resolve_code_paths_for_logging()
+    assert resolved == [str(code_dir.resolve())]
+
+
+def test_mlops_default_code_paths_do_not_package_mlox_sources(monkeypatch):
+    monkeypatch.setenv("MLFLOW_URI", "https://mlflow.local")
+    svc = mlops.MLFlowDeployableModelService(
+        model=_TrackedModel(),
+        model_class="DemoModel",
+    )
+
+    resolved = svc._resolve_code_paths_for_logging()
+    assert resolved == []
+
+    with svc._prepared_code_paths_for_logging() as prepared:
+        assert prepared == []
+
+
+def test_mlops_prepared_code_paths_exclude_cache_directories(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("MLFLOW_URI", "https://mlflow.local")
+    project_dir = tmp_path / "project"
+    code_dir = project_dir / "airml"
+    code_dir.mkdir(parents=True)
+    monkeypatch.chdir(project_dir)
+
+    (code_dir / "model.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (code_dir / ".mypy_cache").mkdir()
+    (code_dir / ".mypy_cache" / "cache.json").write_text("{}", encoding="utf-8")
+    (code_dir / "__pycache__").mkdir()
+    (code_dir / "__pycache__" / "model.cpython-311.pyc").write_bytes(b"pyc")
+    (code_dir / ".pytest_cache").mkdir()
+    (code_dir / ".ruff_cache").mkdir()
+    (code_dir / ".git").mkdir()
+    (code_dir / ".venv").mkdir()
+    (code_dir / "venv").mkdir()
+    (code_dir / "pkg").mkdir()
+    (code_dir / "pkg" / "__pycache__").mkdir()
+    (code_dir / "pkg" / "__pycache__" / "nested.pyc").write_bytes(b"pyc")
+    (code_dir / "pkg" / "live.py").write_text("print('ok')\n", encoding="utf-8")
+
+    svc = mlops.MLFlowDeployableModelService(
+        model=_TrackedModel(),
+        model_class="DemoModel",
+        code_paths=["./airml"],
+    )
+
+    with svc._prepared_code_paths_for_logging() as prepared:
+        assert len(prepared) == 1
+        staged_dir = Path(prepared[0])
+        assert (staged_dir / "model.py").exists()
+        assert (staged_dir / "pkg" / "live.py").exists()
+        assert not (staged_dir / ".mypy_cache").exists()
+        assert not (staged_dir / "__pycache__").exists()
+        assert not (staged_dir / ".pytest_cache").exists()
+        assert not (staged_dir / ".ruff_cache").exists()
+        assert not (staged_dir / ".git").exists()
+        assert not (staged_dir / ".venv").exists()
+        assert not (staged_dir / "venv").exists()
+        assert not (staged_dir / "pkg" / "__pycache__").exists()
+
+
 def test_mlops_list_versions_for_model(monkeypatch):
     monkeypatch.setenv("MLFLOW_URI", "https://mlflow.local")
 
@@ -134,6 +212,11 @@ def test_serve_run_predict_and_list_models(monkeypatch):
             return pd.DataFrame({"result": [float(np.sum(input_data))]})
 
     monkeypatch.setattr(serve.mlflow.pyfunc, "load_model", lambda model_uri: _LoadedModel())
+    monkeypatch.setattr(
+        serve.mlflow.artifacts,
+        "download_artifacts",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("missing")),
+    )
 
     req = serve.PredictionRequest(
         input_data=[[1.0, 2.0]],
@@ -148,9 +231,13 @@ def test_serve_run_predict_and_list_models(monkeypatch):
     parsed2, cached2 = serve.runandget(req)
     assert cached2 is True
     assert parsed2[0]["result"] == 3.0
+    cache = serve.list_cached_models()["cached_models"]
+    assert cache[0]["model_uri"] == "models:/Demo/1"
+    assert serve.clear_cached_models()["cleared_models_count"] == 1
+    assert serve.model_cache == {}
 
     response = serve.predict(req)
-    assert response["is_cached_model"] is True
+    assert response["is_cached_model"] is False
     assert response["prediction_time_sec"] >= 0
 
     class _Version:

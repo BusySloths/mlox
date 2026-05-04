@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik_reverse_proxy_mlflow_gateway_${MLFLOW_GATEWAY_PORT}
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`traefik.constraint.stack`, `mlflow-gateway-${MLFLOW_GATEWAY_PORT}`)"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "${MLFLOW_GATEWAY_PORT}:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - mlox_mlflow_gateway_net
+    restart: unless-stopped
+
+  mlflow_gateway:
+    build:
+      context: .
+      dockerfile: dockerfile-mlflow-gateway-3.8.1
+    restart: always
+    container_name: mlflow_gateway_${MLFLOW_GATEWAY_PORT}
+    environment:
+      - MLFLOW_URI=${MLFLOW_REMOTE_URI}
+      - MLFLOW_TRACKING_URI=${MLFLOW_REMOTE_URI}
+      - MLFLOW_TRACKING_USERNAME=${MLFLOW_REMOTE_USER}
+      - MLFLOW_TRACKING_PASSWORD=${MLFLOW_REMOTE_PW}
+      - MLFLOW_TRACKING_INSECURE_TLS=${MLFLOW_REMOTE_INSECURE:-true}
+    networks:
+      - mlox_mlflow_gateway_net
+    labels:
+      - "traefik.constraint.stack=mlflow-gateway-${MLFLOW_GATEWAY_PORT}"
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.mlflow-gateway-auth.basicauth.users=${TRAEFIK_USER_AND_PW}"
+      - "traefik.http.routers.mlflow-gateway-secure.entrypoints=websecure"
+      - "traefik.http.routers.mlflow-gateway-secure.rule=Host(`${MLFLOW_GATEWAY_URL:-mlflow-gateway.localhost}`)"
+      - "traefik.http.routers.mlflow-gateway-secure.service=mlflow-gateway-service"
+      - "traefik.http.routers.mlflow-gateway-secure.middlewares=mlflow-gateway-auth"
+      - "traefik.http.routers.mlflow-gateway-secure.tls=true"
+      - "traefik.http.services.mlflow-gateway-service.loadbalancer.server.port=8080"
+      - "traefik.http.services.mlflow-gateway-service.loadbalancer.server.scheme=http"
+
+networks:
+  mlox_mlflow_gateway_net:
+    name: mlox-net-mlflow-gateway-${MLFLOW_GATEWAY_PORT}
+    driver: bridge
