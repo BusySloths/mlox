@@ -60,18 +60,29 @@ def test_mlops_service_tracks_models_and_predicts(monkeypatch, tmp_path):
     monkeypatch.setattr(mlops.mlflow, "set_tag", lambda k, v: calls["set_tag"].append((k, v)))
 
     logged = {}
+    model_info = SimpleNamespace(
+        run_id="run-123",
+        registered_model_version=7,
+        model_uri="runs:/run-123/DemoModel",
+    )
     monkeypatch.setattr(
         mlops.mlflow.pyfunc,
         "log_model",
-        lambda **kwargs: logged.update(kwargs),
+        lambda **kwargs: logged.update(kwargs) or model_info,
     )
 
     sample = np.array([[1.0], [2.0]])
-    svc.track_model(params={"x": 1}, input_example=sample, inference_params={"a": 1})
+    returned_model_info = svc.track_model(
+        params={"x": 1}, input_example=sample, inference_params={"a": 1}
+    )
     assert calls["set_tracking_uri"] == ["https://mlflow.local"]
     assert calls["set_registry_uri"] == ["https://mlflow.local"]
     assert logged["name"] == "DemoModel"
     assert logged["registered_model_name"] == "demo-registry"
+    assert returned_model_info is model_info
+    assert svc.logged_model_info is model_info
+    assert svc.run_id == "run-123"
+    assert svc.registered_model_version == 7
 
     ctx = SimpleNamespace(artifacts={"a": 1}, model_config={"b": 2})
     svc.load_context(ctx)

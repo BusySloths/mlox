@@ -10,6 +10,7 @@ from typing import List, Dict, Sequence
 from abc import ABC, abstractmethod
 
 import mlflow  # type: ignore
+from mlflow.models.model import ModelInfo  # type: ignore
 from mlflow.tracking import MlflowClient  # type: ignore
 
 import urllib3
@@ -37,8 +38,11 @@ class DeployableModel(ABC):
 
 class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
     registered_model_name: str | None
+    registered_model_version: int | None
     requirements_file: str | None
     requirements_python_version: str | None
+    run_id: str | None
+    logged_model_info: ModelInfo | None
 
     def __init__(
         self,
@@ -56,8 +60,11 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
         self.registry_uri = os.environ["MLFLOW_URI"]
         self.code_paths = list(code_paths) if code_paths is not None else ["."]
         self.registered_model_name = None
+        self.registered_model_version = None
         self.requirements_file = requirements_file
         self.requirements_python_version = requirements_python_version
+        self.run_id = None
+        self.logged_model_info = None
 
     def set_registered_model_name(self, registered_model_name: str | None) -> None:
         if registered_model_name:
@@ -73,7 +80,7 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
         params: Dict | None = None,
         input_example: np.ndarray | pd.DataFrame | None = None,
         inference_params: Dict | None = None,
-    ):
+    ) -> ModelInfo:
         mlflow.set_tracking_uri(self.tracking_uri)
         mlflow.set_registry_uri(self.registry_uri)
         mlflow.set_experiment(f"{self.model_class}")
@@ -109,7 +116,7 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
 
             mlflow.set_tag("python_class", str(self.model.__class__))
 
-            mlflow.pyfunc.log_model(
+            model_info = mlflow.pyfunc.log_model(
                 name=self.model_class,
                 python_model=self,
                 code_paths=self._resolve_code_paths_for_logging(),
@@ -119,6 +126,8 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
                 registered_model_name=self.registered_model_name,
                 artifacts=artifacts,
             )
+            self._store_logged_model_info(model_info)
+            return model_info
 
     def get_conda_env(self) -> Dict:
         """Create a conda environment for the MLflow model."""
@@ -206,6 +215,19 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
             )
             resolved_paths.append(str(repo_root))
         return resolved_paths
+
+    def _store_logged_model_info(self, model_info: ModelInfo) -> None:
+        self.logged_model_info = model_info
+        self.run_id = model_info.run_id
+        self.registered_model_version = model_info.registered_model_version
+        logger.info(
+            "Logged MLflow model '%s' with run_id=%s, model_uri=%s, "
+            "registered_model_version=%s",
+            self.model_class,
+            self.run_id,
+            model_info.model_uri,
+            self.registered_model_version,
+        )
 
 
 def list_versions_for_model(model_name: str) -> List:
