@@ -73,6 +73,13 @@ def test_mlops_service_tracks_models_and_predicts(monkeypatch, tmp_path):
         "log_model",
         lambda **kwargs: logged.update(kwargs) or model_info,
     )
+    alias_calls = []
+
+    class _Client:
+        def set_registered_model_alias(self, name, alias, version):
+            alias_calls.append((name, alias, version))
+
+    monkeypatch.setattr(mlops, "MlflowClient", _Client)
 
     sample = np.array([[1.0], [2.0]])
     returned_model_info = svc.track_model(
@@ -86,6 +93,10 @@ def test_mlops_service_tracks_models_and_predicts(monkeypatch, tmp_path):
     assert svc.logged_model_info is model_info
     assert svc.run_id == "run-123"
     assert svc.registered_model_version == 7
+    assert alias_calls == []
+
+    svc.set_alias("champion")
+    assert alias_calls == [("demo-registry", "champion", "7")]
 
     ctx = SimpleNamespace(artifacts={"a": 1}, model_config={"b": 2})
     svc.load_context(ctx)
@@ -113,6 +124,25 @@ def test_mlops_service_tracks_models_and_predicts(monkeypatch, tmp_path):
     )
     req_env = req_svc.get_conda_env()
     assert "-r requirements.txt" in req_env["dependencies"][1]["pip"][0]
+
+
+def test_mlops_set_alias_is_not_applied_without_registered_version(monkeypatch):
+    monkeypatch.setenv("MLFLOW_URI", "https://mlflow.local")
+    svc = mlops.MLFlowDeployableModelService(
+        model=_TrackedModel(),
+        model_class="DemoModel",
+    )
+
+    alias_calls = []
+
+    class _Client:
+        def set_registered_model_alias(self, name, alias, version):
+            alias_calls.append((name, alias, version))
+
+    monkeypatch.setattr(mlops, "MlflowClient", _Client)
+
+    svc.set_alias("champion")
+    assert alias_calls == []
 
 
 def test_mlops_code_paths_resolve_relative_to_cwd(monkeypatch, tmp_path):

@@ -90,6 +90,27 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
             )
         self.registered_model_name = registered_model_name
 
+    def set_alias(self, alias: str) -> None:
+        """Set the single registry alias to apply to the logged model version."""
+        if not self.registered_model_name or self.registered_model_version is None:
+            logger.info(
+                "Deferring alias '%s' because no registered model version is available.",
+                alias,
+            )
+            return
+        logger.info(
+            "Setting alias '%s' for registered model '%s' version %s.",
+            alias,
+            self.registered_model_name,
+            self.registered_model_version,
+        )
+        client = MlflowClient()
+        client.set_registered_model_alias(
+            name=self.registered_model_name,
+            alias=alias,
+            version=str(self.registered_model_version),
+        )
+
     def track_model(
         self,
         params: Dict | None = None,
