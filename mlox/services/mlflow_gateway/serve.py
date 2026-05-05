@@ -146,10 +146,36 @@ class PredictionRequest(BaseModel):
         return self
 
 
-def _model_uri(data: PredictionRequest) -> str:
+class ResolvedModelReference(BaseModel):
+    requested_model_name: str
+    requested_model_version: str | None = None
+    requested_model_alias: str | None = None
+    resolved_model_version: str
+    resolved_model_uri: str
+
+
+def _resolve_model_reference(data: PredictionRequest) -> ResolvedModelReference:
     if data.registry_model_alias is not None:
-        return f"models:/{data.registry_model_name}@{data.registry_model_alias}"
-    return f"models:/{data.registry_model_name}/{data.registry_model_version}"
+        client = mlflow.MlflowClient()
+        model_version = client.get_model_version_by_alias(
+            name=data.registry_model_name,
+            alias=data.registry_model_alias,
+        )
+        resolved_version = str(model_version.version)
+        return ResolvedModelReference(
+            requested_model_name=data.registry_model_name,
+            requested_model_alias=data.registry_model_alias,
+            resolved_model_version=resolved_version,
+            resolved_model_uri=f"models:/{data.registry_model_name}/{resolved_version}",
+        )
+
+    resolved_version = str(data.registry_model_version)
+    return ResolvedModelReference(
+        requested_model_name=data.registry_model_name,
+        requested_model_version=resolved_version,
+        resolved_model_version=resolved_version,
+        resolved_model_uri=f"models:/{data.registry_model_name}/{resolved_version}",
+    )
 
 
 def _read_requirements(model_uri: str) -> List[str]:
@@ -235,7 +261,8 @@ def runandget(data: PredictionRequest):
     logger.info(f"Input model_version: {data.registry_model_version}")
     logger.info(f"Input model_alias: {data.registry_model_alias}")
 
-    model_uri = _model_uri(data)
+    resolved_model = _resolve_model_reference(data)
+    model_uri = resolved_model.resolved_model_uri
     logger.info(f"Load model from = {model_uri}")
 
     loaded_model, is_cached_model = _load_model(model_uri)
@@ -255,20 +282,21 @@ def runandget(data: PredictionRequest):
     sys.path = list(SYS_PATH)
     logger.info(f"sys.path.RESET {sys.path}")
     _evict_cache(protected_uri=model_uri)
-    return parsed, is_cached_model
+    return parsed, is_cached_model, resolved_model
 
 
 @app.post("/prod/predict")
 def predict(data: PredictionRequest):
     try:
         prediction_time = datetime.now()
-        data, is_cached_model = runandget(data)
+        data, is_cached_model, resolved_model = runandget(data)
 
         prediction_tdelta = datetime.now() - prediction_time
         return {
             "data": data,
             "prediction_time_sec": prediction_tdelta.total_seconds(),
             "is_cached_model": is_cached_model,
+            "model": resolved_model.model_dump(),
         }
     except mlflow.exceptions.RestException as e:
         sys.path = list(SYS_PATH)

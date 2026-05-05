@@ -225,13 +225,15 @@ def test_serve_run_predict_and_list_models(monkeypatch):
         registry_model_name="Demo",
         registry_model_version=1,
     )
-    parsed, cached = serve.runandget(req)
+    parsed, cached, resolved = serve.runandget(req)
     assert cached is False
     assert parsed[0]["result"] == 3.0
+    assert resolved.resolved_model_uri == "models:/Demo/1"
 
-    parsed2, cached2 = serve.runandget(req)
+    parsed2, cached2, resolved2 = serve.runandget(req)
     assert cached2 is True
     assert parsed2[0]["result"] == 3.0
+    assert resolved2.resolved_model_uri == "models:/Demo/1"
     cache = serve.list_cached_models()["cached_models"]
     assert cache[0]["model_uri"] == "models:/Demo/1"
     assert serve.clear_cached_models()["cleared_models_count"] == 1
@@ -240,6 +242,7 @@ def test_serve_run_predict_and_list_models(monkeypatch):
     response = serve.predict(req)
     assert response["is_cached_model"] is False
     assert response["prediction_time_sec"] >= 0
+    assert response["model"]["resolved_model_uri"] == "models:/Demo/1"
 
     class _Version:
         def __init__(self, version):
@@ -259,7 +262,7 @@ def test_serve_run_predict_and_list_models(monkeypatch):
     assert len(models["versions"]) == 2
 
 
-def test_serve_model_uri_supports_version_or_alias():
+def test_serve_model_reference_supports_version_or_alias(monkeypatch):
     version_req = serve.PredictionRequest(
         input_data=[[1.0]],
         registry_model_name="Demo",
@@ -271,8 +274,23 @@ def test_serve_model_uri_supports_version_or_alias():
         registry_model_alias="champion",
     )
 
-    assert serve._model_uri(version_req) == "models:/Demo/1"
-    assert serve._model_uri(alias_req) == "models:/Demo@champion"
+    class _Client:
+        def get_model_version_by_alias(self, name, alias):
+            assert name == "Demo"
+            assert alias == "champion"
+            return SimpleNamespace(version="7")
+
+    monkeypatch.setattr(serve.mlflow, "MlflowClient", _Client)
+
+    version_ref = serve._resolve_model_reference(version_req)
+    alias_ref = serve._resolve_model_reference(alias_req)
+
+    assert version_ref.resolved_model_uri == "models:/Demo/1"
+    assert version_ref.resolved_model_version == "1"
+    assert version_ref.requested_model_alias is None
+    assert alias_ref.resolved_model_uri == "models:/Demo/7"
+    assert alias_ref.resolved_model_version == "7"
+    assert alias_ref.requested_model_alias == "champion"
 
     with pytest.raises(ValueError):
         serve.PredictionRequest(
@@ -286,6 +304,55 @@ def test_serve_model_uri_supports_version_or_alias():
             registry_model_version=1,
             registry_model_alias="champion",
         )
+
+
+def test_serve_alias_requests_cache_resolved_model_versions(monkeypatch):
+    serve.model_cache.clear()
+
+    class _LoadedModel:
+        def __init__(self, model_uri):
+            self.model_uri = model_uri
+
+        def predict(self, input_data, params=None):
+            return pd.DataFrame({"model_uri": [self.model_uri]})
+
+    class _Client:
+        version = "2"
+
+        def get_model_version_by_alias(self, name, alias):
+            return SimpleNamespace(version=self.version)
+
+    client = _Client()
+    monkeypatch.setattr(serve.mlflow, "MlflowClient", lambda: client)
+    monkeypatch.setattr(
+        serve.mlflow.pyfunc,
+        "load_model",
+        lambda model_uri: _LoadedModel(model_uri),
+    )
+    monkeypatch.setattr(
+        serve.mlflow.artifacts,
+        "download_artifacts",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("missing")),
+    )
+
+    req = serve.PredictionRequest(
+        input_data=[[1.0]],
+        registry_model_name="Demo",
+        registry_model_alias="champion",
+    )
+
+    parsed, cached, resolved = serve.runandget(req)
+    assert cached is False
+    assert parsed[0]["model_uri"] == "models:/Demo/2"
+    assert resolved.resolved_model_uri == "models:/Demo/2"
+    assert set(serve.model_cache) == {"models:/Demo/2"}
+
+    client.version = "3"
+    parsed2, cached2, resolved2 = serve.runandget(req)
+    assert cached2 is False
+    assert parsed2[0]["model_uri"] == "models:/Demo/3"
+    assert resolved2.resolved_model_uri == "models:/Demo/3"
+    assert set(serve.model_cache) == {"models:/Demo/2", "models:/Demo/3"}
 
 
 def test_serve_cache_evicts_by_ttl_and_lru(monkeypatch):
@@ -306,10 +373,10 @@ def test_serve_cache_evicts_by_ttl_and_lru(monkeypatch):
         model_uri="models:/Demo/1",
         last_call=now - pd.Timedelta(days=2),
     )
-    serve.model_cache["models:/Demo@champion"] = serve.ModelCacheEntry(
+    serve.model_cache["models:/Demo/3"] = serve.ModelCacheEntry(
         model=object(),
         sys_path=[],
-        model_uri="models:/Demo@champion",
+        model_uri="models:/Demo/3",
         last_call=now - pd.Timedelta(days=1),
     )
     serve.model_cache["models:/Demo/2"] = serve.ModelCacheEntry(
@@ -322,8 +389,8 @@ def test_serve_cache_evicts_by_ttl_and_lru(monkeypatch):
     evicted = serve._evict_cache(now=now)
     assert evicted["ttl"] == ["models:/Demo/old"]
     assert evicted["lru"] == ["models:/Demo/1"]
-    assert set(serve.model_cache) == {"models:/Demo@champion", "models:/Demo/2"}
-    assert serve.model_cache["models:/Demo@champion"].is_alias_uri is True
+    assert set(serve.model_cache) == {"models:/Demo/3", "models:/Demo/2"}
+    assert serve.model_cache["models:/Demo/3"].is_alias_uri is False
 
     cache_response = serve.list_cached_models()
     assert cache_response["cache"] == {"max_models": 2, "ttl_days": 10.0}
