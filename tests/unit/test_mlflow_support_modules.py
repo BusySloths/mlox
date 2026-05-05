@@ -306,6 +306,58 @@ def test_serve_model_reference_supports_version_or_alias(monkeypatch):
         )
 
 
+def test_serve_supports_dataframe_split_input():
+    req = serve.PredictionRequest(
+        dataframe_split={
+            "columns": [
+                "interested_party_id",
+                "event_id",
+                "top_k",
+                "filter_event_ids",
+            ],
+            "data": [
+                [
+                    "9a44ed51-17f9-47c8-afd6-3e73f8a6dcc3",
+                    "f8c4f629-dcea-4aad-993c-3affc892a3a5",
+                    20,
+                    '["b67e9ed2-0df7-4840-959a-e55d14cf82a2"]',
+                ]
+            ],
+        },
+        registry_model_name="Demo",
+        registry_model_version=1,
+    )
+
+    model_input = serve._prediction_input(req)
+    assert isinstance(model_input, pd.DataFrame)
+    assert list(model_input.columns) == [
+        "interested_party_id",
+        "event_id",
+        "top_k",
+        "filter_event_ids",
+    ]
+    assert model_input.iloc[0]["top_k"] == 20
+
+    with pytest.raises(ValueError):
+        serve.PredictionRequest(
+            input_data=[[1.0]],
+            dataframe_split={"columns": ["a"], "data": [[1.0]]},
+            registry_model_name="Demo",
+            registry_model_version=1,
+        )
+    with pytest.raises(ValueError):
+        serve.PredictionRequest(
+            registry_model_name="Demo",
+            registry_model_version=1,
+        )
+    with pytest.raises(ValueError):
+        serve.PredictionRequest(
+            dataframe_split={"columns": ["a", "b"], "data": [[1.0]]},
+            registry_model_name="Demo",
+            registry_model_version=1,
+        )
+
+
 def test_serve_alias_requests_cache_resolved_model_versions(monkeypatch):
     serve.model_cache.clear()
 

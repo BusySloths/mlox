@@ -110,8 +110,25 @@ def health():
     }
 
 
+class DataFrameSplit(BaseModel):
+    columns: List[str]
+    data: List[List[Any]]
+    index: List[Any] | None = None
+
+    @model_validator(mode="after")
+    def _validate_rows_match_columns(self):
+        expected = len(self.columns)
+        for row in self.data:
+            if len(row) != expected:
+                raise ValueError(
+                    "Each dataframe_split row must have the same length as columns"
+                )
+        return self
+
+
 class PredictionRequest(BaseModel):
-    input_data: List
+    input_data: List | None = None
+    dataframe_split: DataFrameSplit | None = None
     params: Dict | None = None
     registry_model_name: str
     registry_model_version: int | str | None = None
@@ -136,13 +153,17 @@ class PredictionRequest(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _requires_version_or_alias(self):
+    def _validate_request_shape(self):
         has_version = self.registry_model_version is not None
         has_alias = self.registry_model_alias is not None
         if has_version == has_alias:
             raise ValueError(
                 "Provide exactly one of registry_model_version or registry_model_alias"
             )
+        has_input_data = self.input_data is not None
+        has_dataframe_split = self.dataframe_split is not None
+        if has_input_data == has_dataframe_split:
+            raise ValueError("Provide exactly one of input_data or dataframe_split")
         return self
 
 
@@ -176,6 +197,16 @@ def _resolve_model_reference(data: PredictionRequest) -> ResolvedModelReference:
         resolved_model_version=resolved_version,
         resolved_model_uri=f"models:/{data.registry_model_name}/{resolved_version}",
     )
+
+
+def _prediction_input(data: PredictionRequest) -> np.ndarray | pd.DataFrame:
+    if data.dataframe_split is not None:
+        return pd.DataFrame(
+            data.dataframe_split.data,
+            columns=data.dataframe_split.columns,
+            index=data.dataframe_split.index,
+        )
+    return np.array(data.input_data)
 
 
 def _read_requirements(model_uri: str) -> List[str]:
@@ -267,7 +298,7 @@ def runandget(data: PredictionRequest):
 
     loaded_model, is_cached_model = _load_model(model_uri)
     logger.info(f"Model loaded: {loaded_model}")
-    input_data = np.array(data.input_data)
+    input_data = _prediction_input(data)
     logger.info(f"Model data: {input_data}")
     logger.info(f"Model params: {data.params}")
     df_pred = loaded_model.predict(input_data, params=data.params)
