@@ -82,11 +82,15 @@ class UsagePair:
 
     used: float | None = None
     free: float | None = None
+    total_value: float | None = None
     unit: str | None = None
     history: list[float] | None = None
+    scope: str | None = None
 
     @property
     def total(self) -> float | None:
+        if self.total_value is not None:
+            return self.total_value
         if self.used is None or self.free is None:
             return None
         return self.used + self.free
@@ -112,6 +116,7 @@ class CpuUsage:
     load_1m: float | None = None
     load_5m: float | None = None
     load_15m: float | None = None
+    logical_cpus: int | None = None
 
 
 @dataclass
@@ -312,6 +317,12 @@ def _state(attrs: Any) -> str:
     return str(attrs.get("state") or attrs.get("direction") or "").lower()
 
 
+def _attr_value(attrs: Any, key: str) -> str:
+    if not isinstance(attrs, dict):
+        return ""
+    return str(attrs.get(key) or "")
+
+
 def _rows_matching(numeric_df: pd.DataFrame, *needles: str) -> pd.DataFrame:
     if numeric_df.empty:
         return numeric_df
@@ -337,6 +348,8 @@ def _latest_values_by_state(
     wanted_states: tuple[str, ...],
     units: tuple[str, ...] | None = None,
     exclude_name_needles: tuple[str, ...] = (),
+    row_filter: Any | None = None,
+    scope: str | None = None,
 ) -> UsagePair:
     rows = _rows_matching(numeric_df, *metric_needles)
     if rows.empty:
@@ -347,20 +360,24 @@ def _latest_values_by_state(
         rows = rows[~rows["name"].str.contains(needle, case=False, na=False)]
     if rows.empty:
         return UsagePair()
-
-    rows["_state"] = rows["attributes"].apply(_state)
-    rows = rows[rows["_state"].isin(wanted_states)]
+    if row_filter:
+        rows = row_filter(rows)
     if rows.empty:
         return UsagePair()
 
+    rows["_state"] = rows["attributes"].apply(_state)
     rows["_series"] = rows["attributes"].apply(
         lambda attrs: _attrs_key(attrs, exclude={"state"})
     )
     rows.sort_values("timestamp", inplace=True)
-    latest = rows.groupby(["name", "_series", "_state"], as_index=False).tail(1)
+    latest_all = rows.groupby(["name", "_series", "_state"], as_index=False).tail(1)
+    latest = latest_all[latest_all["_state"].isin(wanted_states)]
+    if latest.empty:
+        return UsagePair()
     unit_series = latest["unit"].dropna()
     unit = str(unit_series.iloc[0]) if not unit_series.empty else None
     state_values = latest.groupby("_state")["value"].sum().to_dict()
+    total_value = float(latest_all["value"].sum())
 
     state_by_ts = (
         rows.groupby(["timestamp", "_series", "_state"], as_index=False)["value"]
@@ -373,19 +390,159 @@ def _latest_values_by_state(
     history: list[float] = []
     for _, row in state_by_ts.iterrows():
         used = row.get("used")
-        free = row.get("free")
-        if pd.isna(used) or pd.isna(free):
+        if pd.isna(used):
             continue
-        total = float(used) + float(free)
+        total = float(row.dropna().sum())
         if total > 0:
             history.append(float(used) / total)
 
     return UsagePair(
         used=float(state_values["used"]) if "used" in state_values else None,
         free=float(state_values["free"]) if "free" in state_values else None,
+        total_value=total_value,
+        unit=unit,
+        history=history[-MAX_POINTS_PER_SERIES:],
+        scope=scope,
+    )
+
+
+def _memory_usage(numeric_df: pd.DataFrame) -> UsagePair:
+    rows = _rows_matching(numeric_df, "memory.usage", "system.memory")
+    if rows.empty:
+        return UsagePair()
+    rows = rows[rows["unit"].isin(("By", "bytes", "byte"))]
+    rows = rows[
+        ~rows["name"].str.contains("limit|usage_ratio|utilization", case=False, na=False)
+    ]
+    if rows.empty:
+        return UsagePair()
+
+    rows["_state"] = rows["attributes"].apply(_state)
+    rows = rows[rows["_state"] != ""].copy()
+    if rows.empty:
+        return UsagePair()
+
+    rows["_series"] = rows["attributes"].apply(
+        lambda attrs: _attrs_key(attrs, exclude={"state"})
+    )
+    rows.sort_values("timestamp", inplace=True)
+    latest = rows.groupby(["name", "_series", "_state"], as_index=False).tail(1)
+    unit_series = latest["unit"].dropna()
+    unit = str(unit_series.iloc[0]) if not unit_series.empty else None
+    state_values = latest.groupby("_state")["value"].sum().to_dict()
+
+    explicit_total = _latest_single_metric(
+        numeric_df,
+        "memory.limit",
+        "memory.total",
+        "system.memory.limit",
+        "system.memory.total",
+    )
+    free = float(state_values["free"]) if "free" in state_values else None
+    used = float(state_values["used"]) if "used" in state_values else None
+    available = (
+        float(state_values["available"]) if "available" in state_values else None
+    )
+    inactive = float(state_values["inactive"]) if "inactive" in state_values else 0.0
+    cached = float(state_values["cached"]) if "cached" in state_values else 0.0
+    buffered = float(state_values["buffered"]) if "buffered" in state_values else 0.0
+
+    if free is None and available is not None:
+        free = available
+    total_value = explicit_total
+    if total_value is None and used is not None:
+        if available is not None:
+            total_value = used + available
+        elif free is not None:
+            total_value = used + free + inactive + cached + buffered
+
+    state_by_ts = (
+        rows.groupby(["timestamp", "_series", "_state"], as_index=False)["value"]
+        .mean()
+        .groupby(["timestamp", "_state"])["value"]
+        .sum()
+        .unstack("_state")
+        .sort_index()
+    )
+    history: list[float] = []
+    for _, row in state_by_ts.iterrows():
+        row_used = row.get("used")
+        if pd.isna(row_used):
+            continue
+        row_available = row.get("available")
+        row_free = row.get("free")
+        if not pd.isna(row_available):
+            row_total = float(row_used) + float(row_available)
+        elif not pd.isna(row_free):
+            extra = 0.0
+            for state in ("inactive", "cached", "buffered"):
+                state_value = row.get(state)
+                if not pd.isna(state_value):
+                    extra += float(state_value)
+            row_total = float(row_used) + float(row_free) + extra
+        else:
+            continue
+        if row_total > 0:
+            history.append(float(row_used) / row_total)
+
+    return UsagePair(
+        used=used,
+        free=free,
+        total_value=total_value,
         unit=unit,
         history=history[-MAX_POINTS_PER_SERIES:],
     )
+
+
+IGNORED_FILESYSTEM_TYPES = {
+    "aufs",
+    "autofs",
+    "binfmt_misc",
+    "bpf",
+    "cgroup",
+    "cgroup2",
+    "configfs",
+    "debugfs",
+    "devfs",
+    "devpts",
+    "devtmpfs",
+    "fusectl",
+    "hugetlbfs",
+    "mqueue",
+    "nsfs",
+    "overlay",
+    "proc",
+    "pstore",
+    "rpc_pipefs",
+    "securityfs",
+    "squashfs",
+    "sysfs",
+    "tmpfs",
+    "tracefs",
+}
+
+
+def _filter_primary_filesystem_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    filtered = rows.copy()
+    filtered["_mountpoint"] = filtered["attributes"].apply(
+        lambda attrs: _attr_value(attrs, "mountpoint")
+    )
+    filtered["_fstype"] = filtered["attributes"].apply(
+        lambda attrs: _attr_value(attrs, "type").lower()
+    )
+    filtered = filtered[~filtered["_fstype"].isin(IGNORED_FILESYSTEM_TYPES)]
+    if filtered.empty:
+        return filtered
+
+    root_rows = filtered[filtered["_mountpoint"] == "/"]
+    if not root_rows.empty:
+        return root_rows
+
+    latest_by_mount = filtered.groupby("_mountpoint")["value"].sum()
+    if latest_by_mount.empty:
+        return filtered
+    preferred_mount = str(latest_by_mount.idxmax())
+    return filtered[filtered["_mountpoint"] == preferred_mount]
 
 
 def _five_min_average(
@@ -508,6 +665,24 @@ def _latest_single_metric(numeric_df: pd.DataFrame, *metric_needles: str) -> flo
     return float(rows["value"].iloc[-1])
 
 
+def _cpu_core_count(numeric_df: pd.DataFrame) -> int | None:
+    rows = _rows_matching(
+        numeric_df,
+        "cpu.time",
+        "system.cpu.time",
+        "cpu.utilization",
+        "system.cpu.utilization",
+    )
+    if rows.empty:
+        return None
+    cpu_ids = {
+        _attr_value(attrs, "cpu")
+        for attrs in rows["attributes"]
+        if _attr_value(attrs, "cpu")
+    }
+    return len(cpu_ids) if cpu_ids else None
+
+
 def _cpu_usage(numeric_df: pd.DataFrame) -> CpuUsage:
     usage = _cpu_from_utilization(numeric_df)
     if usage.now_used_ratio is None:
@@ -516,6 +691,7 @@ def _cpu_usage(numeric_df: pd.DataFrame) -> CpuUsage:
     usage.load_1m = _latest_single_metric(numeric_df, "load_average.1m", "load.1m")
     usage.load_5m = _latest_single_metric(numeric_df, "load_average.5m", "load.5m")
     usage.load_15m = _latest_single_metric(numeric_df, "load_average.15m", "load.15m")
+    usage.logical_cpus = _cpu_core_count(numeric_df)
     return usage
 
 
@@ -641,12 +817,7 @@ def _build_resource_snapshot(telemetry_raw: str | None) -> ResourceTelemetrySnap
     snapshot = ResourceTelemetrySnapshot(
         summary=summary,
         cpu=_cpu_usage(numeric_df),
-        memory=_latest_values_by_state(
-            numeric_df,
-            "memory.usage",
-            "system.memory",
-            wanted_states=("used", "free"),
-        ),
+        memory=_memory_usage(numeric_df),
         disk=_latest_values_by_state(
             numeric_df,
             "filesystem.usage",
@@ -655,6 +826,8 @@ def _build_resource_snapshot(telemetry_raw: str | None) -> ResourceTelemetrySnap
             wanted_states=("used", "free"),
             units=("By", "bytes", "byte"),
             exclude_name_needles=("inode",),
+            row_filter=_filter_primary_filesystem_rows,
+            scope="root filesystem",
         ),
         network=_network_usage(numeric_df),
         latest_timestamp=_latest_timestamp(numeric_df),
@@ -839,6 +1012,7 @@ class OtelTelemetryPanel(VerticalScroll):
             _format_percent(cpu.five_min_free_ratio),
         )
         table.add_row("Trend (used %)", _mini_sparkline(cpu.history), cpu.source or "-")
+        table.add_row("Logical CPUs", str(cpu.logical_cpus) if cpu.logical_cpus else "N/A", "")
         table.add_row(
             "Load",
             f"1m {_format_load(cpu.load_1m)}",
@@ -855,6 +1029,8 @@ class OtelTelemetryPanel(VerticalScroll):
         table.add_row("Current total", _format_value(usage.total, usage.unit))
         table.add_row("Current used %", _format_percent(usage.used_ratio))
         table.add_row("Trend (used %)", _mini_sparkline(usage.history))
+        if usage.scope:
+            table.add_row("Scope", usage.scope)
         return Panel(table, title=title, border_style="green")
 
     def _network_panel(self, network: NetworkUsage) -> Panel:

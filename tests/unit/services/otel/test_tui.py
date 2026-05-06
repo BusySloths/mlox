@@ -281,10 +281,12 @@ def test_resource_snapshot_extracts_host_resource_view() -> None:
     assert snapshot.cpu.five_min_used_ratio == pytest.approx(0.25)
     assert snapshot.memory.used == pytest.approx(300)
     assert snapshot.memory.free == pytest.approx(700)
+    assert snapshot.memory.total == pytest.approx(1000)
     assert snapshot.memory.used_ratio == pytest.approx(0.3)
     assert snapshot.memory.history == pytest.approx([0.3])
     assert snapshot.disk.used == pytest.approx(400)
     assert snapshot.disk.free == pytest.approx(600)
+    assert snapshot.disk.total == pytest.approx(1000)
     assert snapshot.disk.history == pytest.approx([0.4])
     assert snapshot.network.receive_rate == pytest.approx(20)
     assert snapshot.network.transmit_rate == pytest.approx(10)
@@ -354,6 +356,7 @@ def test_resource_snapshot_derives_cpu_from_cumulative_cpu_time() -> None:
     assert snapshot.cpu.now_used_ratio == pytest.approx(0.4)
     assert snapshot.cpu.now_free_ratio == pytest.approx(0.6)
     assert snapshot.cpu.history == pytest.approx([0.4])
+    assert snapshot.cpu.logical_cpus == 1
 
 
 def test_resource_snapshot_uses_byte_disk_metrics_not_inodes() -> None:
@@ -413,3 +416,177 @@ def test_resource_snapshot_uses_byte_disk_metrics_not_inodes() -> None:
     assert snapshot.disk.unit == "By"
     assert snapshot.disk.used == pytest.approx(1024)
     assert snapshot.disk.free == pytest.approx(3072)
+
+
+def test_resource_snapshot_memory_total_uses_available_when_present() -> None:
+    telemetry = _jsonl(
+        {
+            "resourceMetrics": [
+                {
+                    "scopeMetrics": [
+                        {
+                            "metrics": [
+                                {
+                                    "name": "system.memory.usage",
+                                    "unit": "By",
+                                    "gauge": {
+                                        "dataPoints": [
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 4,
+                                                "attributes": [_attr("state", "used")],
+                                            },
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 5,
+                                                "attributes": [_attr("state", "cached")],
+                                            },
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 8,
+                                                "attributes": [
+                                                    _attr("state", "available")
+                                                ],
+                                            },
+                                        ]
+                                    },
+                                },
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    )
+
+    snapshot = _build_resource_snapshot(telemetry)
+
+    assert snapshot.memory.used == pytest.approx(4)
+    assert snapshot.memory.free == pytest.approx(8)
+    assert snapshot.memory.total == pytest.approx(12)
+    assert snapshot.memory.used_ratio == pytest.approx(4 / 12)
+    assert snapshot.memory.history == pytest.approx([4 / 12])
+
+
+def test_resource_snapshot_memory_falls_back_to_free_plus_cache_states() -> None:
+    telemetry = _jsonl(
+        {
+            "resourceMetrics": [
+                {
+                    "scopeMetrics": [
+                        {
+                            "metrics": [
+                                {
+                                    "name": "system.memory.usage",
+                                    "unit": "By",
+                                    "gauge": {
+                                        "dataPoints": [
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 4,
+                                                "attributes": [_attr("state", "used")],
+                                            },
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 3,
+                                                "attributes": [_attr("state", "free")],
+                                            },
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 5,
+                                                "attributes": [_attr("state", "cached")],
+                                            },
+                                        ]
+                                    },
+                                },
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    )
+
+    snapshot = _build_resource_snapshot(telemetry)
+
+    assert snapshot.memory.used == pytest.approx(4)
+    assert snapshot.memory.free == pytest.approx(3)
+    assert snapshot.memory.total == pytest.approx(12)
+    assert snapshot.memory.used_ratio == pytest.approx(4 / 12)
+
+
+def test_resource_snapshot_disk_uses_root_mount_not_all_mounts() -> None:
+    telemetry = _jsonl(
+        {
+            "resourceMetrics": [
+                {
+                    "scopeMetrics": [
+                        {
+                            "metrics": [
+                                {
+                                    "name": "system.filesystem.usage",
+                                    "unit": "By",
+                                    "gauge": {
+                                        "dataPoints": [
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 40,
+                                                "attributes": [
+                                                    _attr("mountpoint", "/"),
+                                                    _attr("type", "ext4"),
+                                                    _attr("state", "used"),
+                                                ],
+                                            },
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 60,
+                                                "attributes": [
+                                                    _attr("mountpoint", "/"),
+                                                    _attr("type", "ext4"),
+                                                    _attr("state", "free"),
+                                                ],
+                                            },
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 500,
+                                                "attributes": [
+                                                    _attr("mountpoint", "/mnt/data"),
+                                                    _attr("type", "ext4"),
+                                                    _attr("state", "used"),
+                                                ],
+                                            },
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 500,
+                                                "attributes": [
+                                                    _attr("mountpoint", "/mnt/data"),
+                                                    _attr("type", "ext4"),
+                                                    _attr("state", "free"),
+                                                ],
+                                            },
+                                            {
+                                                "timeUnixNano": "61000000000",
+                                                "asInt": 1000,
+                                                "attributes": [
+                                                    _attr("mountpoint", "/overlay"),
+                                                    _attr("type", "overlay"),
+                                                    _attr("state", "used"),
+                                                ],
+                                            },
+                                        ]
+                                    },
+                                },
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    )
+
+    snapshot = _build_resource_snapshot(telemetry)
+
+    assert snapshot.disk.used == pytest.approx(40)
+    assert snapshot.disk.free == pytest.approx(60)
+    assert snapshot.disk.total == pytest.approx(100)
+    assert snapshot.disk.used_ratio == pytest.approx(0.4)
