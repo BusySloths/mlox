@@ -75,6 +75,7 @@ Button {
 
 #main-area {
   layout: horizontal;
+  height: 1fr;
 }
 
 #sidebar {
@@ -106,29 +107,47 @@ Button {
   height: 1fr;
 }
 
+#app-log-drawer {
+  height: 14;
+  min-height: 8;
+  background: #031410ff;
+  padding: 0;
+  margin: 0;
+  layout: vertical;
+  width: 1fr;
+}
+
+#app-log-output {
+  height: 1fr;
+  width: 1fr;
+  background: #031410ff;
+}
+
 #main-tabs {
   height: 1fr;
 }
 
 #overview-tab,
-#template-tab {
+#server-templates-tab,
+#service-templates-tab {
   height: 1fr;
 }
 
 #overview-scroll,
-#template-scroll-wrapper {
+.template-scroll-wrapper {
   height: 1fr;
   width: 1fr;
   overflow-y: auto;
 }
 
-#template-panel {
+#server-template-panel,
+#service-template-panel {
   height: 1fr;
   width: 1fr;
   layout: vertical;
 }
 
-#template-content {
+.template-content {
   width: 1fr;
 }
 
@@ -271,4 +290,23 @@ Tree {
 
 #selection-state {
   color: #e6edf7;
+}
+
+#otel-telemetry-status {
+  margin-bottom: 1;
+  color: #94a3b8;
+}
+
+.otel-resource-row {
+  height: auto;
+  margin-bottom: 1;
+}
+
+.otel-resource-card {
+  width: 1fr;
+  margin-right: 1;
+}
+
+#otel-telemetry-summary {
+  margin-top: 1;
 }

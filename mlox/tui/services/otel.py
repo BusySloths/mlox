@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
+import json
 import re
-from typing import Dict
+from typing import Any, Dict
 
 import pandas as pd
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.reactive import reactive
-from textual.widgets import Select, Sparkline, Static
+from textual.containers import Horizontal, VerticalScroll
+from textual.widgets import Static
 
 from mlox.infra import Bundle, Infrastructure
 from mlox.services.otel.docker import OtelDockerService
@@ -29,11 +28,6 @@ from mlox.view.services.otel import (
 )
 
 MAX_POINTS_PER_SERIES = 120
-SPARKLINE_COLORS = (
-    ("#55efc4", "#00b894"),
-    ("#fab1a0", "#e17055"),
-    ("#74b9ff", "#0984e3"),
-)
 
 
 @dataclass
@@ -78,6 +72,71 @@ class TelemetrySnapshot:
 
     summary: Dict[str, int]
     groups: Dict[str, MetricGroup]
+    messages: list[str]
+    errors: int = 0
+
+
+@dataclass
+class UsagePair:
+    """Used/free resource values."""
+
+    used: float | None = None
+    free: float | None = None
+    unit: str | None = None
+    history: list[float] | None = None
+
+    @property
+    def total(self) -> float | None:
+        if self.used is None or self.free is None:
+            return None
+        return self.used + self.free
+
+    @property
+    def used_ratio(self) -> float | None:
+        total = self.total
+        if total is None or total <= 0 or self.used is None:
+            return None
+        return self.used / total
+
+
+@dataclass
+class CpuUsage:
+    """CPU utilization snapshot."""
+
+    now_used_ratio: float | None = None
+    now_free_ratio: float | None = None
+    five_min_used_ratio: float | None = None
+    five_min_free_ratio: float | None = None
+    history: list[float] | None = None
+    source: str | None = None
+    load_1m: float | None = None
+    load_5m: float | None = None
+    load_15m: float | None = None
+
+
+@dataclass
+class NetworkUsage:
+    """Network receive/transmit rate snapshot."""
+
+    receive_rate: float | None = None
+    transmit_rate: float | None = None
+    five_min_receive_rate: float | None = None
+    five_min_transmit_rate: float | None = None
+    receive_history: list[float] | None = None
+    transmit_history: list[float] | None = None
+    unit: str | None = None
+
+
+@dataclass
+class ResourceTelemetrySnapshot:
+    """Focused host resource snapshot for the OTEL TUI."""
+
+    summary: Dict[str, int]
+    cpu: CpuUsage
+    memory: UsagePair
+    disk: UsagePair
+    network: NetworkUsage
+    latest_timestamp: datetime | None
     messages: list[str]
     errors: int = 0
 
@@ -239,159 +298,594 @@ def _build_snapshot(telemetry_raw: str | None) -> TelemetrySnapshot:
     )
 
 
+def _attrs_key(attrs: Any, *, exclude: set[str] | None = None) -> str:
+    if not isinstance(attrs, dict):
+        return ""
+    exclude = exclude or set()
+    filtered = {key: value for key, value in attrs.items() if key not in exclude}
+    return json.dumps(filtered, sort_keys=True, default=str)
+
+
+def _state(attrs: Any) -> str:
+    if not isinstance(attrs, dict):
+        return ""
+    return str(attrs.get("state") or attrs.get("direction") or "").lower()
+
+
+def _rows_matching(numeric_df: pd.DataFrame, *needles: str) -> pd.DataFrame:
+    if numeric_df.empty:
+        return numeric_df
+    lowered = numeric_df["name"].str.lower()
+    mask = pd.Series([False] * len(numeric_df), index=numeric_df.index)
+    for needle in needles:
+        mask = mask | lowered.str.contains(needle, na=False)
+    return numeric_df.loc[mask].dropna(subset=["timestamp", "value"]).copy()
+
+
+def _latest_timestamp(numeric_df: pd.DataFrame) -> datetime | None:
+    if numeric_df.empty:
+        return None
+    latest = numeric_df["timestamp"].dropna().max()
+    if pd.isna(latest):
+        return None
+    return latest.to_pydatetime() if hasattr(latest, "to_pydatetime") else latest
+
+
+def _latest_values_by_state(
+    numeric_df: pd.DataFrame,
+    *metric_needles: str,
+    wanted_states: tuple[str, ...],
+    units: tuple[str, ...] | None = None,
+    exclude_name_needles: tuple[str, ...] = (),
+) -> UsagePair:
+    rows = _rows_matching(numeric_df, *metric_needles)
+    if rows.empty:
+        return UsagePair()
+    if units:
+        rows = rows[rows["unit"].isin(units)]
+    for needle in exclude_name_needles:
+        rows = rows[~rows["name"].str.contains(needle, case=False, na=False)]
+    if rows.empty:
+        return UsagePair()
+
+    rows["_state"] = rows["attributes"].apply(_state)
+    rows = rows[rows["_state"].isin(wanted_states)]
+    if rows.empty:
+        return UsagePair()
+
+    rows["_series"] = rows["attributes"].apply(
+        lambda attrs: _attrs_key(attrs, exclude={"state"})
+    )
+    rows.sort_values("timestamp", inplace=True)
+    latest = rows.groupby(["name", "_series", "_state"], as_index=False).tail(1)
+    unit_series = latest["unit"].dropna()
+    unit = str(unit_series.iloc[0]) if not unit_series.empty else None
+    state_values = latest.groupby("_state")["value"].sum().to_dict()
+
+    state_by_ts = (
+        rows.groupby(["timestamp", "_series", "_state"], as_index=False)["value"]
+        .mean()
+        .groupby(["timestamp", "_state"])["value"]
+        .sum()
+        .unstack("_state")
+        .sort_index()
+    )
+    history: list[float] = []
+    for _, row in state_by_ts.iterrows():
+        used = row.get("used")
+        free = row.get("free")
+        if pd.isna(used) or pd.isna(free):
+            continue
+        total = float(used) + float(free)
+        if total > 0:
+            history.append(float(used) / total)
+
+    return UsagePair(
+        used=float(state_values["used"]) if "used" in state_values else None,
+        free=float(state_values["free"]) if "free" in state_values else None,
+        unit=unit,
+        history=history[-MAX_POINTS_PER_SERIES:],
+    )
+
+
+def _five_min_average(
+    points: list[tuple[Any, float]],
+) -> float | None:
+    if not points:
+        return None
+    latest_ts = points[-1][0]
+    cutoff = latest_ts - timedelta(minutes=5)
+    window_values = [value for ts, value in points if ts >= cutoff]
+    if not window_values:
+        return points[-1][1]
+    return sum(window_values) / len(window_values)
+
+
+def _clamp_ratio(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def _cpu_from_utilization(numeric_df: pd.DataFrame) -> CpuUsage:
+    rows = _rows_matching(numeric_df, "cpu.utilization", "system.cpu.utilization")
+    if rows.empty:
+        return CpuUsage()
+
+    rows["_state"] = rows["attributes"].apply(_state)
+    state_by_ts = rows.pivot_table(
+        index="timestamp", columns="_state", values="value", aggfunc="mean"
+    ).sort_index()
+    if state_by_ts.empty:
+        return CpuUsage()
+
+    points: list[tuple[Any, float]] = []
+    for ts, row in state_by_ts.iterrows():
+        state_values = {
+            str(state): float(value)
+            for state, value in row.dropna().items()
+            if str(state)
+        }
+        if "idle" in state_values:
+            total = sum(state_values.values())
+            if total > 0 and total > state_values["idle"]:
+                used = (total - state_values["idle"]) / total
+            else:
+                used = 1.0 - state_values["idle"]
+        else:
+            used = sum(state_values.values())
+        points.append((ts, _clamp_ratio(used)))
+
+    if not points:
+        return CpuUsage()
+
+    latest_used = points[-1][1]
+    avg_used = _five_min_average(points)
+
+    return CpuUsage(
+        now_used_ratio=latest_used,
+        now_free_ratio=1.0 - latest_used,
+        five_min_used_ratio=avg_used,
+        five_min_free_ratio=1.0 - avg_used if avg_used is not None else None,
+        history=[value for _, value in points[-MAX_POINTS_PER_SERIES:]],
+        source="utilization",
+    )
+
+
+def _cpu_from_time(numeric_df: pd.DataFrame) -> CpuUsage:
+    rows = _rows_matching(numeric_df, "cpu.time", "system.cpu.time")
+    if rows.empty:
+        return CpuUsage()
+
+    rows["_state"] = rows["attributes"].apply(_state)
+    rows = rows[rows["_state"] != ""].copy()
+    if rows.empty:
+        return CpuUsage()
+
+    rows["_series"] = rows["attributes"].apply(
+        lambda attrs: _attrs_key(attrs, exclude={"state"})
+    )
+    rows.sort_values(["name", "_series", "_state", "timestamp"], inplace=True)
+    rows["_prev_value"] = rows.groupby(["name", "_series", "_state"])["value"].shift(1)
+    rows["_delta"] = rows["value"] - rows["_prev_value"]
+    delta_rows = rows[rows["_delta"] >= 0].dropna(subset=["_delta"])
+    if delta_rows.empty:
+        return CpuUsage()
+
+    state_deltas = (
+        delta_rows.groupby(["timestamp", "_state"], as_index=False)["_delta"]
+        .sum()
+        .sort_values("timestamp")
+    )
+    points: list[tuple[Any, float]] = []
+    for ts, group in state_deltas.groupby("timestamp"):
+        by_state = group.set_index("_state")["_delta"].to_dict()
+        total = sum(float(value) for value in by_state.values())
+        if total <= 0:
+            continue
+        idle = float(by_state.get("idle", 0.0))
+        used = _clamp_ratio((total - idle) / total)
+        points.append((ts, used))
+
+    if not points:
+        return CpuUsage()
+
+    latest_used = points[-1][1]
+    avg_used = _five_min_average(points)
+    return CpuUsage(
+        now_used_ratio=latest_used,
+        now_free_ratio=1.0 - latest_used,
+        five_min_used_ratio=avg_used,
+        five_min_free_ratio=1.0 - avg_used if avg_used is not None else None,
+        history=[value for _, value in points[-MAX_POINTS_PER_SERIES:]],
+        source="time",
+    )
+
+
+def _latest_single_metric(numeric_df: pd.DataFrame, *metric_needles: str) -> float | None:
+    rows = _rows_matching(numeric_df, *metric_needles)
+    if rows.empty:
+        return None
+    rows.sort_values("timestamp", inplace=True)
+    return float(rows["value"].iloc[-1])
+
+
+def _cpu_usage(numeric_df: pd.DataFrame) -> CpuUsage:
+    usage = _cpu_from_utilization(numeric_df)
+    if usage.now_used_ratio is None:
+        usage = _cpu_from_time(numeric_df)
+
+    usage.load_1m = _latest_single_metric(numeric_df, "load_average.1m", "load.1m")
+    usage.load_5m = _latest_single_metric(numeric_df, "load_average.5m", "load.5m")
+    usage.load_15m = _latest_single_metric(numeric_df, "load_average.15m", "load.15m")
+    return usage
+
+
+def _network_usage(numeric_df: pd.DataFrame) -> NetworkUsage:
+    rows = _rows_matching(numeric_df, "network.io", "network.packets")
+    if rows.empty:
+        return NetworkUsage()
+
+    rows["_direction"] = rows["attributes"].apply(_state)
+    rows = rows[rows["_direction"].isin({"receive", "transmit"})]
+    if rows.empty:
+        return NetworkUsage()
+
+    rows["_series"] = rows["attributes"].apply(
+        lambda attrs: _attrs_key(attrs, exclude={"direction"})
+    )
+    unit_series = rows["unit"].dropna()
+    unit = str(unit_series.iloc[0]) if not unit_series.empty else None
+
+    latest_rates = {"receive": 0.0, "transmit": 0.0}
+    five_min_rates = {"receive": 0.0, "transmit": 0.0}
+    rate_history: dict[str, dict[Any, float]] = {"receive": {}, "transmit": {}}
+    has_latest = {"receive": False, "transmit": False}
+    has_five_min = {"receive": False, "transmit": False}
+
+    for (_metric_name, _series, direction), group in rows.groupby(
+        ["name", "_series", "_direction"]
+    ):
+        ordered = group.sort_values("timestamp")
+        previous = None
+        for _, current in ordered.iterrows():
+            if previous is None:
+                previous = current
+                continue
+            seconds = (current["timestamp"] - previous["timestamp"]).total_seconds()
+            delta = float(current["value"]) - float(previous["value"])
+            if seconds > 0 and delta >= 0:
+                ts = current["timestamp"]
+                rate_history[direction][ts] = (
+                    rate_history[direction].get(ts, 0.0) + delta / seconds
+                )
+            previous = current
+
+        if len(ordered) >= 2:
+            prev = ordered.iloc[-2]
+            latest = ordered.iloc[-1]
+            seconds = (latest["timestamp"] - prev["timestamp"]).total_seconds()
+            delta = float(latest["value"]) - float(prev["value"])
+            if seconds > 0 and delta >= 0:
+                latest_rates[direction] += delta / seconds
+                has_latest[direction] = True
+
+        latest_ts = ordered["timestamp"].iloc[-1]
+        window = ordered[ordered["timestamp"] >= latest_ts - timedelta(minutes=5)]
+        if len(window) >= 2:
+            first = window.iloc[0]
+            latest = window.iloc[-1]
+            seconds = (latest["timestamp"] - first["timestamp"]).total_seconds()
+            delta = float(latest["value"]) - float(first["value"])
+            if seconds > 0 and delta >= 0:
+                five_min_rates[direction] += delta / seconds
+                has_five_min[direction] = True
+
+    return NetworkUsage(
+        receive_rate=latest_rates["receive"] if has_latest["receive"] else None,
+        transmit_rate=latest_rates["transmit"] if has_latest["transmit"] else None,
+        five_min_receive_rate=(
+            five_min_rates["receive"] if has_five_min["receive"] else None
+        ),
+        five_min_transmit_rate=(
+            five_min_rates["transmit"] if has_five_min["transmit"] else None
+        ),
+        receive_history=[
+            rate
+            for _, rate in sorted(rate_history["receive"].items())[
+                -MAX_POINTS_PER_SERIES:
+            ]
+        ],
+        transmit_history=[
+            rate
+            for _, rate in sorted(rate_history["transmit"].items())[
+                -MAX_POINTS_PER_SERIES:
+            ]
+        ],
+        unit=unit,
+    )
+
+
+def _build_resource_snapshot(telemetry_raw: str | None) -> ResourceTelemetrySnapshot:
+    telemetry_data, errors = _load_jsonl(telemetry_raw)
+    summary = {"spans": 0, "logs": 0, "metric_points": 0}
+    messages: list[str] = []
+
+    if not telemetry_data:
+        return ResourceTelemetrySnapshot(
+            summary=summary,
+            cpu=CpuUsage(),
+            memory=UsagePair(),
+            disk=UsagePair(),
+            network=NetworkUsage(),
+            latest_timestamp=None,
+            messages=[
+                "No telemetry data loaded yet. Host metrics will appear after the collector writes samples."
+            ],
+            errors=errors,
+        )
+
+    span_payloads, log_payloads, metric_payloads = _split_telemetry_payload(
+        telemetry_data
+    )
+    _, numeric_df = _build_metric_frames(metric_payloads)
+    summary = {
+        "spans": len(_extract_span_records(span_payloads)),
+        "logs": len(_extract_log_records(log_payloads)),
+        "metric_points": len(numeric_df),
+    }
+
+    if errors:
+        messages.append(f"Skipped {errors} malformed telemetry records during parsing.")
+    if numeric_df.empty:
+        messages.append("No numeric host metrics were found in the collector output.")
+
+    snapshot = ResourceTelemetrySnapshot(
+        summary=summary,
+        cpu=_cpu_usage(numeric_df),
+        memory=_latest_values_by_state(
+            numeric_df,
+            "memory.usage",
+            "system.memory",
+            wanted_states=("used", "free"),
+        ),
+        disk=_latest_values_by_state(
+            numeric_df,
+            "filesystem.usage",
+            "disk.usage",
+            "system.filesystem",
+            wanted_states=("used", "free"),
+            units=("By", "bytes", "byte"),
+            exclude_name_needles=("inode",),
+        ),
+        network=_network_usage(numeric_df),
+        latest_timestamp=_latest_timestamp(numeric_df),
+        messages=messages,
+        errors=errors,
+    )
+    return snapshot
+
+
+def _format_percent(value: float | None) -> str:
+    return f"{value * 100:,.1f}%" if value is not None else "N/A"
+
+
+def _format_bytes(value: float | None) -> str:
+    if value is None:
+        return "N/A"
+    units = ("B", "KB", "MB", "GB", "TB")
+    scaled = float(value)
+    unit = units[0]
+    for unit in units:
+        if abs(scaled) < 1024 or unit == units[-1]:
+            break
+        scaled /= 1024
+    return f"{scaled:,.1f} {unit}"
+
+
+def _format_value(value: float | None, unit: str | None) -> str:
+    if value is None:
+        return "N/A"
+    if unit in {"By", "bytes", "byte"}:
+        return _format_bytes(value)
+    return f"{value:,.2f}{unit or ''}"
+
+
+def _format_rate(value: float | None, unit: str | None) -> str:
+    if value is None:
+        return "N/A"
+    if unit in {"By", "bytes", "byte"}:
+        return f"{_format_bytes(value)}/s"
+    return f"{value:,.2f}{unit or ''}/s"
+
+
+def _format_load(value: float | None) -> str:
+    return f"{value:,.2f}" if value is not None else "N/A"
+
+
+def _mini_sparkline(values: list[float] | None, *, ratio: bool = True) -> str:
+    if not values:
+        return "N/A"
+    blocks = "▁▂▃▄▅▆▇█"
+    raw_values = [float(value) for value in values if value is not None]
+    if ratio:
+        cleaned = [_clamp_ratio(value) for value in raw_values]
+    else:
+        max_value = max(raw_values) if raw_values else 0
+        cleaned = [value / max_value if max_value > 0 else 0 for value in raw_values]
+    if not cleaned:
+        return "N/A"
+    max_points = 32
+    if len(cleaned) > max_points:
+        cleaned = cleaned[-max_points:]
+    return "".join(
+        blocks[min(len(blocks) - 1, int(value * (len(blocks) - 1)))]
+        for value in cleaned
+    )
+
+
 class OtelTelemetryPanel(VerticalScroll):
-    """Container rendering OTEL telemetry with sparkline visualisations."""
+    """Non-blocking, focused OTEL host resource dashboard."""
 
-    selected_key: reactive[str | None] = reactive(None)
-
-    def __init__(self, snapshot: TelemetrySnapshot) -> None:
+    def __init__(
+        self,
+        infra: Infrastructure | None,
+        bundle: Bundle | None,
+        service: OtelDockerService | Any | None,
+        refresh_seconds: int = 30,
+    ) -> None:
         super().__init__()
-        self.snapshot = snapshot
+        self.infra = infra
+        self.bundle = bundle
+        self.service = service
+        self.refresh_seconds = refresh_seconds
+        self.snapshot: ResourceTelemetrySnapshot | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("", id="otel-telemetry-status")
+        with Horizontal(id="otel-resource-row-1", classes="otel-resource-row"):
+            yield Static("", id="otel-cpu-card", classes="otel-resource-card")
+            yield Static("", id="otel-memory-card", classes="otel-resource-card")
+        with Horizontal(id="otel-resource-row-2", classes="otel-resource-row"):
+            yield Static("", id="otel-disk-card", classes="otel-resource-card")
+            yield Static("", id="otel-network-card", classes="otel-resource-card")
         yield Static("", id="otel-telemetry-summary")
-        with Horizontal(id="otel-telemetry-controls"):
-            yield Select(options=[], prompt="Metric Group", id="otel-telemetry-select")
-        with Vertical(id="otel-telemetry-sparklines"):
-            for idx, (min_color, max_color) in enumerate(SPARKLINE_COLORS):
-                with Vertical(
-                    id=f"otel-telemetry-sparkline-slot-{idx}",
-                    classes="otel-telemetry-sparkline-slot",
-                ):
-                    yield Static("", id=f"otel-telemetry-sparkline-label-{idx}")
-                    yield Sparkline(
-                        [],
-                        id=f"otel-telemetry-sparkline-{idx}",
-                        min_color=min_color,
-                        max_color=max_color,
-                    )
-        yield Static("", id="otel-telemetry-details")
 
     @property
     def status(self) -> Static:
         return self.query_one("#otel-telemetry-status", Static)
 
-    @property
-    def summary_view(self) -> Static:
-        return self.query_one("#otel-telemetry-summary", Static)
-
-    @property
-    def metric_select(self) -> Select:
-        return self.query_one("#otel-telemetry-select", Select)
-
-    @property
-    def details(self) -> Static:
-        return self.query_one("#otel-telemetry-details", Static)
-
-    def _sparkline_widgets(self) -> list[tuple[Static, Sparkline]]:
-        widgets: list[tuple[Static, Sparkline]] = []
-        for idx in range(len(SPARKLINE_COLORS)):
-            label_view = self.query_one(
-                f"#otel-telemetry-sparkline-label-{idx}", Static
-            )
-            sparkline = self.query_one(f"#otel-telemetry-sparkline-{idx}", Sparkline)
-            widgets.append((label_view, sparkline))
-        return widgets
-
     def on_mount(self) -> None:
-        self._populate_summary()
-        self._populate_controls()
+        self.status.update("Loading OpenTelemetry host metrics...")
+        self._render_placeholder()
+        self.refresh_snapshot()
+        self.set_interval(self.refresh_seconds, self.refresh_snapshot)
 
-    def _populate_summary(self) -> None:
-        table = Table.grid(padding=(0, 1))
-        table.add_column("Metric", style="cyan", justify="right")
-        table.add_column("Value", justify="left")
-        for key, value in self.snapshot.summary.items():
-            label = key.replace("_", " ").title()
-            table.add_row(label, f"{value}")
-        panel = Panel(table, title="Telemetry Summary", border_style="green")
-        self.summary_view.update(panel)
-
-    def _populate_controls(self) -> None:
-        messages = list(self.snapshot.messages)
-        if self.snapshot.groups:
-            options = [
-                (group.label, key)
-                for key, group in self.snapshot.groups.items()
-                if isinstance(group, MetricGroup)
-            ]
-            self.metric_select.set_options(options)
-            self.selected_key = options[0][1]
-            self.metric_select.value = self.selected_key
-            status_text = (
-                "\n".join(messages) if messages else "Telemetry loaded successfully."
-            )
-            self.status.update(status_text)
-            self._update_metric_view(self.selected_key)
-        else:
-            self.metric_select.set_options([])
-            self.metric_select.value = None
-            for label_view, sparkline in self._sparkline_widgets():
-                label_view.update("No data")
-                sparkline.data = []
-            info = Text(
-                "No standard CPU, memory, or network metrics are available for the collector yet."
-            )
-            self.details.update(Panel(info, border_style="yellow"))
-            if not messages:
-                messages.append(
-                    "Collect CPU, memory, or network metrics to populate this view."
+    def refresh_snapshot(self) -> None:
+        def fetch_snapshot() -> None:
+            try:
+                telemetry_raw = (
+                    self.service.get_telemetry_data(self.bundle)
+                    if self.service and self.bundle
+                    else None
                 )
-            self.status.update("\n".join(messages))
+                snapshot = _build_resource_snapshot(telemetry_raw)
+            except Exception as exc:  # pragma: no cover - remote IO defensive path
+                snapshot = ResourceTelemetrySnapshot(
+                    summary={"spans": 0, "logs": 0, "metric_points": 0},
+                    cpu=CpuUsage(),
+                    memory=UsagePair(),
+                    disk=UsagePair(),
+                    network=NetworkUsage(),
+                    latest_timestamp=None,
+                    messages=[f"Failed to load OTEL telemetry: {exc}"],
+                )
+            self.app.call_from_thread(self._apply_snapshot, snapshot)
 
-    def _update_metric_view(self, key: str | None) -> None:
-        slots = self._sparkline_widgets()
-        for label_view, sparkline in slots:
-            label_view.update("No data")
-            sparkline.data = []
-
-        if not key:
-            self.details.update("")
-            return
-
-        group = self.snapshot.groups.get(key)
-        if not isinstance(group, MetricGroup) or not group.has_data():
-            info = Text("Selected metric group has no datapoints yet.")
-            self.details.update(Panel(info, border_style="yellow"))
-            return
-
-        detail_table = Table.grid(padding=(0, 1))
-        detail_table.add_column("Series", style="cyan", justify="left")
-        detail_table.add_column("Latest", justify="right")
-        detail_table.add_column("Start", justify="left")
-        detail_table.add_column("End", justify="left")
-        detail_table.add_column("Unit", justify="left")
-
-        for (label_view, sparkline), series in zip(slots, group.series):
-            label_view.update(series.label)
-            sparkline.data = series.values
-            latest = series.latest_value()
-            latest_text = f"{latest:,.2f}" if latest is not None else "N/A"
-            if series.unit:
-                latest_text = f"{latest_text}{series.unit}"
-            detail_table.add_row(
-                series.label,
-                latest_text,
-                _ts_display(series.start_timestamp()),
-                _ts_display(series.end_timestamp()),
-                series.unit or "-",
-            )
-
-        self.details.update(
-            Panel(
-                detail_table,
-                title=f"{group.label} trends",
-                border_style="blue",
-            )
+        self.app.run_worker(
+            fetch_snapshot,
+            thread=True,
+            exclusive=True,
+            group=f"otel-telemetry-{id(self)}",
         )
 
-    @on(Select.Changed, "#otel-telemetry-select")
-    def handle_metric_changed(
-        self, event: Select.Changed
-    ) -> None:  # pragma: no cover - UI callback
-        self.selected_key = event.value
-        self._update_metric_view(event.value)
+    def _apply_snapshot(self, snapshot: ResourceTelemetrySnapshot) -> None:
+        self.snapshot = snapshot
+        self._render_snapshot(snapshot)
+
+    def _render_placeholder(self) -> None:
+        pending = Panel(Text("Loading..."), title="OpenTelemetry", border_style="cyan")
+        for selector in (
+            "#otel-cpu-card",
+            "#otel-memory-card",
+            "#otel-disk-card",
+            "#otel-network-card",
+        ):
+            self.query_one(selector, Static).update(pending)
+
+    def _render_snapshot(self, snapshot: ResourceTelemetrySnapshot) -> None:
+        timestamp = _ts_display(snapshot.latest_timestamp)
+        messages = " ".join(snapshot.messages)
+        self.status.update(
+            f"Latest sample: {timestamp}"
+            f" | Refreshes every {self.refresh_seconds}s"
+            + (f" | {messages}" if messages else "")
+        )
+        self.query_one("#otel-cpu-card", Static).update(self._cpu_panel(snapshot.cpu))
+        self.query_one("#otel-memory-card", Static).update(
+            self._usage_panel("Memory", snapshot.memory)
+        )
+        self.query_one("#otel-disk-card", Static).update(
+            self._usage_panel("Disk", snapshot.disk)
+        )
+        self.query_one("#otel-network-card", Static).update(
+            self._network_panel(snapshot.network)
+        )
+        self.query_one("#otel-telemetry-summary", Static).update(
+            self._summary_panel(snapshot)
+        )
+
+    def _cpu_panel(self, cpu: CpuUsage) -> Panel:
+        table = Table.grid(padding=(0, 1))
+        table.add_column("Metric", style="cyan")
+        table.add_column("Used", justify="right")
+        table.add_column("Free", justify="right")
+        table.add_row(
+            "Now (used/free)",
+            _format_percent(cpu.now_used_ratio),
+            _format_percent(cpu.now_free_ratio),
+        )
+        table.add_row(
+            "5 min avg (used/free)",
+            _format_percent(cpu.five_min_used_ratio),
+            _format_percent(cpu.five_min_free_ratio),
+        )
+        table.add_row("Trend (used %)", _mini_sparkline(cpu.history), cpu.source or "-")
+        table.add_row(
+            "Load",
+            f"1m {_format_load(cpu.load_1m)}",
+            f"5m {_format_load(cpu.load_5m)} / 15m {_format_load(cpu.load_15m)}",
+        )
+        return Panel(table, title="CPU", border_style="green")
+
+    def _usage_panel(self, title: str, usage: UsagePair) -> Panel:
+        table = Table.grid(padding=(0, 1))
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", justify="right")
+        table.add_row("Current used", _format_value(usage.used, usage.unit))
+        table.add_row("Current free", _format_value(usage.free, usage.unit))
+        table.add_row("Current total", _format_value(usage.total, usage.unit))
+        table.add_row("Current used %", _format_percent(usage.used_ratio))
+        table.add_row("Trend (used %)", _mini_sparkline(usage.history))
+        return Panel(table, title=title, border_style="green")
+
+    def _network_panel(self, network: NetworkUsage) -> Panel:
+        table = Table.grid(padding=(0, 1))
+        table.add_column("Metric", style="cyan")
+        table.add_column("Receive", justify="right")
+        table.add_column("Transmit", justify="right")
+        table.add_row(
+            "Now rate",
+            _format_rate(network.receive_rate, network.unit),
+            _format_rate(network.transmit_rate, network.unit),
+        )
+        table.add_row(
+            "5 min avg rate",
+            _format_rate(network.five_min_receive_rate, network.unit),
+            _format_rate(network.five_min_transmit_rate, network.unit),
+        )
+        table.add_row(
+            "Trend",
+            _mini_sparkline(network.receive_history, ratio=False),
+            _mini_sparkline(network.transmit_history, ratio=False),
+        )
+        return Panel(table, title="Network", border_style="green")
+
+    def _summary_panel(self, snapshot: ResourceTelemetrySnapshot) -> Panel:
+        table = Table.grid(padding=(0, 1))
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", justify="right")
+        for key, value in snapshot.summary.items():
+            table.add_row(key.replace("_", " ").title(), str(value))
+        return Panel(table, title="Collector Output", border_style="blue")
 
 
 def settings(
@@ -401,6 +895,4 @@ def settings(
 ) -> OtelTelemetryPanel:
     """Return a Textual container visualising OTEL telemetry."""
 
-    telemetry_raw = service.get_telemetry_data(bundle)
-    snapshot = _build_snapshot(telemetry_raw)
-    return OtelTelemetryPanel(snapshot)
+    return OtelTelemetryPanel(infra, bundle, service)

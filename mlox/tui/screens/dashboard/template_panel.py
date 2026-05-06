@@ -19,25 +19,37 @@ from .model import SelectionInfo
 
 
 class TemplatePanel(Container):
-    """Context-aware template browser."""
+    """Template browser for one template category."""
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
+    def __init__(
+        self,
+        *children,
+        template_type: str,
+        **kwargs,
+    ) -> None:
+        super().__init__(*children, **kwargs)
+        self.template_type = template_type
+
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="template-scroll-wrapper"):
-            yield Static(id="template-content")
+        with VerticalScroll(classes="template-scroll-wrapper"):
+            yield Static(classes="template-content")
 
     @property
     def content(self) -> Static:
-        return self.query_one("#template-content", Static)
+        return self.query_one(".template-content", Static)
 
     def on_mount(self) -> None:
-        self._show_default()
+        self._show_templates()
 
-    def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
-        if selection and selection.type in {"server", "bundle"}:
+    def watch_selection(self, _selection: Optional[SelectionInfo]) -> None:
+        self._show_templates()
+
+    def _show_templates(self) -> None:
+        if self.template_type == "server":
             self._show_server_templates()
-        elif selection and selection.type == "service":
+        elif self.template_type == "service":
             self._show_service_templates()
         else:
             self._show_default()
