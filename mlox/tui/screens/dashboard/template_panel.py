@@ -2,20 +2,34 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from dataclasses import asdict, is_dataclass
+from typing import Any, Optional
 
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
+from textual.coordinate import Coordinate
 from textual.reactive import reactive
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
+from textual.widgets._data_table import RowKey
 
 from mlox.config import load_all_server_configs, load_all_service_configs
 
 from .model import SelectionInfo
+
+
+class TemplateDataTable(DataTable):
+    """DataTable that notifies its parent when the cursor moves."""
+
+    def watch_cursor_coordinate(self, _old: object, _new: object) -> None:
+        panel = self.query_ancestor(TemplatePanel)
+        if panel:
+            panel.show_current_row_details()
 
 
 class TemplatePanel(Container):
@@ -31,14 +45,24 @@ class TemplatePanel(Container):
     ) -> None:
         super().__init__(*children, **kwargs)
         self.template_type = template_type
+        self._configs_by_key: dict[str, Any] = {}
+        self.selected_config_id: str | None = None
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(classes="template-scroll-wrapper"):
-            yield Static(classes="template-content")
+            table = TemplateDataTable(classes="template-table")
+            table.cursor_type = "row"
+            table.add_columns("Name", "Version", "Maintainer", "Path")
+            yield table
+            yield Static(classes="template-details")
 
     @property
-    def content(self) -> Static:
-        return self.query_one(".template-content", Static)
+    def table(self) -> DataTable:
+        return self.query_one(DataTable)
+
+    @property
+    def details(self) -> Static:
+        return self.query_one(".template-details", Static)
 
     def on_mount(self) -> None:
         self._show_templates()
@@ -58,32 +82,131 @@ class TemplatePanel(Container):
         message = Text.from_markup(
             "[b]Templates[/b]\n\nSelect a server to browse matching server configs or a service to browse service configs."
         )
-        self.content.update(Panel(message, title="Templates", border_style="green"))
+        self.table.clear(columns=False)
+        self._configs_by_key = {}
+        self.selected_config_id = None
+        self.details.update(Panel(message, title="Templates", border_style="green"))
 
-    def _build_template_table(self, configs, title: str) -> Panel:
-        table = Table(show_header=True, header_style="bold")
-        table.add_column("Name", style="cyan")
-        table.add_column("Version", justify="left")
-        table.add_column("Maintainer", justify="left")
-        table.add_column("Path", justify="left")
+    def _show_template_table(self, configs: list[Any], title: str) -> None:
+        table = self.table
+        table.clear(columns=False)
+        self._configs_by_key = {}
         if configs:
             for cfg in configs:
+                key = str(getattr(cfg, "id", "") or getattr(cfg, "name", ""))
+                self._configs_by_key[key] = cfg
                 table.add_row(
                     getattr(cfg, "name", "-"),
                     str(getattr(cfg, "version", "-")),
                     getattr(cfg, "maintainer", "-"),
                     getattr(cfg, "path", "-"),
+                    key=key,
                 )
+            first_key = next(iter(self._configs_by_key))
+            table.cursor_coordinate = (0, 0)
+            self._show_config_details(first_key, title)
         else:
-            table.add_row("-", "-", "-", "-")
-        return Panel(table, title=title, border_style="green")
+            self.details.update(
+                Panel(Text("No templates found."), title=title, border_style="yellow")
+            )
+
+    def show_current_row_details(self) -> None:
+        table = self.table
+        if table.row_count == 0:
+            return
+        cursor_row = table.cursor_row
+        if cursor_row < 0 or cursor_row >= table.row_count:
+            return
+        row_key = table.coordinate_to_cell_key(Coordinate(cursor_row, 0)).row_key
+        self._show_config_details(row_key)
 
     def _show_server_templates(self) -> None:
         configs = load_all_server_configs()
-        panel = self._build_template_table(configs, "Server Templates")
-        self.content.update(panel)
+        self._show_template_table(configs, "Server Templates")
 
     def _show_service_templates(self) -> None:
         configs = load_all_service_configs()
-        panel = self._build_template_table(configs, "Service Templates")
-        self.content.update(panel)
+        self._show_template_table(configs, "Service Templates")
+
+    def _row_key_value(self, row_key: object) -> str:
+        if isinstance(row_key, RowKey):
+            return str(row_key.value)
+        return str(row_key)
+
+    def _show_config_details(self, row_key: object, title: str | None = None) -> None:
+        key = self._row_key_value(row_key)
+        config = self._configs_by_key.get(key)
+        if not config:
+            return
+        self.selected_config_id = key
+
+        detail_table = Table.grid(padding=(0, 1))
+        detail_table.add_column("Field", style="cyan", justify="right")
+        detail_table.add_column("Value", justify="left")
+        for label, value in self._detail_rows(config):
+            detail_table.add_row(label, self._format_detail_value(value))
+
+        panel_title = title or getattr(config, "name", "Template")
+        self.details.update(Panel(detail_table, title=panel_title, border_style="green"))
+
+    def _detail_rows(self, config: Any) -> list[tuple[str, Any]]:
+        build = getattr(config, "build", None)
+        rows: list[tuple[str, Any]] = [
+            ("ID", getattr(config, "id", "-")),
+            ("Name", getattr(config, "name", "-")),
+            ("Version", getattr(config, "version", "-")),
+            ("Maintainer", getattr(config, "maintainer", "-")),
+            ("Short description", getattr(config, "description_short", "-")),
+            ("Description", getattr(config, "description", "-")),
+            ("Requirements", getattr(config, "requirements", {})),
+            ("Ports", getattr(config, "ports", {})),
+            ("Capabilities", getattr(config, "capabilities", {})),
+            ("Groups", getattr(config, "groups", {})),
+        ]
+        if build:
+            rows.extend(
+                [
+                    ("Build class", getattr(build, "class_name", "-")),
+                    ("Build params", getattr(build, "params", {})),
+                ]
+            )
+        rows.extend(
+            [
+                ("Links", getattr(config, "links", {})),
+                ("Path", getattr(config, "path", "-")),
+            ]
+        )
+        return rows
+
+    def _format_detail_value(self, value: Any) -> str:
+        if value in (None, "", {}, []):
+            return "-"
+        if is_dataclass(value):
+            value = asdict(value)
+        if isinstance(value, dict):
+            if not value:
+                return "-"
+            return "\n".join(
+                f"{escape(str(key))}: {escape(self._format_detail_value(item))}"
+                for key, item in value.items()
+            )
+        if isinstance(value, (list, tuple, set)):
+            if not value:
+                return "-"
+            return ", ".join(escape(str(item)) for item in value)
+        text = str(value)
+        if len(text) > 500:
+            text = text[:497] + "..."
+        return escape(text)
+
+    @on(DataTable.RowHighlighted)
+    def handle_row_highlighted(
+        self, event: DataTable.RowHighlighted
+    ) -> None:  # pragma: no cover - UI callback
+        self._show_config_details(event.row_key)
+
+    @on(DataTable.RowSelected)
+    def handle_row_selected(
+        self, event: DataTable.RowSelected
+    ) -> None:  # pragma: no cover - UI callback
+        self._show_config_details(event.row_key)

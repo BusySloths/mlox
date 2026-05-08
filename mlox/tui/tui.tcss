@@ -147,8 +147,16 @@ Button {
   layout: vertical;
 }
 
-.template-content {
+.template-table {
+  height: 1fr;
+  min-height: 10;
+  border: round #1bd6f3ff;
+}
+
+.template-details {
   width: 1fr;
+  height: auto;
+  margin-top: 1;
 }
 
 #selection-overview {

@@ -388,6 +388,46 @@ def test_serve_supports_dataframe_split_input():
         )
 
 
+def test_serve_forwards_params_with_dataframe_split(monkeypatch):
+    serve.model_cache.clear()
+    seen = {}
+
+    class _LoadedModel:
+        def predict(self, input_data, params=None):
+            seen["input_data"] = input_data
+            seen["params"] = params
+            return pd.DataFrame({"value": [params["top_k"]]})
+
+    monkeypatch.setattr(serve.mlflow.pyfunc, "load_model", lambda model_uri: _LoadedModel())
+    monkeypatch.setattr(
+        serve.mlflow.artifacts,
+        "download_artifacts",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("missing")),
+    )
+
+    req = serve.PredictionRequest(
+        dataframe_split={
+            "columns": ["interested_party_id", "event_id"],
+            "data": [["party-1", "event-1"]],
+        },
+        params={"top_k": 20, "include_scores": True},
+        registry_model_name="Demo",
+        registry_model_version=1,
+    )
+
+    parsed, cached, resolved = serve.runandget(req)
+
+    assert cached is False
+    assert parsed == [{"value": 20}]
+    assert resolved.resolved_model_uri == "models:/Demo/1"
+    assert isinstance(seen["input_data"], pd.DataFrame)
+    assert seen["input_data"].iloc[0].to_dict() == {
+        "interested_party_id": "party-1",
+        "event_id": "event-1",
+    }
+    assert seen["params"] == {"top_k": 20, "include_scores": True}
+
+
 def test_serve_alias_requests_cache_resolved_model_versions(monkeypatch):
     serve.model_cache.clear()
 
