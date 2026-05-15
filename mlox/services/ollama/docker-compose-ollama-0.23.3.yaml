@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik_reverse_proxy_ollama_${OLLAMA_ENDPOINT_PORT}
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`traefik.constraint.stack`,
+        `ollama-${OLLAMA_ENDPOINT_PORT}`)"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "${OLLAMA_ENDPOINT_PORT}:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - mlox_ollama_net
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.23.3
+    container_name: ollama_${OLLAMA_ENDPOINT_PORT}
+    pull_policy: always
+    tty: true
+    restart: always
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
+      - MY_OLLAMA_MODELS=${MY_OLLAMA_MODELS:-}
+    volumes:
+      - ollama-data:/root/.ollama
+      - ./entrypoint.sh:/entrypoint.sh
+    entrypoint: [ "/usr/bin/bash", "/entrypoint.sh" ]
+    networks:
+      - mlox_ollama_net
+    labels:
+      - "traefik.constraint.stack=ollama-${OLLAMA_ENDPOINT_PORT}"
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.ollama-auth.basicauth.users=${TRAEFIK_USER_AN\
+        D_PW}"
+      - "traefik.http.routers.ollama-secure.entrypoints=websecure"
+      - "traefik.http.routers.ollama-secure.rule=Host(`${OLLAMA_ENDPOINT_URL:-o\
+        llama.localhost}`)"
+      - "traefik.http.routers.ollama-secure.service=ollama-service"
+      - "traefik.http.routers.ollama-secure.middlewares=ollama-auth"
+      - "traefik.http.routers.ollama-secure.tls=true"
+      - "traefik.http.services.ollama-service.loadbalancer.server.port=11434"
+      - "traefik.http.services.ollama-service.loadbalancer.server.scheme=http"
+
+networks:
+  mlox_ollama_net:
+    name: mlox-net-ollama-${OLLAMA_ENDPOINT_PORT}
+    driver: bridge
+
+volumes:
+  ollama-data:
+    name: ollama-data-${OLLAMA_ENDPOINT_PORT}

@@ -87,6 +87,10 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "config_ids": ("openbao-docker",),
         "function_names": ("settings", "setup"),
     },
+    "mlox.view.services.ollama": {
+        "config_ids": ("ollama-0.23.3-docker",),
+        "function_names": ("settings", "setup"),
+    },
     "mlox.view.services.otel": {
         "config_ids": ("otel-0.127.0-docker", "otel-0.146.1-docker"),
         "function_names": ("settings", "setup"),

@@ -1,0 +1,38 @@
+id: ollama-0.23.3-docker
+name: Ollama
+version: 0.23.3
+maintainer: Your Name
+description_short: Standalone Ollama service with HTTPS and BasicAuth via Traefik.
+description: 'Runs Ollama as an independently managed MLOX service. The native Ollama
+  HTTP API is kept behind a Traefik reverse proxy that provides HTTPS and BasicAuth,
+  matching the MLServer and MLflow Gateway exposure pattern.'
+links:
+  project: https://ollama.com/
+  news: https://ollama.com/blog
+  security: https://github.com/ollama/ollama/security
+  documentation: https://github.com/ollama/ollama/blob/main/docs/api.md
+  changelog: https://github.com/ollama/ollama/releases
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 10.0
+groups:
+  llm: null
+  service: null
+  model-server: null
+  backend:
+    docker: null
+ports:
+  rest: 11434
+build:
+  class_name: mlox.services.ollama.docker.OllamaDockerService
+  params:
+    name: ollama-0.23.3
+    template: ${MLOX_STACKS_PATH}/ollama/docker-compose-ollama-0.23.3.yaml
+    target_path: ${MLOX_USER_HOME}/ollama-0.23.3
+    ollama_script: ${MLOX_STACKS_PATH}/ollama/entrypoint.sh
+    port: ${MLOX_AUTO_PORT_REST}
+    user: ${MLOX_AUTO_USER}
+    pw: ${MLOX_AUTO_PW}
+    keep_alive: 24h
+    ollama_models: ${OLLAMA_MODELS}

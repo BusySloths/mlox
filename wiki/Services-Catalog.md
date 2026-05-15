@@ -41,6 +41,7 @@ A full reference of all MLOps services supported by MLOX, organized by category.
 | Service | Version(s) | Description | Status |
 |---------|-----------|-------------|--------|
 | **LiteLLM + Ollama** | 1.77.7 | Unified LLM proxy supporting 100+ providers (OpenAI, Anthropic, local Ollama models, and more). | ✅ Stable |
+| **Ollama** | 0.23.3 | Standalone local LLM API with HTTPS and BasicAuth provided by Traefik. | ✅ Stable |
 
 ---
 

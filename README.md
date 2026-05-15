@@ -59,7 +59,7 @@ We welcome contributors, early adopters, and honest feedback. If you hit somethi
 |----------|----------|--------|
 | ML Platforms | MLflow 2.x, MLflow 3.x, Airflow 2.x, Airflow 3.x | ✅ Stable |
 | Model Serving | MLflow MLServer | ✅ Stable |
-| LLMs & Inference | LiteLLM | ✅ Stable |
+| LLMs & Inference | LiteLLM, Ollama | ✅ Stable |
 | Vector & Feature Stores | Milvus, Feast | ✅ Stable |
 | Data & Streaming | PostgreSQL, Redis, MinIO, Kafka | ✅ Stable |
 | Observability | InfluxDB, OpenTelemetry | ✅ Stable |

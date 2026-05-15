@@ -17,6 +17,7 @@ from mlox.services.mlflow_gateway.docker import MLFlowGatewayDockerService
 from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
 from mlox.services.openbao.client import OpenBaoSecretManager
 from mlox.services.openbao.docker import OpenBaoDockerService
+from mlox.services.ollama.docker import OllamaDockerService
 from mlox.services.otel.docker import OtelDockerService
 from mlox.services.postgres.docker import PostgresDockerService
 from mlox.services.redis.docker import RedisDockerService
@@ -606,6 +607,47 @@ def test_mlflow_gateway_setup_ignores_unresolved_requirements_placeholder(conn):
     env_lines = service.exec.appended["/tmp/stack-8082/service.env"]
     assert "MLOX_GATEWAY_CACHE_MAX_MODELS=10" in env_lines
     assert "MLOX_GATEWAY_CACHE_TTL_DAYS=10" in env_lines
+
+
+def test_ollama_setup_check_and_secrets(conn):
+    service = _set_exec(
+        OllamaDockerService(
+            **BASE,
+            port="11434",
+            user="api",
+            pw="pw",
+            ollama_script="entrypoint.sh",
+            ollama_models=["llama3", "llama3", "qwen2.5:0.5b"],
+            keep_alive="12h",
+        ),
+        FakeExec(),
+    )
+
+    assert service.target_path.endswith("-11434")
+
+    service.setup(conn)
+    assert service.service_url == "https://example.test:11434"
+    env_lines = service.exec.appended["/tmp/stack-11434/service.env"]
+    assert "OLLAMA_ENDPOINT_URL=example.test" in env_lines
+    assert "OLLAMA_ENDPOINT_PORT=11434" in env_lines
+    assert "OLLAMA_KEEP_ALIVE=12h" in env_lines
+    assert "MY_OLLAMA_MODELS=llama3,qwen2.5:0.5b" in env_lines
+
+    service.exec.service_states[service.compose_service_names["Ollama"]] = "running"
+    service.exec.execute_result = "200"
+    assert service.check(conn) == {"status": "running"}
+
+    service.exec.execute_result = "401"
+    assert service.check(conn) == {"status": "unknown", "http_code": "401"}
+
+    service.exec.service_states[service.compose_service_names["Ollama"]] = "exited"
+    assert service.check(conn) == {"status": "stopped"}
+
+    assert service.get_secrets()["ollama_basic_auth"] == {
+        "username": "api",
+        "password": "pw",
+        "service_url": "https://example.test:11434",
+    }
 
 
 def test_airflow_setup_and_check(conn, monkeypatch):
