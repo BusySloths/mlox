@@ -31,6 +31,7 @@ class TSMService(AbstractService, AbstractSecretManagerService):
     secrets_abs_path: str | None = field(default=None, init=False)
 
     def __post_init__(self):
+        super().__post_init__()
         self.state = "running"
 
     def get_secret_manager(self, infra: Infrastructure) -> AbstractSecretManager:
@@ -75,7 +76,12 @@ class TSMService(AbstractService, AbstractSecretManagerService):
         self.state = "un-initialized"
 
     def spin_up(self, conn):
-        return None
+        self.state = "running"
+        return True
+
+    def spin_down(self, conn) -> bool:
+        self.state = "stopped"
+        return True
 
     def check(self, conn) -> Dict:
         return dict()

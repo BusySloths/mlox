@@ -745,6 +745,26 @@ def test_tsm_service_get_secret_manager_paths(monkeypatch):
     assert sm_rel.args[1] == "/stacks/demo"
 
 
+def test_tsm_service_lifecycle(conn):
+    service = _set_exec(
+        TSMService(**BASE, pw="vaultpw", server_uuid="srv-1"),
+        FakeExec(),
+    )
+
+    service.setup(conn)
+    assert service.state == "running"
+
+    assert service.spin_up(conn) is True
+    assert service.state == "running"
+
+    assert service.spin_down(conn) is True
+    assert service.state == "stopped"
+
+    service.teardown(conn)
+    assert service.state == "un-initialized"
+    assert ("fs_delete_dir", ("/tmp/stack",), {}) in service.exec.calls
+
+
 def test_openbao_secret_manager_core_paths(monkeypatch):
     manager = OpenBaoSecretManager(address="bao.local/", token="tok", mount_path="/kv/")
     assert manager.address == "http://bao.local"

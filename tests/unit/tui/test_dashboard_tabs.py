@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from types import SimpleNamespace
 
 from textual.app import App, ComposeResult
@@ -29,6 +30,8 @@ class DashboardTestApp(App):
         self.session = SimpleNamespace(
             project=SimpleNamespace(name="test-project"),
             infra=SimpleNamespace(bundles=[]),
+            password="secret",
+            migrations=None,
         )
 
     def compose(self) -> ComposeResult:
@@ -143,3 +146,37 @@ def test_sidebar_can_be_widened() -> None:
 
     assert initial_width == SIDEBAR_DEFAULT_WIDTH
     assert widened_width == SIDEBAR_DEFAULT_WIDTH + SIDEBAR_STEP
+
+
+async def _reload_project_infrastructure(monkeypatch) -> tuple[str, object]:
+    class ReloadedSession:
+        def __init__(self, project_name, password, migrations=None) -> None:
+            self.project = SimpleNamespace(name=f"{project_name}-reloaded")
+            self.password = password
+            self.migrations = migrations
+            self.infra = SimpleNamespace(bundles=[])
+
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.screen.MloxSession", ReloadedSession
+    )
+
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        await pilot.press("R")
+        deadline = time.monotonic() + 2
+        while app.session.project.name == "test-project":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for project reload.")
+            await pilot.pause(0.05)
+
+        screen = app.query_one(DashboardScreen)
+        return app.session.project.name, screen.query_one("#infra-tree").root.data
+
+
+def test_reload_binding_reloads_project_infrastructure(monkeypatch) -> None:
+    project_name, root_selection = asyncio.run(
+        _reload_project_infrastructure(monkeypatch)
+    )
+
+    assert project_name == "test-project-reloaded"
+    assert root_selection.type == "root"

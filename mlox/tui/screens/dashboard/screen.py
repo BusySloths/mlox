@@ -16,6 +16,7 @@ from .overview_panel import OverviewPanel
 from .stats_panel import StatsPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
+from mlox.session import MloxSession
 from mlox.services.otel.docker import OtelDockerService
 
 
@@ -34,6 +35,7 @@ class DashboardScreen(Screen):
 
     BINDINGS = [
         ("l", "toggle_app_logs", "Logs"),
+        ("R", "reload_infrastructure", "Reload"),
         ("[", "narrow_sidebar", "Narrow Sidebar"),
         ("]", "widen_sidebar", "Widen Sidebar"),
     ]
@@ -84,7 +86,9 @@ class DashboardScreen(Screen):
         self._apply_sidebar_width()
 
     def on_selection_changed(self, message: SelectionChanged) -> None:
-        selection = message.selection
+        self._apply_selection(message.selection)
+
+    def _apply_selection(self, selection: SelectionInfo | None) -> None:
         overview = self.query_one(OverviewPanel)
         overview.selection = selection
         stats = self.query_one(StatsPanel)
@@ -97,6 +101,56 @@ class DashboardScreen(Screen):
             templates.selection = selection
         self._update_template_tabs(selection)
         self._update_tui_panel(selection)
+
+    def action_reload_infrastructure(self) -> None:
+        session = getattr(self.app, "session", None)
+        project = getattr(getattr(session, "project", None), "name", None)
+        password = getattr(session, "password", None)
+        migrations = getattr(session, "migrations", None)
+        if not project or not password:
+            self.notify(
+                "Cannot reload infrastructure because the project session is incomplete.",
+                severity="error",
+            )
+            return
+
+        self.notify(f"Reloading project infrastructure for {project}...")
+
+        def reload_session() -> None:
+            try:
+                reloaded_session = MloxSession(
+                    project_name=project,
+                    password=password,
+                    migrations=migrations,
+                )
+            except Exception as exc:
+                self.app.call_from_thread(
+                    self._show_reload_error,
+                    f"Failed to reload infrastructure: {exc}",
+                )
+                return
+            self.app.call_from_thread(
+                self._apply_reloaded_session,
+                project,
+                reloaded_session,
+            )
+
+        self.app.run_worker(
+            reload_session,
+            thread=True,
+            exclusive=True,
+            group="project-reload",
+        )
+
+    def _show_reload_error(self, message: str) -> None:
+        self.notify(message, severity="error")
+
+    def _apply_reloaded_session(self, project: str, reloaded_session: MloxSession) -> None:
+        self.app.session = reloaded_session
+        tree = self.query_one(InfraTree)
+        tree.populate_tree()
+        self._apply_selection(tree.root.data)
+        self.notify(f"Reloaded project infrastructure for {project}.")
 
     def _update_template_tabs(self, selection: SelectionInfo | None) -> None:
         self._set_tab_visible(
