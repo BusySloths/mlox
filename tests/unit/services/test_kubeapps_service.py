@@ -101,7 +101,7 @@ class FakeServer:
         yield SimpleNamespace(host="example.test")
 
 
-def test_kubeapps_setup_installs_sap_oci_chart_as_nodeport():
+def test_kubeapps_setup_installs_sap_oci_chart_with_ingress():
     conn = SimpleNamespace(host="example.test")
     fake = FakeKubeExec()
     service = _service(fake)
@@ -120,8 +120,7 @@ def test_kubeapps_setup_installs_sap_oci_chart_as_nodeport():
         "kubeconfig": "/etc/rancher/k3s/k3s.yaml",
         "create_namespace": True,
         "values": {
-            "frontend.service.type": "NodePort",
-            "frontend.service.nodePorts.http": "30080",
+            "frontend.service.type": "ClusterIP",
             "dashboard.image.tag": "v3.0.0",
             "apprepository.image.tag": "v3.0.0",
             "apprepository.syncImage.tag": "v3.0.0",
@@ -129,11 +128,25 @@ def test_kubeapps_setup_installs_sap_oci_chart_as_nodeport():
             "pinnipedProxy.image.tag": "v3.0.0",
             "ociCatalog.image.tag": "v3.0.0",
             "postgresql.fullnameOverride": "kubeapps-0-postgresql",
+            "postgresql.resourcesPreset": "small",
+            "apprepository.watchAllNamespaces": "false",
+            "apprepository.crontab": "0 */6 * * *",
+            "apprepository.initialRepos[0].name": "jetstack",
+            "apprepository.initialRepos[0].url": "https://charts.jetstack.io",
+            "apprepository.initialRepos[1].name": "external-secrets",
+            "apprepository.initialRepos[1].url": "https://charts.external-secrets.io",
+            "apprepository.initialRepos[2].name": "cloudnative-pg",
+            "apprepository.initialRepos[2].url": "https://cloudnative-pg.github.io/charts",
         },
     }
-    assert service.service_urls["KubeApps"] == "http://example.test:31161"
-    assert service.service_ports["KubeApps"] == 31161
-    assert service.node_port == 31161
+    values = helm_call[2]["values"]
+    assert "bitnami" not in values.values()
+    assert "https://charts.bitnami.com/bitnami" not in values.values()
+    assert "prometheus-community" not in values.values()
+    assert "grafana" not in values.values()
+    assert service.service_urls["KubeApps"] == "https://example.test:443/kubeapps-0/"
+    assert service.service_ports["KubeApps"] == 443
+    assert service.ingress_path == "/kubeapps-0"
     assert service.state == "running"
 
     assert service.namespace == "kubeapps-0"
@@ -141,6 +154,17 @@ def test_kubeapps_setup_installs_sap_oci_chart_as_nodeport():
     manifest = fake.files["/tmp/kubeapps/kubeapps-0-kubeapps-admin-cluster-admin.yaml"]
     assert "name: kubeapps-admin" in manifest
     assert "name: cluster-admin" in manifest
+
+    ingress = fake.files["/tmp/kubeapps/kubeapps-0-ingress.yaml"]
+    assert "kind: Ingress" in ingress
+    assert "name: kubeapps-0-ingress" in ingress
+    assert "namespace: kubeapps-0" in ingress
+    assert "host: kubeapps-0.example.test" not in ingress
+    assert "    - http:" in ingress
+    assert "path: /kubeapps-0" in ingress
+    assert "name: kubeapps-0" in ingress
+    assert "number: 80" in ingress
+    assert "secretName: kubeapps-0-ingress-tls" in ingress
 
 
 def test_kubeapps_setup_ignores_unsuffixed_namespace_and_starts_at_zero():

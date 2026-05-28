@@ -18,6 +18,8 @@ class KubeAppsService(AbstractService):
     app_version: str = "v3.0.0"
     service_account_name: str = "kubeapps-admin"
     node_port: int = 30080
+    ingress_port: int = 443
+    ingress_path: str = ""
 
     def get_login_token(self, bundle) -> str:
         token = "no token"
@@ -63,12 +65,76 @@ class KubeAppsService(AbstractService):
 
         self._bind_service_account_cluster_admin(conn)
 
-        node_ip = conn.host
-        service_port = self._detect_frontend_node_port(conn)
-        self.node_port = service_port
+        host, service_port, path = self.expose_kubeapps_ingress(conn)
+        self.ingress_path = path
         self.service_ports["KubeApps"] = service_port
-        self.service_urls["KubeApps"] = f"http://{node_ip}:{service_port}"
+        self.service_urls["KubeApps"] = f"https://{host}:{service_port}{path}/"
         self.state = "running"
+
+    def expose_kubeapps_ingress(
+        self,
+        conn,
+        ingress_name: str | None = None,
+        ingress_port: int | None = None,
+        host: str | None = None,
+        path: str | None = None,
+        backend_service_port: int = 80,
+        tls_secret_name: str | None = None,
+        entrypoint: str = "websecure",
+    ):
+        """
+        Expose KubeApps through the k3s Traefik ingress controller.
+        """
+        ingress_name = ingress_name or f"{self.release_name}-ingress"
+        ingress_port = ingress_port or self.ingress_port
+        external_host = conn.host
+        path = self._normalize_ingress_path(path)
+        tls_secret_name = tls_secret_name or f"{ingress_name}-tls"
+        host_line = f"    - host: {host}\n      http:" if host else "    - http:"
+        tls_hosts = f"\n        - {host}" if host else " []"
+
+        ingress_manifest = f"""apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {ingress_name}
+  namespace: {self.namespace}
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: {entrypoint}
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+{host_line}
+        paths:
+          - path: {path}
+            pathType: Prefix
+            backend:
+              service:
+                name: {self.release_name}
+                port:
+                  number: {backend_service_port}
+  tls:
+    - hosts:{tls_hosts}
+      secretName: {tls_secret_name}
+"""
+        manifest_path = f"{self.target_path}/{ingress_name}.yaml"
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_write_file(conn, manifest_path, ingress_manifest)
+        self.exec.k8s_apply_manifest(
+            conn,
+            manifest_path,
+            namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
+        )
+
+        logger.info(
+            "KubeApps exposed at https://%s:%s%s via ingress",
+            external_host,
+            ingress_port,
+            path,
+        )
+        return external_host, ingress_port, path
 
     def expose_kubeapps_nodeport(
         self,
@@ -157,9 +223,8 @@ class KubeAppsService(AbstractService):
         return True
 
     def _helm_values(self) -> Dict[str, str]:
-        return {
-            "frontend.service.type": "NodePort",
-            "frontend.service.nodePorts.http": str(self.node_port),
+        values = {
+            "frontend.service.type": "ClusterIP",
             "dashboard.image.tag": self.app_version,
             "apprepository.image.tag": self.app_version,
             "apprepository.syncImage.tag": self.app_version,
@@ -167,7 +232,30 @@ class KubeAppsService(AbstractService):
             "pinnipedProxy.image.tag": self.app_version,
             "ociCatalog.image.tag": self.app_version,
             "postgresql.fullnameOverride": f"{self.release_name}-postgresql",
+            "postgresql.resourcesPreset": "small",
+            "apprepository.watchAllNamespaces": "false",
+            "apprepository.crontab": "0 */6 * * *",
         }
+        values.update(self._initial_app_repositories())
+        return values
+
+    def _initial_app_repositories(self) -> Dict[str, str]:
+        repositories = [
+            ("jetstack", "https://charts.jetstack.io"),
+            ("external-secrets", "https://charts.external-secrets.io"),
+            ("cloudnative-pg", "https://cloudnative-pg.github.io/charts"),
+        ]
+        values = {}
+        for index, (name, url) in enumerate(repositories):
+            values[f"apprepository.initialRepos[{index}].name"] = name
+            values[f"apprepository.initialRepos[{index}].url"] = url
+        return values
+
+    def _normalize_ingress_path(self, path: str | None = None) -> str:
+        ingress_path = path or f"/{self.release_name}"
+        if not ingress_path.startswith("/"):
+            ingress_path = f"/{ingress_path}"
+        return ingress_path.rstrip("/") or "/"
 
     def _select_available_namespace(self, conn, max_attempts: int = 20) -> bool:
         base_namespace = self.namespace
