@@ -1,20 +1,19 @@
 id: kubeapps-newest-k3s
 name: KubeApps
-version: newest
-maintainer: Your Name
+version: 3.0.0
+maintainer: SAP SE
 description_short: KubeApps is a web-based UI for managing Kubernetes applications.
 description: "KubeApps is a web-based UI for managing Kubernetes applications. It\
-  \ provides a user-friendly interface to \ndeploy, manage, and monitor applications\
-  \ running on Kubernetes clusters. KubeApps simplifies the management \nof Helm charts\
-  \ and allows users to easily install, upgrade, and delete applications. In MLOX,\
-  \ it serves as \na convenient tool for users to interact with their Kubernetes deployments\
-  \ and manage applications without \nneeding to use the command line.\n"
+  \ provides a user-friendly interface to browse, deploy, upgrade, and delete Helm\
+  \ chart applications running on Kubernetes clusters. This MLOX service installs\
+  \ the SAP-maintained Kubeapps fork from the GHCR OCI Helm chart after the original\
+  \ upstream project was deprecated and archived.\n"
 links:
-  project: https://kubeapps.com/
-  news: https://kubeapps.com/
-  security: https://kubeapps.com/
-  documentation: https://kubeapps.com/
-  changelog: https://kubeapps.com/
+  project: https://github.com/SAP/kubeapps
+  news: https://github.com/SAP/kubeapps/releases
+  security: https://github.com/SAP/kubeapps/security
+  documentation: https://sap.github.io/kubeapps/
+  changelog: https://github.com/SAP/kubeapps/releases
 requirements:
   cpus: 2.0
   ram_gb: 4.0
@@ -25,7 +24,7 @@ groups:
   backend:
     kubernetes: null
 ports:
-  web_ui: 5432
+  web_ui: 30080
 build:
   class_name: mlox.services.kubeapps.k8s.KubeAppsService
   params:

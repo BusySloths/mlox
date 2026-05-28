@@ -6,9 +6,6 @@ from mlox.infra import Infrastructure, Bundle
 
 
 def settings(infra: Infrastructure, bundle: Bundle, service: KubeAppsService):
-    st.header(f"Settings for service {service.name}")
-    st.write(f"IP: {bundle.server.ip}")
-
-    # with bundle.server.get_server_connection() as conn:
-    #     res = service.check(conn)
-    #     st.write(res)
+    token = service.get_login_token(bundle)
+    st.text_area("Login Token", token)
+    st.link_button("KubeApps Link", service.service_urls["KubeApps"])

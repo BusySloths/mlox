@@ -1,9 +1,9 @@
-import time
 import logging
-import json  # Added for parsing JSON output
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass
 from typing import Dict
 
+from mlox.executors import TaskGroup
 from mlox.service import AbstractService
 
 logger = logging.getLogger(__name__)
@@ -14,10 +14,26 @@ class KubeAppsService(AbstractService):
     namespace: str = "kubeapps"
     kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
     release_name: str = "kubeapps"
-    chart_repo: str = "bitnami"
-    chart_name: str = "bitnami/kubeapps"
-    chart_repo_url: str = "https://charts.bitnami.com/bitnami"
+    chart_name: str = "oci://ghcr.io/sap/kubeapps/kubeapps"
+    app_version: str = "v3.0.0"
+    service_account_name: str = "kubeapps-admin"
     node_port: int = 30080
+
+    def get_login_token(self, bundle) -> str:
+        token = "no token"
+        if not bundle.server:
+            logger.error("No server connection available")
+            return token
+        with bundle.server.get_server_connection() as conn:
+            _token = self.exec.k8s_create_token(
+                conn,
+                service_account=self.service_account_name,
+                namespace=self.namespace,
+                kubeconfig=self.kubeconfig,
+            )
+            if _token:
+                token = _token
+        return token
 
     def setup(self, conn) -> None:
         logger.info("🔧 Installing KubeApps")
@@ -25,38 +41,12 @@ class KubeAppsService(AbstractService):
         # ensure target path exists
         self.exec.fs_create_dir(conn, self.target_path)
 
-        base_namespace = self.namespace
-        attempts = 0
-        while self.exec.k8s_namespace_exists(
-            conn, self.namespace, kubeconfig=self.kubeconfig
-        ):
-            logger.info(
-                "Namespace %s already exists, selecting a new name.",
-                self.namespace,
-            )
-            attempts += 1
-            self.namespace = f"{base_namespace}-{attempts}"
+        if not self._select_available_namespace(conn):
+            self.state = "unknown"
+            return
 
-        # add & update Helm repo
-        self.exec.helm_repo_add(
-            conn,
-            self.chart_repo,
-            self.chart_repo_url,
-        )
-        self.exec.helm_repo_update(conn)
-
-        # self.exec.exec_command(
-        #     conn,
-        #     # f"helm install kubeapps bitnami/kubeapps -n kubeapps"
-        #     f"helm upgrade --install {self.release_name} {self.chart_name} "
-        #     f"--kubeconfig {self.kubeconfig} "
-        #     f"--namespace {self.namespace} --create-namespace "
-        #     f"--set frontend.service.type=LoadBalancer ",
-        #     sudo=True,
-        # )
-        # TODO: can produce an error if the release already existed and is in the process of being terminated.
-
-        # # install or upgrade KubeApps with NodePort
+        # SAP publishes the maintained Kubeapps chart as an OCI artifact. Helm
+        # can install it directly, so there is no repository index to add/update.
         res = self.exec.helm_upgrade_install(
             conn,
             release=self.release_name,
@@ -64,20 +54,18 @@ class KubeAppsService(AbstractService):
             namespace=self.namespace,
             kubeconfig=self.kubeconfig,
             create_namespace=True,
-            values={
-                "frontend.service.type": "NodePort",
-                "frontend.service.nodePort": str(self.node_port),
-            },
+            values=self._helm_values(),
         )
         if not res:
             logger.error("Failed to install or upgrade KubeApps.")
             self.state = "unknown"
             return
 
-        # expose via NodePort and record URL
-        # node_ip, service_port = self.expose_kubeapps_nodeport(conn)
+        self._bind_service_account_cluster_admin(conn)
+
         node_ip = conn.host
-        service_port = self.node_port
+        service_port = self._detect_frontend_node_port(conn)
+        self.node_port = service_port
         self.service_ports["KubeApps"] = service_port
         self.service_urls["KubeApps"] = f"http://{node_ip}:{service_port}"
         self.state = "running"
@@ -137,6 +125,19 @@ class KubeAppsService(AbstractService):
         # remove namespace
         self.exec.k8s_delete_resource(
             conn,
+            "clusterrolebinding",
+            self._cluster_role_binding_name(),
+            kubeconfig=self.kubeconfig,
+        )
+        self.exec.k8s_delete_resource(
+            conn,
+            "serviceaccount",
+            self.service_account_name,
+            namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
+        )
+        self.exec.k8s_delete_resource(
+            conn,
             "namespace",
             self.namespace,
             kubeconfig=self.kubeconfig,
@@ -155,6 +156,132 @@ class KubeAppsService(AbstractService):
         logger.info("🔄 no spinning down…")
         return True
 
+    def _helm_values(self) -> Dict[str, str]:
+        return {
+            "frontend.service.type": "NodePort",
+            "frontend.service.nodePorts.http": str(self.node_port),
+            "dashboard.image.tag": self.app_version,
+            "apprepository.image.tag": self.app_version,
+            "apprepository.syncImage.tag": self.app_version,
+            "kubeappsapis.image.tag": self.app_version,
+            "pinnipedProxy.image.tag": self.app_version,
+            "ociCatalog.image.tag": self.app_version,
+            "postgresql.fullnameOverride": f"{self.release_name}-postgresql",
+        }
+
+    def _select_available_namespace(self, conn, max_attempts: int = 20) -> bool:
+        base_namespace = self.namespace
+        base_release_name = self.release_name
+
+        for attempt in range(max_attempts):
+            candidate = f"{base_namespace}-{attempt}"
+            phase = self._namespace_phase(conn, candidate)
+            if not phase:
+                self.namespace = candidate
+                self.release_name = f"{base_release_name}-{attempt}"
+                logger.info(
+                    "Installing KubeApps into namespace %s.",
+                    self.namespace,
+                )
+                return True
+            logger.info(
+                "Namespace %s is unavailable with phase %s.",
+                candidate,
+                phase,
+            )
+
+        logger.error(
+            "No available KubeApps namespace found after %s attempts starting at %s.",
+            max_attempts,
+            base_namespace,
+        )
+        return False
+
+    def _namespace_phase(self, conn, namespace: str | None = None) -> str:
+        namespace = namespace or self.namespace
+        jsonpath = r"{.status.phase}"
+        cmd = (
+            f"kubectl --kubeconfig {self.kubeconfig} get namespace {namespace} "
+            f"--ignore-not-found -o jsonpath=\"{jsonpath}\""
+        )
+        try:
+            result = self.exec.execute(
+                conn,
+                cmd,
+                group=TaskGroup.KUBERNETES,
+                sudo=True,
+            )
+            return result.strip() if result else ""
+        except Exception as exc:
+            logger.warning("Could not read namespace %s phase: %s", namespace, exc)
+            return ""
+
+    def _cluster_role_binding_name(self) -> str:
+        return f"{self.namespace}-{self.service_account_name}-cluster-admin"
+
+    def _bind_service_account_cluster_admin(self, conn) -> None:
+        binding_name = self._cluster_role_binding_name()
+        manifest_path = f"{self.target_path}/{binding_name}.yaml"
+        manifest = f"""apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {self.service_account_name}
+  namespace: {self.namespace}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {binding_name}
+subjects:
+  - kind: ServiceAccount
+    name: {self.service_account_name}
+    namespace: {self.namespace}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+"""
+        self.exec.fs_create_dir(conn, self.target_path)
+        self.exec.fs_write_file(conn, manifest_path, manifest)
+        self.exec.k8s_apply_manifest(
+            conn,
+            manifest_path,
+            kubeconfig=self.kubeconfig,
+        )
+        logger.info(
+            "Bound service account %s/%s to cluster-admin",
+            self.namespace,
+            self.service_account_name,
+        )
+
+    def _detect_frontend_node_port(self, conn) -> int:
+        service_name = self.release_name
+        jsonpaths = [
+            r"{.spec.ports[?(@.name=='http')].nodePort}",
+            r"{.spec.ports[0].nodePort}",
+        ]
+        for jsonpath in jsonpaths:
+            cmd = (
+                f"kubectl --kubeconfig {self.kubeconfig} -n {self.namespace} "
+                f"get svc {service_name} -o jsonpath=\"{jsonpath}\""
+            )
+            try:
+                result = self.exec.execute(
+                    conn,
+                    cmd,
+                    group=TaskGroup.KUBERNETES,
+                    sudo=True,
+                )
+                if result:
+                    return int(result.strip())
+            except Exception as exc:
+                logger.warning(
+                    "Could not detect KubeApps NodePort with jsonpath %s: %s",
+                    jsonpath,
+                    exc,
+                )
+        return self.node_port
+
     def check(self, conn) -> Dict:
         helm_result = self.exec.helm_status(
             conn,
@@ -163,94 +290,40 @@ class KubeAppsService(AbstractService):
             kubeconfig=self.kubeconfig,
             output_format="json",
         )
+        if not helm_result:
+            return {"status": "unknown", "details": "Helm status returned no output."}
 
-        # if helm_result.ok:
-        #     try:
-        #         status_json = json.loads(helm_result.stdout.strip())
-        #         release_state = (
-        #             status_json.get("info", {}).get("status", "unknown").lower()
-        #         )
+        try:
+            status_json = json.loads(helm_result)
+        except json.JSONDecodeError:
+            return {
+                "status": "unknown",
+                "details": "Failed to parse Helm status JSON.",
+                "helm_status": helm_result,
+            }
 
-        #         if release_state == "deployed":
-        #             return {"status": "running", "details": "Helm release is deployed."}
-        #         elif release_state in ["uninstalling", "pending-delete"]:
-        #             return {
-        #                 "status": "terminating",
-        #                 "details": f"Helm release status: {release_state}.",
-        #             }
-        #         elif release_state == "uninstalled":
-        #             release_definitely_gone_from_helm = True
-        #         else:  # e.g., failed, pending-install, pending-upgrade
-        #             return {
-        #                 "status": "error",
-        #                 "details": f"Helm release status: {release_state}.",
-        #             }
-        #     except json.JSONDecodeError:
-        #         helm_error = "Failed to parse helm status JSON."
-        #         # Proceed to namespace check as Helm status is unreliable
-        # else:
-        #     if "release: not found" in helm_result.stderr.lower():
-        #         release_definitely_gone_from_helm = True
-        #     else:
-        #         helm_error = (
-        #             helm_result.stderr.strip()
-        #             if helm_result.stderr
-        #             else f"Helm command failed with code {helm_result.return_code}"
-        #         )
-        #         # If Helm command failed for other reasons, it's an error, but we can still check namespace as a fallback.
-
-        # # 2. If Helm release is gone or status was inconclusive, check namespace
-        # if release_definitely_gone_from_helm or (not helm_result.ok and not helm_error):
-        #     ns_status_cmd = f"kubectl get namespace {self.namespace} -o jsonpath='{{.status.phase}}'"
-        #     ns_result = conn.sudo(ns_status_cmd, warn=True, hide=True)
-
-        #     if ns_result.ok:
-        #         namespace_phase = ns_result.stdout.strip()
-        #         if namespace_phase == "Terminating":
-        #             return {
-        #                 "status": "terminating",
-        #                 "details": "Namespace is terminating.",
-        #             }
-        #         elif namespace_phase == "Active":
-        #             if release_definitely_gone_from_helm:
-        #                 return {
-        #                     "status": "torn_down",
-        #                     "details": "Helm release uninstalled, namespace is active.",
-        #                 }
-        #             else:  # Helm status was inconclusive, but namespace is active
-        #                 return {
-        #                     "status": "unknown",
-        #                     "details": f"Namespace is Active. Helm status inconclusive: {helm_error or 'Not found'}",
-        #                 }
-        #     else:
-        #         if "notfound" in (ns_result.stderr or "").lower().replace(
-        #             " ", ""
-        #         ):  # Check for "namespaces ... not found"
-        #             return {
-        #                 "status": "torn_down",
-        #                 "details": "Helm release and namespace not found.",
-        #             }
-        #         else:
-        #             ns_error_details = (
-        #                 ns_result.stderr.strip()
-        #                 if ns_result.stderr
-        #                 else f"kubectl command failed with code {ns_result.return_code}"
-        #             )
-        #             return {
-        #                 "status": "error",
-        #                 "details": f"Failed to get namespace status: {ns_error_details}. Helm status: {helm_error or 'Release not found or uninstalled'}",
-        #             }
-
-        # # If helm status failed for a reason other than "not found" and we couldn't determine from namespace
-        # if helm_error:
-        #     self.state = "unknown"
-        #     return {
-        #         "status": "error",
-        #         "details": f"Helm error: {helm_error}. Namespace status not definitively checked or also problematic.",
-        #     }
-
-        # return {"status": "unknown", "details": "Could not determine KubeApps status."}
-        return {"status": helm_result}
+        release_state = status_json.get("info", {}).get("status", "unknown").lower()
+        if release_state == "deployed":
+            return {"status": "running", "details": "Helm release is deployed."}
+        if release_state in {"uninstalling", "pending-delete"}:
+            return {
+                "status": "terminating",
+                "details": f"Helm release status: {release_state}.",
+            }
+        if release_state in {"uninstalled", "superseded"}:
+            return {
+                "status": "stopped",
+                "details": f"Helm release status: {release_state}.",
+            }
+        if release_state in {"failed", "pending-install", "pending-upgrade"}:
+            return {
+                "status": "error",
+                "details": f"Helm release status: {release_state}.",
+            }
+        return {
+            "status": "unknown",
+            "details": f"Helm release status: {release_state}.",
+        }
 
     def get_secrets(self) -> Dict[str, Dict]:
         return {}
