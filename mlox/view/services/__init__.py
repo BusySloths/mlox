@@ -103,6 +103,10 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "config_ids": ("redis-8-bookworm-docker",),
         "function_names": ("settings",),
     },
+    "mlox.view.services.registry": {
+        "config_ids": ("registry-3-docker",),
+        "function_names": ("settings",),
+    },
     "mlox.view.services.repo_deploy": {
         "config_ids": ("repo-deploy-0.1-beta-docker",),
         "function_names": ("settings", "setup"),
