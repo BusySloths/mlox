@@ -376,3 +376,62 @@ def test_ubuntu_native_firewall_status_parsing_and_filtering():
     assert _is_firewall_up("Status: active") is True
     assert _is_firewall_up("Status: inactive") is False
     assert _is_firewall_up(None) is False
+
+
+def test_multipass_server_launches_before_ubuntu_setup(monkeypatch):
+    from mlox.servers.ubuntu.multipass import MultipassUbuntuNativeServer
+
+    server = MultipassUbuntuNativeServer(
+        ip="mlox-unit-vm",
+        port="22",
+        root="root",
+        root_pw="pass",
+        service_config_id="ubuntu-multipass-native",
+        vm_name="mlox-unit-vm",
+        cpus="3",
+        memory="6G",
+        disk="30G",
+    )
+    calls = []
+    monkeypatch.setattr(
+        type(server), "is_multipass_available", property(lambda self: True)
+    )
+    monkeypatch.setattr(server, "launch_vm", lambda: (calls.append("launch"), setattr(server, "ip", "10.0.0.5")))
+    monkeypatch.setattr(UbuntuNativeServer, "setup", lambda self: calls.append(("ubuntu_setup", self.ip)))
+
+    assert server.test_connection() is True
+    server.setup()
+
+    assert calls == ["launch", ("ubuntu_setup", "10.0.0.5")]
+    assert server.vm_name == "mlox-unit-vm"
+    assert server.cpus == "3"
+    assert server.memory == "6G"
+    assert server.disk == "30G"
+
+
+def test_multipass_backend_status_includes_vm_metadata(monkeypatch):
+    from mlox.servers.ubuntu.multipass import MultipassUbuntuDockerServer
+
+    server = MultipassUbuntuDockerServer(
+        ip="10.0.0.6",
+        port="22",
+        root="root",
+        root_pw="pass",
+        service_config_id="ubuntu-multipass-docker",
+        vm_name="mlox-docker-vm",
+        cpus="4",
+        memory="8G",
+        disk="40G",
+    )
+    monkeypatch.setattr(UbuntuDockerServer, "get_backend_status", lambda self: {"backend.is_running": True})
+    monkeypatch.setattr(server, "multipass_info", lambda: {"state": "Running"})
+
+    status = server.get_backend_status()
+
+    assert status["backend.is_running"] is True
+    assert status["multipass.vm_name"] == "mlox-docker-vm"
+    assert status["multipass.ip"] == "10.0.0.6"
+    assert status["multipass.cpus"] == "4"
+    assert status["multipass.memory"] == "8G"
+    assert status["multipass.disk"] == "40G"
+    assert status["multipass.info"] == {"state": "Running"}

@@ -7,6 +7,17 @@ from mlox.ui.registry import register
 _REGISTERED = False
 
 _STREAMLIT_SERVER_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
+    "mlox.view.servers.ubuntu.multipass": {
+        "config_ids": (
+            "ubuntu-multipass-native-24.04-server",
+            "ubuntu-multipass-docker-24.04-server",
+        ),
+        "function_names": ("settings", "setup"),
+    },
+    "mlox.view.servers.ubuntu.multipass_k3s": {
+        "config_ids": ("ubuntu-multipass-k3s-24.04-server",),
+        "function_names": ("settings", "setup"),
+    },
     "mlox.view.servers.ubuntu.docker": {
         "config_ids": ("ubuntu-docker-24.04-server",),
         "function_names": ("settings", "setup"),

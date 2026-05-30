@@ -330,6 +330,18 @@ def test_builtin_server_config_capabilities_match_classes():
             {"git", "firewall", "initial_auth_password"},
             {"kubernetes"},
         ),
+        "ubuntu-multipass-native-24.04-server": (
+            {"git", "firewall", "initial_auth_password"},
+            {"native"},
+        ),
+        "ubuntu-multipass-docker-24.04-server": (
+            {"git", "firewall", "initial_auth_password"},
+            {"docker"},
+        ),
+        "ubuntu-multipass-k3s-24.04-server": (
+            {"git", "firewall", "initial_auth_password"},
+            {"kubernetes"},
+        ),
     }
 
     for config_id, (server_capabilities, backend_capabilities) in expected.items():
