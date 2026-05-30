@@ -482,7 +482,7 @@ def test_serve_cache_evicts_by_ttl_and_lru(monkeypatch):
     monkeypatch.setenv("MLOX_GATEWAY_CACHE_MAX_MODELS", "2")
     monkeypatch.setenv("MLOX_GATEWAY_CACHE_TTL_DAYS", "10")
 
-    now = datetime(2026, 5, 4, 12, 0, 0)
+    now = datetime.now()
     serve.model_cache["models:/Demo/old"] = serve.ModelCacheEntry(
         model=object(),
         sys_path=[],
