@@ -21,6 +21,7 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> Dict:
         "Create new Kubernetes cluster or select existing controller to join",
         k8s_controller,
         format_func=lambda x: "Create new cluster" if not x else x.name,
+        key=f"setup-k3s-controller-{config.id}",
     )
 
     if join_k8s_bundle:

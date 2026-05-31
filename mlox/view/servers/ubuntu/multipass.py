@@ -61,6 +61,15 @@ def _multipass_form(sid: str) -> Dict[str, str]:
         help="Leave empty to use the bundled MLOX Multipass cloud-init file.",
         key=f"{form_id}-cloud-init",
     )
+    launch_timeout = st.number_input(
+        "Launch timeout (seconds)",
+        value=600,
+        min_value=60,
+        max_value=1800,
+        step=60,
+        help="Maximum time to wait for SSH login on first boot.",
+        key=f"{form_id}-launch-timeout",
+    )
     return {
         "${MULTIPASS_VM_NAME}": vm_name,
         "${MULTIPASS_CPUS}": str(cpus),
@@ -68,6 +77,7 @@ def _multipass_form(sid: str) -> Dict[str, str]:
         "${MULTIPASS_DISK}": disk,
         "${MULTIPASS_IMAGE}": image,
         "${MULTIPASS_CLOUD_INIT}": cloud_init,
+        "${MULTIPASS_LAUNCH_TIMEOUT}": str(launch_timeout),
     }
 
 
@@ -86,6 +96,7 @@ def setup_k3s_multipass(infra: Infrastructure, config: ServiceConfig) -> Dict:
         "Create new Kubernetes cluster or select existing controller to join",
         k8s_controller,
         format_func=lambda x: "Create new cluster" if not x else x.name,
+        key=f"setup-k3s-multipass-controller-{config.id}",
     )
 
     if join_k8s_bundle:
@@ -103,23 +114,15 @@ def setup_k3s_multipass(infra: Infrastructure, config: ServiceConfig) -> Dict:
 
 def settings(infra: Infrastructure, bundle: Bundle, server: MultipassUbuntuServerMixin):
     with st.expander("Multipass VM", expanded=False):
-        st.write(
+        st.json(
             {
                 "vm_name": server.vm_name,
                 "ip": server.ip,
+                "state": server.state,
                 "cpus": server.cpus,
                 "memory": server.memory,
                 "disk": server.disk,
                 "image": server.image,
             }
         )
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("Start VM", key=f"multipass-start-{server.uuid}"):
-                server.start_vm()
-                st.success(f"Started {server.vm_name}.")
-        with c2:
-            if st.button("Stop VM", key=f"multipass-stop-{server.uuid}"):
-                server.stop_vm()
-                st.success(f"Stopped {server.vm_name}.")
     settings_native(infra, bundle, server)  # type: ignore[arg-type]

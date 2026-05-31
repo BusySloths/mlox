@@ -37,6 +37,15 @@ def remove_bundle(infra: Infrastructure, bundle: Bundle) -> None:
         service.clear_service_lookup()
 
     try:
+        bundle.server.teardown()
+    except Exception:
+        logger.exception(
+            "Could not teardown server %s before removal.",
+            bundle.server.ip,
+        )
+        raise
+
+    try:
         infra.bundles.remove(bundle)
     except ValueError:
         logger.warning("Could not find bundle %s", bundle.server.ip)

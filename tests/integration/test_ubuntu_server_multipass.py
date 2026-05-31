@@ -39,6 +39,7 @@ def test_multipass_ubuntu_server_lifecycle(template, expected_backend):
         "${MULTIPASS_DISK}": "20G",
         "${MULTIPASS_IMAGE}": "24.04",
         "${MULTIPASS_CLOUD_INIT}": "",
+        "${MULTIPASS_LAUNCH_TIMEOUT}": "600",
         "${K3S_CONTROLLER_URL}": "",
         "${K3S_CONTROLLER_TOKEN}": "",
         "${K3S_CONTROLLER_UUID}": "",

@@ -396,17 +396,191 @@ def test_multipass_server_launches_before_ubuntu_setup(monkeypatch):
     monkeypatch.setattr(
         type(server), "is_multipass_available", property(lambda self: True)
     )
-    monkeypatch.setattr(server, "launch_vm", lambda: (calls.append("launch"), setattr(server, "ip", "10.0.0.5")))
-    monkeypatch.setattr(UbuntuNativeServer, "setup", lambda self: calls.append(("ubuntu_setup", self.ip)))
+    monkeypatch.setattr(
+        server,
+        "launch_vm",
+        lambda: (calls.append("launch"), setattr(server, "ip", "10.0.0.5")),
+    )
+    monkeypatch.setattr(
+        UbuntuNativeServer,
+        "setup",
+        lambda self: calls.append(("ubuntu_setup", self.ip, self.state)),
+    )
 
     assert server.test_connection() is True
     server.setup()
 
-    assert calls == ["launch", ("ubuntu_setup", "10.0.0.5")]
+    assert calls == ["launch", ("ubuntu_setup", "10.0.0.5", "un-initialized")]
     assert server.vm_name == "mlox-unit-vm"
     assert server.cpus == "3"
     assert server.memory == "6G"
     assert server.disk == "30G"
+
+
+def test_multipass_launch_waits_for_root_login(monkeypatch):
+    from mlox.servers.ubuntu import multipass
+    from mlox.servers.ubuntu.multipass import MultipassUbuntuNativeServer
+
+    server = MultipassUbuntuNativeServer(
+        ip="mlox-unit-vm",
+        port="22",
+        root="root",
+        root_pw="pass",
+        service_config_id="ubuntu-multipass-native",
+        vm_name="mlox-unit-vm",
+    )
+    calls = []
+    monkeypatch.setattr(
+        type(server), "is_multipass_available", property(lambda self: True)
+    )
+    monkeypatch.setattr(multipass, "_HAS_MULTIPASS_SDK", False)
+    monkeypatch.setattr(server, "_resolve_cloud_init_path", lambda: None)
+    monkeypatch.setattr(
+        server,
+        "_run_multipass_cli",
+        lambda *_args, **_kwargs: calls.append("launch"),
+    )
+    monkeypatch.setattr(server, "wait_for_ssh", lambda: "10.0.0.5")
+    monkeypatch.setattr(
+        server,
+        "wait_for_root_login",
+        lambda: calls.append("root-login"),
+    )
+
+    server.launch_vm()
+
+    assert server.ip == "10.0.0.5"
+    assert calls == ["launch", "root-login"]
+
+
+def test_multipass_setup_cleans_up_vm_on_provisioning_failure(monkeypatch):
+    from mlox.servers.ubuntu.multipass import MultipassUbuntuNativeServer
+
+    server = MultipassUbuntuNativeServer(
+        ip="mlox-unit-vm",
+        port="22",
+        root="root",
+        root_pw="pass",
+        service_config_id="ubuntu-multipass-native",
+        vm_name="mlox-unit-vm",
+    )
+    calls = []
+    monkeypatch.setattr(
+        type(server), "is_multipass_available", property(lambda self: True)
+    )
+    monkeypatch.setattr(
+        server,
+        "launch_vm",
+        lambda: (calls.append("launch"), setattr(server, "ip", "10.0.0.5")),
+    )
+    monkeypatch.setattr(server, "delete_vm", lambda: calls.append("delete"))
+    monkeypatch.setattr(
+        UbuntuNativeServer,
+        "setup",
+        lambda self: (_ for _ in ()).throw(RuntimeError("auth failed")),
+    )
+
+    try:
+        server.setup()
+    except RuntimeError:
+        pass
+    else:
+        assert False, "Expected setup to raise"
+
+    assert calls == ["launch", "delete"]
+    assert server.ip == "mlox-unit-vm"
+    assert server.state == "un-initialized"
+
+
+def test_multipass_root_login_timeout_reports_command_output(monkeypatch):
+    from mlox.servers.ubuntu.multipass import MultipassUbuntuNativeServer
+
+    server = MultipassUbuntuNativeServer(
+        ip="10.0.0.5",
+        port="22",
+        root="root",
+        root_pw="pass",
+        service_config_id="ubuntu-multipass-native",
+        vm_name="mlox-unit-vm",
+        launch_timeout="1",
+    )
+
+    @contextmanager
+    def _conn():
+        conn = SimpleNamespace()
+        conn.run = lambda *_args, **_kwargs: SimpleNamespace(
+            ok=False,
+            stdout="status: error",
+            stderr="",
+            exited=2,
+        )
+        yield conn
+
+    monkeypatch.setattr(
+        server,
+        "get_server_connection",
+        lambda force_root=False: _conn(),
+    )
+    monkeypatch.setattr(
+        "mlox.servers.ubuntu.multipass.time.time",
+        iter([0, 0, 2]).__next__,
+    )
+    monkeypatch.setattr(
+        "mlox.servers.ubuntu.multipass.time.sleep",
+        lambda _seconds: None,
+    )
+
+    try:
+        server.wait_for_root_login()
+    except TimeoutError as exc:
+        assert "status: error" in str(exc)
+    else:
+        assert False, "Expected root login wait to time out"
+
+
+def test_multipass_start_stop_use_vm_sdk_methods(monkeypatch):
+    from mlox.servers.ubuntu import multipass
+    from mlox.servers.ubuntu.multipass import MultipassUbuntuNativeServer
+
+    class _VM:
+        def __init__(self):
+            self.calls = []
+
+        def start(self):
+            self.calls.append("start")
+
+        def stop(self):
+            self.calls.append("stop")
+
+    class _Client:
+        def __init__(self):
+            self.vm = vm
+
+        def find(self, name):
+            calls.append(("find", name))
+            return self.vm
+
+    vm = _VM()
+    calls = []
+    server = MultipassUbuntuNativeServer(
+        ip="mlox-unit-vm",
+        port="22",
+        root="root",
+        root_pw="pass",
+        service_config_id="ubuntu-multipass-native",
+        vm_name="mlox-unit-vm",
+    )
+    monkeypatch.setattr(multipass, "_HAS_MULTIPASS_SDK", True)
+    monkeypatch.setattr(multipass, "MultipassClient", _Client)
+    monkeypatch.setattr(server, "wait_for_ssh", lambda: "10.0.0.5")
+
+    server.start_vm()
+    server.stop_vm()
+
+    assert calls == [("find", "mlox-unit-vm"), ("find", "mlox-unit-vm")]
+    assert vm.calls == ["start", "stop"]
+    assert server.ip == "10.0.0.5"
+    assert server.state == "stopped"
 
 
 def test_multipass_backend_status_includes_vm_metadata(monkeypatch):

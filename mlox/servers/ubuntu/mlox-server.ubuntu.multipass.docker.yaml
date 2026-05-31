@@ -36,3 +36,4 @@ build:
     disk: ${MULTIPASS_DISK}
     image: ${MULTIPASS_IMAGE}
     cloud_init: ${MULTIPASS_CLOUD_INIT}
+    launch_timeout: ${MULTIPASS_LAUNCH_TIMEOUT}

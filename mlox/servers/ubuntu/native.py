@@ -60,14 +60,18 @@ class UbuntuNativeServer(
             logging.error("Can not initialize an already initialized server.")
             return
         self.state = "starting"
-        self.update()
-        self.install_packages()
-        self.update()
-        self.add_mlox_user()
-        self.setup_users()
-        self.disable_password_authentication()
-        self.setup_backend()
-        self.state = "running"
+        try:
+            self.update()
+            self.install_packages()
+            self.update()
+            self.add_mlox_user()
+            self.setup_users()
+            self.disable_password_authentication()
+            self.setup_backend()
+            self.state = "running"
+        except Exception:
+            self.state = "un-initialized"
+            raise
 
     def teardown(self):
         self.state = "shutdown"

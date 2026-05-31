@@ -42,7 +42,6 @@ def register_builtin_streamlit_servers() -> None:
     if _REGISTERED:
         return
 
-    _REGISTERED = True
     for module_path, binding in _STREAMLIT_SERVER_BINDINGS.items():
         module = importlib.import_module(module_path)
         for function_name in binding["function_names"]:
@@ -56,3 +55,5 @@ def register_builtin_streamlit_servers() -> None:
                     function_name=function_name,
                     handler=handler,
                 )
+
+    _REGISTERED = True

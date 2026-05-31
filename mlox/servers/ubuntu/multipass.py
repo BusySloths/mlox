@@ -53,7 +53,7 @@ class MultipassUbuntuServerMixin:
     disk: str = "20G"
     image: str = "24.04"
     cloud_init: str = ""
-    launch_timeout: str = "180"
+    launch_timeout: str = "600"
 
     def __post_init__(self) -> None:
         super().__post_init__()  # type: ignore[misc]
@@ -78,9 +78,17 @@ class MultipassUbuntuServerMixin:
         if self.state != "un-initialized":
             logging.error("Can not initialize an already initialized server.")
             return
-        self.state = "starting"
-        self.launch_vm()
-        super().setup()  # type: ignore[misc]
+        launched = False
+        try:
+            self.launch_vm()
+            launched = True
+            super().setup()  # type: ignore[misc]
+        except Exception:
+            self.state = "un-initialized"
+            if launched:
+                self.delete_vm()
+                self.ip = self.vm_name
+            raise
 
     def teardown(self) -> None:
         try:
@@ -91,18 +99,46 @@ class MultipassUbuntuServerMixin:
             self.state = "shutdown"
 
     def start_vm(self) -> None:
-        if _HAS_MULTIPASS_SDK:
-            client = MultipassClient()
-            client.start(self.vm_name)
+        if self._run_multipass_vm_action("start"):
+            self.ip = self.wait_for_ssh()
+            self.state = "running"
             return
         self._run_multipass_cli(["start", self.vm_name])
+        self.ip = self.wait_for_ssh()
+        self.state = "running"
 
     def stop_vm(self) -> None:
-        if _HAS_MULTIPASS_SDK:
-            client = MultipassClient()
-            client.stop(self.vm_name)
+        if self._run_multipass_vm_action("stop"):
+            self.state = "stopped"
             return
         self._run_multipass_cli(["stop", self.vm_name])
+        self.state = "stopped"
+
+    def _run_multipass_vm_action(self, action: str) -> bool:
+        if not _HAS_MULTIPASS_SDK:
+            return False
+
+        client = MultipassClient()
+        vm = getattr(self, "_multipass_vm", None)
+        if vm is None and hasattr(client, "find"):
+            try:
+                vm = client.find(self.vm_name)
+            except Exception:
+                logger.debug(
+                    "Could not find Multipass VM %s via SDK.",
+                    self.vm_name,
+                    exc_info=True,
+                )
+
+        if vm is not None and hasattr(vm, action):
+            getattr(vm, action)()
+            return True
+
+        if hasattr(client, action):
+            getattr(client, action)(self.vm_name)
+            return True
+
+        return False
 
     def launch_vm(self) -> None:
         if not self.is_multipass_available:
@@ -151,6 +187,7 @@ class MultipassUbuntuServerMixin:
             self._run_multipass_cli(cmd)
 
         self.ip = self.wait_for_ssh()
+        self.wait_for_root_login()
         logger.info("Multipass VM %s is reachable at %s", self.vm_name, self.ip)
 
     def delete_vm(self) -> None:
@@ -215,7 +252,7 @@ class MultipassUbuntuServerMixin:
             return {"raw": raw}
 
     def wait_for_ssh(self) -> str:
-        timeout = _coerce_positive_int(self.launch_timeout, 180)
+        timeout = _coerce_positive_int(self.launch_timeout, 600)
         deadline = time.time() + timeout
         last_exc: Exception | None = None
         while time.time() < deadline:
@@ -228,6 +265,30 @@ class MultipassUbuntuServerMixin:
             time.sleep(3)
         raise TimeoutError(
             f"VM {self.vm_name} SSH not reachable after {timeout}s. Last error: {last_exc!r}"
+        )
+
+    def wait_for_root_login(self) -> None:
+        timeout = _coerce_positive_int(self.launch_timeout, 600)
+        deadline = time.time() + timeout
+        last_exc: Exception | None = None
+        while time.time() < deadline:
+            try:
+                with self.get_server_connection(force_root=True) as conn:
+                    result = conn.run(
+                        "true",
+                        hide=True,
+                        warn=True,
+                        pty=False,
+                    )
+                    if result.ok:
+                        return
+                    output = (result.stderr or result.stdout or "").strip()
+                    last_exc = RuntimeError(output or f"exit code {result.exited}")
+            except Exception as exc:
+                last_exc = exc
+            time.sleep(3)
+        raise TimeoutError(
+            f"VM {self.vm_name} root SSH login not ready after {timeout}s. Last error: {last_exc!r}"
         )
 
     def _current_ipv4(self) -> str | None:

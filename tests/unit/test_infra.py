@@ -48,6 +48,14 @@ class DummyServer(AbstractServer):
         pass
 
 
+@dataclass
+class RecordingServer(DummyServer):
+    teardown_calls: int = 0
+
+    def teardown(self) -> None:
+        self.teardown_calls += 1
+
+
 class GitServer(DummyServer):
     capabilities: ClassVar[set[ServerCapability | str]] = {ServerCapability.GIT}
 
@@ -320,3 +328,18 @@ def test_infrastructure_methods_delegate_to_application_layer(
     else:
         assert recorded == [((infra, *args), {})]
     assert result == expected
+
+
+def test_remove_bundle_tears_down_server_and_removes_bundle():
+    server = make_server(RecordingServer, "10.0.0.1")
+    service = make_service("svc", "test-service", "svc-1")
+    service.bind_service_lookup(object())
+    bundle = Bundle(name="server", server=server)
+    bundle.services.append(service)
+    infra = make_infra(bundles=[bundle])
+
+    infra_use_cases.remove_bundle(infra, bundle)
+
+    assert server.teardown_calls == 1
+    assert infra.bundles == []
+    assert service._service_lookup is None

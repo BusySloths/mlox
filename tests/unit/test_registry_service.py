@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import pytest
 
 from mlox.ui.registry import clear_handlers, get_handler
+from mlox.ui import registry as ui_registry
 from mlox.view import services as streamlit_services
 from mlox.view.services import registry as registry_view
 from mlox.services.registry.docker import RegistryDockerService
@@ -38,6 +39,39 @@ def test_registry_streamlit_settings_handler_is_registered(monkeypatch):
         function_name="settings",
     )
     assert callable(handler)
+
+    clear_handlers()
+
+
+def test_ui_registry_retries_after_failed_bootstrap(monkeypatch):
+    calls = []
+
+    class _Module:
+        def __init__(self, name):
+            self.name = name
+
+        def register_builtin_streamlit_services(self):
+            calls.append(self.name)
+
+        def register_builtin_streamlit_servers(self):
+            calls.append(self.name)
+
+        def register_builtin_tui_services(self):
+            calls.append(self.name)
+
+    def fake_import_module(name):
+        if name == "mlox.view.servers.ubuntu" and len(calls) < 2:
+            raise RuntimeError("temporary import failure")
+        return _Module(name)
+
+    clear_handlers()
+    monkeypatch.setattr(ui_registry.importlib, "import_module", fake_import_module)
+
+    assert get_handler(config_id="missing", frontend="streamlit", function_name="setup") is None
+    assert ui_registry._BOOTSTRAPPED is False
+
+    assert get_handler(config_id="missing", frontend="streamlit", function_name="setup") is None
+    assert ui_registry._BOOTSTRAPPED is True
 
     clear_handlers()
 

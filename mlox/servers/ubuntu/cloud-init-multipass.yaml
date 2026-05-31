@@ -1,9 +1,5 @@
 # cloud-config
 
-package_update: true
-packages:
-  - openssh-server
-
 ssh_pwauth: true
 
 users:
@@ -21,6 +17,4 @@ runcmd:
   - sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
   - sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
   - sed -i 's/^#\?Port .*/Port 22/' /etc/ssh/sshd_config
-  - bash -c 'if command -v ufw >/dev/null 2>&1; then ufw --force disable; fi'
-  - bash -c 'systemctl enable ssh 2>/dev/null || systemctl enable sshd'
-  - bash -c 'systemctl restart ssh 2>/dev/null || systemctl restart sshd'
+  - systemctl restart ssh
