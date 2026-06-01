@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import ssl
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -25,12 +25,13 @@ class OpenBaoSecretManager(AbstractSecretManager):
     mount_path: str = "secret"
     timeout: float = 10.0
     verify_tls: bool = False
+    unseal_keys: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.address.startswith("http://") and not self.address.startswith(
             "https://"
         ):
-            # Default to http because the dev server exposed by the stack does not use TLS
+            # Keep bare addresses usable for internal/bootstrap calls.
             self.address = f"http://{self.address}"
         self.address = self.address.rstrip("/")
         self.mount_path = self.mount_path.strip("/") or "secret"
@@ -115,11 +116,67 @@ class OpenBaoSecretManager(AbstractSecretManager):
     # ------------------------------------------------------------------
     def is_working(self) -> bool:
         try:
-            health = self._request("GET", "/v1/sys/health")
+            health = self.seal_status()
         except Exception as exc:  # pragma: no cover - defensive logging path
             logger.warning("OpenBao health check failed: %s", exc)
             return False
-        return bool(health.get("initialized", False))
+        return bool(health.get("initialized", False)) and not bool(
+            health.get("sealed", True)
+        )
+
+    def init_status(self) -> bool:
+        response = self._request("GET", "/v1/sys/init")
+        return bool(response.get("initialized", False))
+
+    def initialize(self, secret_shares: int, secret_threshold: int) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            "/v1/sys/init",
+            data={
+                "secret_shares": int(secret_shares),
+                "secret_threshold": int(secret_threshold),
+            },
+        )
+
+    def seal_status(self) -> Dict[str, Any]:
+        return self._request(
+            "GET",
+            "/v1/sys/health",
+            expected_status=(200, 429, 472, 473, 501, 503),
+        )
+
+    def unseal(self, key: str) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            "/v1/sys/unseal",
+            data={"key": key},
+        )
+
+    def enable_kv_v2(self, mount_path: str) -> None:
+        mount = mount_path.strip("/") or self.mount_path
+        response = self._request(
+            "POST",
+            f"/v1/sys/mounts/{mount}",
+            data={"type": "kv", "options": {"version": "2"}},
+            expected_status=(200, 204, 400),
+        )
+        errors = response.get("errors", [])
+        if errors and not any("path is already in use" in str(err) for err in errors):
+            raise RuntimeError(f"Could not enable OpenBao KV v2 mount {mount}: {errors}")
+
+    def enable_file_audit(self, path: str = "/openbao/logs/audit.log") -> None:
+        response = self._request(
+            "PUT",
+            "/v1/sys/audit/file",
+            data={"type": "file", "options": {"file_path": path}},
+            expected_status=(200, 204, 400),
+        )
+        errors = response.get("errors", [])
+        if errors and not any(
+            "path is already in use" in str(err) or "already exists" in str(err)
+            for err in errors
+        ):
+            raise RuntimeError(f"Could not enable OpenBao file audit: {errors}")
 
     def list_secrets(self, keys_only: bool = False) -> Dict[str, Any]:
         path = f"/v1/{self.mount_path}/metadata"
@@ -190,6 +247,7 @@ class OpenBaoSecretManager(AbstractSecretManager):
             mount_path=mount_path,
             timeout=timeout,
             verify_tls=verify_tls,
+            unseal_keys=list(info.get("unseal_keys", [])),
         )
 
     def create_token(
@@ -244,4 +302,5 @@ class OpenBaoSecretManager(AbstractSecretManager):
             "token": self.token,
             "mount_path": self.mount_path,
             "verify_tls": self.verify_tls,
+            "unseal_keys": list(self.unseal_keys),
         }

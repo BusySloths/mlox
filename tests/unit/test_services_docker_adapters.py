@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -110,8 +111,8 @@ class FakeExec:
         self._record("sys_user_id")
         return self.user_id
 
-    def execute(self, conn, command, group=None, description=""):
-        self._record("execute", command, group, description)
+    def execute(self, conn, command, group=None, description="", **kwargs):
+        self._record("execute", command, group, description, kwargs)
         return self.execute_result
 
 
@@ -255,16 +256,62 @@ def test_milvus_setup_and_hash_helper(conn):
 
 def test_openbao_setup_spin_check_and_secret_manager(conn):
     service = _set_exec(
-        OpenBaoDockerService(**BASE, root_token="root", port="8200", mount_path="kv"),
+        OpenBaoDockerService(**BASE, port="8200", mount_path="kv"),
         FakeExec(),
     )
+    service._bootstrap_openbao = lambda *_: setattr(service, "root_token", "root")
 
     service.setup(conn)
     assert service.port == 8200
     assert service.service_url == "https://example.test:8200"
+    assert ("fs_create_dir", ("/tmp/stack/data",), {}) in service.exec.calls
+    assert ("fs_create_dir", ("/tmp/stack/logs",), {}) in service.exec.calls
+    assert ("fs_create_dir", ("/tmp/stack/config",), {}) in service.exec.calls
+    assert ("fs_set_permissions", ("/tmp/stack/data", "777", {}), {}) in service.exec.calls
+    assert ("fs_set_permissions", ("/tmp/stack/logs", "777", {}), {}) in service.exec.calls
+    assert ("tls_setup", ("example.test", "/tmp/stack"), {}) in service.exec.calls
+    assert (
+        "fs_set_permissions",
+        ("/tmp/stack/cert.pem", "644", {}),
+        {},
+    ) in service.exec.calls
+    assert (
+        "fs_set_permissions",
+        ("/tmp/stack/key.pem", "644", {}),
+        {},
+    ) in service.exec.calls
+    env_lines = service.exec.appended["/tmp/stack/service.env"]
+    assert not any(line.startswith("OPENBAO_ROOT_TOKEN=") for line in env_lines)
+
+    config = service.exec.files["/tmp/stack/config/openbao.hcl"]
+    assert 'storage "raft"' in config
+    assert 'path = "/openbao/data"' in config
+    assert 'listener "tcp"' in config
+    assert 'api_addr = "https://example.test:8200"' in config
+    assert 'cluster_addr = "http://openbao:8201"' in config
+    assert "tls_disable = false" in config
+    assert 'tls_cert_file = "/openbao/tls/cert.pem"' in config
+    assert 'tls_key_file = "/openbao/tls/key.pem"' in config
+    compose = Path("mlox/services/openbao/docker-compose-openbao.yaml").read_text()
+    assert "server -dev" not in compose
+    assert "dev-root-token" not in compose
+    assert 'entrypoint: ["bao"]' in compose
+    assert 'command: ["server", "-config=/openbao/config/openbao.hcl"]' in compose
+    assert "./data:/openbao/data" in compose
+    assert "./logs:/openbao/logs" in compose
+    assert "./cert.pem:/openbao/tls/cert.pem:ro" in compose
+    assert "./key.pem:/openbao/tls/key.pem:ro" in compose
+    assert "./config/openbao.hcl:/openbao/config/openbao.hcl:ro" in compose
+    assert "${OPENBAO_PORT}:8200" in compose
+    assert "traefik" not in compose.lower()
 
     assert service.spin_up(conn) is True
     assert service.state == "running"
+    assert service.root_token == "root"
+    execute_calls = [call for call in service.exec.calls if call[0] == "execute"]
+    assert execute_calls
+    assert execute_calls[-1][1][0].startswith("timeout 300s docker compose")
+    assert "--force-recreate" in execute_calls[-1][1][0]
 
     service.exec.all_states = {service.compose_service_names["OpenBao"]: {"Status": "running"}}
     assert service.check(conn) == {"status": "running"}
@@ -277,6 +324,56 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
     )
     sm = service.get_secret_manager(infra)
     assert isinstance(sm, OpenBaoSecretManager)
+    assert sm.address == "https://10.0.0.7:8200"
+
+
+def test_openbao_health_wait_requires_real_status(conn, monkeypatch):
+    service = _set_exec(
+        OpenBaoDockerService(**BASE, port="8200", mount_path="kv"),
+        FakeExec(),
+    )
+    service.setup(conn)
+    statuses = iter([{}, {"initialized": False, "sealed": True}])
+    monkeypatch.setattr(service, "_bao_json", lambda *args, **kwargs: next(statuses))
+
+    assert service._wait_for_container_health(conn) == {
+        "initialized": False,
+        "sealed": True,
+    }
+
+
+def test_openbao_bootstrap_uses_unseal_keys_b64(conn, monkeypatch):
+    service = _set_exec(
+        OpenBaoDockerService(**BASE, port="8200", mount_path="kv"),
+        FakeExec(),
+    )
+    service.setup(conn)
+    health = iter(
+        [
+            {"initialized": False, "sealed": True},
+            {"initialized": True, "sealed": True},
+        ]
+    )
+    unseal_calls = []
+
+    monkeypatch.setattr(service, "_wait_for_container_health", lambda *_: next(health))
+
+    def _bao_json(conn, *args, **kwargs):
+        if args[:2] == ("operator", "init"):
+            return {"root_token": "root", "unseal_keys_b64": ["unseal-key"]}
+        if args[:2] == ("operator", "unseal"):
+            unseal_calls.append(args[-1])
+            return {"sealed": False}
+        return {}
+
+    monkeypatch.setattr(service, "_bao_json", _bao_json)
+    monkeypatch.setattr(service, "_bao", lambda *args, **kwargs: "")
+
+    service._bootstrap_openbao(conn)
+
+    assert service.root_token == "root"
+    assert service.unseal_keys == ["unseal-key"]
+    assert unseal_calls == ["unseal-key"]
 
 
 def test_otel_setup_check_and_read_telemetry(conn):
@@ -769,10 +866,22 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
     manager = OpenBaoSecretManager(address="bao.local/", token="tok", mount_path="/kv/")
     assert manager.address == "http://bao.local"
     assert manager.mount_path == "kv"
+    calls = []
 
     def _request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
         if method == "GET" and path == "/v1/sys/health":
+            return {"initialized": True, "sealed": False}
+        if method == "GET" and path == "/v1/sys/init":
             return {"initialized": True}
+        if method == "POST" and path == "/v1/sys/init":
+            return {"root_token": "root", "keys_base64": ["key"]}
+        if method == "POST" and path == "/v1/sys/unseal":
+            return {"sealed": False}
+        if method == "POST" and path == "/v1/sys/mounts/kv":
+            return {}
+        if method == "PUT" and path == "/v1/sys/audit/file":
+            return {}
         if method == "GET" and path == "/v1/kv/metadata":
             return {"data": {"keys": ["a/"]}}
         if method == "GET" and path == "/v1/kv/data/a":
@@ -783,10 +892,23 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
 
     monkeypatch.setattr(manager, "_request", _request)
     assert manager.is_working() is True
+    assert manager.init_status() is True
+    assert manager.initialize(1, 1)["root_token"] == "root"
+    assert manager.unseal("key")["sealed"] is False
+    manager.enable_kv_v2("kv")
+    manager.enable_file_audit()
     assert manager.list_secrets(keys_only=False) == {"a": {"x": 1}}
     manager.save_secret("x", "{\"y\":1}")
     assert manager.create_token(300)["client_token"] == "child-token"
     assert manager.get_access_secrets()["mount_path"] == "kv"
+    assert ("POST", "/v1/sys/init") in [(method, path) for method, path, _ in calls]
+    assert ("POST", "/v1/sys/unseal") in [(method, path) for method, path, _ in calls]
+    assert ("POST", "/v1/sys/mounts/kv") in [
+        (method, path) for method, path, _ in calls
+    ]
+    assert ("PUT", "/v1/sys/audit/file") in [
+        (method, path) for method, path, _ in calls
+    ]
 
     def _raise_404(method, path, **kwargs):
         raise HTTPError(url="http://bao", code=404, msg="not found", hdrs=None, fp=None)

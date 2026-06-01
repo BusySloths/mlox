@@ -18,10 +18,7 @@ def install_openbao_service(ubuntu_docker_server):
 
     config = load_config(get_stacks_path(), "/openbao", "mlox.openbao.yaml")
 
-    params = {
-        "${OPENBAO_ROOT_TOKEN}": generate_password(length=20, with_punctuation=False)
-    }
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
+    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add OpenBao service from config")
 
@@ -53,6 +50,8 @@ def test_openbao_service_is_running(install_openbao_service):
     status = wait_for_service_ready(service, bundle, retries=6, interval=20)
     assert status.get("status") == "running"
     assert service.service_url
+    assert service.root_token
+    assert service.unseal_keys
 
 
 def test_openbao_secret_roundtrip(install_openbao_service):
@@ -79,9 +78,27 @@ def test_openbao_secret_roundtrip(install_openbao_service):
     assert "openbao_root_credentials" in secrets
     creds = secrets["openbao_root_credentials"]
     assert creds.get("token") == service.root_token
+    assert creds.get("root_token") == service.root_token
+    assert creds.get("unseal_keys") == service.unseal_keys
     assert creds.get("address", "").startswith("https://")
     assert creds.get("verify_tls") is False
     assert service.compose_service_names["OpenBao"].endswith("_openbao")
+
+
+def test_openbao_restart_preserves_raft_data(install_openbao_service):
+    infra, bundle, service = install_openbao_service
+    sm = service.get_secret_manager(infra)
+    secret_name = "integration-restart-secret"
+    secret_payload = {"persisted": True}
+    sm.save_secret(secret_name, secret_payload)
+
+    with bundle.server.get_server_connection() as conn:
+        service.spin_down(conn)
+        service.spin_up(conn)
+
+    wait_for_service_ready(service, bundle, retries=6, interval=20)
+    sm = service.get_secret_manager(infra)
+    assert sm.load_secret(secret_name) == secret_payload
 
 
 def test_openbao_create_token_allows_child_access(install_openbao_service):

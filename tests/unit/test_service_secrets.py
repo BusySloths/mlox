@@ -82,6 +82,8 @@ SERVICE_CASES = [
         {
             "openbao_root_credentials": {
                 "token": "root-token",
+                "root_token": "root-token",
+                "unseal_keys": [],
                 "address": "https://example.test:8200",
                 "mount_path": "kv",
                 "verify_tls": False,
