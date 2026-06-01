@@ -32,9 +32,24 @@ def clear_service_lookups(infra: Infrastructure) -> None:
         service.clear_service_lookup()
 
 
-def remove_bundle(infra: Infrastructure, bundle: Bundle) -> None:
+def remove_bundle(
+    infra: Infrastructure,
+    bundle: Bundle,
+    *,
+    teardown_server: bool = False,
+) -> None:
     for service in bundle.services:
         service.clear_service_lookup()
+
+    if teardown_server:
+        try:
+            bundle.server.teardown()
+        except Exception:
+            logger.exception(
+                "Could not teardown server %s before removal.",
+                bundle.server.ip,
+            )
+            raise
 
     try:
         infra.bundles.remove(bundle)

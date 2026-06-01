@@ -49,7 +49,7 @@ def _ensure_bootstrapped() -> None:
     if _BOOTSTRAPPED:
         return
 
-    _BOOTSTRAPPED = True
+    had_error = False
     for module_path, register_name in (
         ("mlox.view.services", "register_builtin_streamlit_services"),
         ("mlox.view.servers.ubuntu", "register_builtin_streamlit_servers"),
@@ -60,4 +60,11 @@ def _ensure_bootstrapped() -> None:
             register_builtin = getattr(module, register_name)
             register_builtin()
         except Exception as exc:  # pragma: no cover - defensive bootstrap logging
-            logger.exception("Failed to bootstrap UI registrations from %s: %s", module_path, exc)
+            had_error = True
+            logger.exception(
+                "Failed to bootstrap UI registrations from %s: %s",
+                module_path,
+                exc,
+            )
+
+    _BOOTSTRAPPED = not had_error

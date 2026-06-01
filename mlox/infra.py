@@ -200,10 +200,14 @@ class Infrastructure:
 
         infra_use_cases.clear_service_lookups(self)
 
-    def remove_bundle(self, bundle: Bundle) -> None:
+    def remove_bundle(self, bundle: Bundle, *, teardown_server: bool = False) -> None:
         from mlox.application import infrastructure_ops as infra_use_cases
 
-        infra_use_cases.remove_bundle(self, bundle)
+        infra_use_cases.remove_bundle(
+            self,
+            bundle,
+            teardown_server=teardown_server,
+        )
         return None
 
     def setup_service(self, service: AbstractService) -> None:

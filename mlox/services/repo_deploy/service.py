@@ -138,6 +138,10 @@ class RepoDeployDockerService(AbstractService):
                         candidate = discovered_env.get(token_name, token_default)
                         if str(candidate).isdigit():
                             host_port = int(candidate)
+                        else:
+                            parts = normalized.split(":")
+                            if len(parts) >= 2 and parts[-1].isdigit():
+                                host_port = int(parts[-1])
                     else:
                         parts = normalized.split(":")
                         if len(parts) >= 2 and parts[-2].isdigit():

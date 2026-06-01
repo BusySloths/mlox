@@ -1,0 +1,43 @@
+id: ubuntu-multipass-k3s-24.04-server
+name: Ubuntu Multipass VM (Kubernetes, K3S)
+version: 24.04
+maintainer: Your Name
+description_short: Ubuntu Multipass VM with Kubernetes-K3S backend.
+description: 'Launches a local Ubuntu VM with Multipass and provisions the K3s MLOX backend.'
+links:
+  project: https://multipass.run/
+  news: https://ubuntu.com/
+  security: https://ubuntu.com/
+  documentation: https://multipass.run/docs
+  changelog: https://github.com/canonical/multipass/releases
+groups:
+  server:
+    git: null
+    initial_auth_password: null
+  backend:
+    kubernetes:
+      k3s: null
+capabilities:
+  server:
+  - git
+  - firewall
+  - initial_auth_password
+  backend:
+  - kubernetes
+build:
+  class_name: mlox.servers.ubuntu.multipass.MultipassUbuntuK3sServer
+  params:
+    ip: ${MULTIPASS_VM_NAME}
+    port: '22'
+    root: root
+    root_pw: pass
+    vm_name: ${MULTIPASS_VM_NAME}
+    cpus: ${MULTIPASS_CPUS}
+    memory: ${MULTIPASS_MEMORY}
+    disk: ${MULTIPASS_DISK}
+    image: ${MULTIPASS_IMAGE}
+    cloud_init: ${MULTIPASS_CLOUD_INIT}
+    launch_timeout: ${MULTIPASS_LAUNCH_TIMEOUT}
+    controller_url: ${K3S_CONTROLLER_URL}
+    controller_token: ${K3S_CONTROLLER_TOKEN}
+    controller_uuid: ${K3S_CONTROLLER_UUID}

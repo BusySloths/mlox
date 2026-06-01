@@ -1,0 +1,39 @@
+id: ubuntu-multipass-docker-24.04-server
+name: Ubuntu Multipass VM (Docker)
+version: 24.04
+maintainer: Your Name
+description_short: Ubuntu Multipass VM with Docker backend.
+description: 'Launches a local Ubuntu VM with Multipass and provisions the Docker MLOX backend.'
+links:
+  project: https://multipass.run/
+  news: https://ubuntu.com/
+  security: https://ubuntu.com/
+  documentation: https://multipass.run/docs
+  changelog: https://github.com/canonical/multipass/releases
+groups:
+  server:
+    git: null
+    initial_auth_password: null
+  backend:
+    docker: null
+capabilities:
+  server:
+  - git
+  - firewall
+  - initial_auth_password
+  backend:
+  - docker
+build:
+  class_name: mlox.servers.ubuntu.multipass.MultipassUbuntuDockerServer
+  params:
+    ip: ${MULTIPASS_VM_NAME}
+    port: '22'
+    root: root
+    root_pw: pass
+    vm_name: ${MULTIPASS_VM_NAME}
+    cpus: ${MULTIPASS_CPUS}
+    memory: ${MULTIPASS_MEMORY}
+    disk: ${MULTIPASS_DISK}
+    image: ${MULTIPASS_IMAGE}
+    cloud_init: ${MULTIPASS_CLOUD_INIT}
+    launch_timeout: ${MULTIPASS_LAUNCH_TIMEOUT}

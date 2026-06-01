@@ -216,8 +216,14 @@ def tab_server_management(infra: Infrastructure):
         },
     )
 
-    if len(select_server["selection"].get("rows", [])) == 1:
-        selected_server = rows[select_server["selection"]["rows"][0]]["ip"]
+    selected_rows = select_server["selection"].get("rows", [])
+    if len(selected_rows) == 1:
+        selected_row = selected_rows[0]
+        if selected_row >= len(rows):
+            st.session_state.pop("server-select", None)
+            st.rerun()
+
+        selected_server = rows[selected_row]["ip"]
         bundle_tmp = infra.get_bundle_by_ip(str(selected_server))
         if not bundle_tmp:
             st.error(f"Could not find bundle for server {selected_server}.")
@@ -266,7 +272,8 @@ def tab_server_management(infra: Infrastructure):
 
         if c2.button("Delete", type="primary"):
             st.info(f"Backend for server with IP {selected_server} will be deleted.")
-            infra.remove_bundle(bundle)
+            infra.remove_bundle(bundle, teardown_server=True)
+            st.session_state.pop("server-select", None)
             save_infra()
             st.rerun()
 
@@ -278,7 +285,13 @@ def tab_server_management(infra: Infrastructure):
         if c1.button("Setup", disabled=not bundle.server.state == "un-initialized"):
             st.info(f"Initialize the server with IP {selected_server}.")
             with st.spinner("Initializing server...", show_time=True):
-                bundle.server.setup()
+                try:
+                    bundle.server.setup()
+                except Exception as exc:
+                    logger.exception("Server setup failed for %s.", selected_server)
+                    save_infra()
+                    st.error(f"Server setup failed: {exc}")
+                    return
             save_infra()
             st.rerun()
         current_access = "mlox.debug" in bundle.tags
@@ -388,7 +401,7 @@ def tab_server_templates(infra: Infrastructure):
 
             config = srv["config"]
 
-            params: Dict[str, Any] | None = {}
+            params: Dict[str, Any] | None = None
             callable_setup_func = config.get_ui_handler("streamlit", "setup")
             if callable_setup_func:
                 with st.expander("", icon=":material/settings:"):

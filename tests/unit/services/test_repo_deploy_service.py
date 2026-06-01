@@ -225,3 +225,23 @@ def test_update_and_redeploy_pulls_repo_and_restarts_compose():
     assert any(c[1][1]["sudo"] is True for c in execute_calls)
     assert service.exec.appended["/repos/my-repo/.env"] == ["A=1"]
     assert service.state == "running"
+
+
+def test_setup_uses_container_port_when_host_port_token_is_empty():
+    conn = SimpleNamespace(host="example.test")
+    service = _svc("compose/redis.yaml")
+    service.exec.files["/repos/my-repo/compose/redis.yaml"] = {
+        "services": {
+            "redis": {
+                "image": "redis",
+                "ports": ["${MY_REDIS_PORT:-}:6379"],
+                "environment": ["REDIS_PASSWORD=${MY_REDIS_PW:-}"],
+            }
+        }
+    }
+
+    service.setup(conn)
+
+    assert service.service_ports["redis:1"] == 6379
+    assert service.env_vars["MY_REDIS_PORT"] == ""
+    assert service.env_vars["MY_REDIS_PW"] == ""
