@@ -272,7 +272,7 @@ def tab_server_management(infra: Infrastructure):
 
         if c2.button("Delete", type="primary"):
             st.info(f"Backend for server with IP {selected_server} will be deleted.")
-            infra.remove_bundle(bundle)
+            infra.remove_bundle(bundle, teardown_server=True)
             st.session_state.pop("server-select", None)
             save_infra()
             st.rerun()

@@ -34,7 +34,7 @@ def _register_identity_model(service_url: str, username: str, password: str) -> 
     mlflow.set_experiment("test_gateway_experiment")
     with mlflow.start_run(run_name="test_gateway_run") as run:
         model_info = mlflow.pyfunc.log_model("model", python_model=IdentityModel())
-        model_uri = f"runs:/{run.info.run_id}/{model_info.artifact_path}"
+        model_uri = model_info.model_uri
 
     model_name = f"gateway_identity_model_{int(time.time())}"
     mv = mlflow.register_model(model_uri, model_name)

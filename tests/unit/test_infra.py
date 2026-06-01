@@ -325,12 +325,14 @@ def test_infrastructure_methods_delegate_to_application_layer(
 
     if method_name == "add_service":
         assert recorded == [((infra, *args), {"service": None})]
+    elif method_name == "remove_bundle":
+        assert recorded == [((infra, *args), {"teardown_server": False})]
     else:
         assert recorded == [((infra, *args), {})]
     assert result == expected
 
 
-def test_remove_bundle_tears_down_server_and_removes_bundle():
+def test_remove_bundle_removes_bundle_without_tearing_down_server_by_default():
     server = make_server(RecordingServer, "10.0.0.1")
     service = make_service("svc", "test-service", "svc-1")
     service.bind_service_lookup(object())
@@ -340,6 +342,17 @@ def test_remove_bundle_tears_down_server_and_removes_bundle():
 
     infra_use_cases.remove_bundle(infra, bundle)
 
-    assert server.teardown_calls == 1
+    assert server.teardown_calls == 0
     assert infra.bundles == []
     assert service._service_lookup is None
+
+
+def test_remove_bundle_can_teardown_server_before_removal():
+    server = make_server(RecordingServer, "10.0.0.1")
+    bundle = Bundle(name="server", server=server)
+    infra = make_infra(bundles=[bundle])
+
+    infra_use_cases.remove_bundle(infra, bundle, teardown_server=True)
+
+    assert server.teardown_calls == 1
+    assert infra.bundles == []
