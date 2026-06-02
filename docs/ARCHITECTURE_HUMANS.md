@@ -1,223 +1,111 @@
-# MLOX Core Architecture (Human Contributor Guide)
+# MLOX Architecture
 
-This document gives a practical, contributor-first map of the MLOX codebase.
+This is the contributor-facing map of the current codebase.
 
-## 1) Fast orientation
+## Runtime Shape
 
-MLOX is a Python project that manages MLOps infrastructure through three user interfaces:
+MLOX is a configuration-driven control plane for MLOps infrastructure. It exposes three local interfaces:
 
-- **CLI** (`mlox/cli/`)
-- **TUI** (`mlox/tui/`)
-- **Web app (Streamlit)** (`mlox/view/`)
+- CLI: `mlox/cli/`
+- TUI: `mlox/tui/`
+- Streamlit web UI: `mlox/view/`
 
-The shared architecture is centered on a session container and session-based use-cases:
-
-- **`mlox/application/use_cases/`**: session-based application actions that should be shared by CLI, TUI, Streamlit, and future UIs
-- **`MloxSession`** (`mlox/session.py`): project/session container holding metadata, secret manager, and infrastructure
-- **`Infrastructure`** (`mlox/infra.py`): project topology made of bundles, compute, and services
-- **`mlox/application/facade.py`**: current stateless adapter used mainly by the CLI and callers that need session loading/caching
-- **`mlox/ui/registry.py`**: frontend UI handler registry keyed by config ID, frontend, and function name
+Those interfaces should stay thin. Shared behavior belongs in the application/session layer.
 
 ```text
-CLI     TUI     Streamlit Web UI     Other UIs
-  \      |             |                /
-   \     |             |               /
-    +----+-------------+--------------+
-                    |
-                    v
-      `mlox/application/use_cases/*`
-         shared session-based logic
-                    |
-                    v
-              `MloxSession`
-   project + encrypted secret manager + infrastructure
-             /                               \
-            v                                 v
- secret-manager backend                `Infrastructure`
- (InMemory/TinySM/OpenBao/GCP)      topology for one project
-                                            |
-                                            v
-                           `Bundle` = compute/server + services[*]
-                              |                            |
-                              v                            v
-                server capabilities               service capabilities
-             (`git`, `docker`, ...)           (emerging: `registry`, `db`, `model`, ...)
-                              \                            /
-                               \                          /
-                                +------------------------+
-                                             |
-                                             v
-                   execution via `mlox/executors.py` + `mlox/execution/*`
+CLI / TUI / Streamlit
+        |
+        v
+mlox/application/use_cases/*
+        |
+        v
+MloxSession
+        |
+        +--> secret manager
+        |
+        v
+Infrastructure
+        |
+        v
+Bundle = one server/compute + services deployed on it
+        |
+        v
+executors + backend adapters
 ```
 
-## 2) Setup, tests, and repo surroundings
+## Important Modules
 
-### Task runner and setup
+- `mlox/session.py`: `MloxSession`, the runtime container for project metadata, secret manager, and infrastructure.
+- `mlox/infra.py`: topology model containing bundles, servers, and services.
+- `mlox/application/use_cases/`: shared session-based actions used by interfaces.
+- `mlox/application/facade.py`: thin adapter used by callers that need session loading/caching.
+- `mlox/application/infrastructure_ops.py`: side-effectful setup/teardown helpers used by use-cases.
+- `mlox/config.py`: YAML and plugin config loading.
+- `mlox/executors.py` and `mlox/execution/`: command execution and backend helpers.
+- `mlox/ui/registry.py`: frontend handler lookup for Streamlit/TUI-specific setup panels.
 
-- The project uses **Go Task** (`task`) as its task runner.
-- Main task configuration is in **`taskfile.dist.yml`**.
-- This file includes setup and operational tasks such as:
-  - environment bootstrap (`first:steps`, `dev:env:create`)
-  - VM setup (Multipass install/start/cleanup)
-  - running tests (unit + integration)
-  - running Docker-based local stack (`docker:up`, `docker:down`)
+## Config Model
 
-### Tests
+Built-in configs live under:
 
-- **Unit tests** live in `tests/unit/` and are expected to run out-of-the-box once the environment is correctly prepared.
-- **Integration tests** live in `tests/integration/` and require **Multipass VMs**; they are slower and more expensive to run.
+- `mlox/services/**/mlox*.yaml`
+- `mlox/servers/**/mlox-server*.yaml`
 
-### Other important top-level directories
+Each config declares metadata, capabilities, requirements, ports, and `build.class_name`. `build.class_name` points to the Python class that implements the service or server.
 
-- `examples/`: user-oriented usage snippets.
-- `docs/`: project documentation.
-- `scripts/`: currently a hacky/experimental area; not a stable architecture reference.
-- `website/`: Astro-based landing page site.
+Frontend UI handlers are not declared in YAML. They live in frontend modules and are registered through `mlox/ui/registry.py`.
 
-### Documentation and packaging pipeline
+External config plugins are loaded from Python entry points:
 
-- **pdoc** is used to generate API docs for GitHub Pages (see workflows).
-- The package is configured for publication to **PyPI** (`pyproject.toml`, deploy workflow).
+- `mlox.service_plugins`
+- `mlox.server_plugins`
 
-## 3) Main library architecture (`mlox/`)
+See `docs/PLUGIN_CONFIGS.md` for the minimal plugin contract.
 
-The `mlox/` package contains:
+## State And Persistence
 
-- `services/`: deployable MLOps services
-- `servers/`: backend/server abstractions and implementations
-- `application/`: facade plus session-based use-cases
-- `tui/`: Textual terminal UI plus TUI-specific UI handlers
-- `ui/`: frontend UI handler registry and bootstrap point
-- `view/`: Streamlit web app plus Streamlit-specific UI handlers
-- `cli/`: Typer CLI package (`app.py` + `commands/*`)
-- `assets/`: includes some outdated scripts/assets (not always canonical)
+`MloxSession` is the main runtime boundary. It loads project metadata, connects a secret manager, and loads/saves `Infrastructure`.
 
-### Configuration-driven building
+Supported secret manager paths include:
 
-Services and servers are built from YAML configurations loaded through `mlox/config.py`:
+- in-memory fallback
+- TinySecretManager
+- OpenBao
+- GCP Secret Manager
 
-- YAML metadata defines service/server identity and build class
-- `build.class_name` maps config to Python implementation class
-- `ports`, `groups`, `capabilities`, `requirements` etc. are read from YAML
-- frontend-specific UI handlers are not defined in YAML; they live in frontend modules and are resolved through `ServiceConfig.get_ui_handler(...)` via `mlox/ui/registry.py`
-- Plugin loading is also wired in `config.py` (entry-point discovery)
+Runtime objects are serialized to JSON-compatible dictionaries and stored through the configured secret manager.
 
-## 4) Core runtime data model
+## Services, Servers, And Execution
 
-### `MloxSession` is the central entry point
+A bundle contains one compute/server and the services deployed onto it. Servers advertise capabilities such as `git`, `docker`, `kubernetes`, `firewall`, or native execution support. Services declare their intended capabilities in config, but that model is still evolving.
 
-`MloxSession` (`mlox/session.py`) is the main runtime object that:
+Rules for new service/server work:
 
-- loads/creates a project
-- wires a secret manager
-- loads/saves project infrastructure
-- always gives the runtime one place to find project metadata, secrets, and topology
+- Add or update the MLOX YAML config.
+- Keep deployment assets beside the service/server implementation.
+- Route remote/system work through executors instead of ad-hoc shell calls in UI code.
+- Expose access details through `get_secret()` when the service has credentials or endpoints.
+- Store service dependencies by UUID and resolve them through infrastructure/session helpers.
+- Keep Streamlit/TUI setup panels in frontend modules, registered through `mlox/ui/registry.py`.
 
-### `MloxSession` contains an encrypted key-value secret manager
+## Current Limitations
 
-The session always works with a secret manager instance:
+- `requirements` in YAML are parsed but not fully enforced at runtime.
+- Service capabilities are useful metadata but not yet a complete placement policy.
+- Some orchestration still lives close to `Infrastructure` for compatibility.
+- UI handler plugin registration is not yet part of the documented external plugin API.
 
-- local/default flows use an encrypted key-value style manager (`InMemorySecretManager` fallback, `TinySecretManager` for lightweight persistence)
-- production-facing integrations can swap that backend out (`OpenBao`, `GCP Secret Manager`)
-- project metadata remembers which secret manager class to reconnect to
+## Development Commands
 
-In practice, `MloxSession` is the persistence boundary around `Infrastructure`.
+Use Task as the command index:
 
-### `Infrastructure` holds one project’s active topology
+```bash
+task
+task first:steps
+task tests:unit:run
+task tests:integration:run
+task docker:up
+task docker:down
+```
 
-`Infrastructure` (`mlox/infra.py`) contains the project’s server bundles and services for a session/project.
-
-### `Bundle` groups one compute/server with its services
-
-`Bundle` is the operational unit inside `Infrastructure`:
-
-- one bundle contains one compute/server object
-- that compute advertises capabilities such as `git`, `docker`, `kubernetes`, `firewall`, or local/native runtime support
-- the same bundle also contains the services deployed onto that compute
-
-This makes `Infrastructure` the topology root for "what runs where".
-
-### Persistent storage model
-
-- Runtime structures are dataclass-based and serialized to JSON-compatible dicts.
-- Project and infrastructure data are stored through a **secret manager** abstraction.
-- In practice, a session always has a secret manager configured (fallback to in-memory if needed).
-
-## 5) Secret manager model
-
-MLOX supports multiple secret-manager implementations:
-
-- MLOX-native/lightweight:
-  - `InMemorySecretManager`
-  - `TinySecretManager`
-- External integrations:
-  - OpenBao (service + client under `mlox/services/openbao/`)
-  - GCP Secret Manager (`mlox/services/gcp/secret_manager.py`)
-
-The `MloxProject` metadata stores which secret manager class is used and how to reconnect to it.
-
-## 6) Service lifecycle and execution model
-
-### Shared control flow
-
-The intended control flow is:
-
-- UI layer (`cli`, `tui`, `view`, future UIs)
-- shared application layer (`mlox/application/use_cases/*`)
-- session container (`MloxSession`)
-- topology root (`Infrastructure`)
-
-The CLI currently reaches that shared layer through `mlox/application/facade.py`. TUI and Streamlit should converge on the same use-cases so behavior stays aligned across interfaces.
-
-`Infrastructure` is primarily the topology model, but it still exposes compatibility wrappers that delegate some lifecycle work into `mlox/application/infrastructure_ops.py`.
-
-Frontend-specific setup/settings panels are now owned by the frontend packages rather than the service/server definitions themselves. Streamlit and TUI register handlers in `mlox/ui/registry.py`, and config objects resolve those handlers by config ID when a frontend needs to render custom UI.
-
-### Executors do system calls
-
-- Anything that executes on a compute/server should route through the execution layer.
-- In practice that means task executors (`mlox/executors.py`) plus the helper modules in `mlox/execution/`.
-- Services receive their executor from the compute/server they are attached to.
-- Operational system calls should not be scattered arbitrarily inside service logic.
-
-### Port assignment behavior
-
-- YAML config declares intended ports.
-- During infrastructure setup, ports can be remapped to avoid collisions.
-
-## 7) Design notes / current limitations
-
-- `mlox/scheduler.py` exists but is effectively legacy/obsolete in day-to-day architecture.
-- `mlox/application/use_cases/*` is the important session-based application layer. Keep growing behavior there instead of reintroducing broad ad-hoc operations modules.
-- `mlox/application/facade.py` is a thin stateless adapter that loads/caches session context and dispatches to `application/use_cases/*`.
-- `mlox/application/infrastructure_ops.py` holds orchestration helpers used by the session-based use-cases for setup/teardown-style side effects.
-- YAML `requirements` are present in config schema but currently not fully enforced in runtime.
-- UI registration is frontend-owned; avoid reintroducing UI component declarations into service/server YAML.
-- Server capabilities are already explicit in code/config.
-- Service capabilities are still emerging; today some of that intent is represented through YAML groups and service-type interfaces.
-
-## 8) Backend abstraction
-
-MLOX is backend-agnostic at architecture level. Current backends include:
-
-- native
-- docker
-- kubernetes
-
-The design aims to make additional backends relatively straightforward to add (e.g., new Kubernetes flavors or custom platforms).
-
-## 9) Services and servers: authoring conventions
-
-- Each service has a dedicated MLOX YAML config.
-- Servers also have MLOX YAML configs.
-- Services usually include backend-specific implementation classes and required deployment files (e.g., Docker Compose templates).
-- Frontend-specific UI handlers live with the frontend implementations (`mlox/view/...`, `mlox/tui/...`) and are registered through `mlox/ui/registry.py`.
-- Some services expose helper clients (`client.py` or similar) so users can consume service functionality from Python code via the package.
-- Services can depend on other services:
-  - dependency UUIDs are stored on service objects
-  - dependent services are resolved via helper methods (e.g., `get_dependend_service` pattern)
-- Services are attached to a bundle and therefore run on a specific compute/server.
-- A first-class service capability model is a likely next architectural step; current services already express parts of that through configs and typed interfaces.
-- Each service should expose `get_secret()` returning access-relevant credentials/details (user/password/endpoint/etc.).
-
-Today the built-in registry bootstraps handlers from `mlox.view.services`, `mlox.view.servers.ubuntu`, and `mlox.tui.services`. The registry shape is also the intended extension point for plugin-provided UI handlers later, but that plugin UI registration path is not yet part of the documented entry-point API.
+Unit tests live in `tests/unit/`. Integration tests live in `tests/integration/` and require Multipass.

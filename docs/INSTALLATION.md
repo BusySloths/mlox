@@ -1,47 +1,78 @@
-# The Sloth Way of Installation Enlightment
+# Installation
 
-## Github
+MLOX is a Python 3.11/3.12 project. The repository uses [Task](https://taskfile.dev/installation/) as the main command runner.
 
-- Clone the repository via `git clone https://github.com/BusySloths/mlox.git`
-- Install go-tasks which is super-easy for many systems: <https://taskfile.dev/docs/installation> e.g. `brew install go-task`
+## From Source
 
-- ease into the the project root `cd mlox`
-- show all commands: `task help`
+```bash
+git clone https://github.com/BusySloths/mlox.git
+cd mlox
+task
+task first:steps
+```
 
-### Build and Start Docker from Scratch
+The plain `task` command prints the command overview. `task first:steps` creates the development environment and installs the package with development extras. Activate the created environment before running local commands. With Conda, that is usually:
 
-- just run `task docker:up` will build and spin up a docker container with the web UI that you can access via your browser
+```bash
+conda activate mlox-dev
+```
 
-### Run Python
+Useful local commands:
 
-- we assume that Anaconda is installed (cf. <https://www.anaconda.com/download>)
+```bash
+task ui:streamlit          # Streamlit web UI
+task ui:cli                # CLI help
+task ui:textual:terminal   # Textual TUI
+task tests:unit:run        # unit tests
+```
 
-- run `task first:steps` (sets up a condo environment with all packages, ready to run mlox)
-- activate your new environment e.g. `source activate mlox-dev`
+## Docker
 
-Run one of the following:
+For the repository-local Docker Compose stack:
 
-- Web UI: `task ui:streamlit` (start local web app)
-- CLI: `task ui:cli` (show CLI)
-- TUI: `task ui:textual:terminal` (start local terminal UI)
+```bash
+task docker:up
+task docker:down
+```
 
-- Unit Tests: `task tests:unit:run`
+You can also run the published image:
 
-### Setup VM for Testing
+```bash
+docker run -it --rm -p 8501:8501 drbusysloth/mlox:latest
+```
 
-- we use canonical `multipass` VM for testing
-- run `task vm:install:(macos OR linux)` to install multipass on your system
-- start a mlox-ready vm via: `task vm:start` copy the IP and use `root`/`pass` for user/pw.
+To keep projects between runs, give the container a name and start it again later:
 
-- delete all vms via `task vm:purge`
+```bash
+docker run -it --name mlox -p 8501:8501 drbusysloth/mlox:latest
+docker start -ai mlox
+```
 
-## Docker Hub
+## Integration Test VMs
 
-### Option 1: I don't need to persist projects
+Integration tests use Multipass VMs and are slower than unit tests.
 
-- use `docker run -it --rm -p 8501:8501 drbusysloth/mlox:latest` this pulls and runs the image
+For running all integration tests just type (assumes multipass VM has been installed):
 
-### Option 2: I want to persist projects
+```bash
+task tests:integration:run
+```
 
-- first time usage: `docker run -it --name mlox -p 8501:8501 drbusysloth/mlox:latest` this will pull the image and start a container with name `mlox`
-- You can now use MLOX and stop the container as you like without loosing your projects. If you want to run again and load your projects just start the container again with `docker start mlox`
+For running a specific integration test use:
+
+```bash
+task tests:integration:service SERVICE=service_name
+```
+
+All related commands:
+
+```bash
+task vm:install:macos      # macOS only
+task vm:install:linux      # Linux only
+task vm:start
+task tests:integration:run
+task tests:integration:cleanup
+task vm:purge
+```
+
+Use `task vm:purge` carefully; it removes the local Multipass VMs created for MLOX testing.

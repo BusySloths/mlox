@@ -1,193 +1,67 @@
-# Core Architecture Simplification Plan
-
-> Status as of 2026-04-29: items A and B from this plan are implemented. The CLI now lives under `mlox/cli/app.py` + `mlox/cli/commands/*`, and the application layer now uses session-based `mlox/application/use_cases/*`. This document remains useful as a record of the refactor and for the still-open follow-up items.
-
-## Why now
-
-At the start of this refactor, the codebase already stated a shared flow through `MloxSession` and `Infrastructure`, but several responsibilities were mixed:
-
-- `mlox/cli.py` was very large and contained both command wiring and presentation/formatting concerns.
-- `mlox/application/facade.py` has since been reduced to a thin stateless facade above the session-based use-cases.
-- `mlox/infra.py` mixes topology state with orchestration/runtime tasks.
-- Service dependency lookup has historically lived outside `Infrastructure`, creating two sources of truth for services.
-
-This plan proposes a clean architecture that keeps the strengths of the current model while reducing coupling.
-
-## Target architecture (layered + ports/adapters)
-
-### 1) Presentation Layer
-
-**Goal:** keep user interfaces thin.
-
-- `interfaces/cli/` (Typer only: args/options -> use-case input models)
-- `interfaces/tui/`
-- `interfaces/web/`
-
-No business logic, no direct infrastructure mutation, no registry lookup.
-
-### 2) Application Layer (Use-cases)
-
-**Goal:** explicit use-cases as stable API for all UIs.
-
-- `application/use_cases/project.py`
-- `application/use_cases/servers.py`
-- `application/use_cases/services.py`
-- `application/use_cases/models.py`
-
-Use-cases return standardized DTOs/results (keep `OperationResult` style but move to `application/result.py`).
-
-### 3) Domain Layer
-
-**Goal:** pure domain model + invariants.
-
-- `domain/infrastructure.py` (entities: `Infrastructure`, `Bundle`, `ServiceRef`)
-- `domain/policies/` (port allocation policy, naming policy, dependency policy)
-- `domain/events.py` (service added/removed events)
-
-This layer must not depend on Typer, subprocess, YAML loaders, or singleton registries.
-
-### 4) Infrastructure/Adapters Layer
-
-**Goal:** IO and framework integration only.
-
-- config loading adapters (YAML/plugin loading)
-- persistence adapters (secret manager/session storage)
-- runtime adapters (server executors, docker/k8s/native drivers)
-- observability/log adapters
-
-## Key structural decisions
-
-## A) Split `cli.py` into command modules [completed]
-
-Suggested structure:
-
-- `mlox/cli/app.py` (root app wiring)
-- `mlox/cli/commands/project.py`
-- `mlox/cli/commands/server.py`
-- `mlox/cli/commands/service.py`
-- `mlox/cli/commands/model.py`
-- `mlox/cli/rendering/table.py` (formatting-only helpers)
-- `mlox/cli/context.py` (credential/session option resolution)
-
-Result: CLI remains easy to navigate and test with command-focused unit tests.
-
-## B) Replace monolithic facade logic with focused use-case modules [completed]
-
-Instead of one broad facade module owning business flow, split behavior by domain capabilities and keep the facade thin.
-
-Example pattern:
-
-- `application/use_cases/servers.py`
-- `application/use_cases/services.py`
-- `application/use_cases/models.py`
-
-Each module should expose small, explicit functions, for example:
-
-- `list_servers(session)`
-- `add_server(session, load_server_config, ...)`
-- `setup_service(session, name=...)`
-
-Prefer passing a small number of concrete helper functions over introducing
-ports/protocols unless the abstraction is already paying for itself.
-
-This keeps CLI/TUI/Web consumers interchangeable while staying easy to read
-and test.
-
-## C) Make `Infrastructure` the single source of truth (remove parallel registry)
-
-Service dependency lookup should live on `Infrastructure`, not in a parallel registry.
-
-Refactor plan:
-
-1. Introduce an internal index on `Infrastructure`:
-   - `services_by_uuid: dict[str, AbstractService]`
-   - optional `services_by_name: dict[str, str]`
-2. Keep index updates inside `add_service`, `teardown_service`, `remove_bundle`.
-3. Expose lookup methods on `Infrastructure`:
-   - `get_service_by_uuid(...)`
-   - `get_service_by_name(...)`
-4. Remove direct singleton usage from service dependency resolution.
-5. Provide a temporary compatibility adapter that proxies old calls to new lookups during migration.
-
-## D) Move orchestration out of domain entities
-
-`Infrastructure.setup_service()` / teardown behavior should move to application service handlers.
-
-- Domain entities mutate state and validate invariants.
-- Application use-cases orchestrate side effects (connection creation, setup/spin-up calls, persistence).
-
-This avoids anemic use-cases and makes runtime effects explicit.
-
-## E) Introduce explicit ports (interfaces)
-
-Define small contracts to decouple use-cases from implementation details:
-
-- `ProjectSessionPort` (load/save project state)
-- `ServiceCatalogPort` (list/load service templates)
-- `ServerCatalogPort`
-- `ServiceRuntimePort` (setup/spin-up/spin-down)
-- `ModelRegistryPort`
-
-Then implement adapters over existing modules (`session.py`, `config.py`, server executors).
-
-## Migration roadmap (safe, incremental)
-
-### Phase 0: Baseline and guardrails
-
-- Add architecture tests around current critical workflows (create project, add server, add/setup service).
-- Add snapshot/contract tests for CLI output where needed.
-
-### Phase 1: CLI decomposition (no behavior change) [completed]
-
-- Move command groups and rendering helpers into new files.
-- Keep delegating to the application facade during the transition.
-
-### Phase 2: Facade decomposition [completed]
-
-- Create `application/use_cases/*` modules.
-- Migrate one command family at a time (servers first, then services, then models).
-- Keep `application/facade.py` as a thin stateless adapter that loads context and calls session-based use-cases.
-
-### Phase 3: Registry unification
-
-- Add service indexes to `Infrastructure`.
-- Redirect dependency lookups to `Infrastructure` methods.
-- Deprecate and remove singleton registry module.
-
-### Phase 4: Domain/application separation
-
-- Move runtime side effects from domain entity methods to use-cases.
-- Keep entities focused on state transitions and invariants.
-
-### Phase 5: Clean-up and hardening
-
-- Delete deprecated facades.
-- Ensure docs match final architecture.
-- Add lint rules/import boundaries if desired.
-
-## Suggested module map after refactor
-
-- `mlox/domain/...`
-- `mlox/application/...`
-- `mlox/adapters/...`
-- `mlox/interfaces/cli/...`
-- `mlox/interfaces/tui/...`
-- `mlox/interfaces/web/...`
-
-(You can keep existing package paths and migrate progressively to avoid a big-bang rewrite.)
-
-## Practical engineering heuristics
-
-- Prefer **strangler pattern** over full rewrite.
-- Keep old and new entrypoints temporarily, behind small facades.
-- Make every migration step reversible.
-- Track architecture debt with ADRs (one ADR per major decision).
-- Set a hard cap for module size (e.g., 300 lines) for new modules.
-
-## Definition of done for this initiative
-
-- No single file owning both CLI rendering + business logic + orchestration.
-- One source of truth for service lookup/lifecycle state.
-- Use-cases shared by CLI/TUI/Web without UI-specific branching.
-- Domain logic testable without network/subprocess.
-- Adding a new UI command path requires no edits to core domain objects.
+# Architecture Refactor Status
+
+This document is a compact status note for the architecture simplification work started in 2026.
+
+## Completed
+
+- The old large CLI module was split into `mlox/cli/app.py`, `mlox/cli/commands/*`, rendering helpers, and context helpers.
+- The application layer now has focused session-based use-cases under `mlox/application/use_cases/`.
+- `mlox/application/facade.py` is now a thin adapter for callers that need session loading/caching.
+- Frontend-specific setup handlers are outside YAML and are resolved through `mlox/ui/registry.py`.
+
+## Current Architecture
+
+Current runtime flow:
+
+```text
+CLI / TUI / Streamlit
+        |
+        v
+mlox/application/use_cases/*
+        |
+        v
+MloxSession
+        |
+        v
+Infrastructure
+        |
+        v
+Bundle(server + services)
+```
+
+`Infrastructure` still contains compatibility methods around lifecycle behavior. Side-effectful orchestration is increasingly concentrated in `mlox/application/infrastructure_ops.py`, but this separation is not complete.
+
+## Still Open
+
+1. Make `Infrastructure` the single source of truth for service lookup.
+2. Move more setup/teardown orchestration out of topology entities and into application-layer handlers.
+3. Add clearer port/naming/dependency policies.
+4. Keep service capability metadata moving toward a real placement model.
+5. Add boundary tests around config loading, session reload, service dependency lookup, and CLI/use-case behavior.
+
+## Practical Direction
+
+Avoid a large package rename. The current paths are already usable and known:
+
+- `mlox/cli/`
+- `mlox/tui/`
+- `mlox/view/`
+- `mlox/application/`
+- `mlox/infra.py`
+- `mlox/session.py`
+- `mlox/config.py`
+
+Prefer incremental moves:
+
+- keep UI code thin
+- grow use-cases for shared workflows
+- keep executor boundaries intact
+- remove compatibility wrappers only after tests cover the replacement path
+
+## Done Criteria For The Remaining Refactor
+
+- Service lookup has one authoritative path.
+- UI commands do not mutate infrastructure directly.
+- Domain/topology objects are testable without network or subprocess calls.
+- Config loading remains backward compatible for existing YAML and plugins.
+- Adding a new UI path mostly means wiring to existing use-cases.

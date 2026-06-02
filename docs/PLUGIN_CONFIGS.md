@@ -1,18 +1,17 @@
-# External config plugins (minimal example)
+# Config Plugins
 
-MLOX discovers third-party template plugins through Python entry points:
+MLOX can discover third-party service and server configs from Python entry points.
+
+Entry-point groups:
 
 - `mlox.service_plugins`
 - `mlox.server_plugins`
 
-Each entry point must return a `ServiceConfig` instance.
+Each entry point must return a `mlox.config.ServiceConfig` instance. The config should include the same core fields as built-in YAML configs, especially `id`, `name`, `version`, `maintainer`, `description_short`, `description`, `links`, and `build.class_name`.
 
-These entry points currently cover deployable service/server configs only. Frontend-specific UI handlers are intentionally kept outside YAML and are registered separately through `mlox/ui/registry.py`.
-
-## Minimal package example
+## Minimal Package
 
 ```toml
-# pyproject.toml
 [project]
 name = "my-mlox-plugin"
 version = "0.1.0"
@@ -26,57 +25,56 @@ my-server = "my_mlox_plugin.plugin:server_plugin"
 ```
 
 ```python
-# my_mlox_plugin/plugin.py
 from mlox.config import BuildConfig, ServiceConfig
 
 
-def _build_config(config_id: str, path: str, class_name: str) -> ServiceConfig:
-    cfg = ServiceConfig(
-        id=config_id,
-        name=config_id,
-        version="1.0",
-        maintainer="plugin-author",
-        description="External plugin template",
-        description_short="External template",
-        links={"project": "https://example.com"},
-        build=BuildConfig(class_name=class_name),
-    )
-    cfg.path = path
-    return cfg
-
-
 def service_plugin() -> ServiceConfig:
-    return _build_config(
-        config_id="my-plugin-service",
-        path="external/mlox.my-plugin-service.yaml",
-        class_name="my_mlox_plugin.service.MyService",
+    config = ServiceConfig(
+        id="my-plugin-service",
+        name="My Plugin Service",
+        version="1.0.0",
+        maintainer="Plugin Maintainer",
+        description_short="Example external service config.",
+        description="Example external service config for MLOX.",
+        links={"project": "https://example.com"},
+        build=BuildConfig(class_name="my_mlox_plugin.service.MyService"),
     )
+    config.path = "external/mlox.my-plugin-service.yaml"
+    return config
 
 
 def server_plugin() -> ServiceConfig:
-    return _build_config(
-        config_id="my-plugin-server",
-        path="external/mlox-server.my-plugin-server.yaml",
-        class_name="my_mlox_plugin.server.MyServer",
+    config = ServiceConfig(
+        id="my-plugin-server",
+        name="My Plugin Server",
+        version="1.0.0",
+        maintainer="Plugin Maintainer",
+        description_short="Example external server config.",
+        description="Example external server config for MLOX.",
+        links={"project": "https://example.com"},
+        build=BuildConfig(class_name="my_mlox_plugin.server.MyServer"),
     )
+    config.path = "external/mlox-server.my-plugin-server.yaml"
+    return config
 ```
 
-Install the plugin package in the same environment as MLOX (`pip install my-mlox-plugin`) and it will be discoverable through template listing commands.
+Install the plugin package into the same environment as MLOX:
 
-With this integration, existing template-loading paths automatically include entry-point plugins, e.g.:
+```bash
+pip install my-mlox-plugin
+```
+
+After installation, the config is included by normal loading paths such as:
+
 - `load_all_service_configs()`
 - `load_all_server_configs()`
 
-So most callers do not need any code changes to benefit from external plugins.
+## UI Handlers
 
-## UI registration note
+Plugin entry points currently cover config discovery only. Streamlit/TUI setup handlers are not declared in YAML and are not yet part of the documented external plugin API.
 
-Custom setup/settings panels for Streamlit or TUI are not declared in the YAML config and are not currently part of the plugin entry-point API documented here.
+The built-in pattern is:
 
-The active pattern in the core codebase is:
-
-- YAML defines the deployable service/server config
-- frontend modules implement custom UI handlers
-- `mlox/ui/registry.py` registers handlers by `config_id`, `frontend`, and `function_name`
-
-That registry shape is the intended future hook for plugin-contributed UI handlers, but today this guide only documents config plugins.
+1. YAML or plugin config declares the deployable service/server.
+2. Frontend modules implement custom setup/settings handlers.
+3. `mlox/ui/registry.py` registers handlers by `config_id`, frontend, and function name.
