@@ -23,6 +23,13 @@ groups:
     kubernetes: null
     docker: null
     native: null
+capabilities:
+  service:
+  - repository
+  backend:
+  - kubernetes
+  - docker
+  - native
 build:
   class_name: mlox.services.github.service.GithubRepoService
   params:

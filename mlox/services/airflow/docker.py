@@ -24,7 +24,7 @@ import urllib.request
 from typing import Dict
 from dataclasses import dataclass, field
 
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 from mlox.utils import generate_password
 
 
@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AirflowDockerService(AbstractService):
+    capabilities = {ServiceCapability.WORKFLOW_ORCHESTRATOR}
     path_dags: str
     path_output: str
     ui_user: str

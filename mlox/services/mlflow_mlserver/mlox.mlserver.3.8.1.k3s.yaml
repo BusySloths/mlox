@@ -27,6 +27,11 @@ groups:
   model-server: null
   backend:
     kubernetes: null
+capabilities:
+  service:
+  - model_server
+  backend:
+  - kubernetes
 ports:
   rest: 30432
 build:

@@ -19,11 +19,9 @@ Related modules (plain-text links):
 - mlox.session
 """
 
-from abc import abstractmethod
 from collections.abc import Generator
 import logging
 
-from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List, Literal, Dict, Any
 
@@ -31,43 +29,18 @@ from mlox.config import (
     ServiceConfig,
 )
 from mlox.server import AbstractServer, ServerCapability
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractModelRegistryService as ModelRegistry,
+    AbstractModelServerService as ModelServer,
+    AbstractRepositoryService as Repo,
+    AbstractService,
+)
 from mlox.utils import (
     dataclass_to_dict,
     dict_to_dataclass,
 )
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ModelRegistry:
-    @abstractmethod
-    def list_models(self, filter: str | None = None) -> List[Dict[str, Any]]:
-        pass
-
-
-@dataclass
-class ModelServer:
-    # kw_only avoids default-before-required ordering problems in subclasses
-    registry_uuid: str | None = field(default=None, kw_only=True)
-
-    @abstractmethod
-    def is_model(self, name: str) -> bool:
-        pass
-
-    @abstractmethod
-    def get_registry(self) -> ModelRegistry | None:
-        pass
-
-
-@dataclass
-class Repo:
-    repo_name: str = field(default="", init=False)
-    created_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
-    modified_timestamp: str = field(
-        default_factory=datetime.now().isoformat, init=False
-    )
 
 
 @dataclass

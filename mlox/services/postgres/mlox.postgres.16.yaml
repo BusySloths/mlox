@@ -26,6 +26,11 @@ groups:
     relational: null
   backend:
     docker: null
+capabilities:
+  service:
+  - database
+  backend:
+  - docker
 ports:
   service: 5432
 build:

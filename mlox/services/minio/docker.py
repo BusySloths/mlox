@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 
 
 logging.basicConfig(
@@ -31,6 +31,7 @@ logging.basicConfig(
 
 @dataclass
 class MinioDockerService(AbstractService):
+    capabilities = {ServiceCapability.OBJECT_STORAGE}
     root_user: str
     root_password: str
     api_port: str | int

@@ -26,6 +26,12 @@ groups:
     nosql: null
   backend:
     docker: null
+capabilities:
+  service:
+  - cache
+  - database
+  backend:
+  - docker
 ports:
   service: 6379
 build:

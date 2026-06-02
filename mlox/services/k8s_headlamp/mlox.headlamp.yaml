@@ -24,6 +24,11 @@ groups:
   dashboard: null
   backend:
     kubernetes: null
+capabilities:
+  service:
+  - dashboard
+  backend:
+  - kubernetes
 build:
   class_name: mlox.services.k8s_headlamp.k8s.K8sHeadlampService
   params:

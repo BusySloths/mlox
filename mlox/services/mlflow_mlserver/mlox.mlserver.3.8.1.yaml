@@ -32,6 +32,11 @@ groups:
   model-server: null
   backend:
     docker: null
+capabilities:
+  service:
+  - model_server
+  backend:
+  - docker
 ports:
   rest: 6432
 build:

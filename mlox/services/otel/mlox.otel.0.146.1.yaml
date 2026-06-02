@@ -28,6 +28,11 @@ groups:
   monitor: null
   backend:
     docker: null
+capabilities:
+  service:
+  - observability
+  backend:
+  - docker
 ports:
   grpc: 4317
   http: 4318

@@ -35,6 +35,11 @@ groups:
   feature-store: null
   backend:
     docker: null
+capabilities:
+  service:
+  - feature_store
+  backend:
+  - docker
 ports:
   registry: 6564
 build:

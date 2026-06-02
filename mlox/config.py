@@ -7,7 +7,14 @@ from importlib import resources, metadata as importlib_metadata
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Literal, TypedDict
 
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractModelRegistryService,
+    AbstractModelServerService,
+    AbstractRepositoryService,
+    AbstractSecretManagerService,
+    AbstractService,
+    ServiceCapability,
+)
 from mlox.server import (
     AbstractDockerServer,
     AbstractFirewallServer,
@@ -25,7 +32,7 @@ from mlox.ui.registry import get_handler
 PluginKind = Literal["service", "server"]
 
 
-CAPABILITY_ABCS = {
+SERVER_CAPABILITY_ABCS = {
     ServerCapability.GIT.value: AbstractGitServer,
     ServerCapability.FIREWALL.value: AbstractFirewallServer,
     ServerCapability.INITIAL_AUTH_PASSWORD.value: AbstractInitialPasswordAuthServer,
@@ -36,10 +43,40 @@ CAPABILITY_ABCS = {
 }
 
 
+SERVICE_CAPABILITY_ABCS = {
+    ServiceCapability.SECRET_MANAGER.value: AbstractSecretManagerService,
+    ServiceCapability.REPOSITORY.value: AbstractRepositoryService,
+    ServiceCapability.MODEL_REGISTRY.value: AbstractModelRegistryService,
+    ServiceCapability.MODEL_SERVER.value: AbstractModelServerService,
+}
+
+SERVICE_GROUP_ALIASES = {
+    "secret_manager": ServiceCapability.SECRET_MANAGER.value,
+    "repository": ServiceCapability.REPOSITORY.value,
+    "git": ServiceCapability.REPOSITORY.value,
+    "model_registry": ServiceCapability.MODEL_REGISTRY.value,
+    "model_server": ServiceCapability.MODEL_SERVER.value,
+    "observability": ServiceCapability.OBSERVABILITY.value,
+    "data_warehouse": ServiceCapability.DATA_WAREHOUSE.value,
+    "object_storage": ServiceCapability.OBJECT_STORAGE.value,
+    "spreadsheet": ServiceCapability.SPREADSHEET.value,
+    "database": ServiceCapability.DATABASE.value,
+    "vector_database": ServiceCapability.VECTOR_DATABASE.value,
+    "cache": ServiceCapability.CACHE.value,
+    "message_broker": ServiceCapability.MESSAGE_BROKER.value,
+    "workflow_orchestrator": ServiceCapability.WORKFLOW_ORCHESTRATOR.value,
+    "feature_store": ServiceCapability.FEATURE_STORE.value,
+    "container_registry": ServiceCapability.CONTAINER_REGISTRY.value,
+    "deployment": ServiceCapability.DEPLOYMENT.value,
+    "llm": ServiceCapability.LLM.value,
+    "dashboard": ServiceCapability.DASHBOARD.value,
+}
+
+
 def _normalize_capability_name(value: Any) -> str:
-    if isinstance(value, ServerCapability):
+    if isinstance(value, (ServerCapability, ServiceCapability)):
         return value.value
-    return str(value).strip().lower()
+    return str(value).strip().lower().replace("-", "_")
 
 
 def _normalize_capability_values(value: Any) -> set[str]:
@@ -61,7 +98,7 @@ def _normalize_capability_map(capabilities: Dict[str, Any]) -> Dict[str, set[str
 
 
 def _capabilities_from_groups(groups: Dict[str, Any]) -> Dict[str, set[str]]:
-    derived: Dict[str, set[str]] = {"server": set(), "backend": set()}
+    derived: Dict[str, set[str]] = {"server": set(), "backend": set(), "service": set()}
 
     server_groups = groups.get("server")
     if isinstance(server_groups, dict):
@@ -71,6 +108,12 @@ def _capabilities_from_groups(groups: Dict[str, Any]) -> Dict[str, set[str]]:
     if isinstance(backend_groups, dict):
         for backend in backend_groups.keys():
             derived["backend"].add(_normalize_capability_name(backend))
+
+    for group in groups.keys():
+        group_name = _normalize_capability_name(group)
+        capability = SERVICE_GROUP_ALIASES.get(group_name)
+        if capability:
+            derived["service"].add(capability)
 
     return {section: values for section, values in derived.items() if values}
 
@@ -90,11 +133,19 @@ def _load_build_class(config: "ServiceConfig") -> type | None:
     return build_class
 
 
-def _server_class_capabilities(server_class: type) -> set[str]:
+def _class_capabilities(build_class: type) -> set[str]:
     return {
         _normalize_capability_name(capability)
-        for capability in getattr(server_class, "capabilities", set())
+        for capability in getattr(build_class, "capabilities", set())
     }
+
+
+def _server_class_capabilities(server_class: type) -> set[str]:
+    return _class_capabilities(server_class)
+
+
+def _service_class_capabilities(service_class: type) -> set[str]:
+    return _class_capabilities(service_class)
 
 
 def _validate_server_config_capabilities(config: "ServiceConfig") -> None:
@@ -138,13 +189,66 @@ def _validate_server_config_capabilities(config: "ServiceConfig") -> None:
         )
 
     for capability in sorted(declared_known):
-        required_abc = CAPABILITY_ABCS.get(capability)
+        required_abc = SERVER_CAPABILITY_ABCS.get(capability)
         if required_abc and not issubclass(server_class, required_abc):
             logging.warning(
                 "Server config %s declares capability %s but %s does not implement %s",
                 config.id,
                 capability,
                 server_class.__name__,
+                required_abc.__name__,
+            )
+
+
+def _validate_service_config_capabilities(config: "ServiceConfig") -> None:
+    service_class = _load_build_class(config)
+    if service_class is None:
+        return
+    if not isinstance(service_class, type) or not issubclass(
+        service_class, AbstractService
+    ):
+        return
+
+    declared = config.service_capabilities()
+    known = {capability.value for capability in ServiceCapability}
+    unknown = declared - known
+    if unknown:
+        logging.warning(
+            "Service config %s declares unknown service capabilities: %s",
+            config.id,
+            sorted(unknown),
+        )
+
+    declared_known = declared & known
+    class_capabilities = _service_class_capabilities(service_class)
+    class_service_capabilities = class_capabilities & known
+
+    missing_from_class = declared_known - class_service_capabilities
+    if missing_from_class:
+        logging.warning(
+            "Service config %s declares service capabilities not supported by %s: %s",
+            config.id,
+            service_class.__name__,
+            sorted(missing_from_class),
+        )
+
+    missing_from_config = class_service_capabilities - declared_known
+    if missing_from_config:
+        logging.warning(
+            "Service class %s supports service capabilities not advertised by config %s: %s",
+            service_class.__name__,
+            config.id,
+            sorted(missing_from_config),
+        )
+
+    for capability in sorted(declared_known):
+        required_abc = SERVICE_CAPABILITY_ABCS.get(capability)
+        if required_abc and not issubclass(service_class, required_abc):
+            logging.warning(
+                "Service config %s declares capability %s but %s does not implement %s",
+                config.id,
+                capability,
+                service_class.__name__,
                 required_abc.__name__,
             )
 
@@ -181,6 +285,9 @@ class ServiceConfig:
 
     def backend_capabilities(self) -> set[str]:
         return self.declared_capabilities().get("backend", set())
+
+    def service_capabilities(self) -> set[str]:
+        return self.declared_capabilities().get("service", set())
 
     def get_ui_handler(self, frontend: str, function_name: str) -> Callable | None:
         return get_handler(
@@ -364,6 +471,8 @@ def load_config(
             service_config_instance.path = f"{service_dir}/{candidate}"
             if candidate.startswith("mlox-server."):
                 _validate_server_config_capabilities(service_config_instance)
+            else:
+                _validate_service_config_capabilities(service_config_instance)
             return service_config_instance
 
         except yaml.YAMLError as e:

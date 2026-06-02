@@ -238,3 +238,56 @@ class TestServiceConfig:
         assert configs[0].name == "TestService"
         assert "Error parsing YAML file" in caplog.text
         assert "mlox.invalid.v1.yaml" in caplog.text
+
+
+def test_service_capabilities_fall_back_from_groups(service_config_data):
+    service_config_data["build"] = BuildConfig(**service_config_data["build"])
+    service_config_data["groups"] = {
+        "service": None,
+        "model-registry": None,
+        "backend": {"docker": None},
+    }
+    config = ServiceConfig(**service_config_data)
+
+    assert config.service_capabilities() == {"model_registry"}
+    assert config.backend_capabilities() == {"docker"}
+
+
+def test_service_capability_mismatch_logs_warning(
+    tmp_path, caplog, mock_dummy_modules, service_config_data
+):
+    service_config_data["capabilities"] = {
+        "service": ["repository"],
+        "backend": ["docker"],
+    }
+    create_yaml_file(tmp_path, "dummy", service_config_data)
+
+    caplog.set_level("WARNING")
+    config = load_config(str(tmp_path), "dummy", "mlox.dummy.v1.yaml")
+
+    assert config is not None
+    assert "declares service capabilities not supported" in caplog.text
+    assert "does not implement AbstractRepositoryService" in caplog.text
+
+
+def test_builtin_service_configs_have_matching_explicit_capabilities():
+    from mlox.config import _load_build_class
+    from mlox.service import ServiceCapability
+
+    configs = load_all_service_configs(include_plugins=False)
+    known = {capability.value for capability in ServiceCapability}
+    assert configs
+
+    for config in configs:
+        assert config.capabilities, config.path
+        assert config.service_capabilities(), config.path
+        assert config.backend_capabilities(), config.path
+        assert config.service_capabilities() <= known, config.path
+
+        service_class = _load_build_class(config)
+        assert service_class is not None, config.path
+        class_capabilities = {
+            capability.value if hasattr(capability, "value") else str(capability)
+            for capability in getattr(service_class, "capabilities", set())
+        }
+        assert config.service_capabilities() <= class_capabilities, config.path

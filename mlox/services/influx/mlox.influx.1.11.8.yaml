@@ -26,6 +26,11 @@ groups:
     nosql: null
   backend:
     docker: null
+capabilities:
+  service:
+  - database
+  backend:
+  - docker
 ports:
   web_ui: 8086
 build:

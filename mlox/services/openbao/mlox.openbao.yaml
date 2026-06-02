@@ -6,8 +6,8 @@ description_short: OpenBao provides a Vault-compatible secret management server.
 description: 'OpenBao is an open-source, Vault-compatible secret manager offering
   a secure key-value store
 
-  and policy engine for managing sensitive information. This stack runs OpenBao
-  with integrated Raft storage and mlox-managed initialization/unseal material.
+  and policy engine for managing sensitive information. This stack runs OpenBao with
+  integrated Raft storage and mlox-managed initialization/unseal material.
 
   '
 links:
@@ -22,6 +22,11 @@ groups:
   secret-manager: null
   backend:
     docker: null
+capabilities:
+  service:
+  - secret_manager
+  backend:
+  - docker
 ports:
   api: 8200
 build:

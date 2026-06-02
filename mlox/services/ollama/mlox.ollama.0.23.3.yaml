@@ -3,9 +3,9 @@ name: Ollama
 version: 0.23.3
 maintainer: Your Name
 description_short: Standalone Ollama service with HTTPS and BasicAuth via Traefik.
-description: 'Runs Ollama as an independently managed MLOX service. The native Ollama
+description: Runs Ollama as an independently managed MLOX service. The native Ollama
   HTTP API is kept behind a Traefik reverse proxy that provides HTTPS and BasicAuth,
-  matching the MLServer and MLflow Gateway exposure pattern.'
+  matching the MLServer and MLflow Gateway exposure pattern.
 links:
   project: https://ollama.com/
   news: https://ollama.com/blog
@@ -22,6 +22,12 @@ groups:
   model-server: null
   backend:
     docker: null
+capabilities:
+  service:
+  - llm
+  - model_server
+  backend:
+  - docker
 ports:
   rest: 11434
 build:

@@ -26,6 +26,11 @@ groups:
   dashboard: null
   backend:
     kubernetes: null
+capabilities:
+  service:
+  - dashboard
+  backend:
+  - kubernetes
 ports:
   web_ui: 5432
 build:

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict
 
 from mlox.execution import TaskGroup
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,7 @@ _ENV_TOKEN_PATTERN = re.compile(
 
 @dataclass
 class RepoDeployDockerService(AbstractService):
+    capabilities = {ServiceCapability.DEPLOYMENT}
     repo_uuid: str
     compose_file: str
     env_vars: Dict[str, str] = field(default_factory=dict)

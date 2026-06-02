@@ -37,6 +37,11 @@ groups:
     docker: null
     native: null
     connector: null
+capabilities:
+  service:
+  - data_warehouse
+  backend:
+  - connector
 build:
   class_name: mlox.services.gcp.bq_service.GCPBigQueryService
   params:

@@ -3,10 +3,10 @@ name: MLFlow Gateway
 version: 3.8.1
 maintainer: Your Name
 description_short: Lightweight multi-model HTTP gateway for MLflow registry models.
-description: 'Provides a simple authenticated HTTPS endpoint that loads MLflow pyfunc
+description: Provides a simple authenticated HTTPS endpoint that loads MLflow pyfunc
   models dynamically from a configured MLflow registry and caches them for repeated
   predictions. It is intended as a flexible lightweight complement to MLServer for
-  exploration, internal tooling, and lower-criticality model access.'
+  exploration, internal tooling, and lower-criticality model access.
 links:
   project: https://mlflow.org/
   news: https://mlflow.org/releases/
@@ -22,6 +22,11 @@ groups:
   model-server: null
   backend:
     docker: null
+capabilities:
+  service:
+  - model_server
+  backend:
+  - docker
 ports:
   rest: 6433
 build:
