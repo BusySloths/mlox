@@ -1,6 +1,8 @@
 import grpc  # type: ignore
 import logging
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Dict, Any, Optional
 
 # WORK IN PROGRESS: OTel client API is still being refined.
@@ -76,13 +78,10 @@ class OTelClient:
         )
         # Set up the Python logging module to use OpenTelemetry
         self.logging_handler = LoggingHandler(logger_provider=self.logger_provider)
-        logging.basicConfig(
-            level=logging.INFO,
-            format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-            handlers=[self.logging_handler],
-        )
         self.logger = logging.getLogger("otel_logger")
+        self.logger.setLevel(logging.INFO)
+        self.logger.addHandler(self.logging_handler)
+        self.logger.propagate = False
 
     def _setup_metrics(self):
         self.metric_exporter = OTLPMetricExporter(**self._exporter_kwargs())
@@ -144,11 +143,19 @@ class OTelClient:
         gauge = self.meter.create_gauge(name, unit=unit, description=description)
         gauge.set(value, attributes or {})
 
-    def send_span(self, name: str, attributes: Optional[Dict[str, Any]] = None):
+    @contextmanager
+    def span(
+        self, name: str, attributes: Optional[Dict[str, Any]] = None
+    ) -> Iterator[Any]:
         with self.tracer.start_as_current_span(name) as span:
             if attributes:
                 for k, v in attributes.items():
                     span.set_attribute(k, v)
+            yield span
+
+    def send_span(self, name: str, attributes: Optional[Dict[str, Any]] = None):
+        with self.span(name, attributes):
+            pass
 
     def send_log(
         self,
@@ -160,6 +167,6 @@ class OTelClient:
         self.logger.log(level, message, extra=attributes or {})
 
     def shutdown(self):
-        self.metric_exporter.shutdown()
-        self.span_exporter.shutdown()
-        self.log_exporter.shutdown()
+        self.meter_provider.shutdown()
+        self.tracer_provider.shutdown()
+        self.logger_provider.shutdown()

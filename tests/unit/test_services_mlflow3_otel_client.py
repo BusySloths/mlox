@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from types import SimpleNamespace
 
 from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
@@ -137,6 +136,10 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
         def __init__(self, metric_readers, resource):
             self.metric_readers = metric_readers
             self.resource = resource
+            self.shutdown_called = False
+
+        def shutdown(self):
+            self.shutdown_called = True
 
     class _Counter:
         def __init__(self):
@@ -179,38 +182,54 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
             return self.gauge
 
     class _Span:
-        def __init__(self):
+        def __init__(self, name, parent):
+            self.name = name
+            self.parent = parent
             self.attrs = {}
 
         def set_attribute(self, key, value):
             self.attrs[key] = value
 
     class _SpanCtx:
-        def __init__(self, span):
-            self.span = span
+        def __init__(self, tracer, name):
+            self.tracer = tracer
+            self.name = name
+            self.span = None
+
+        def _active_span(self):
+            if not self.tracer.active:
+                return None
+            return self.tracer.active[-1]
 
         def __enter__(self):
+            self.span = _Span(self.name, self._active_span())
+            self.tracer.spans.append(self.span)
+            self.tracer.active.append(self.span)
             return self.span
 
         def __exit__(self, exc_type, exc_val, exc_tb):
+            self.tracer.active.pop()
             return False
 
     class _Tracer:
         def __init__(self):
             self.spans = []
+            self.active = []
 
         def start_as_current_span(self, name):
-            span = _Span()
-            self.spans.append((name, span))
-            return _SpanCtx(span)
+            return _SpanCtx(self, name)
 
     class _TracerProvider:
         def __init__(self, resource):
             self.resource = resource
             self.processors = []
+            self.shutdown_called = False
 
         def add_span_processor(self, processor):
             self.processors.append(processor)
+
+        def shutdown(self):
+            self.shutdown_called = True
 
     class _BatchSpanProcessor:
         def __init__(self, exporter):
@@ -224,9 +243,13 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
         def __init__(self, resource):
             self.resource = resource
             self.processors = []
+            self.shutdown_called = False
 
         def add_log_record_processor(self, processor):
             self.processors.append(processor)
+
+        def shutdown(self):
+            self.shutdown_called = True
 
     class _LoggingHandler:
         def __init__(self, logger_provider):
@@ -272,6 +295,9 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
     client.send_observable_gauge("cpu.pct", callback=lambda _: None)
     client.send_gauge("memory.pct", 0.7, {"env": "test"})
     client.send_span("job.run", {"ok": True})
+    with client.span("job.parent", {"workflow.step": "start"}) as parent:
+        with client.span("job.child", {"workflow.step": "child"}) as child:
+            assert child.parent is parent
     client.send_log("hello", severity="warning", attributes={"env": "test"})
     client.shutdown()
 
@@ -279,12 +305,16 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
     assert meter.hist.calls == [(42.0, {"env": "test"})]
     assert meter.gauge.calls == [(0.7, {"env": "test"})]
     assert meter.observable
-    assert tracer.spans[0][0] == "job.run"
-    assert tracer.spans[0][1].attrs["ok"] is True
+    assert tracer.spans[0].name == "job.run"
+    assert tracer.spans[0].attrs["ok"] is True
+    assert tracer.spans[1].name == "job.parent"
+    assert tracer.spans[1].attrs["workflow.step"] == "start"
+    assert tracer.spans[2].name == "job.child"
+    assert tracer.spans[2].attrs["workflow.step"] == "child"
     assert fake_logger.calls
-    assert client.metric_exporter.shutdown_called is True
-    assert client.span_exporter.shutdown_called is True
-    assert client.log_exporter.shutdown_called is True
+    assert client.meter_provider.shutdown_called is True
+    assert client.tracer_provider.shutdown_called is True
+    assert client.logger_provider.shutdown_called is True
 
 
 def test_otel_client_init_from_service_secrets_dict(monkeypatch):
@@ -306,6 +336,9 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
             self.metric_readers = metric_readers
             self.resource = resource
 
+        def shutdown(self):
+            pass
+
     class _TracerProvider:
         def __init__(self, resource):
             self.resource = resource
@@ -313,6 +346,9 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
 
         def add_span_processor(self, processor):
             self.processors.append(processor)
+
+        def shutdown(self):
+            pass
 
     class _BatchSpanProcessor:
         def __init__(self, exporter):
@@ -329,6 +365,9 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
 
         def add_log_record_processor(self, processor):
             self.processors.append(processor)
+
+        def shutdown(self):
+            pass
 
     class _LoggingHandler:
         def __init__(self, logger_provider):

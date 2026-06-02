@@ -83,7 +83,7 @@ def _timestamp_from_nanos(raw_ts: Any) -> datetime | None:
 
 
 def _format_timestamp(ts: datetime | None) -> str:
-    return ts.strftime("%Y-%m-%d %H:%M:%S") if ts else "Unknown time"
+    return ts.isoformat(timespec="milliseconds") if ts else "Unknown time"
 
 
 def _format_attributes(attributes: dict[str, Any] | None) -> str:

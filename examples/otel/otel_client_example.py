@@ -47,20 +47,28 @@ def main() -> None:
     client = _otel_client(session)
 
     # Traces: parent + nested span
-    client.send_span(
+    with client.span(
         "examples.otel.parent_span",
-        {
+        attributes={
             "workflow.step": "start",
             "example": True,
         },
-    )
-    client.send_span(
-        "examples.otel.child_span",
-        {
-            "workflow.step": "child",
-            "latency.bucket": "fast",
-        },
-    )
+    ):
+        time.sleep(0.45)
+        with client.span(
+            "examples.otel.nested_span",
+            attributes={
+                "workflow.step": "nested",
+                "latency.bucket": "medium",
+            },
+        ) as nested_span:
+            nested_start = time.perf_counter()
+            time.sleep(0.1)
+            nested_span.set_attribute(
+                "example.measured_duration_ms",
+                round((time.perf_counter() - nested_start) * 1000, 3),
+            )
+        time.sleep(0.45)
 
     # Metrics: counter, histogram, gauge
     client.send_metric(
