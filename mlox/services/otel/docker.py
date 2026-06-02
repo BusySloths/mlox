@@ -22,7 +22,7 @@ from typing import Dict, Any
 from urllib.parse import unquote
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -34,6 +34,7 @@ logging.basicConfig(
 
 @dataclass
 class OtelDockerService(AbstractService):
+    capabilities = {ServiceCapability.OBSERVABILITY}
     relic_endpoint: str
     relic_key: str
     config: str

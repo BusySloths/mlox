@@ -4,13 +4,14 @@ from dataclasses import dataclass
 from typing import Dict
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class KubeAppsService(AbstractService):
+    capabilities = {ServiceCapability.DASHBOARD}
     namespace: str = "kubeapps"
     kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
     release_name: str = "kubeapps"

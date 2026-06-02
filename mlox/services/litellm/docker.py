@@ -21,7 +21,11 @@ from typing import Dict, Any, List
 
 import yaml
 
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractModelServerService,
+    AbstractService,
+    ServiceCapability,
+)
 
 
 # Configure logging (optional, but recommended)
@@ -33,7 +37,8 @@ logging.basicConfig(
 
 
 @dataclass
-class LiteLLMDockerService(AbstractService):
+class LiteLLMDockerService(AbstractService, AbstractModelServerService):
+    capabilities = {ServiceCapability.LLM, ServiceCapability.MODEL_SERVER}
     ollama_script: str
     litellm_config: str
     ui_user: str
@@ -145,6 +150,12 @@ class LiteLLMDockerService(AbstractService):
             self.state = "unknown"
 
         return {"status": status, "services": services}
+
+    def is_model(self, name: str) -> bool:
+        return name in self.ollama_models
+
+    def get_registry(self):
+        return None
 
     def get_secrets(self) -> Dict[str, Dict]:
         secrets: Dict[str, Dict] = {}

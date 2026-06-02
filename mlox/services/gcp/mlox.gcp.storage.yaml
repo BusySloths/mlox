@@ -36,6 +36,11 @@ groups:
     docker: null
     native: null
     connector: null
+capabilities:
+  service:
+  - object_storage
+  backend:
+  - connector
 build:
   class_name: mlox.services.gcp.storage_service.GCPStorageService
   params:

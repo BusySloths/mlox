@@ -25,6 +25,11 @@ groups:
   etl: null
   backend:
     docker: null
+capabilities:
+  service:
+  - workflow_orchestrator
+  backend:
+  - docker
 ports:
   web_ui: 1099
 build:

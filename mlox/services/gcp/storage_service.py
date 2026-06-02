@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, cast
 
 from mlox.secret_manager import AbstractSecretManagerService
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 from mlox.infra import Infrastructure
 from mlox.services.gcp.cloud_storage import GCPStorage
 
@@ -18,6 +18,7 @@ logging.basicConfig(
 
 @dataclass
 class GCPStorageService(AbstractService):
+    capabilities = {ServiceCapability.OBJECT_STORAGE}
     secret_name: str
     secret_manager_uuid: str
 

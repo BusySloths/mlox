@@ -20,13 +20,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class RegistryDockerService(AbstractService):
+    capabilities = {ServiceCapability.CONTAINER_REGISTRY}
     """Manage a TLS and basic-auth protected Docker distribution registry."""
 
     username: str

@@ -12,7 +12,7 @@ description: "Google Spreadsheets is a secure and scalable service for managing 
   \ data exchange and collaborative workflows.\n"
 links:
   project: https://workspace.google.com/intl/en_au/products/sheets/
-  news: "https://workspace.google.com/i\xDFntl/en_au/products/sheets/"
+  news: https://workspace.google.com/ißntl/en_au/products/sheets/
   security: https://workspace.google.com/intl/en_au/products/sheets/
   documentation: https://workspace.google.com/intl/en_au/products/sheets/
   changelog: https://workspace.google.com/intl/en_au/products/sheets/
@@ -31,6 +31,11 @@ groups:
     docker: null
     native: null
     connector: null
+capabilities:
+  service:
+  - spreadsheet
+  backend:
+  - connector
 build:
   class_name: mlox.services.gcp.sheet_service.GCPSpreadsheetsService
   params:

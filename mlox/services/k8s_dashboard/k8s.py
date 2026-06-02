@@ -2,13 +2,14 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class K8sDashboardService(AbstractService):
+    capabilities = {ServiceCapability.DASHBOARD}
     namespace: str = "kubernetes-dashboard"
     release_name: str = "dashboard"
 

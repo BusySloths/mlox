@@ -9,13 +9,18 @@ from typing import Dict, List
 from passlib.hash import apr_md5_crypt  # type: ignore
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractModelServerService,
+    AbstractService,
+    ServiceCapability,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class OllamaDockerService(AbstractService):
+class OllamaDockerService(AbstractService, AbstractModelServerService):
+    capabilities = {ServiceCapability.LLM, ServiceCapability.MODEL_SERVER}
     port: str | int
     user: str = "admin"
     pw: str = "s3cr3t"
@@ -112,6 +117,12 @@ class OllamaDockerService(AbstractService):
             logger.error("Error checking Ollama status: %s", exc)
             self.state = "unknown"
         return {"status": "unknown"}
+
+    def is_model(self, name: str) -> bool:
+        return name in self.ollama_models
+
+    def get_registry(self):
+        return None
 
     def get_secrets(self) -> Dict[str, Dict]:
         return {

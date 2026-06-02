@@ -23,8 +23,8 @@ groups:
   backend:
     docker: null
 capabilities:
-  server:
-  - docker
+  service:
+  - deployment
   backend:
   - docker
 build:

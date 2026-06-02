@@ -30,6 +30,11 @@ groups:
   streaming: null
   backend:
     docker: null
+capabilities:
+  service:
+  - message_broker
+  backend:
+  - docker
 ports:
   service: 9094
 build:

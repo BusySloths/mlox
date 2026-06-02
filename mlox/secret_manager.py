@@ -8,8 +8,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, cast
 from dataclasses import dataclass, field
 
-from mlox.infra import Infrastructure
 from mlox.server import AbstractServer
+from mlox.service import AbstractSecretManagerService
 import importlib
 from mlox.utils import (
     _get_encryption_key,
@@ -55,13 +55,6 @@ class AbstractSecretManager(ABC):
     @abstractmethod
     def get_access_secrets(self) -> Dict[str, Any] | None:
         """Get MLOX access information from the secret manager."""
-        pass
-
-
-@dataclass
-class AbstractSecretManagerService(ABC):
-    @abstractmethod
-    def get_secret_manager(self, infra: Infrastructure) -> AbstractSecretManager:
         pass
 
 

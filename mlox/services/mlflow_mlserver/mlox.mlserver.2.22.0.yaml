@@ -5,8 +5,8 @@ maintainer: Your Name
 description_short: MLServer is an open-source Python library for building production-ready
   asynchronous APIs for machine learning models.
 description: "MLServer aims to provide an easy way to start serving your machine learning\
-  \ models through a REST and gRPC interface, \nfully compliant with KFServing\u2019\
-  s V2 Dataplane spec. MLServer supports multi-model serving, the ability to run inference\
+  \ models through a REST and gRPC interface, \nfully compliant with KFServing’s V2\
+  \ Dataplane spec. MLServer supports multi-model serving, the ability to run inference\
   \ in parallel for vertical scaling across multiple models through a \nsharedpool\
   \ of inference workers, and more. This service uses MLFlow MLServer integration\
   \ to deploy single\nmodels. The version of this service refers to MLFlow.\n"
@@ -25,6 +25,11 @@ groups:
   model-server: null
   backend:
     docker: null
+capabilities:
+  service:
+  - model_server
+  backend:
+  - docker
 ports:
   rest: 6432
 build:

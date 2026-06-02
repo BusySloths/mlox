@@ -20,7 +20,7 @@ import secrets
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 
 
 
@@ -41,6 +41,7 @@ def _generate_cluster_id() -> str:
 
 @dataclass
 class KafkaDockerService(AbstractService):
+    capabilities = {ServiceCapability.MESSAGE_BROKER}
     """Docker based deployment for a single-node Kafka broker."""
 
     ssl_password: str

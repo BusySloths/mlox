@@ -22,13 +22,104 @@ import csv
 import json
 import uuid
 import logging
+from datetime import datetime
 from abc import ABC, abstractmethod
-from typing import Dict, Literal, Optional, Protocol
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Literal, Optional, Protocol
 from dataclasses import dataclass, field, asdict
 
 from mlox.executors import UbuntuTaskExecutor
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from mlox.infra import Infrastructure
+    from mlox.secret_manager import AbstractSecretManager
+
+
+class ServiceCapability(StrEnum):
+    """User-facing service capabilities advertised by service configs/classes."""
+
+    SECRET_MANAGER = "secret_manager"
+    REPOSITORY = "repository"
+    MODEL_REGISTRY = "model_registry"
+    MODEL_SERVER = "model_server"
+    OBSERVABILITY = "observability"
+    DATA_WAREHOUSE = "data_warehouse"
+    OBJECT_STORAGE = "object_storage"
+    SPREADSHEET = "spreadsheet"
+    DATABASE = "database"
+    VECTOR_DATABASE = "vector_database"
+    CACHE = "cache"
+    MESSAGE_BROKER = "message_broker"
+    WORKFLOW_ORCHESTRATOR = "workflow_orchestrator"
+    FEATURE_STORE = "feature_store"
+    CONTAINER_REGISTRY = "container_registry"
+    DEPLOYMENT = "deployment"
+    LLM = "llm"
+    DASHBOARD = "dashboard"
+
+
+class AbstractSecretManagerService(ABC):
+    """Service capability mixin for services that provide a secret manager client."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.SECRET_MANAGER}
+
+    @abstractmethod
+    def get_secret_manager(
+        self, infra: "Infrastructure"
+    ) -> "AbstractSecretManager":
+        """Return an AbstractSecretManager client for this service."""
+        pass
+
+
+@dataclass
+class AbstractRepositoryService(ABC):
+    """Service capability mixin for repository provider services."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.REPOSITORY}
+    repo_name: str = field(default="", init=False)
+    created_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
+    modified_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
+
+    @abstractmethod
+    def get_url(self) -> str:
+        pass
+
+    @abstractmethod
+    def git_clone(self, conn) -> None:
+        pass
+
+    @abstractmethod
+    def git_pull(self, conn) -> None:
+        pass
+
+
+@dataclass
+class AbstractModelRegistryService(ABC):
+    """Service capability mixin for model registry services."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.MODEL_REGISTRY}
+
+    @abstractmethod
+    def list_models(self, filter: str | None = None) -> List[Dict[str, Any]]:
+        pass
+
+
+@dataclass
+class AbstractModelServerService(ABC):
+    """Service capability mixin for model-serving services."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.MODEL_SERVER}
+    registry_uuid: str | None = field(default=None, kw_only=True)
+
+    @abstractmethod
+    def is_model(self, name: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_registry(self) -> AbstractModelRegistryService | None:
+        pass
 
 
 class ServiceLookup(Protocol):

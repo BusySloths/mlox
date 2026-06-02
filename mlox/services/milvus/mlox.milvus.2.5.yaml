@@ -25,6 +25,11 @@ groups:
     vector: null
   backend:
     docker: null
+capabilities:
+  service:
+  - vector_database
+  backend:
+  - docker
 ports:
   service: 19530
 build:

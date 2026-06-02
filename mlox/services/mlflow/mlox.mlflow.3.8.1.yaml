@@ -33,6 +33,11 @@ groups:
   experiment-tracking: null
   backend:
     docker: null
+capabilities:
+  service:
+  - model_registry
+  backend:
+  - docker
 ports:
   web_ui: 5432
 build:

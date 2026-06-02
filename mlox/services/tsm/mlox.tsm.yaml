@@ -25,6 +25,13 @@ groups:
     kubernetes: null
     docker: null
     native: null
+capabilities:
+  service:
+  - secret_manager
+  backend:
+  - kubernetes
+  - docker
+  - native
 build:
   class_name: mlox.services.tsm.service.TSMService
   params:

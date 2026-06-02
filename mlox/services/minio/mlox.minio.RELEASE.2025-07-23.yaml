@@ -27,6 +27,11 @@ groups:
   storage: null
   backend:
     docker: null
+capabilities:
+  service:
+  - object_storage
+  backend:
+  - docker
 ports:
   api: 9000
   console: 9001

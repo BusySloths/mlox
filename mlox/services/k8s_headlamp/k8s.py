@@ -3,13 +3,14 @@ from typing import Dict
 from dataclasses import dataclass, field
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService
+from mlox.service import AbstractService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class K8sHeadlampService(AbstractService):
+    capabilities = {ServiceCapability.DASHBOARD}
     namespace: str = "kube-system"
     service_name: str = "my-headlamp"
     kubeconfig: str = field(default="/etc/rancher/k3s/k3s.yaml", init=False)

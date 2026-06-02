@@ -25,6 +25,12 @@ groups:
   service: null
   backend:
     docker: null
+capabilities:
+  service:
+  - llm
+  - model_server
+  backend:
+  - docker
 ports:
   web_ui: 5222
 build:
