@@ -1,7 +1,7 @@
 id: mlflow-mlserver-3.8.1-k3s
 name: MLFlow-MLServer
 version: 3.8.1
-maintainer: Your Name
+maintainer: Seldon Technologies
 description_short: Deploy an MLflow registry model with MLServer on Kubernetes (k3s).
 description: 'Deploys an MLflow registry model as an MLServer workload on Kubernetes
   (k3s) using

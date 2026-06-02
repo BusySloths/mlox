@@ -1,7 +1,7 @@
 id: ollama-0.23.3-docker
 name: Ollama
 version: 0.23.3
-maintainer: Your Name
+maintainer: Ollama
 description_short: Standalone Ollama service with HTTPS and BasicAuth via Traefik.
 description: Runs Ollama as an independently managed MLOX service. The native Ollama
   HTTP API is kept behind a Traefik reverse proxy that provides HTTPS and BasicAuth,

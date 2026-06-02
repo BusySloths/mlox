@@ -1,7 +1,7 @@
 id: headlamp-newest-k3s
 name: Headlamp Dashboard
 version: newest
-maintainer: Your Name
+maintainer: Kubernetes SIG UI
 description_short: Headlamp is a web-based UI for managing Kubernetes clusters.
 description: "Headlamp is a web-based UI for managing Kubernetes clusters. It provides\
   \ a user-friendly interface to \ndeploy, manage, and monitor applications running\

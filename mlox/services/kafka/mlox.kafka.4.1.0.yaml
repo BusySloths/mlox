@@ -1,7 +1,7 @@
 id: kafka-4.1.0-docker
 name: Apache Kafka
 version: 4.1.0
-maintainer: Your Name
+maintainer: Apache Software Foundation
 description_short: Apache Kafka is a distributed event streaming platform for high-performance
   data pipelines.
 description: 'Apache Kafka is an open-source distributed event streaming platform

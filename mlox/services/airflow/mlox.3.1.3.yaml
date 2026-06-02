@@ -1,7 +1,7 @@
 id: airflow-3.1.3-docker
 name: Airflow
 version: 3.1.3
-maintainer: Your Name
+maintainer: Apache Software Foundation
 description_short: Apache Airflow is a workflow orchestrator used to schedule and
   monitor machine learning pipelines.
 description: "Apache Airflow is an open-source workflow orchestrator used to schedule\

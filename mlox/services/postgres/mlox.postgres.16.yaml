@@ -1,7 +1,7 @@
 id: postgres-16-bullseye-docker
 name: Postgres
 version: 16-bullseye
-maintainer: Your Name
+maintainer: PostgreSQL Global Development Group
 description_short: Postgres is a powerful, open-source object-relational database
   system.
 description: "PostgresSQL is a powerful, open-source object-relational database system\

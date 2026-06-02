@@ -1,7 +1,7 @@
 id: gcp-storage-0.1.0
 name: GCP Storage
 version: 0.1.0
-maintainer: Your Name
+maintainer: Google Cloud
 description_short: GCP Storage is a secure and scalable service for managing storage
   in Google Cloud Platform.
 description: 'The GCP Storage is a secure and scalable service for managing storage

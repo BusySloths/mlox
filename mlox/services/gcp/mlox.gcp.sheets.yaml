@@ -1,7 +1,7 @@
 id: gcp-sheets-0.1.0
 name: GCP Sheets
 version: 0.1.0
-maintainer: Your Name
+maintainer: Google Workspace
 description_short: Google Spreadsheets is a secure and scalable service for managing
   sheets in Google Cloud Platform.
 description: "Google Spreadsheets is a secure and scalable service for managing sheets\

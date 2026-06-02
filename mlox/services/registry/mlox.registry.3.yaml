@@ -1,7 +1,7 @@
 id: registry-3-docker
 name: Private Registry
 version: '3'
-maintainer: MLOX Contributors
+maintainer: CNCF Distribution Maintainers
 description_short: Secure, private Docker distribution registry with TLS and htpasswd
   auth.
 description: 'Deploy a private Docker distribution registry secured with automatically

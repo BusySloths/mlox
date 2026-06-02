@@ -1,7 +1,7 @@
 id: openbao-docker
 name: OpenBao
 version: 2.5.4
-maintainer: MLOX Contributors
+maintainer: OpenBao Project
 description_short: OpenBao provides a Vault-compatible secret management server.
 description: 'OpenBao is an open-source, Vault-compatible secret manager offering
   a secure key-value store

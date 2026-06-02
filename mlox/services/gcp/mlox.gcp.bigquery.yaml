@@ -1,7 +1,7 @@
 id: gcp-bigquery-0.1.0
 name: GCP BigQuery
 version: 0.1.0
-maintainer: Your Name
+maintainer: Google Cloud
 description_short: GCP BigQuery is a fully managed, serverless data warehouse that
   enables scalable analysis over petabytes of data.
 description: 'The GCP BigQuery is a fully managed, serverless data warehouse that

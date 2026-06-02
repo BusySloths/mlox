@@ -1,7 +1,7 @@
 id: otel-0.127.0-docker
 name: OpenTelemetry Collector
 version: 0.127.0
-maintainer: Your Name
+maintainer: OpenTelemetry Authors
 description_short: OpenTelemetry Collector is a service for collecting and exporting
   telemetry data.
 description: 'OpenTelemetry Collector is an open-source service that collects, processes,

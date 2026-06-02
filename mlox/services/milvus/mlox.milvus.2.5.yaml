@@ -1,7 +1,7 @@
 id: milvus-2.5-docker
 name: Milvus
 version: '2.5'
-maintainer: Your Name
+maintainer: Milvus Project
 description_short: Milvus is an open-source vector database designed for scalable
   similarity search.
 description: "Milvus is an open-source vector database designed for scalable similarity\

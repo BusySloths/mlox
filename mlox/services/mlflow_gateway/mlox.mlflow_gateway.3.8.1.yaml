@@ -1,7 +1,7 @@
 id: mlflow-gateway-3.8.1-docker
 name: MLFlow Gateway
 version: 3.8.1
-maintainer: Your Name
+maintainer: Busy Sloths
 description_short: Lightweight multi-model HTTP gateway for MLflow registry models.
 description: Provides a simple authenticated HTTPS endpoint that loads MLflow pyfunc
   models dynamically from a configured MLflow registry and caches them for repeated

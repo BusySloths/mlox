@@ -1,7 +1,7 @@
 id: tsm-0.1-beta
 name: TinySecretManager (TSM)
 version: 0.1-beta
-maintainer: Your Name
+maintainer: Busy Sloths
 description_short: TinySecretManager is a lightweight, file-based secret management
   service.
 description: "TinySecretManager (TSM) is a lightweight, file-based secret management\

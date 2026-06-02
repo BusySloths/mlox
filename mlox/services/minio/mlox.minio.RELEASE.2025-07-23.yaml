@@ -1,7 +1,7 @@
 id: minio-release-2025-07-23-docker
 name: MinIO
 version: RELEASE.2025-07-23T15-54-02Z-cpuv1
-maintainer: MLOX Contributors
+maintainer: MinIO, Inc.
 description_short: MinIO is a high-performance, S3 compatible object store.
 description: 'MinIO is a high-performance, S3 compatible object store designed for
   large-scale

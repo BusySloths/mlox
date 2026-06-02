@@ -1,7 +1,7 @@
 id: redis-8-bookworm-docker
 name: Redis
 version: 8-bookworm
-maintainer: Your Name
+maintainer: Redis
 description_short: Redis is an open-source, in-memory data structure store.
 description: "Redis an open-source, in-memory data structure store, used as a database,\
   \ \ncache, and message broker. It supports various data structures such as strings,\

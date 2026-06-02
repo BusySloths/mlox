@@ -1,7 +1,7 @@
 id: github-repo-0.1-beta-docker
 name: Github Repository
 version: 0.1-beta
-maintainer: Your Name
+maintainer: Busy Sloths
 description_short: Clone and pull Github Repositories on your servers.
 description: 'Clone and pull Github Repositories on your servers. Make your repositories
   accessible for installed services.

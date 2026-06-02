@@ -1,7 +1,7 @@
 id: kafka-3.7.0-docker
 name: Bitnami Kafka
 version: 3.7.0
-maintainer: Your Name
+maintainer: Apache Software Foundation
 description_short: Apache Kafka is a distributed event streaming platform for high-performance
   data pipelines.
 description: 'Bitnami Kafka is an open-source distributed event streaming platform

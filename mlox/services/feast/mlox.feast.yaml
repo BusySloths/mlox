@@ -1,7 +1,7 @@
 id: feast-0.54.0
 name: Feast Feature Store
 version: 0.54.0
-maintainer: Your Name
+maintainer: Feast Project
 description_short: Feast is an open-source feature store for managing and serving
   machine learning features.
 description: 'Feast is an open-source feature store designed to help data scientists
