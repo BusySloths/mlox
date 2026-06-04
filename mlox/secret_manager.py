@@ -5,7 +5,7 @@ import logging
 from cryptography.fernet import Fernet
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, cast
+from typing import Any, Dict, Mapping, cast
 from dataclasses import dataclass, field
 
 from mlox.server import AbstractServer
@@ -14,10 +14,15 @@ import importlib
 from mlox.utils import (
     _get_encryption_key,
     dict_to_dataclass,
+    decrypt_dict,
     encrypt_dict,
     load_from_json,
     dataclass_to_dict,
 )
+
+
+SECRET_MANAGER_KEYFILE_ENV = "MLOX_SECRET_MANAGER_KEYFILE"
+SECRET_MANAGER_KEYFILE_PW_ENV = "MLOX_SECRET_MANAGER_KEYFILE_PW"
 
 
 @dataclass
@@ -273,6 +278,35 @@ def get_encrypted_access_keyfile(
     return encrypted_keyfile_dict
 
 
+def _instantiate_secret_manager_from_access_secret(
+    secret_manager_class: str, access_secret: Dict[str, Any]
+) -> AbstractSecretManager | None:
+    module_name, class_name = secret_manager_class.rsplit(".", 1)
+    module = importlib.import_module(module_name)
+    sm_class = getattr(module, class_name)
+    sm_class = cast(type[AbstractSecretManager], sm_class)
+    return sm_class.instantiate_secret_manager(access_secret)
+
+
+def _instantiate_secret_manager_from_keyfile_data(
+    keyfile_data: Dict[str, Any]
+) -> AbstractSecretManager | None:
+    secret_manager_class = keyfile_data["secret_manager_class"]
+    access_secret = keyfile_data["access_secret"]
+    if not secret_manager_class or not isinstance(access_secret, dict):
+        logging.error("Invalid keyfile format.")
+        return None
+    try:
+        return _instantiate_secret_manager_from_access_secret(
+            secret_manager_class, access_secret
+        )
+    except Exception as e:
+        logging.error(
+            f"Error loading secret manager class '{secret_manager_class}': {e}"
+        )
+    return None
+
+
 def load_secret_manager_from_keyfile(
     encrypted_access_keyfile: str, keyfile_pw: str
 ) -> AbstractSecretManager | None:
@@ -280,24 +314,45 @@ def load_secret_manager_from_keyfile(
         # Part I: Load and decrypt the keyfile
         keyfile_data = load_from_json(encrypted_access_keyfile, keyfile_pw)
         logging.warning(f"Loaded keyfile data: {keyfile_data}")
-        secret_manager_class = keyfile_data["secret_manager_class"]
-        access_secret = keyfile_data["access_secret"]
-        if not secret_manager_class or not access_secret:
-            logging.error("Invalid keyfile format.")
-            return None
     except Exception as e:
         logging.error(
             f"Error loading secret manager access secret '{encrypted_access_keyfile}': {e}"
         )
+        return None
+    return _instantiate_secret_manager_from_keyfile_data(keyfile_data)
+
+
+def load_secret_manager_from_env(
+    encrypted_access_keyfile_env: str = SECRET_MANAGER_KEYFILE_ENV,
+    keyfile_pw_env: str = SECRET_MANAGER_KEYFILE_PW_ENV,
+    environ: Mapping[str, str] | None = None,
+) -> AbstractSecretManager | None:
+    """Load a secret manager from environment variables.
+
+    ``encrypted_access_keyfile_env`` must contain the same encrypted keyfile
+    content consumed by ``load_secret_manager_from_keyfile``.
+    """
+    env = os.environ if environ is None else environ
+    encrypted_access_keyfile = env.get(encrypted_access_keyfile_env)
+    keyfile_pw = env.get(keyfile_pw_env)
+
+    if not encrypted_access_keyfile or not keyfile_pw:
+        logging.error(
+            "Secret manager environment variables '%s' and '%s' must be set.",
+            encrypted_access_keyfile_env,
+            keyfile_pw_env,
+        )
+        return None
+
     try:
-        # Part II: Load the secret manager class
-        module_name, class_name = secret_manager_class.rsplit(".", 1)
-        module = importlib.import_module(module_name)
-        sm_class = getattr(module, class_name)
-        sm_class = cast(AbstractSecretManager, sm_class)
-        return sm_class.instantiate_secret_manager(access_secret)
+        keyfile_data = decrypt_dict(encrypted_access_keyfile, keyfile_pw)
+        logging.warning(f"Loaded keyfile data from environment: {keyfile_data}")
     except Exception as e:
         logging.error(
-            f"Error loading secret manager class '{secret_manager_class}': {e}"
+            "Error loading secret manager access secret from environment '%s': %s",
+            encrypted_access_keyfile_env,
+            e,
         )
-    return None
+        return None
+
+    return _instantiate_secret_manager_from_keyfile_data(keyfile_data)

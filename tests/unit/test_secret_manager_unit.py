@@ -5,13 +5,15 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-import pytest
 from cryptography.fernet import Fernet
 
 from mlox.secret_manager import (
     InMemorySecretManager,
+    SECRET_MANAGER_KEYFILE_ENV,
+    SECRET_MANAGER_KEYFILE_PW_ENV,
     TinySecretManager,
     get_encrypted_access_keyfile,
+    load_secret_manager_from_env,
     load_secret_manager_from_keyfile,
 )
 from mlox.utils import _get_encryption_key, decrypt_dict
@@ -168,6 +170,48 @@ def test_load_secret_manager_from_keyfile_paths(monkeypatch):
     assert sm is not None
     assert sm.load_secret("z") == 1
 
-    monkeypatch.setattr("mlox.secret_manager.load_from_json", lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("bad")))
-    with pytest.raises(UnboundLocalError):
-        load_secret_manager_from_keyfile("broken", "pw")
+    monkeypatch.setattr(
+        "mlox.secret_manager.load_from_json",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("bad")),
+    )
+    assert load_secret_manager_from_keyfile("broken", "pw") is None
+
+
+def test_load_secret_manager_from_env(monkeypatch):
+    source_sm = InMemorySecretManager()
+    source_sm.save_secret("z", 1)
+    monkeypatch.setenv(
+        SECRET_MANAGER_KEYFILE_ENV, get_encrypted_access_keyfile(source_sm, "pw")
+    )
+    monkeypatch.setenv(SECRET_MANAGER_KEYFILE_PW_ENV, "pw")
+
+    sm = load_secret_manager_from_env()
+    assert sm is not None
+    assert sm.load_secret("z") == 1
+
+
+def test_load_secret_manager_from_env_custom_names():
+    source_sm = InMemorySecretManager()
+    source_sm.save_secret("custom", "value")
+
+    sm = load_secret_manager_from_env(
+        encrypted_access_keyfile_env="SM_KEYFILE",
+        keyfile_pw_env="SM_PW",
+        environ={
+            "SM_KEYFILE": get_encrypted_access_keyfile(source_sm, "pw"),
+            "SM_PW": "pw",
+        },
+    )
+
+    assert sm is not None
+    assert sm.load_secret("custom") == "value"
+
+
+def test_load_secret_manager_from_env_invalid(monkeypatch):
+    monkeypatch.delenv(SECRET_MANAGER_KEYFILE_ENV, raising=False)
+    monkeypatch.delenv(SECRET_MANAGER_KEYFILE_PW_ENV, raising=False)
+    assert load_secret_manager_from_env() is None
+
+    monkeypatch.setenv(SECRET_MANAGER_KEYFILE_ENV, "not encrypted keyfile content")
+    monkeypatch.setenv(SECRET_MANAGER_KEYFILE_PW_ENV, "pw")
+    assert load_secret_manager_from_env() is None
