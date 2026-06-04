@@ -52,34 +52,100 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
     sealed = bool(status.get("sealed", False)) if status else False
     st.write(f"Initialized: `{initialized}`")
     st.write(f"Sealed: `{sealed}`")
-    st.write(f"Root Token: `{_mask_secret(service.root_token)}`")
-    if service.root_token and st.toggle(
-        "Show full root token",
+    st.write("Namespace: `root`")
+
+    st.markdown("### UI Login")
+    st.caption("Use these credentials for OpenBao UI access instead of the root token.")
+    st.write(f"Method: `{service.userpass_path}`")
+    st.text_input(
+        "Username",
+        value=service.admin_username,
+        disabled=True,
+        key=f"openbao_admin_username_{service.uuid}",
+    )
+    if service.admin_password and st.toggle(
+        "Show UI password",
         value=False,
-        key=f"openbao_show_root_token_{service.uuid}",
+        key=f"openbao_show_admin_password_{service.uuid}",
     ):
         st.text_input(
-            "Root Token",
-            value=service.root_token,
+            "Password",
+            value=service.admin_password,
             disabled=True,
             type="default",
-            key=f"openbao_root_token_{service.uuid}",
+            key=f"openbao_admin_password_{service.uuid}",
         )
-    st.write(f"Unseal Keys: `{len(service.unseal_keys)}`")
-    if service.unseal_keys and st.toggle(
-        "Show unseal keys",
-        value=False,
-        key=f"openbao_show_unseal_keys_{service.uuid}",
+
+    st.markdown("### mlox Client Token")
+    st.write(f"Token: `{_mask_secret(service.client_token)}`")
+    st.write(f"Accessor: `{service.client_token_accessor or '-'}`")
+    st.write(f"Renewable: `{service.client_token_renewable}`")
+    st.write(f"Lease Duration: `{service.client_token_lease_duration}` seconds")
+    if service.client_token_last_renewed_at:
+        st.write(f"Last Updated: `{service.client_token_last_renewed_at}`")
+
+    token_cols = st.columns(2)
+    if token_cols[0].button(
+        "Renew client token",
+        type="primary",
+        key=f"openbao_renew_client_token_{service.uuid}",
     ):
-        for idx, unseal_key in enumerate(service.unseal_keys, start=1):
+        try:
+            service.renew_client_token(infra)
+            st.session_state.pop(key, None)
+            try:
+                st.session_state.mlox.save_infrastructure()
+            except Exception:
+                pass
+            st.success("OpenBao client token renewed.")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Could not renew OpenBao client token: {exc}")
+    if token_cols[1].button(
+        "Rotate client token",
+        key=f"openbao_rotate_client_token_{service.uuid}",
+    ):
+        try:
+            service.rotate_client_token(infra)
+            st.session_state.pop(key, None)
+            try:
+                st.session_state.mlox.save_infrastructure()
+            except Exception:
+                pass
+            st.success("OpenBao client token rotated.")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Could not rotate OpenBao client token: {exc}")
+
+    with st.expander("Emergency recovery material"):
+        st.warning("Use root and unseal material only for recovery or bootstrap tasks.")
+        st.write(f"Root Token: `{_mask_secret(service.root_token)}`")
+        if service.root_token and st.toggle(
+            "Show full root token",
+            value=False,
+            key=f"openbao_show_root_token_{service.uuid}",
+        ):
             st.text_input(
-                f"Unseal Key {idx}",
-                value=unseal_key,
+                "Root Token",
+                value=service.root_token,
                 disabled=True,
                 type="default",
-                key=f"openbao_unseal_key_{service.uuid}_{idx}",
+                key=f"openbao_root_token_{service.uuid}",
             )
-    st.write("Namespace: `root`")
+        st.write(f"Unseal Keys: `{len(service.unseal_keys)}`")
+        if service.unseal_keys and st.toggle(
+            "Show unseal keys",
+            value=False,
+            key=f"openbao_show_unseal_keys_{service.uuid}",
+        ):
+            for idx, unseal_key in enumerate(service.unseal_keys, start=1):
+                st.text_input(
+                    f"Unseal Key {idx}",
+                    value=unseal_key,
+                    disabled=True,
+                    type="default",
+                    key=f"openbao_unseal_key_{service.uuid}_{idx}",
+                )
 
     if sealed:
         if not service.unseal_keys:

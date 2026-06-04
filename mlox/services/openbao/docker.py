@@ -20,16 +20,18 @@ from __future__ import annotations
 import logging
 import json
 import re
+from datetime import datetime, timezone
 import shlex
 import time
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Any, Dict
 
 from mlox.execution.base import TaskGroup
 from mlox.infra import Infrastructure
 from mlox.secret_manager import AbstractSecretManager, AbstractSecretManagerService
 from mlox.service import AbstractService
 from .client import OpenBaoSecretManager
+from mlox.utils import generate_password
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +45,22 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
     root_token: str = ""
     key_shares: int = 1
     key_threshold: int = 1
+    userpass_path: str = "userpass"
+    admin_username: str = "mlox-admin"
+    admin_password: str = ""
+    kv_policy_name: str = "mlox-kv-rw"
+    ui_policy_name: str = "mlox-ui-kv-admin"
+    client_token: str = ""
+    client_token_accessor: str = ""
+    client_token_ttl: str = "24h"
+    client_token_max_ttl: str = "168h"
+    client_token_lease_duration: int = 0
+    client_token_renewable: bool = True
+    client_token_last_renewed_at: str = ""
     compose_service_names: Dict[str, str] = field(init=False, default_factory=dict)
-    unseal_keys: list[str] = field(default_factory=list, init=False)
-    service_url: str = field(default="", init=False)
-    stack_prefix: str = field(default="", init=False)
+    unseal_keys: list[str] = field(default_factory=list)
+    service_url: str = ""
+    stack_prefix: str = ""
 
     def __post_init__(self) -> None:
         self.port = int(self.port)
@@ -117,6 +131,7 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
         if result:
             logger.info("Bootstrapping OpenBao production instance.")
             self._bootstrap_openbao(conn)
+            self._configure_mlox_access(conn)
             logger.info("OpenBao bootstrap completed.")
         self.state = "running" if result else "unknown"
         return result
@@ -159,37 +174,88 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
             return {"status": "unknown", "error": str(exc)}
 
     def get_secrets(self) -> Dict[str, Dict]:
-        if not self.root_token:
+        if not self.client_token:
             return {}
         return {
-            "openbao_root_credentials": {
-                "token": self.root_token,
-                "root_token": self.root_token,
-                "unseal_keys": list(self.unseal_keys),
+            "openbao_client_credentials": {
+                "token": self.client_token,
                 "address": self.service_url,
                 "mount_path": self.mount_path,
                 "verify_tls": False,
+                "renewable": self.client_token_renewable,
+                "lease_duration": self.client_token_lease_duration,
+                "token_accessor": self.client_token_accessor,
             }
         }
 
     # ------------------------------------------------------------------
     # AbstractSecretManagerService implementation
     # ------------------------------------------------------------------
-    def get_secret_manager(self, infra: Infrastructure) -> AbstractSecretManager:
-        bundle = infra.get_bundle_by_service(self)
-        if bundle is None:
-            raise ValueError(
-                "OpenBao service is not attached to a bundle in the infrastructure"
-            )
+    def get_secret_manager(
+        self, infra: Infrastructure | None = None
+    ) -> AbstractSecretManager:
+        address = self.service_url
+        if infra is not None:
+            bundle = infra.get_bundle_by_service(self)
+            if bundle is None:
+                raise ValueError(
+                    "OpenBao service is not attached to a bundle in the infrastructure"
+                )
+            address = f"https://{bundle.server.ip}:{self.port}"
+        if not address:
+            raise ValueError("OpenBao service URL is not configured.")
 
-        server = bundle.server
-        address = f"https://{server.ip}:{self.port}"
+        token = self.client_token or self.root_token
+        if not token:
+            raise ValueError("OpenBao client token is not configured.")
+        return OpenBaoSecretManager(
+            address=address,
+            token=token,
+            mount_path=self.mount_path,
+            unseal_keys=list(self.unseal_keys),
+        )
+
+    def get_root_secret_manager(
+        self, infra: Infrastructure | None = None
+    ) -> OpenBaoSecretManager:
+        """Return a bootstrap/recovery client that uses the root token."""
+
+        address = self.service_url
+        if infra is not None:
+            bundle = infra.get_bundle_by_service(self)
+            if bundle is None:
+                raise ValueError(
+                    "OpenBao service is not attached to a bundle in the infrastructure"
+                )
+            address = f"https://{bundle.server.ip}:{self.port}"
+        if not address:
+            raise ValueError("OpenBao service URL is not configured.")
+        if not self.root_token:
+            raise ValueError("OpenBao root token is not configured.")
         return OpenBaoSecretManager(
             address=address,
             token=self.root_token,
             mount_path=self.mount_path,
             unseal_keys=list(self.unseal_keys),
         )
+
+    def renew_client_token(
+        self, infra: Infrastructure | None = None, increment: str | int | None = None
+    ) -> Dict[str, Any]:
+        """Renew the scoped mlox client token and update stored metadata."""
+
+        manager = self.get_secret_manager(infra)
+        auth = manager.renew_self(increment or self.client_token_ttl)
+        self._store_client_token_auth(auth)
+        return auth
+
+    def rotate_client_token(self, infra: Infrastructure | None = None) -> Dict[str, Any]:
+        """Create a replacement scoped mlox client token using the root token."""
+
+        manager = self.get_root_secret_manager(infra)
+        auth = self._create_client_token(manager)
+        self._store_client_token_auth(auth)
+        return auth
 
     def _render_config(self, host: str) -> str:
         node_id = f"mlox-openbao-{self.uuid[:8]}"
@@ -212,6 +278,125 @@ listener "tcp" {{
   tls_key_file = "/openbao/tls/key.pem"
 }}
 """
+
+    def _root_api_client(self, conn) -> OpenBaoSecretManager:
+        address = self.service_url or f"https://{conn.host}:{self.port}"
+        return OpenBaoSecretManager(
+            address=address,
+            token=self.root_token,
+            mount_path=self.mount_path,
+            unseal_keys=list(self.unseal_keys),
+        )
+
+    def _render_kv_policy(self) -> str:
+        mount = self.mount_path.strip("/") or "secret"
+        return f'''path "{mount}/data/*" {{
+  capabilities = ["create", "update", "read", "patch"]
+}}
+
+path "{mount}/metadata" {{
+  capabilities = ["list", "read"]
+}}
+
+path "{mount}/metadata/*" {{
+  capabilities = ["list", "read"]
+}}
+'''
+
+    def _render_ui_policy(self) -> str:
+        mount = self.mount_path.strip("/") or "secret"
+        return f'''path "{mount}/data/*" {{
+  capabilities = ["create", "update", "read", "patch", "delete"]
+}}
+
+path "{mount}/metadata" {{
+  capabilities = ["list", "read", "delete"]
+}}
+
+path "{mount}/metadata/*" {{
+  capabilities = ["list", "read", "delete"]
+}}
+
+path "sys/internal/ui/mounts" {{
+  capabilities = ["read"]
+}}
+
+path "sys/internal/ui/mounts/*" {{
+  capabilities = ["read"]
+}}
+'''
+
+    def _configure_mlox_access(self, conn) -> None:
+        if not self.root_token:
+            raise RuntimeError("OpenBao root token is required for mlox access setup.")
+
+        manager = self._root_api_client(conn)
+        logger.info("Ensuring OpenBao KV v2 mount '%s' exists via API.", self.mount_path)
+        manager.ensure_kv_v2(self.mount_path)
+        logger.info("Ensuring OpenBao file audit device exists via API.")
+        manager.enable_file_audit()
+        logger.info("Writing OpenBao mlox policies.")
+        manager.write_policy(self.kv_policy_name, self._render_kv_policy())
+        manager.write_policy(self.ui_policy_name, self._render_ui_policy())
+        logger.info("Ensuring OpenBao userpass auth is configured.")
+        manager.ensure_userpass_auth(self.userpass_path)
+        if not self.admin_password:
+            self.admin_password = generate_password(length=24, with_punctuation=False)
+        manager.create_or_update_userpass_user(
+            self.admin_username,
+            self.admin_password,
+            policies=[self.ui_policy_name],
+            ttl="8h",
+            max_ttl="24h",
+            path=self.userpass_path,
+        )
+        if not self._client_token_is_valid(manager):
+            logger.info("Creating scoped OpenBao client token for mlox.")
+            self._store_client_token_auth(self._create_client_token(manager))
+
+    def _client_token_is_valid(self, manager: OpenBaoSecretManager) -> bool:
+        if not self.client_token:
+            return False
+        try:
+            token_data = manager.lookup_token(self.client_token)
+        except Exception as exc:  # pragma: no cover - defensive OpenBao path
+            logger.info("Existing OpenBao client token is not valid: %s", exc)
+            return False
+        ttl = int(token_data.get("ttl") or 0)
+        if ttl <= 0:
+            return False
+        self.client_token_accessor = str(
+            token_data.get("accessor") or self.client_token_accessor or ""
+        )
+        self.client_token_lease_duration = ttl
+        self.client_token_renewable = bool(token_data.get("renewable", True))
+        return True
+
+    def _create_client_token(self, manager: OpenBaoSecretManager) -> Dict[str, Any]:
+        return manager.create_token(
+            ttl=self.client_token_ttl,
+            policies=[self.kv_policy_name],
+            renewable=True,
+            explicit_max_ttl=self.client_token_max_ttl,
+            metadata={
+                "managed_by": "mlox",
+                "service_uuid": self.uuid,
+                "purpose": "mlox-secret-manager-client",
+            },
+        )
+
+    def _store_client_token_auth(self, auth: Dict[str, Any]) -> None:
+        token = auth.get("client_token")
+        if token:
+            self.client_token = str(token)
+        accessor = auth.get("accessor")
+        if accessor:
+            self.client_token_accessor = str(accessor)
+        if auth.get("lease_duration") is not None:
+            self.client_token_lease_duration = int(auth.get("lease_duration") or 0)
+        if auth.get("renewable") is not None:
+            self.client_token_renewable = bool(auth.get("renewable"))
+        self.client_token_last_renewed_at = datetime.now(timezone.utc).isoformat()
 
     def _bootstrap_openbao(self, conn) -> None:
         health = self._wait_for_container_health(conn)
@@ -264,27 +449,6 @@ listener "tcp" {{
         if not self.root_token:
             raise RuntimeError("OpenBao is initialized but no root token is available.")
 
-        logger.info("Ensuring OpenBao KV v2 mount '%s' exists.", self.mount_path)
-        self._bao(
-            conn,
-            "secrets",
-            "enable",
-            f"-path={self.mount_path}",
-            "-version=2",
-            "kv",
-            token=self.root_token,
-            allow_failure=True,
-        )
-        logger.info("Ensuring OpenBao file audit device exists.")
-        self._bao(
-            conn,
-            "audit",
-            "enable",
-            "file",
-            "file_path=/openbao/logs/audit.log",
-            token=self.root_token,
-            allow_failure=True,
-        )
 
     def _wait_for_container_health(self, conn) -> Dict:
         last_error: Exception | None = None

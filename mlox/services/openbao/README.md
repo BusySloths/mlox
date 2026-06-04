@@ -20,6 +20,7 @@ The mlox OpenBao stack now uses:
 - Persistent host bind mounts for `data`, `logs`, config, and TLS material.
 - mlox-managed initialization, unseal keys, and root token storage.
 - KV v2 enabled at the configured mount path.
+- mlox-scoped policies, userpass UI login, and renewable client token.
 - File audit logging at `/openbao/logs/audit.log`.
 
 The Docker compose stack intentionally exposes OpenBao directly over HTTPS. It
@@ -64,7 +65,10 @@ container-local `bao` CLI. It then performs bootstrap:
 2. mlox stores the returned root token and unseal key in the service state.
 3. If OpenBao is sealed, mlox submits stored unseal keys.
 4. mlox ensures KV v2 exists at `mount_path`.
-5. mlox enables file audit logging.
+5. mlox writes least-privilege mlox policies.
+6. mlox enables userpass and creates UI login credentials.
+7. mlox creates a renewable scoped client token for secret-manager access.
+8. mlox enables file audit logging.
 
 The default bootstrap uses one key share and a threshold of one:
 
@@ -84,15 +88,16 @@ The OpenBao settings panel shows:
 
 - initialization status
 - seal status
-- masked root token
-- optional full root token reveal
-- unseal key count
-- optional unseal key reveal
+- userpass UI login credentials
+- scoped mlox client token status
+- token renewal and rotation actions
+- emergency-only root token reveal
+- unseal key count and optional emergency reveal
 - an `Unseal` button when OpenBao is sealed
 - the KV secret list when OpenBao is initialized and unsealed
 
-Use `Show full root token` when you need to log into the OpenBao browser UI.
-The namespace is `root`.
+Use the generated userpass credentials for the OpenBao browser UI. Use the root
+token only for recovery or bootstrap administration. The namespace is `root`.
 
 Secrets can be added, listed, and read directly from the mlox UI. The client uses
 KV v2 paths, so a secret named `example` is written to:
@@ -122,10 +127,13 @@ the client machine.
 Login with:
 
 ```text
-Method: Token
-Token: <root token shown in mlox settings>
+Method: userpass
+Username: <mlox admin username shown in settings>
+Password: <mlox admin password shown in settings>
 Namespace: root
 ```
+
+Root token login remains available only as emergency recovery material.
 
 ## Seal And Unseal
 
@@ -171,8 +179,8 @@ and the bootstrap call is container-local. mlox clients also default
 ## Operational Notes
 
 - Keep the root token and unseal key backed up outside mlox.
-- Rotate away from the root token for day-to-day OpenBao administration when
-  adding policy and token management.
+- Use the generated userpass credentials and scoped client token for day-to-day
+  access instead of the root token.
 - Do not use teardown unless deleting the OpenBao data is intended.
 - Future production hardening can add HA Raft peers, KMS auto-unseal, trusted
   certificates, and least-privilege OpenBao policies.

@@ -260,6 +260,14 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
         FakeExec(),
     )
     service._bootstrap_openbao = lambda *_: setattr(service, "root_token", "root")
+    service._configure_mlox_access = lambda *_: service._store_client_token_auth(
+        {
+            "client_token": "client",
+            "accessor": "accessor",
+            "lease_duration": 86400,
+            "renewable": True,
+        }
+    )
 
     service.setup(conn)
     assert service.port == 8200
@@ -308,6 +316,7 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
     assert service.spin_up(conn) is True
     assert service.state == "running"
     assert service.root_token == "root"
+    assert service.client_token == "client"
     execute_calls = [call for call in service.exec.calls if call[0] == "execute"]
     assert execute_calls
     assert execute_calls[-1][1][0].startswith("timeout 300s docker compose")
@@ -325,6 +334,59 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
     sm = service.get_secret_manager(infra)
     assert isinstance(sm, OpenBaoSecretManager)
     assert sm.address == "https://10.0.0.7:8200"
+    assert sm.token == "client"
+    root_sm = service.get_root_secret_manager(infra)
+    assert root_sm.token == "root"
+    secrets = service.get_secrets()["openbao_client_credentials"]
+    assert secrets["token"] == "client"
+    assert "root_token" not in secrets
+
+
+def test_openbao_configure_mlox_access(conn, monkeypatch):
+    service = _set_exec(
+        OpenBaoDockerService(**BASE, port="8200", mount_path="kv", root_token="root"),
+        FakeExec(),
+    )
+    service.service_url = "https://example.test:8200"
+    calls = []
+
+    def record(name):
+        def inner(*args, **kwargs):
+            calls.append((name, args, kwargs))
+            if name == "lookup_token":
+                raise RuntimeError("missing token")
+            if name == "create_token":
+                return {
+                    "client_token": "scoped",
+                    "accessor": "acc",
+                    "lease_duration": 86400,
+                    "renewable": True,
+                }
+            return {}
+
+        return inner
+
+    monkeypatch.setattr(OpenBaoSecretManager, "ensure_kv_v2", record("ensure_kv_v2"))
+    monkeypatch.setattr(OpenBaoSecretManager, "enable_file_audit", record("audit"))
+    monkeypatch.setattr(OpenBaoSecretManager, "write_policy", record("policy"))
+    monkeypatch.setattr(
+        OpenBaoSecretManager, "ensure_userpass_auth", record("userpass")
+    )
+    monkeypatch.setattr(
+        OpenBaoSecretManager, "create_or_update_userpass_user", record("user")
+    )
+    monkeypatch.setattr(OpenBaoSecretManager, "lookup_token", record("lookup_token"))
+    monkeypatch.setattr(OpenBaoSecretManager, "create_token", record("create_token"))
+
+    service._configure_mlox_access(conn)
+
+    assert service.admin_password
+    assert service.client_token == "scoped"
+    assert service.client_token_accessor == "acc"
+    assert service.client_token_lease_duration == 86400
+    assert any(call[0] == "ensure_kv_v2" and call[1][1:] == ("kv",) for call in calls)
+    assert any(call[0] == "user" for call in calls)
+    assert any(call[0] == "policy" for call in calls)
 
 
 def test_openbao_health_wait_requires_real_status(conn, monkeypatch):
@@ -878,8 +940,21 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
             return {"root_token": "root", "keys_base64": ["key"]}
         if method == "POST" and path == "/v1/sys/unseal":
             return {"sealed": False}
+        if method == "GET" and path == "/v1/sys/mounts":
+            return {"data": {}}
         if method == "POST" and path == "/v1/sys/mounts/kv":
             return {}
+        if method == "POST" and path == "/v1/sys/policy/mlox":
+            return {}
+        if method == "GET" and path == "/v1/sys/auth":
+            return {"data": {}}
+        if method == "POST" and path == "/v1/sys/auth/userpass":
+            return {}
+        if method == "POST" and path == "/v1/auth/userpass/users/alice":
+            return {}
+        if method == "POST" and path == "/v1/auth/userpass/login/alice":
+            assert kwargs.get("include_token") is False
+            return {"auth": {"client_token": "user-token"}}
         if method == "PUT" and path == "/v1/sys/audit/file":
             return {}
         if method == "GET" and path == "/v1/kv/metadata":
@@ -888,6 +963,12 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
             return {"data": {"data": {"x": 1}}}
         if method == "POST" and path.startswith("/v1/auth/token/create"):
             return {"auth": {"client_token": "child-token"}}
+        if method == "GET" and path == "/v1/auth/token/lookup-self":
+            return {"data": {"ttl": 300}}
+        if method == "POST" and path == "/v1/auth/token/lookup":
+            return {"data": {"ttl": 300}}
+        if method == "POST" and path == "/v1/auth/token/renew-self":
+            return {"auth": {"client_token": "tok", "lease_duration": 300}}
         return {}
 
     monkeypatch.setattr(manager, "_request", _request)
@@ -896,14 +977,37 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
     assert manager.initialize(1, 1)["root_token"] == "root"
     assert manager.unseal("key")["sealed"] is False
     manager.enable_kv_v2("kv")
+    manager.ensure_kv_v2("kv")
+    manager.write_policy("mlox", "path \"kv/*\" {}")
+    manager.ensure_userpass_auth()
+    manager.create_or_update_userpass_user("alice", "pw", policies=["mlox"])
+    assert manager.login_userpass("alice", "pw")["client_token"] == "user-token"
     manager.enable_file_audit()
     assert manager.list_secrets(keys_only=False) == {"a": {"x": 1}}
     manager.save_secret("x", "{\"y\":1}")
     assert manager.create_token(300)["client_token"] == "child-token"
+    assert manager.lookup_self()["ttl"] == 300
+    assert manager.lookup_token("tok")["ttl"] == 300
+    assert manager.renew_self(300)["lease_duration"] == 300
     assert manager.get_access_secrets()["mount_path"] == "kv"
     assert ("POST", "/v1/sys/init") in [(method, path) for method, path, _ in calls]
     assert ("POST", "/v1/sys/unseal") in [(method, path) for method, path, _ in calls]
     assert ("POST", "/v1/sys/mounts/kv") in [
+        (method, path) for method, path, _ in calls
+    ]
+    assert ("POST", "/v1/sys/policy/mlox") in [
+        (method, path) for method, path, _ in calls
+    ]
+    assert ("POST", "/v1/sys/auth/userpass") in [
+        (method, path) for method, path, _ in calls
+    ]
+    assert ("POST", "/v1/auth/userpass/users/alice") in [
+        (method, path) for method, path, _ in calls
+    ]
+    assert ("POST", "/v1/auth/userpass/login/alice") in [
+        (method, path) for method, path, _ in calls
+    ]
+    assert ("POST", "/v1/auth/token/renew-self") in [
         (method, path) for method, path, _ in calls
     ]
     assert ("PUT", "/v1/sys/audit/file") in [

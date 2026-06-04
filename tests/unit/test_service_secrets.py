@@ -78,15 +78,23 @@ SERVICE_CASES = [
     ),
     (
         OpenBaoDockerService,
-        {"root_token": "root-token", "port": "8200", "mount_path": "kv"},
         {
-            "openbao_root_credentials": {
-                "token": "root-token",
-                "root_token": "root-token",
-                "unseal_keys": [],
+            "root_token": "root-token",
+            "client_token": "client-token",
+            "client_token_accessor": "accessor",
+            "client_token_lease_duration": 86400,
+            "port": "8200",
+            "mount_path": "kv",
+        },
+        {
+            "openbao_client_credentials": {
+                "token": "client-token",
                 "address": "https://example.test:8200",
                 "mount_path": "kv",
                 "verify_tls": False,
+                "renewable": True,
+                "lease_duration": 86400,
+                "token_accessor": "accessor",
             }
         },
         lambda service: setattr(service, "service_url", "https://example.test:8200"),
