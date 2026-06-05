@@ -55,6 +55,8 @@ The generated OpenBao config includes:
 - `cluster_addr = "http://openbao:8201"`
 - `ui = true`
 - `disable_mlock = true`
+- file audit logging at `/openbao/logs/audit.log` via declarative
+  `audit "file" "file"` configuration
 
 ## Bootstrap Flow
 
@@ -68,7 +70,9 @@ container-local `bao` CLI. It then performs bootstrap:
 5. mlox writes least-privilege mlox policies.
 6. mlox enables userpass and creates UI login credentials.
 7. mlox creates a renewable scoped client token for secret-manager access.
-8. mlox enables file audit logging.
+
+File audit logging is configured before startup in `openbao.hcl`. OpenBao no
+longer allows normal API-created audit devices in this runtime mode.
 
 The default bootstrap uses one key share and a threshold of one:
 
@@ -98,6 +102,12 @@ The OpenBao settings panel shows:
 
 Use the generated userpass credentials for the OpenBao browser UI. Use the root
 token only for recovery or bootstrap administration. The namespace is `root`.
+
+The downloadable secret-manager keyfile contains only a scoped mlox API token
+and connection metadata. It does not contain the root token, unseal keys, or UI
+password. For OpenBao, keyfiles are generated for named applications. mlox stores
+only each application's token accessor and metadata, so the root-backed UI can
+renew or revoke that application's credential without storing the token value.
 
 Secrets can be added, listed, and read directly from the mlox UI. The client uses
 KV v2 paths, so a secret named `example` is written to:
@@ -181,6 +191,12 @@ and the bootstrap call is container-local. mlox clients also default
 - Keep the root token and unseal key backed up outside mlox.
 - Use the generated userpass credentials and scoped client token for day-to-day
   access instead of the root token.
+- Application keyfile tokens are periodic renewable tokens. They can keep
+  running indefinitely if they are renewed before each selected period expires.
+- If a keyfile token expires, API calls made with that keyfile fail with
+  OpenBao's token-expired/permission error. Rotate and download a new keyfile.
+- Rotating the service token does not update already downloaded keyfiles because
+  each keyfile contains its own token string.
 - Do not use teardown unless deleting the OpenBao data is intended.
 - Future production hardening can add HA Raft peers, KMS auto-unseal, trusted
   certificates, and least-privilege OpenBao policies.

@@ -196,6 +196,10 @@ def test_openbao_secret_manager_is_self_contained(install_openbao_service):
     sm.save_secret(secret_name, secret_payload)
     access = sm.get_access_secrets()
     assert access
+    assert access.get("token") == service.client_token
+    assert access.get("token") != service.root_token
+    assert "unseal_keys" not in access
+    assert "root_token" not in access
 
     restored = OpenBaoSecretManager.instantiate_secret_manager(access)
     assert restored is not None

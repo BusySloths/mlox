@@ -8,6 +8,15 @@ from mlox.utils import generate_pw
 from mlox.view.utils import st_hack_align
 from mlox.secret_manager import get_encrypted_access_keyfile
 
+APPLICATION_PERIOD_OPTIONS: dict[str, str] = {
+    "1 hour": "1h",
+    "8 hours": "8h",
+    "24 hours": "24h",
+    "7 days": "168h",
+    "30 days": "720h",
+    "90 days": "2160h",
+}
+
 # Lightweight CSS for badges, chips, and custom tables
 st.markdown(
     """
@@ -138,24 +147,67 @@ def secrets() -> None:
                 "Download the keyfile for this secret manager. It contains the access information required to connect to it."
             )
             c1, c2, c3 = st.columns(3)
-            keyfile_name = c1.text_input(
-                "Keyfile Name",
-                value=f"{secret_manager_service.name}.json",
-                key=f"keyfile_name_{secret_manager_service.name}",
+            application_name = c1.text_input(
+                "Application",
+                value=secret_manager_service.name,
+                key=f"keyfile_application_{secret_manager_service.name}",
             )
+            keyfile_name = f"{application_name.strip() or secret_manager_service.name}.json"
             keyfile_pw = c2.text_input(
                 "Password",
                 value=generate_pw(16),
                 key=f"keyfile_pw_{secret_manager_service.name}",
             )
-
-            encrypted_keyfile_dict = get_encrypted_access_keyfile(
-                secret_manager, keyfile_pw
+            supports_scoped_ttl = hasattr(
+                secret_manager_service, "create_keyfile_secret_manager"
             )
+            period_label = "24 hours"
+            if supports_scoped_ttl:
+                period_label = c3.selectbox(
+                    "Renewal period",
+                    options=list(APPLICATION_PERIOD_OPTIONS.keys()),
+                    index=2,
+                    key=f"keyfile_ttl_{secret_manager_service.name}",
+                )
+
+            generated_key = f"generated_access_keyfile_{secret_manager_service.uuid}"
+            signature_key = f"{generated_key}_signature"
+            keyfile_signature = (
+                application_name,
+                keyfile_pw,
+                APPLICATION_PERIOD_OPTIONS.get(period_label)
+                if supports_scoped_ttl
+                else None,
+            )
+            if supports_scoped_ttl:
+                period = APPLICATION_PERIOD_OPTIONS[period_label]
+                if st.session_state.get(signature_key) != keyfile_signature:
+                    keyfile_secret_manager = (
+                        secret_manager_service.create_keyfile_secret_manager(
+                            infra,
+                            period=period,
+                            application_name=application_name,
+                        )
+                    )
+                    st.session_state[generated_key] = get_encrypted_access_keyfile(
+                        keyfile_secret_manager, keyfile_pw
+                    )
+                    st.session_state[signature_key] = keyfile_signature
+                    try:
+                        st.session_state.mlox.save_infrastructure()
+                    except Exception:
+                        pass
+                encrypted_keyfile = st.session_state[generated_key]
+                st.caption(f"Renewal period: `{period}`")
+            else:
+                encrypted_keyfile = get_encrypted_access_keyfile(
+                    secret_manager, keyfile_pw
+                )
+
             st_hack_align(c3)
             c3.download_button(
                 "Download Keyfile",
-                data=encrypted_keyfile_dict,
+                data=encrypted_keyfile,
                 file_name=keyfile_name,
                 mime="application/json",
                 icon=":material/download:",

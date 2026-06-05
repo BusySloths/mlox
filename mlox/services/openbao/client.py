@@ -296,6 +296,7 @@ class OpenBaoSecretManager(AbstractSecretManager):
         errors = response.get("errors", [])
         if errors and not any(
             "path is already in use" in str(err) or "already exists" in str(err)
+            or "declarative, config-based audit device management" in str(err)
             for err in errors
         ):
             raise RuntimeError(f"Could not enable OpenBao file audit: {errors}")
@@ -374,7 +375,7 @@ class OpenBaoSecretManager(AbstractSecretManager):
 
     def create_token(
         self,
-        ttl: str | int,
+        ttl: str | int | None = None,
         *,
         policies: list[str] | None = None,
         renewable: bool | None = None,
@@ -388,10 +389,13 @@ class OpenBaoSecretManager(AbstractSecretManager):
         """Create a new scoped child token using the manager's root/admin token."""
 
         duration = self._stringify_duration(ttl)
-        if not duration:
-            raise ValueError("A TTL must be provided when creating a token.")
+        token_period = self._stringify_duration(period)
+        if not duration and not token_period:
+            raise ValueError("A TTL or period must be provided when creating a token.")
 
-        payload: Dict[str, Any] = {"ttl": duration}
+        payload: Dict[str, Any] = {}
+        if duration:
+            payload["ttl"] = duration
         if policies is not None:
             payload["policies"] = policies
         if renewable is not None:
@@ -402,8 +406,8 @@ class OpenBaoSecretManager(AbstractSecretManager):
             payload["num_uses"] = num_uses
         if no_default_policy is not None:
             payload["no_default_policy"] = no_default_policy
-        if period is not None:
-            payload["period"] = self._stringify_duration(period)
+        if token_period is not None:
+            payload["period"] = token_period
         if metadata:
             payload["meta"] = metadata
 
@@ -428,6 +432,13 @@ class OpenBaoSecretManager(AbstractSecretManager):
 
         return self._request(
             "POST", "/v1/auth/token/lookup", data={"token": token}
+        ).get("data", {})
+
+    def lookup_accessor(self, accessor: str) -> Dict[str, Any]:
+        """Lookup token metadata by accessor without needing the token value."""
+
+        return self._request(
+            "POST", "/v1/auth/token/lookup-accessor", data={"accessor": accessor}
         ).get("data", {})
 
     def renew_self(self, increment: str | int | None = None) -> Dict[str, Any]:
@@ -458,11 +469,34 @@ class OpenBaoSecretManager(AbstractSecretManager):
             raise RuntimeError("OpenBao did not return token renewal information.")
         return auth
 
+    def renew_accessor(
+        self, accessor: str, increment: str | int | None = None
+    ) -> Dict[str, Any]:
+        """Renew a token by accessor using the current token's privileges."""
+
+        payload: Dict[str, Any] = {"accessor": accessor}
+        if increment is not None:
+            payload["increment"] = self._stringify_duration(increment)
+        response = self._request("POST", "/v1/auth/token/renew-accessor", data=payload)
+        auth = response.get("auth", {})
+        if not auth:
+            raise RuntimeError("OpenBao did not return token renewal information.")
+        return auth
+
+    def revoke_accessor(self, accessor: str) -> None:
+        """Revoke a token by accessor using the current token's privileges."""
+
+        self._request(
+            "POST",
+            "/v1/auth/token/revoke-accessor",
+            data={"accessor": accessor},
+            expected_status=(200, 204),
+        )
+
     def get_access_secrets(self) -> Dict[str, Any] | None:
         return {
             "address": self.address,
             "token": self.token,
             "mount_path": self.mount_path,
             "verify_tls": self.verify_tls,
-            "unseal_keys": list(self.unseal_keys),
         }

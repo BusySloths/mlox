@@ -300,6 +300,8 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
     assert "tls_disable = false" in config
     assert 'tls_cert_file = "/openbao/tls/cert.pem"' in config
     assert 'tls_key_file = "/openbao/tls/key.pem"' in config
+    assert 'audit "file" "file"' in config
+    assert 'file_path = "/openbao/logs/audit.log"' in config
     compose = Path("mlox/services/openbao/docker-compose-openbao.yaml").read_text()
     assert "server -dev" not in compose
     assert "dev-root-token" not in compose
@@ -317,6 +319,14 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
     assert service.state == "running"
     assert service.root_token == "root"
     assert service.client_token == "client"
+    service.unseal_keys = ["unseal-key"]
+    access_secrets = service.get_secret_manager().get_access_secrets()
+    assert access_secrets == {
+        "address": "https://example.test:8200",
+        "token": "client",
+        "mount_path": "kv",
+        "verify_tls": False,
+    }
     execute_calls = [call for call in service.exec.calls if call[0] == "execute"]
     assert execute_calls
     assert execute_calls[-1][1][0].startswith("timeout 300s docker compose")
@@ -340,6 +350,16 @@ def test_openbao_setup_spin_check_and_secret_manager(conn):
     secrets = service.get_secrets()["openbao_client_credentials"]
     assert secrets["token"] == "client"
     assert "root_token" not in secrets
+
+    root_only_service = _set_exec(
+        OpenBaoDockerService(
+            **BASE, port="8200", mount_path="kv", root_token="root-only"
+        ),
+        FakeExec(),
+    )
+    root_only_service.service_url = "https://example.test:8200"
+    with pytest.raises(ValueError, match="client token"):
+        root_only_service.get_secret_manager()
 
 
 def test_openbao_configure_mlox_access(conn, monkeypatch):
@@ -367,7 +387,6 @@ def test_openbao_configure_mlox_access(conn, monkeypatch):
         return inner
 
     monkeypatch.setattr(OpenBaoSecretManager, "ensure_kv_v2", record("ensure_kv_v2"))
-    monkeypatch.setattr(OpenBaoSecretManager, "enable_file_audit", record("audit"))
     monkeypatch.setattr(OpenBaoSecretManager, "write_policy", record("policy"))
     monkeypatch.setattr(
         OpenBaoSecretManager, "ensure_userpass_auth", record("userpass")
@@ -385,8 +404,95 @@ def test_openbao_configure_mlox_access(conn, monkeypatch):
     assert service.client_token_accessor == "acc"
     assert service.client_token_lease_duration == 86400
     assert any(call[0] == "ensure_kv_v2" and call[1][1:] == ("kv",) for call in calls)
+    assert not any(call[0] == "audit" for call in calls)
     assert any(call[0] == "user" for call in calls)
     assert any(call[0] == "policy" for call in calls)
+
+
+def test_openbao_create_keyfile_secret_manager_uses_fresh_scoped_token(monkeypatch):
+    service = OpenBaoDockerService(
+        **BASE,
+        port="8200",
+        mount_path="kv",
+        root_token="root",
+        kv_policy_name="mlox-kv",
+    )
+    service.service_url = "https://example.test:8200"
+    calls = []
+
+    root_manager = OpenBaoSecretManager(
+        address="https://example.test:8200",
+        token="root",
+        mount_path="kv",
+        verify_tls=False,
+        unseal_keys=["unseal"],
+    )
+
+    def create_token(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {
+            "client_token": "keyfile-token",
+            "accessor": "keyfile-accessor",
+            "lease_duration": 3600,
+            "renewable": True,
+        }
+
+    monkeypatch.setattr(root_manager, "create_token", create_token)
+    monkeypatch.setattr(service, "get_root_secret_manager", lambda *_: root_manager)
+
+    keyfile_manager = service.create_keyfile_secret_manager(
+        period="1h",
+        application_name="demo-app.json",
+    )
+
+    assert keyfile_manager.address == "https://example.test:8200"
+    assert keyfile_manager.token == "keyfile-token"
+    assert keyfile_manager.mount_path == "kv"
+    assert keyfile_manager.get_access_secrets() == {
+        "address": "https://example.test:8200",
+        "token": "keyfile-token",
+        "mount_path": "kv",
+        "verify_tls": False,
+    }
+    assert calls == [
+        (
+            (),
+            {
+                "policies": ["mlox-kv"],
+                "renewable": True,
+                "period": "1h",
+                "metadata": {
+                    "managed_by": "mlox",
+                    "service_uuid": service.uuid,
+                    "purpose": "mlox-secret-manager-keyfile",
+                    "application_name": "demo-app",
+                },
+            },
+        )
+    ]
+    assert service.application_credentials["demo-app"]["accessor"] == "keyfile-accessor"
+    assert service.application_credentials["demo-app"]["lease_duration"] == 3600
+    assert service.application_credentials["demo-app"]["period"] == "1h"
+
+    def renew_accessor(accessor, increment=None):
+        assert accessor == "keyfile-accessor"
+        assert increment is None
+        return {"lease_duration": 7200, "renewable": True}
+
+    revoked = []
+    monkeypatch.setattr(root_manager, "renew_accessor", renew_accessor)
+    monkeypatch.setattr(root_manager, "revoke_accessor", lambda accessor: revoked.append(accessor))
+
+    service.renew_application_credential("demo-app")
+    assert service.application_credentials["demo-app"]["lease_duration"] == 7200
+    service.revoke_application_credential("demo-app")
+    assert revoked == ["keyfile-accessor"]
+    assert "demo-app" not in service.application_credentials
+
+    credential = service.create_application_credential("demo-app", period="2160h")
+    assert credential["application_name"] == "demo-app"
+    assert credential["accessor"] == "keyfile-accessor"
+    assert credential["period"] == "2160h"
 
 
 def test_openbao_health_wait_requires_real_status(conn, monkeypatch):
@@ -967,8 +1073,14 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
             return {"data": {"ttl": 300}}
         if method == "POST" and path == "/v1/auth/token/lookup":
             return {"data": {"ttl": 300}}
+        if method == "POST" and path == "/v1/auth/token/lookup-accessor":
+            return {"data": {"ttl": 300, "renewable": True}}
         if method == "POST" and path == "/v1/auth/token/renew-self":
             return {"auth": {"client_token": "tok", "lease_duration": 300}}
+        if method == "POST" and path == "/v1/auth/token/renew-accessor":
+            return {"auth": {"lease_duration": 300, "renewable": True}}
+        if method == "POST" and path == "/v1/auth/token/revoke-accessor":
+            return {}
         return {}
 
     monkeypatch.setattr(manager, "_request", _request)
@@ -988,7 +1100,10 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
     assert manager.create_token(300)["client_token"] == "child-token"
     assert manager.lookup_self()["ttl"] == 300
     assert manager.lookup_token("tok")["ttl"] == 300
+    assert manager.lookup_accessor("acc")["ttl"] == 300
     assert manager.renew_self(300)["lease_duration"] == 300
+    assert manager.renew_accessor("acc", 300)["lease_duration"] == 300
+    manager.revoke_accessor("acc")
     assert manager.get_access_secrets()["mount_path"] == "kv"
     assert ("POST", "/v1/sys/init") in [(method, path) for method, path, _ in calls]
     assert ("POST", "/v1/sys/unseal") in [(method, path) for method, path, _ in calls]
@@ -1010,9 +1125,28 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
     assert ("POST", "/v1/auth/token/renew-self") in [
         (method, path) for method, path, _ in calls
     ]
+    assert ("POST", "/v1/auth/token/renew-accessor") in [
+        (method, path) for method, path, _ in calls
+    ]
+    assert ("POST", "/v1/auth/token/revoke-accessor") in [
+        (method, path) for method, path, _ in calls
+    ]
     assert ("PUT", "/v1/sys/audit/file") in [
         (method, path) for method, path, _ in calls
     ]
+
+    def _api_audit_blocked(method, path, **kwargs):
+        assert method == "PUT"
+        assert path == "/v1/sys/audit/file"
+        return {
+            "errors": [
+                "cannot enable audit device via API; use declarative, "
+                "config-based audit device management instead"
+            ]
+        }
+
+    monkeypatch.setattr(manager, "_request", _api_audit_blocked)
+    manager.enable_file_audit()
 
     def _raise_404(method, path, **kwargs):
         raise HTTPError(url="http://bao", code=404, msg="not found", hdrs=None, fp=None)

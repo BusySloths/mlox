@@ -57,6 +57,7 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
     client_token_lease_duration: int = 0
     client_token_renewable: bool = True
     client_token_last_renewed_at: str = ""
+    application_credentials: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     compose_service_names: Dict[str, str] = field(init=False, default_factory=dict)
     unseal_keys: list[str] = field(default_factory=list)
     service_url: str = ""
@@ -205,14 +206,12 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
         if not address:
             raise ValueError("OpenBao service URL is not configured.")
 
-        token = self.client_token or self.root_token
-        if not token:
+        if not self.client_token:
             raise ValueError("OpenBao client token is not configured.")
         return OpenBaoSecretManager(
             address=address,
-            token=token,
+            token=self.client_token,
             mount_path=self.mount_path,
-            unseal_keys=list(self.unseal_keys),
         )
 
     def get_root_secret_manager(
@@ -257,6 +256,173 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
         self._store_client_token_auth(auth)
         return auth
 
+    def create_keyfile_secret_manager(
+        self,
+        infra: Infrastructure | None = None,
+        *,
+        ttl: str | int | None = None,
+        renewable: bool = True,
+        application_name: str = "",
+        period: str | int | None = "24h",
+    ) -> OpenBaoSecretManager:
+        """Create or rotate a named application token for a downloaded keyfile."""
+
+        application = self._normalize_application_name(application_name)
+        manager = self.get_root_secret_manager(infra)
+        previous = self.application_credentials.get(application, {})
+        previous_accessor = previous.get("accessor")
+        if previous_accessor:
+            try:
+                manager.revoke_accessor(str(previous_accessor))
+            except Exception as exc:  # pragma: no cover - best-effort cleanup
+                logger.info(
+                    "Could not revoke previous OpenBao token for application %s: %s",
+                    application,
+                    exc,
+                )
+        metadata = {
+            "managed_by": "mlox",
+            "service_uuid": self.uuid,
+            "purpose": "mlox-secret-manager-keyfile",
+            "application_name": application,
+        }
+        token_options: Dict[str, Any] = {
+            "policies": [self.kv_policy_name],
+            "renewable": renewable,
+            "metadata": metadata,
+        }
+        if ttl is not None:
+            token_options["ttl"] = ttl
+        if period is not None:
+            token_options["period"] = period
+        auth = manager.create_token(**token_options)
+        self._store_application_credential(
+            application,
+            auth,
+            ttl=str(ttl) if ttl is not None else "",
+            period=str(period) if period is not None else "",
+        )
+        return OpenBaoSecretManager(
+            address=manager.address,
+            token=str(auth["client_token"]),
+            mount_path=self.mount_path,
+            verify_tls=manager.verify_tls,
+        )
+
+    def create_application_credential(
+        self,
+        application_name: str,
+        infra: Infrastructure | None = None,
+        *,
+        ttl: str | int | None = None,
+        period: str | int | None = "24h",
+    ) -> Dict[str, Any]:
+        """Create a renewable application credential without exposing its token."""
+
+        application = self._normalize_application_name(application_name)
+        self.create_keyfile_secret_manager(
+            infra,
+            ttl=ttl,
+            renewable=True,
+            application_name=application,
+            period=period,
+        )
+        return self.application_credentials[application]
+
+    def renew_application_credential(
+        self,
+        application_name: str,
+        infra: Infrastructure | None = None,
+        increment: str | int | None = None,
+    ) -> Dict[str, Any]:
+        application = self._normalize_application_name(application_name)
+        credential = self.application_credentials.get(application)
+        if not credential or not credential.get("accessor"):
+            raise ValueError(f"No OpenBao credential is registered for {application}.")
+        manager = self.get_root_secret_manager(infra)
+        auth = manager.renew_accessor(str(credential["accessor"]), increment)
+        credential["lease_duration"] = int(auth.get("lease_duration") or 0)
+        credential["renewable"] = bool(auth.get("renewable", True))
+        credential["last_renewed_at"] = datetime.now(timezone.utc).isoformat()
+        self.application_credentials[application] = credential
+        return auth
+
+    def revoke_application_credential(
+        self, application_name: str, infra: Infrastructure | None = None
+    ) -> None:
+        application = self._normalize_application_name(application_name)
+        credential = self.application_credentials.get(application)
+        if not credential or not credential.get("accessor"):
+            raise ValueError(f"No OpenBao credential is registered for {application}.")
+        manager = self.get_root_secret_manager(infra)
+        manager.revoke_accessor(str(credential["accessor"]))
+        self.application_credentials.pop(application, None)
+
+    def refresh_application_credentials(
+        self, infra: Infrastructure | None = None
+    ) -> Dict[str, Dict[str, Any]]:
+        manager = self.get_root_secret_manager(infra)
+        refreshed: Dict[str, Dict[str, Any]] = {}
+        for application, credential in list(self.application_credentials.items()):
+            accessor = credential.get("accessor")
+            if not accessor:
+                continue
+            try:
+                token_data = manager.lookup_accessor(str(accessor))
+            except Exception as exc:  # pragma: no cover - defensive OpenBao path
+                logger.info(
+                    "Could not refresh OpenBao credential for %s: %s",
+                    application,
+                    exc,
+                )
+                credential["status"] = "unknown"
+                refreshed[application] = credential
+                continue
+            credential["lease_duration"] = int(token_data.get("ttl") or 0)
+            credential["renewable"] = bool(token_data.get("renewable", True))
+            credential["status"] = (
+                "active" if int(credential["lease_duration"] or 0) > 0 else "expired"
+            )
+            credential["last_checked_at"] = datetime.now(timezone.utc).isoformat()
+            refreshed[application] = credential
+        self.application_credentials = refreshed
+        return self.application_credentials
+
+    @staticmethod
+    def _normalize_application_name(application_name: str) -> str:
+        application = re.sub(r"[^A-Za-z0-9_.-]+", "-", application_name.strip())
+        application = application.strip("-._")
+        if application.endswith(".json"):
+            application = application[:-5]
+        if not application:
+            raise ValueError("Application name is required.")
+        return application
+
+    def _store_application_credential(
+        self,
+        application: str,
+        auth: Dict[str, Any],
+        *,
+        ttl: str,
+        period: str = "",
+    ) -> None:
+        accessor = auth.get("accessor")
+        if not accessor:
+            raise RuntimeError("OpenBao did not return a token accessor.")
+        now = datetime.now(timezone.utc).isoformat()
+        self.application_credentials[application] = {
+            "application_name": application,
+            "accessor": str(accessor),
+            "ttl": ttl,
+            "period": period,
+            "renewable": bool(auth.get("renewable", True)),
+            "lease_duration": int(auth.get("lease_duration") or 0),
+            "created_at": now,
+            "last_rotated_at": now,
+            "status": "active",
+            "keyfile_name": f"{application}.json",
+        }
+
     def _render_config(self, host: str) -> str:
         node_id = f"mlox-openbao-{self.uuid[:8]}"
         api_addr = f"https://{host}:{self.port}"
@@ -276,6 +442,13 @@ listener "tcp" {{
   tls_disable = false
   tls_cert_file = "/openbao/tls/cert.pem"
   tls_key_file = "/openbao/tls/key.pem"
+}}
+
+audit "file" "file" {{
+  description = "mlox OpenBao audit log"
+  options {{
+    file_path = "/openbao/logs/audit.log"
+  }}
 }}
 """
 
@@ -333,8 +506,6 @@ path "sys/internal/ui/mounts/*" {{
         manager = self._root_api_client(conn)
         logger.info("Ensuring OpenBao KV v2 mount '%s' exists via API.", self.mount_path)
         manager.ensure_kv_v2(self.mount_path)
-        logger.info("Ensuring OpenBao file audit device exists via API.")
-        manager.enable_file_audit()
         logger.info("Writing OpenBao mlox policies.")
         manager.write_policy(self.kv_policy_name, self._render_kv_policy())
         manager.write_policy(self.ui_policy_name, self._render_ui_policy())
