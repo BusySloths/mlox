@@ -291,3 +291,28 @@ def test_builtin_service_configs_have_matching_explicit_capabilities():
             for capability in getattr(service_class, "capabilities", set())
         }
         assert config.service_capabilities() <= class_capabilities, config.path
+
+
+@pytest.mark.parametrize(
+    "config_id",
+    [
+        "gcp-bigquery-0.1.0",
+        "gcp-secret-manager-0.1.0",
+        "gcp-sheets-0.1.0",
+        "gcp-storage-0.1.0",
+    ],
+)
+def test_externally_hosted_gcp_services_use_connector_backend(config_id):
+    configs = {
+        config.id: config for config in load_all_service_configs(include_plugins=False)
+    }
+
+    config = configs[config_id]
+
+    assert config.backend_capabilities() == {"connector"}
+    assert set(config.groups["backend"]) == {"connector"}
+    assert config.requirements == {
+        "cpus": 0.0,
+        "ram_gb": 0.0,
+        "disk_gb": 0.0,
+    }

@@ -317,6 +317,7 @@ def test_builtin_server_config_capabilities_match_classes():
     by_id = {config.id: config for config in configs}
     expected = {
         "local-server": ({"git"}, {"local"}),
+        "connector-server": (set(), {"connector"}),
         "ubuntu-simple-24.04-server": (set(), {"native"}),
         "ubuntu-native-24.04-server": (
             {"git", "firewall", "initial_auth_password"},

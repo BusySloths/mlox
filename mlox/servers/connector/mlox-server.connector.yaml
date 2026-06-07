@@ -1,0 +1,27 @@
+id: connector-server
+name: Connector Backend
+version: 0.1.0
+maintainer: MLOX
+description_short: Virtual backend for externally hosted connector services.
+description: |
+  Lightweight virtual server for connector services whose runtime is hosted
+  outside of MLOX, such as GCP Secret Manager, Google Sheets, BigQuery, and
+  other third-party service connectors. It does not provision a VM, VPS,
+  storage, memory, SSH, Docker, or Kubernetes runtime.
+links:
+  project: https://github.com/busysloths/mlox
+  news: https://mlox.org/
+groups:
+  experimental:
+  server:
+  backend:
+    connector:
+capabilities:
+  backend:
+    - connector
+build:
+  class_name: mlox.servers.connector.virtual.VirtualConnectorServer
+  params:
+    ip: connector.local
+    root: mlox_connector
+    root_pw: ""

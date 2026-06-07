@@ -117,6 +117,7 @@ class ServerCapability(StrEnum):
     DOCKER = "docker"
     KUBERNETES = "kubernetes"
     LOCAL = "local"
+    CONNECTOR = "connector"
 
 
 @dataclass
@@ -356,6 +357,13 @@ class AbstractKubernetesServer(AbstractBackendServer):
 
 @dataclass
 class AbstractLocalServer(AbstractBackendServer):
+    pass
+
+
+@dataclass
+class AbstractConnectorServer(AbstractBackendServer):
+    """Backend contract for virtual, externally hosted service connectors."""
+
     pass
 
 

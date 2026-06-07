@@ -146,7 +146,7 @@ class Infrastructure:
         ]
 
     def filter_bundles_by_backend(
-        self, backend: Literal["docker", "kubernetes"]
+        self, backend: Literal["native", "docker", "kubernetes", "local", "connector"]
     ) -> List[Bundle]:
         return [b for b in self.bundles if backend in b.server.backend]
 

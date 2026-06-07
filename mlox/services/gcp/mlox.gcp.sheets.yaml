@@ -17,9 +17,9 @@ links:
   documentation: https://workspace.google.com/intl/en_au/products/sheets/
   changelog: https://workspace.google.com/intl/en_au/products/sheets/
 requirements:
-  cpus: 1.0
-  ram_gb: 1.0
-  disk_gb: 1.0
+  cpus: 0.0
+  ram_gb: 0.0
+  disk_gb: 0.0
 groups:
   service: null
   cloud:
@@ -27,9 +27,6 @@ groups:
   database:
     spreadsheets: null
   backend:
-    kubernetes: null
-    docker: null
-    native: null
     connector: null
 capabilities:
   service:
