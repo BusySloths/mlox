@@ -260,12 +260,10 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
         self,
         infra: Infrastructure | None = None,
         *,
-        ttl: str | int | None = None,
-        renewable: bool = True,
         application_name: str = "",
-        period: str | int | None = "24h",
+        period: str | int = "24h",
     ) -> OpenBaoSecretManager:
-        """Create or rotate a named application token for a downloaded keyfile."""
+        """Create or rotate a periodic application token for a keyfile."""
 
         application = self._normalize_application_name(application_name)
         manager = self.get_root_secret_manager(infra)
@@ -288,19 +286,16 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
         }
         token_options: Dict[str, Any] = {
             "policies": [self.kv_policy_name],
-            "renewable": renewable,
+            "renewable": True,
+            "period": period,
             "metadata": metadata,
         }
-        if ttl is not None:
-            token_options["ttl"] = ttl
-        if period is not None:
-            token_options["period"] = period
         auth = manager.create_token(**token_options)
         self._store_application_credential(
             application,
             auth,
-            ttl=str(ttl) if ttl is not None else "",
-            period=str(period) if period is not None else "",
+            ttl="",
+            period=str(period),
         )
         return OpenBaoSecretManager(
             address=manager.address,
@@ -314,16 +309,13 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
         application_name: str,
         infra: Infrastructure | None = None,
         *,
-        ttl: str | int | None = None,
-        period: str | int | None = "24h",
+        period: str | int = "24h",
     ) -> Dict[str, Any]:
         """Create a renewable application credential without exposing its token."""
 
         application = self._normalize_application_name(application_name)
         self.create_keyfile_secret_manager(
             infra,
-            ttl=ttl,
-            renewable=True,
             application_name=application,
             period=period,
         )

@@ -98,15 +98,34 @@ def _usage_markdown() -> str:
 
 def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerService):
     key = f"openbao_secret_manager_{service.uuid}"
-    if key not in st.session_state:
-        st.session_state[key] = service.get_secret_manager(infra)
-    manager = st.session_state[key]
+    manager = st.session_state.get(key)
+    if manager is None and service.client_token:
+        try:
+            manager = service.get_secret_manager(infra)
+            st.session_state[key] = manager
+        except Exception:
+            manager = None
 
     service_token_error: Exception | None = None
+    service_token_ttl = int(service.client_token_lease_duration or 0)
+    if manager is not None:
+        try:
+            token_data = manager.lookup_self()
+            service_token_ttl = int(token_data.get("ttl") or 0)
+            service.client_token_lease_duration = service_token_ttl
+            service.client_token_renewable = bool(
+                token_data.get("renewable", service.client_token_renewable)
+            )
+        except Exception as exc:
+            service_token_error = exc
+
     try:
-        status = manager.seal_status()
-    except Exception as exc:
-        service_token_error = exc
+        status = (
+            manager.seal_status()
+            if manager is not None
+            else service.get_root_secret_manager(infra).seal_status()
+        )
+    except Exception:
         try:
             status = service.get_root_secret_manager(infra).seal_status()
         except Exception:
@@ -115,13 +134,15 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
     initialized = bool(status.get("initialized", bool(service.root_token)))
     sealed = bool(status.get("sealed", False)) if status else False
     service_token_expired = (
-        bool(service_token_error)
-        or bool(service.client_token and service.client_token_lease_duration <= 0)
+        not bool(service.client_token)
+        or manager is None
+        or bool(service_token_error)
+        or service_token_ttl <= 0
     )
     status_cols = st.columns(4)
     status_cols[0].metric("Initialized", "Yes" if initialized else "No")
     status_cols[1].metric("Seal", "Sealed" if sealed else "Open")
-    status_cols[2].metric("Client TTL", _format_ttl(service.client_token_lease_duration))
+    status_cols[2].metric("Client TTL", _format_ttl(service_token_ttl))
     status_cols[3].metric("Applications", len(service.application_credentials))
 
     usage_markdown = _usage_markdown()
@@ -196,7 +217,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
         )
         token_cols[3].text_input(
             "Lease",
-            value=_format_ttl(service.client_token_lease_duration),
+            value=_format_ttl(service_token_ttl),
             disabled=True,
             key=f"openbao_client_lease_{service.uuid}",
         )
@@ -325,7 +346,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
                     "Rotation period",
                     options=list(APPLICATION_PERIOD_OPTIONS.keys()),
                     index=2,
-                    key=f"openbao_selected_keyfile_ttl_{service.uuid}_{selected_application}",
+                    key=f"openbao_selected_keyfile_period_{service.uuid}_{selected_application}",
                 )
                 if app_action_cols[2].button(
                     "Renew",
@@ -406,6 +427,8 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
             )
         else:
             try:
+                if manager is None:
+                    raise RuntimeError("OpenBao mlox service token is unavailable.")
                 secrets = manager.list_secrets(keys_only=True)
             except Exception as exc:
                 st.warning(f"Could not list OpenBao secrets: {exc}")
@@ -474,8 +497,9 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
                 icon=":material/lock_open:",
                 key=f"openbao_unseal_{service.uuid}",
             ):
+                recovery_manager = manager or service.get_root_secret_manager(infra)
                 for unseal_key in service.unseal_keys:
-                    status = manager.unseal(unseal_key)
+                    status = recovery_manager.unseal(unseal_key)
                     if not bool(status.get("sealed", True)):
                         break
                 if bool(status.get("sealed", True)):
