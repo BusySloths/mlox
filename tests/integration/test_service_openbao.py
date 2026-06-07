@@ -52,6 +52,10 @@ def test_openbao_service_is_running(install_openbao_service):
     assert service.service_url
     assert service.root_token
     assert service.unseal_keys
+    assert service.admin_username
+    assert service.admin_password
+    assert service.client_token
+    assert service.client_token != service.root_token
 
 
 def test_openbao_secret_roundtrip(install_openbao_service):
@@ -61,6 +65,7 @@ def test_openbao_secret_roundtrip(install_openbao_service):
     assert isinstance(sm, OpenBaoSecretManager)
     assert sm.is_working()
     assert sm.address.startswith("https://")
+    assert sm.token == service.client_token
 
     secret_name = "integration-secret"
     secret_payload = {"alpha": 1, "beta": "value"}
@@ -75,11 +80,13 @@ def test_openbao_secret_roundtrip(install_openbao_service):
     assert secret_name in keys_only and keys_only[secret_name] is None
 
     secrets = service.get_secrets()
-    assert "openbao_root_credentials" in secrets
-    creds = secrets["openbao_root_credentials"]
-    assert creds.get("token") == service.root_token
-    assert creds.get("root_token") == service.root_token
-    assert creds.get("unseal_keys") == service.unseal_keys
+    assert "openbao_client_credentials" in secrets
+    assert "openbao_root_credentials" not in secrets
+    creds = secrets["openbao_client_credentials"]
+    assert creds.get("token") == service.client_token
+    assert creds.get("token") != service.root_token
+    assert "root_token" not in creds
+    assert "unseal_keys" not in creds
     assert creds.get("address", "").startswith("https://")
     assert creds.get("verify_tls") is False
     assert service.compose_service_names["OpenBao"].endswith("_openbao")
@@ -103,7 +110,7 @@ def test_openbao_restart_preserves_raft_data(install_openbao_service):
 
 def test_openbao_create_token_allows_child_access(install_openbao_service):
     infra, _bundle, service = install_openbao_service
-    sm = service.get_secret_manager(infra)
+    sm = service.get_root_secret_manager(infra)
 
     secret_name = "integration-token-secret"
     secret_payload = {"token": generate_password(length=16, with_punctuation=False)}
@@ -139,7 +146,7 @@ def test_openbao_create_token_allows_child_access(install_openbao_service):
 
 def test_openbao_create_token_honors_options(install_openbao_service):
     infra, _bundle, service = install_openbao_service
-    sm = service.get_secret_manager(infra)
+    sm = service.get_root_secret_manager(infra)
 
     auth = sm.create_token(
         ttl="90s",
@@ -160,3 +167,40 @@ def test_openbao_create_token_honors_options(install_openbao_service):
     assert 0 < ttl_seconds <= 90
     assert info.get("renewable") is False
     assert info.get("num_uses") == 2
+
+
+def test_openbao_userpass_login_and_client_token_renewal(install_openbao_service):
+    infra, _bundle, service = install_openbao_service
+    root_manager = service.get_root_secret_manager(infra)
+
+    user_auth = root_manager.login_userpass(
+        service.admin_username, service.admin_password, path=service.userpass_path
+    )
+    assert user_auth.get("client_token")
+    assert user_auth.get("client_token") != service.root_token
+
+    previous_token = service.client_token
+    auth = service.renew_client_token(infra, increment="10m")
+    assert auth.get("lease_duration", 0) > 0
+    assert service.client_token
+    assert service.client_token == auth.get("client_token", previous_token)
+    assert service.client_token_lease_duration > 0
+
+
+def test_openbao_secret_manager_is_self_contained(install_openbao_service):
+    infra, _bundle, service = install_openbao_service
+    secret_name = "integration-self-contained"
+    secret_payload = {"self_contained": True}
+
+    sm = service.get_secret_manager(infra)
+    sm.save_secret(secret_name, secret_payload)
+    access = sm.get_access_secrets()
+    assert access
+    assert access.get("token") == service.client_token
+    assert access.get("token") != service.root_token
+    assert "unseal_keys" not in access
+    assert "root_token" not in access
+
+    restored = OpenBaoSecretManager.instantiate_secret_manager(access)
+    assert restored is not None
+    assert restored.load_secret(secret_name) == secret_payload

@@ -47,8 +47,15 @@ class OpenBaoSecretManager(AbstractSecretManager):
         data: Dict[str, Any] | None = None,
         params: Dict[str, Any] | None = None,
         expected_status: tuple[int, ...] = (200, 204),
+        token: str | None = None,
+        include_token: bool = True,
     ) -> Dict[str, Any]:
-        """Execute an HTTP request against the OpenBao API."""
+        """Execute an HTTP request against the OpenBao API.
+
+        The client is self-contained: every operation only needs an OpenBao
+        address, token, mount path, and TLS preference. Calls such as userpass
+        login can opt out of the token header with ``include_token=False``.
+        """
 
         url = f"{self.address}{path}"
         if params:
@@ -57,7 +64,10 @@ class OpenBaoSecretManager(AbstractSecretManager):
                 url = f"{url}?{query}"
 
         payload_bytes = None
-        headers = {"X-Vault-Token": self.token}
+        headers: Dict[str, str] = {}
+        selected_token = self.token if token is None else token
+        if include_token and selected_token:
+            headers["X-Vault-Token"] = selected_token
         if data is not None:
             payload_bytes = json.dumps(data).encode("utf-8")
             headers["Content-Type"] = "application/json"
@@ -164,6 +174,118 @@ class OpenBaoSecretManager(AbstractSecretManager):
         if errors and not any("path is already in use" in str(err) for err in errors):
             raise RuntimeError(f"Could not enable OpenBao KV v2 mount {mount}: {errors}")
 
+    def list_mounts(self) -> Dict[str, Any]:
+        """Return enabled secrets engines keyed by mount path."""
+
+        return self._request("GET", "/v1/sys/mounts").get("data", {})
+
+    def ensure_kv_v2(self, mount_path: str | None = None) -> None:
+        """Ensure a KV v2 secrets engine exists at ``mount_path``."""
+
+        mount = (mount_path or self.mount_path).strip("/") or self.mount_path
+        mounts = self.list_mounts()
+        mount_key = f"{mount}/"
+        existing = mounts.get(mount_key) or mounts.get(mount)
+        if existing:
+            options = existing.get("options", {}) if isinstance(existing, dict) else {}
+            if existing.get("type") == "kv" and str(options.get("version")) == "2":
+                return
+        self.enable_kv_v2(mount)
+
+    def write_policy(self, name: str, policy: str) -> None:
+        """Create or update an OpenBao policy."""
+
+        self._request(
+            "POST",
+            f"/v1/sys/policy/{name}",
+            data={"policy": policy},
+            expected_status=(200, 204),
+        )
+
+    def read_policy(self, name: str) -> Dict[str, Any] | None:
+        """Read a policy or return ``None`` if it does not exist."""
+
+        try:
+            return self._request("GET", f"/v1/sys/policy/{name}")
+        except HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+
+    def list_auth_methods(self) -> Dict[str, Any]:
+        """Return enabled auth methods keyed by mount path."""
+
+        return self._request("GET", "/v1/sys/auth").get("data", {})
+
+    def enable_auth_method(self, path: str, auth_type: str) -> None:
+        """Enable an auth method if it is not already enabled."""
+
+        mount = path.strip("/")
+        response = self._request(
+            "POST",
+            f"/v1/sys/auth/{mount}",
+            data={"type": auth_type},
+            expected_status=(200, 204, 400),
+        )
+        errors = response.get("errors", [])
+        if errors and not any("path is already in use" in str(err) for err in errors):
+            raise RuntimeError(
+                f"Could not enable OpenBao auth method {auth_type} at {mount}: {errors}"
+            )
+
+    def ensure_userpass_auth(self, path: str = "userpass") -> None:
+        """Ensure userpass auth is enabled at ``path``."""
+
+        mount = path.strip("/") or "userpass"
+        auth_methods = self.list_auth_methods()
+        existing = auth_methods.get(f"{mount}/") or auth_methods.get(mount)
+        if isinstance(existing, dict) and existing.get("type") == "userpass":
+            return
+        self.enable_auth_method(mount, "userpass")
+
+    def create_or_update_userpass_user(
+        self,
+        username: str,
+        password: str,
+        *,
+        policies: list[str],
+        ttl: str | int | None = "8h",
+        max_ttl: str | int | None = "24h",
+        path: str = "userpass",
+    ) -> None:
+        """Create or update a userpass user for UI login."""
+
+        payload: Dict[str, Any] = {
+            "password": password,
+            "token_policies": policies,
+        }
+        if ttl is not None:
+            payload["token_ttl"] = self._stringify_duration(ttl)
+        if max_ttl is not None:
+            payload["token_max_ttl"] = self._stringify_duration(max_ttl)
+        self._request(
+            "POST",
+            f"/v1/auth/{path.strip('/')}/users/{username}",
+            data=payload,
+            expected_status=(200, 204),
+        )
+
+    def login_userpass(
+        self, username: str, password: str, *, path: str = "userpass"
+    ) -> Dict[str, Any]:
+        """Authenticate with userpass and return the OpenBao ``auth`` block."""
+
+        response = self._request(
+            "POST",
+            f"/v1/auth/{path.strip('/')}/login/{username}",
+            data={"password": password},
+            include_token=False,
+        )
+        auth = response.get("auth", {})
+        if not auth.get("client_token"):
+            raise RuntimeError("OpenBao userpass login did not return a client token.")
+        return auth
+
     def enable_file_audit(self, path: str = "/openbao/logs/audit.log") -> None:
         response = self._request(
             "PUT",
@@ -174,6 +296,7 @@ class OpenBaoSecretManager(AbstractSecretManager):
         errors = response.get("errors", [])
         if errors and not any(
             "path is already in use" in str(err) or "already exists" in str(err)
+            or "declarative, config-based audit device management" in str(err)
             for err in errors
         ):
             raise RuntimeError(f"Could not enable OpenBao file audit: {errors}")
@@ -252,7 +375,7 @@ class OpenBaoSecretManager(AbstractSecretManager):
 
     def create_token(
         self,
-        ttl: str | int,
+        ttl: str | int | None = None,
         *,
         policies: list[str] | None = None,
         renewable: bool | None = None,
@@ -266,10 +389,13 @@ class OpenBaoSecretManager(AbstractSecretManager):
         """Create a new scoped child token using the manager's root/admin token."""
 
         duration = self._stringify_duration(ttl)
-        if not duration:
-            raise ValueError("A TTL must be provided when creating a token.")
+        token_period = self._stringify_duration(period)
+        if not duration and not token_period:
+            raise ValueError("A TTL or period must be provided when creating a token.")
 
-        payload: Dict[str, Any] = {"ttl": duration}
+        payload: Dict[str, Any] = {}
+        if duration:
+            payload["ttl"] = duration
         if policies is not None:
             payload["policies"] = policies
         if renewable is not None:
@@ -280,8 +406,8 @@ class OpenBaoSecretManager(AbstractSecretManager):
             payload["num_uses"] = num_uses
         if no_default_policy is not None:
             payload["no_default_policy"] = no_default_policy
-        if period is not None:
-            payload["period"] = self._stringify_duration(period)
+        if token_period is not None:
+            payload["period"] = token_period
         if metadata:
             payload["meta"] = metadata
 
@@ -296,11 +422,81 @@ class OpenBaoSecretManager(AbstractSecretManager):
             raise RuntimeError("OpenBao did not return a client token.")
         return auth
 
+    def lookup_self(self) -> Dict[str, Any]:
+        """Lookup the current token and return the OpenBao data block."""
+
+        return self._request("GET", "/v1/auth/token/lookup-self").get("data", {})
+
+    def lookup_token(self, token: str) -> Dict[str, Any]:
+        """Lookup an arbitrary token using the current token's privileges."""
+
+        return self._request(
+            "POST", "/v1/auth/token/lookup", data={"token": token}
+        ).get("data", {})
+
+    def lookup_accessor(self, accessor: str) -> Dict[str, Any]:
+        """Lookup token metadata by accessor without needing the token value."""
+
+        return self._request(
+            "POST", "/v1/auth/token/lookup-accessor", data={"accessor": accessor}
+        ).get("data", {})
+
+    def renew_self(self, increment: str | int | None = None) -> Dict[str, Any]:
+        """Renew the current token and return the OpenBao auth block."""
+
+        payload: Dict[str, Any] = {}
+        if increment is not None:
+            payload["increment"] = self._stringify_duration(increment)
+        response = self._request(
+            "POST", "/v1/auth/token/renew-self", data=payload
+        )
+        auth = response.get("auth", {})
+        if not auth:
+            raise RuntimeError("OpenBao did not return token renewal information.")
+        return auth
+
+    def renew_token(
+        self, token: str, increment: str | int | None = None
+    ) -> Dict[str, Any]:
+        """Renew an arbitrary token using the current token's privileges."""
+
+        payload: Dict[str, Any] = {"token": token}
+        if increment is not None:
+            payload["increment"] = self._stringify_duration(increment)
+        response = self._request("POST", "/v1/auth/token/renew", data=payload)
+        auth = response.get("auth", {})
+        if not auth:
+            raise RuntimeError("OpenBao did not return token renewal information.")
+        return auth
+
+    def renew_accessor(
+        self, accessor: str, increment: str | int | None = None
+    ) -> Dict[str, Any]:
+        """Renew a token by accessor using the current token's privileges."""
+
+        payload: Dict[str, Any] = {"accessor": accessor}
+        if increment is not None:
+            payload["increment"] = self._stringify_duration(increment)
+        response = self._request("POST", "/v1/auth/token/renew-accessor", data=payload)
+        auth = response.get("auth", {})
+        if not auth:
+            raise RuntimeError("OpenBao did not return token renewal information.")
+        return auth
+
+    def revoke_accessor(self, accessor: str) -> None:
+        """Revoke a token by accessor using the current token's privileges."""
+
+        self._request(
+            "POST",
+            "/v1/auth/token/revoke-accessor",
+            data={"accessor": accessor},
+            expected_status=(200, 204),
+        )
+
     def get_access_secrets(self) -> Dict[str, Any] | None:
         return {
             "address": self.address,
             "token": self.token,
             "mount_path": self.mount_path,
             "verify_tls": self.verify_tls,
-            "unseal_keys": list(self.unseal_keys),
         }
