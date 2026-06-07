@@ -23,9 +23,9 @@ links:
   documentation: https://cloud.google.com/bigquery
   changelog: https://cloud.google.com/bigquery
 requirements:
-  cpus: 1.0
-  ram_gb: 1.0
-  disk_gb: 1.0
+  cpus: 0.0
+  ram_gb: 0.0
+  disk_gb: 0.0
 groups:
   service: null
   cloud:
@@ -33,9 +33,6 @@ groups:
   database:
     warehouse: null
   backend:
-    kubernetes: null
-    docker: null
-    native: null
     connector: null
 capabilities:
   service:

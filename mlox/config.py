@@ -16,6 +16,7 @@ from mlox.service import (
     ServiceCapability,
 )
 from mlox.server import (
+    AbstractConnectorServer,
     AbstractDockerServer,
     AbstractFirewallServer,
     AbstractGitServer,
@@ -40,6 +41,7 @@ SERVER_CAPABILITY_ABCS = {
     ServerCapability.DOCKER.value: AbstractDockerServer,
     ServerCapability.KUBERNETES.value: AbstractKubernetesServer,
     ServerCapability.LOCAL.value: AbstractLocalServer,
+    ServerCapability.CONNECTOR.value: AbstractConnectorServer,
 }
 
 

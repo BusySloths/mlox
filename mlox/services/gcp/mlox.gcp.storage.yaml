@@ -23,18 +23,15 @@ links:
   documentation: https://kubeapps.com/
   changelog: https://kubeapps.com/
 requirements:
-  cpus: 1.0
-  ram_gb: 1.0
-  disk_gb: 1.0
+  cpus: 0.0
+  ram_gb: 0.0
+  disk_gb: 0.0
 groups:
   service: null
   storage: null
   cloud:
     gcp: null
   backend:
-    kubernetes: null
-    docker: null
-    native: null
     connector: null
 capabilities:
   service:
