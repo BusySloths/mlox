@@ -53,6 +53,7 @@ def _ensure_bootstrapped() -> None:
     for module_path, register_name in (
         ("mlox.view.services", "register_builtin_streamlit_services"),
         ("mlox.view.servers.ubuntu", "register_builtin_streamlit_servers"),
+        ("mlox.view.servers.connector", "register_builtin_streamlit_servers"),
         ("mlox.tui.services", "register_builtin_tui_services"),
     ):
         try:

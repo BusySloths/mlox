@@ -22,6 +22,6 @@ capabilities:
 build:
   class_name: mlox.servers.connector.virtual.VirtualConnectorServer
   params:
-    ip: connector.local
+    ip: ${MLOX_IP}
     root: mlox_connector
     root_pw: ""

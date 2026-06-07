@@ -19,6 +19,7 @@ from mlox.server import (
     ServerCapability,
     ServerConnection,
 )
+from mlox.utils import generate_password
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +42,11 @@ class VirtualConnection:
     methods while avoiding any shell access to a real machine.
     """
 
-    host = "connector.local"
     user = "mlox_connector"
     port = 0
 
-    def __init__(self) -> None:
+    def __init__(self, host: str) -> None:
+        self.host = host
         self.is_connected = False
 
     def open(self) -> "VirtualConnection":
@@ -104,7 +105,7 @@ class VirtualConnectorServer(AbstractServer, AbstractConnectorServer):
     def __post_init__(self) -> None:
         super().__post_init__()
         if not self.ip:
-            self.ip = "connector.local"
+            self.ip = f"mlox-connector-{generate_password(8).lower()}"
         self.port = "0"
         self.backend = [ServerCapability.CONNECTOR.value]
         self.mlox_user = MloxUser(
@@ -118,7 +119,7 @@ class VirtualConnectorServer(AbstractServer, AbstractConnectorServer):
     def get_server_connection(
         self, force_root: bool = False
     ) -> VirtualServerConnection:
-        return VirtualServerConnection(VirtualConnection())
+        return VirtualServerConnection(VirtualConnection(self.ip))
 
     def test_connection(self) -> bool:
         return True
