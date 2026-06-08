@@ -36,6 +36,7 @@ class DashboardScreen(Screen):
 
     BINDINGS = [
         ("l", "toggle_app_logs", "Logs"),
+        ("O", "open_terminal", "Open Terminal"),
         ("R", "reload_infrastructure", "Reload"),
         ("[", "narrow_sidebar", "Narrow Sidebar"),
         ("]", "widen_sidebar", "Widen Sidebar"),
@@ -57,8 +58,8 @@ class DashboardScreen(Screen):
                             with TabPane("Overview", id=OVERVIEW_TAB_ID):
                                 with VerticalScroll(id="overview-scroll"):
                                     yield OverviewPanel(id="selection-overview")
-                                    yield ServerActions(id="selection-server-actions")
                                     yield StatsPanel(id="selection-stats")
+                                    yield ServerActions(id="selection-server-actions")
                             with TabPane("History & Logs", id="logs-tab"):
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")
@@ -251,6 +252,16 @@ class DashboardScreen(Screen):
     def action_toggle_app_logs(self) -> None:
         drawer = self.query_one("#app-log-drawer", AppLogPanel)
         self._set_app_log_drawer_visible(drawer.styles.display == "none")
+
+    def action_open_terminal(self) -> None:
+        server_actions = self.query_one(ServerActions)
+        if not server_actions.display:
+            self.notify(
+                "Select a bundle or server to open an SSH terminal.",
+                severity="warning",
+            )
+            return
+        server_actions.open_terminal()
 
     def _set_app_log_drawer_visible(self, visible: bool) -> None:
         drawer = self.query_one("#app-log-drawer", AppLogPanel)

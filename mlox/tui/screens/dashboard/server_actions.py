@@ -96,18 +96,23 @@ class ServerActions(Container):
 
     @on(Button.Pressed, "#open-server-terminal")
     def handle_open_terminal(self, _: Button.Pressed) -> None:
+        self.open_terminal()
+
+    def open_terminal(self) -> bool:
+        """Open a terminal for the current selection when available."""
+
         server = self._selected_server()
         if not server:
-            self.notify("No server is selected.", severity="error")
-            return
+            return False
 
         try:
             launch_external_ssh_terminal(server)
         except TerminalLaunchError as exc:
             self.notify(str(exc), severity="error")
-            return
+            return False
 
         self.notify(f"Opened SSH terminal for {getattr(server, 'ip', 'server')}.")
+        return True
 
     @on(Button.Pressed, "#toggle-server-credentials")
     def handle_toggle_credentials(self, _: Button.Pressed) -> None:

@@ -76,6 +76,62 @@ def test_open_terminal_button_launches_selected_server(monkeypatch) -> None:
     assert launched[0].ip == "10.0.0.5"
 
 
+async def _open_terminal_with_binding(monkeypatch, selection) -> list[object]:
+    launched: list[object] = []
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.server_actions.launch_external_ssh_terminal",
+        launched.append,
+    )
+
+    from mlox.tui.screens.dashboard.screen import DashboardScreen
+
+    class DashboardBindingTestApp(App):
+        def __init__(self) -> None:
+            super().__init__()
+            self.session = SimpleNamespace(
+                project=SimpleNamespace(name="test-project"),
+                infra=SimpleNamespace(bundles=[]),
+                password="secret",
+                migrations=None,
+            )
+
+        def compose(self) -> ComposeResult:
+            yield DashboardScreen()
+
+    app = DashboardBindingTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(selection)
+        await pilot.pause()
+        await pilot.press("O")
+        await pilot.pause()
+    return launched
+
+
+def test_open_terminal_binding_launches_for_server_selection(monkeypatch) -> None:
+    server = SimpleNamespace(ip="10.0.0.5")
+
+    launched = asyncio.run(
+        _open_terminal_with_binding(
+            monkeypatch,
+            SelectionInfo(type="server", server=server),
+        )
+    )
+
+    assert launched == [server]
+
+
+def test_open_terminal_binding_does_nothing_for_root_selection(monkeypatch) -> None:
+    launched = asyncio.run(
+        _open_terminal_with_binding(
+            monkeypatch,
+            SelectionInfo(type="root"),
+        )
+    )
+
+    assert launched == []
+
+
 async def _reveal_credentials() -> tuple[str, str, str, str]:
     server = SimpleNamespace(
         ip="10.0.0.5",
