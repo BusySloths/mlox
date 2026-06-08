@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from textual.app import App, ComposeResult
 
+from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.template_panel import TemplatePanel
 
 
@@ -37,6 +38,14 @@ def _fake_config(config_id: str, name: str) -> SimpleNamespace:
         links={"docs": "https://example.invalid"},
         path=f"{name}.yaml",
     )
+
+
+def _fake_service_config(
+    config_id: str, name: str, backends: set[str]
+) -> SimpleNamespace:
+    config = _fake_config(config_id, name)
+    config.backend_capabilities = lambda: backends
+    return config
 
 
 async def _mounted_panel_detail_title(monkeypatch) -> tuple[int, str | None, str | None]:
@@ -70,3 +79,36 @@ def test_template_panel_table_selection_updates_details(monkeypatch) -> None:
     assert row_count == 2
     assert initial_config_id == "template-one"
     assert selected_config_id == "template-two"
+
+
+async def _service_template_ids_for_bundle(monkeypatch) -> tuple[int, set[str]]:
+    configs = [
+        _fake_service_config("docker-service", "Docker Service", {"docker"}),
+        _fake_service_config(
+            "portable-service", "Portable Service", {"docker", "kubernetes"}
+        ),
+        _fake_service_config("k8s-service", "Kubernetes Service", {"kubernetes"}),
+    ]
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.template_panel.load_all_service_configs",
+        lambda: configs,
+    )
+
+    app = TemplatePanelTestApp("service")
+    async with app.run_test() as pilot:
+        panel = app.query_one(TemplatePanel)
+        panel.selection = SelectionInfo(
+            type="bundle",
+            bundle=SimpleNamespace(
+                server=SimpleNamespace(backend=["docker", "native"])
+            ),
+        )
+        await pilot.pause()
+        return panel.table.row_count, set(panel._configs_by_key)
+
+
+def test_service_templates_are_filtered_by_bundle_backend(monkeypatch) -> None:
+    row_count, config_ids = asyncio.run(_service_template_ids_for_bundle(monkeypatch))
+
+    assert row_count == 2
+    assert config_ids == {"docker-service", "portable-service"}

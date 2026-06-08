@@ -35,6 +35,19 @@ class SelectionChanged(Message):
         self.selection = selection
 
 
+def get_server_backends(server: Any | None) -> list[str]:
+    """Return normalized backend names advertised by a server."""
+
+    raw_backends = getattr(server, "backend", []) if server else []
+    if isinstance(raw_backends, str):
+        raw_backends = [raw_backends]
+    return [
+        str(backend).strip().lower()
+        for backend in raw_backends or []
+        if str(backend).strip()
+    ]
+
+
 def summarize_infrastructure(session: Optional[MloxSession]) -> Dict[str, Any]:
     """Return aggregate statistics and listings for the active session."""
 

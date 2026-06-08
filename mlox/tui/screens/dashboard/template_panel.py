@@ -20,7 +20,7 @@ from textual.widgets._data_table import RowKey
 
 from mlox.config import load_all_server_configs, load_all_service_configs
 
-from .model import SelectionInfo
+from .model import SelectionInfo, get_server_backends
 
 
 class TemplateDataTable(DataTable):
@@ -87,10 +87,13 @@ class TemplatePanel(Container):
         self.selected_config_id = None
         self.details.update(Panel(message, title="Templates", border_style="green"))
 
-    def _show_template_table(self, configs: list[Any], title: str) -> None:
+    def _show_template_table(
+        self, configs: list[Any], title: str, empty_message: str = "No templates found."
+    ) -> None:
         table = self.table
         table.clear(columns=False)
         self._configs_by_key = {}
+        self.selected_config_id = None
         if configs:
             for cfg in configs:
                 key = str(getattr(cfg, "id", "") or getattr(cfg, "name", ""))
@@ -107,7 +110,7 @@ class TemplatePanel(Container):
             self._show_config_details(first_key, title)
         else:
             self.details.update(
-                Panel(Text("No templates found."), title=title, border_style="yellow")
+                Panel(Text(empty_message), title=title, border_style="yellow")
             )
 
     def show_current_row_details(self) -> None:
@@ -126,7 +129,20 @@ class TemplatePanel(Container):
 
     def _show_service_templates(self) -> None:
         configs = load_all_service_configs()
-        self._show_template_table(configs, "Service Templates")
+        selection = self.selection
+        if selection and selection.type == "bundle":
+            server = selection.server or getattr(selection.bundle, "server", None)
+            backends = set(get_server_backends(server))
+            configs = [
+                config
+                for config in configs
+                if backends & config.backend_capabilities()
+            ]
+        self._show_template_table(
+            configs,
+            "Service Templates",
+            empty_message="No compatible service templates found for this bundle.",
+        )
 
     def _row_key_value(self, row_key: object) -> str:
         if isinstance(row_key, RowKey):

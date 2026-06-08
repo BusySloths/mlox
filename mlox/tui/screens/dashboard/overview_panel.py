@@ -18,6 +18,7 @@ from mlox.session import MloxSession
 from .model import (
     SelectionInfo,
     WELCOME_TEXT,
+    get_server_backends,
     summarize_infrastructure,
 )
 
@@ -145,6 +146,7 @@ class OverviewPanel(Static):
         table.add_row("Tags", tags)
         table.add_row("Server IP", str(getattr(server, "ip", "unknown")))
         table.add_row("Server State", str(getattr(server, "state", "unknown")))
+        table.add_row("Backend", ", ".join(get_server_backends(server)) or "unknown")
         table.add_row("Services", str(len(services)))
         table.add_row("Service Names", service_names)
         self.update(
@@ -162,7 +164,7 @@ class OverviewPanel(Static):
         table.add_column(justify="left", ratio=3)
         table.add_row("IP", str(getattr(server, "ip", "unknown")))
         table.add_row("State", str(getattr(server, "state", "unknown")))
-        backend = ", ".join(getattr(server, "backend", []) or ["unknown"])
+        backend = ", ".join(get_server_backends(server)) or "unknown"
         table.add_row("Backend", backend)
         discovered = getattr(server, "discovered", None)
         table.add_row("Discovered", str(discovered) if discovered else "-")
