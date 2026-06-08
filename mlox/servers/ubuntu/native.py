@@ -230,7 +230,7 @@ class UbuntuNativeServer(
             ).strip()
             remote_user.ssh_key = self.exec.fs_read_file(
                 conn, f"{self.mlox_user.home}/.ssh/id_rsa", format="string"
-            ).strip()
+            ).rstrip("\r\n") + "\n"
 
             # 4. generate rsa keys for mlox user
             logger.info(

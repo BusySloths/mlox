@@ -13,6 +13,7 @@ from .history_panel import HistoryPanel
 from .log_panel import LogPanel
 from .model import SelectionChanged, SelectionInfo
 from .overview_panel import OverviewPanel
+from .server_actions import ServerActions
 from .stats_panel import StatsPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
@@ -56,6 +57,7 @@ class DashboardScreen(Screen):
                             with TabPane("Overview", id=OVERVIEW_TAB_ID):
                                 with VerticalScroll(id="overview-scroll"):
                                     yield OverviewPanel(id="selection-overview")
+                                    yield ServerActions(id="selection-server-actions")
                                     yield StatsPanel(id="selection-stats")
                             with TabPane("History & Logs", id="logs-tab"):
                                 yield LogPanel(id="selection-logs")
@@ -91,6 +93,8 @@ class DashboardScreen(Screen):
     def _apply_selection(self, selection: SelectionInfo | None) -> None:
         overview = self.query_one(OverviewPanel)
         overview.selection = selection
+        server_actions = self.query_one(ServerActions)
+        server_actions.selection = selection
         stats = self.query_one(StatsPanel)
         stats.selection = selection
         logs = self.query_one(LogPanel)

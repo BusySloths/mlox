@@ -161,6 +161,7 @@ def test_ubuntu_native_setup_users_and_auth_toggles(monkeypatch):
     assert server.remote_user is not None
     assert server.remote_user.ssh_pub_key.startswith("ssh-rsa")
     assert server.remote_user.ssh_key.startswith("-----BEGIN")
+    assert server.remote_user.ssh_key.endswith("\n")
     assert server.mlox_user.uid == 1001
 
     server.disable_password_authentication()

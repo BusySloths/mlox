@@ -164,6 +164,7 @@ Button {
 }
 
 #selection-overview,
+#selection-server-actions,
 #selection-stats,
 #selection-logs,
 #selection-history {
@@ -174,6 +175,39 @@ Button {
 #selection-stats {
   width: 1fr;
   min-width: 0;
+}
+
+#selection-server-actions {
+  height: auto;
+  margin-top: 1;
+  padding: 1;
+  border: round #2fa527ff;
+}
+
+#server-action-buttons,
+#credential-copy-buttons {
+  height: auto;
+}
+
+#open-server-terminal {
+  width: auto;
+}
+
+#toggle-server-credentials,
+#copy-server-password,
+#copy-server-passphrase {
+  width: auto;
+  margin-left: 1;
+}
+
+#server-credentials {
+  height: auto;
+  margin-top: 1;
+  color: #e6edf7;
+}
+
+#credential-copy-buttons {
+  margin-top: 1;
 }
 
 #selection-stats {
