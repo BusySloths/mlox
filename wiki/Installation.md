@@ -7,9 +7,48 @@
 
 ## Contents
 
-1. [From Source (GitHub)](#from-source-github)
-2. [Docker Hub](#docker-hub)
-3. [Kubernetes](#kubernetes)
+1. [Try MLOX (PyPI)](#try-mlox-pypi)
+2. [From Source (GitHub)](#from-source-github)
+3. [Docker Hub](#docker-hub)
+4. [Kubernetes](#kubernetes)
+
+---
+
+## Try MLOX (PyPI)
+
+The fastest way to try MLOX without cloning the repository is to install it from PyPI and launch the web UI.
+
+### System Requirements
+
+| Component | Minimum |
+|-----------|---------|
+| RAM | 4 GB (8 GB recommended for heavier stacks like Airflow) |
+| CPU | 2 cores |
+| OS | Linux, macOS, or Windows (WSL 2) |
+
+> **Note for low-RAM or Windows machines:** Docker Desktop (WSL 2 backend) and Kubernetes (K3s) can be memory-intensive. If your local machine is constrained, consider pointing MLOX at a remote Ubuntu 22.04 VM (≥ 2 vCPU / 4 GB RAM) over SSH instead.
+
+### Steps
+
+```bash
+# 1. Create and activate a Python environment
+conda create -n mlox python=3.12 -y
+conda activate mlox
+
+# 2. Install MLOX with all optional dependencies
+pip install "busysloths-mlox[all]"
+
+# 3. Launch the web UI
+mlox ui
+```
+
+`mlox ui` opens the Streamlit web UI in your browser. From there you can create a new project, add servers, and install services.
+
+For a full list of CLI commands:
+
+```bash
+mlox --help
+```
 
 ---
 

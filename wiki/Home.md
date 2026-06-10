@@ -96,6 +96,22 @@ YAML stays focused on deployable configs and Python build classes. Streamlit and
 
 ## Quickstart
 
+### Try via PyPI (no clone needed)
+
+```bash
+# 1. Create a Python environment (Python 3.11 or 3.12)
+conda create -n mlox python=3.12 -y
+conda activate mlox
+
+# 2. Install MLOX
+pip install "busysloths-mlox[all]"
+
+# 3. Launch the web UI
+mlox ui
+```
+
+### Develop from source
+
 ```bash
 # 1. Install Task (https://taskfile.dev/installation/)
 
