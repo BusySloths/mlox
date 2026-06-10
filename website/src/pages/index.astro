@@ -16,7 +16,10 @@ const baseUrl = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_UR
 const heroContent = heroPage ? await heroPage.render() : null;
 ---
 
-<BaseLayout title="MLOX - MLOps Made Simple">
+<BaseLayout
+  title="MLOX - Deploy and Manage ML/AI Infrastructure"
+  description={heroPage?.data.description}
+>
   <Header />
   <NewsBanner />
 
@@ -118,6 +121,11 @@ const heroContent = heroPage ? await heroPage.render() : null;
                 <p class="text-xl md:text-2xl text-gray-300 mb-8 animate-slide-up">
                   {heroPage.data.subtitle}
                 </p>
+                {heroPage.data.description && (
+                  <p class="text-base md:text-lg text-gray-300 mb-8 max-w-2xl leading-relaxed animate-slide-up">
+                    {heroPage.data.description}
+                  </p>
+                )}
               </>
             )}
             {heroPage && (
@@ -193,7 +201,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
                   WHY TEAMS PICK MLOX
                 </p>
                 <h2 class="text-3xl md:text-4xl font-bold mb-6 text-black">
-                  Calm Operations for Serious ML Systems
+                  Your Product at the Center
                 </h2>
                 <div class="text-lg text-black leading-relaxed prose prose-invert [&>p]:mb-4 max-w-none">
                   <heroContent.Content />
@@ -202,16 +210,16 @@ const heroContent = heroPage ? await heroPage.render() : null;
 
               <div class="space-y-4">
                 <div class="border-2 border-black p-4 bg-accent-yellow/60">
-                  <p class="text-xs font-black uppercase tracking-wider mb-1">Own Your Stack</p>
-                  <p class="text-sm">Run on your own infrastructure with inspectable configs and no black boxes.</p>
+                  <p class="text-xs font-black uppercase tracking-wider mb-1">Manage Your Stack</p>
+                  <p class="text-sm">Run on your own servers with inspectable configurations and explicit dependencies.</p>
                 </div>
                 <div class="border-2 border-black p-4 bg-accent-pink/35">
-                  <p class="text-xs font-black uppercase tracking-wider mb-1">Operational Clarity</p>
-                  <p class="text-sm">Web UI, TUI, and CLI stay aligned so teams can deploy and debug faster.</p>
+                  <p class="text-xs font-black uppercase tracking-wider mb-1">Connect the Pieces</p>
+                  <p class="text-sm">Keep databases, workflows, model serving, tracking, and monitoring connected around your product.</p>
                 </div>
                 <div class="border-2 border-black p-4 bg-accent-cyan/20">
-                  <p class="text-xs font-black uppercase tracking-wider mb-1">Built To Evolve</p>
-                  <p class="text-sm">Open-source foundations designed for long-term maintainability and adaptation.</p>
+                  <p class="text-xs font-black uppercase tracking-wider mb-1">Choose Your Interface</p>
+                  <p class="text-sm">Use the Web UI, TUI, or CLI against the same shared project model.</p>
                 </div>
               </div>
             </div>
@@ -219,15 +227,15 @@ const heroContent = heroPage ? await heroPage.render() : null;
             <div class="relative z-10 mt-8 grid sm:grid-cols-3 gap-4">
               <div class="border border-black bg-paper px-4 py-3 text-center">
                 <p class="text-2xl font-black text-black">UI + TUI + CLI</p>
-                <p class="text-xs uppercase tracking-wider">One Unified Control Surface</p>
+                <p class="text-xs uppercase tracking-wider">One Shared Project Model</p>
               </div>
               <div class="border border-black bg-paper px-4 py-3 text-center">
                 <p class="text-2xl font-black text-black">Open Source</p>
                 <p class="text-xs uppercase tracking-wider">Transparent By Default</p>
               </div>
               <div class="border border-black bg-paper px-4 py-3 text-center">
-                <p class="text-2xl font-black text-black">Hybrid Ready</p>
-                <p class="text-xs uppercase tracking-wider">On-Prem Or Mixed Cloud</p>
+                <p class="text-2xl font-black text-black">Connected</p>
+                <p class="text-xs uppercase tracking-wider">Product And Services Together</p>
               </div>
             </div>
           </div>
@@ -305,11 +313,6 @@ const heroContent = heroPage ? await heroPage.render() : null;
               );
             })}
           </div>
-          <div class="max-w-5xl mx-auto mt-16 rounded-2xl border border-accent-yellow/80 bg-accent-yellow px-5 py-5 text-center shadow-md">
-            <p class="text-xs md:text-sm text-black font-semibold md:whitespace-nowrap">
-              MLOX is under active development. Features and workflows continue to evolve. We welcome contributors and feedback.
-            </p>
-          </div>
         </div>
       </section>
     )}
@@ -321,7 +324,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
           See MLOX in Action
         </h2>
         <p class="text-xl text-gray-400 text-center mb-16 max-w-3xl mx-auto">
-          Experience the power of MLOX through our intuitive interface and comprehensive tooling
+          Manage the infrastructure around your product through the Web UI, TUI, and CLI.
         </p>
         <div class="max-w-6xl mx-auto grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           <!-- Screenshot 1: Infrastructure Control -->
@@ -337,7 +340,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
             </picture>
             <div class="absolute bottom-0 left-0 right-0 bg-ink border-t-2 border-ink px-4 py-3">
               <h3 class="text-paper-bright font-black text-sm uppercase tracking-wide">Infrastructure Control</h3>
-              <p class="text-paper-alt text-xs mt-0.5">Manage servers and clusters with ease</p>
+              <p class="text-paper-alt text-xs mt-0.5">Manage servers and set up Docker or Kubernetes</p>
             </div>
           </div>
 
@@ -355,7 +358,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
             </picture>
             <div class="absolute bottom-0 left-0 right-0 bg-ink border-t-2 border-ink px-4 py-3">
               <h3 class="text-paper-bright font-black text-sm uppercase tracking-wide">Service Management</h3>
-              <p class="text-paper-alt text-xs mt-0.5">Deploy and manage ML services effortlessly</p>
+              <p class="text-paper-alt text-xs mt-0.5">Deploy and connect ML/AI services</p>
             </div>
           </div>
 
@@ -373,7 +376,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
             </picture>
             <div class="absolute bottom-0 left-0 right-0 bg-ink border-t-2 border-ink px-4 py-3">
               <h3 class="text-paper-bright font-black text-sm uppercase tracking-wide">Git & Cloud Integrations</h3>
-              <p class="text-paper-alt text-xs mt-0.5">Seamless integration with Git and Cloud Platforms</p>
+              <p class="text-paper-alt text-xs mt-0.5">Connect repositories, applications, and cloud services</p>
             </div>
           </div>
 
@@ -390,7 +393,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
             </picture>
             <div class="absolute bottom-0 left-0 right-0 bg-ink border-t-2 border-ink px-4 py-3">
               <h3 class="text-paper-bright font-black text-sm uppercase tracking-wide">Real-time Monitoring</h3>
-              <p class="text-paper-alt text-xs mt-0.5">Track performance and metrics in real-time</p>
+              <p class="text-paper-alt text-xs mt-0.5">Keep tracking and monitoring close to your stack</p>
             </div>
           </div>
           <!-- Screenshot 5: Terminal UI -->
@@ -406,7 +409,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
             </picture>
             <div class="absolute bottom-0 left-0 right-0 bg-ink border-t-2 border-ink px-4 py-3">
               <h3 class="text-paper-bright font-black text-sm uppercase tracking-wide">Terminal UI</h3>
-              <p class="text-paper-alt text-xs mt-0.5">Low bandwidth configuration management</p>
+              <p class="text-paper-alt text-xs mt-0.5">Operate the same project model from the terminal</p>
             </div>
           </div>
 
@@ -423,7 +426,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
             </picture>
             <div class="absolute bottom-0 left-0 right-0 bg-ink border-t-2 border-ink px-4 py-3">
               <h3 class="text-paper-bright font-black text-sm uppercase tracking-wide">CLI</h3>
-              <p class="text-paper-alt text-xs mt-0.5">Build for automation.</p>
+              <p class="text-paper-alt text-xs mt-0.5">Script and automate infrastructure workflows</p>
             </div>
           </div>
         </div>
@@ -520,7 +523,7 @@ const heroContent = heroPage ? await heroPage.render() : null;
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div>
             <h4 class="text-xl font-bold mb-4 text-accent-cyan">MLOX</h4>
-            <p class="text-gray-400 mb-4">Sovereign AI Infrastructure. Open by Design. Slothfully Simple.</p>
+            <p class="text-gray-400 mb-4">Deploy and manage ML/AI infrastructure on your own servers. Slothfully simple.</p>
             <p class="text-sm text-gray-500">MLOX is open-source under the MIT license.</p>
           </div>
           <div>

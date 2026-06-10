@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <strong>Your ML/AI Infrastructure. Open by Design. Slothfully Simple.</strong>
+  <strong>Deploy and manage ML/AI infrastructure on your own servers. Slothfully simple.</strong>
 </p>
 
 <p align="center">
-  Manage server and deploy production-grade MLOps with ease and without cloud lock-in.
+  Servers, Docker, Kubernetes, databases, workflows, model serving, data services, tracking, and monitoring, with your product at the center. Managed in one place and connected by design.
 </p>
 
 <p align="center">
@@ -24,9 +24,11 @@
 
 ## What is MLOX?
 
-Cloud ML/AI costs thousands per month. Setup is painful. Vendor lock-in is a trap.
+ML/AI infrastructure is fragmented. Setup is painful, managed platforms are expensive, and vendor lock-in limits your choices.
 
-MLOX is a calm, reproducible way to manage and run production-grade ML/AI infrastructure. Docker, kubernetes, firewalls, databases, secret managers, monitoring, experiment trackers, workflow schedulers, model deployment, and more. Use the Web UI, TUI, or CLI and let MLOX do the hard part — set up servers, create and manage kubernetes clusters, deploying services, managing secrets, and wiring dependencies. Great for solopreneurs, startups and smaller teams who want to focus on building their product not on infrastructure.
+MLOX brings the infrastructure around your product into one connected system. It manages servers, sets up Docker and Kubernetes clusters, deploys open-source services, stores secrets, and wires dependencies across databases, workflows, experiment tracking, model serving, data services, and monitoring.
+
+Use the Web UI, TUI, or CLI to operate the same inspectable, configuration-driven core. MLOX is built for solopreneurs, startups, and small teams that want to focus on their product instead of assembling and maintaining infrastructure.
 
 It's for engineers who prefer thoughtful systems over chaos. Backed by open source. Powered by sloths.
 
@@ -36,9 +38,9 @@ It's for engineers who prefer thoughtful systems over chaos. Backed by open sour
 
 ## Current Status
 
-MLOX is in **active alpha development (v0.x)**. Core infrastructure, four backends (Native, Docker, Kubernetes, Connectors), and the major services are functional. The project has been accepted at **CAIN 2026**.
+Native, Docker, and Kubernetes execution, connector integrations, and the major services are functional. The project has been accepted at **CAIN 2026**.
 
-We welcome contributors, early adopters, and honest feedback. If you hit something broken, please [open an issue](https://github.com/BusySloths/mlox/issues/new/choose) or reach out at `contact@mlox.org`.
+We welcome contributors, users, and honest feedback. If you hit something broken, please [open an issue](https://github.com/BusySloths/mlox/issues/new/choose) or reach out at `contact@mlox.org`.
 
 ---
 
@@ -46,8 +48,10 @@ We welcome contributors, early adopters, and honest feedback. If you hit somethi
 
 | Area | What's included |
 |------|----------------|
-| **Infrastructure** | Add/remove/tag servers; choose Connector, Native, Docker, or Kubernetes runtime; spin up single- or multi-node clusters |
-| **Services** | Deploy, update, and remove services; centralized secrets; dependency wiring between services |
+| **Infrastructure** | Add, remove, and tag servers; use Native, Docker, or Kubernetes execution; create single- or multi-node clusters |
+| **Services** | Deploy, manage, and remove services; centralize secrets; connect service dependencies |
+| **Connectors** | Integrate externally hosted services such as BigQuery, Cloud Storage, Sheets, and GCP Secret Manager |
+| **Applications** | Import repositories and deploy your product alongside its supporting services |
 | **Code** | `busysloths-mlox` PyPI package with client integrations, SDK helpers, and example snippets |
 | **Lifecycle Management** | Migrate, upgrade, export, and decommission services *(planned)* |
 
@@ -57,17 +61,17 @@ We welcome contributors, early adopters, and honest feedback. If you hit somethi
 
 | Category | Services | Status |
 |----------|----------|--------|
-| ML Platforms | MLflow 2.x, MLflow 3.x, Airflow 2.x, Airflow 3.x | ✅ Stable |
-| Model Serving | MLflow MLServer, Lightweight MLFlow-Gateway | ✅ Stable |
-| LLMs & Inference | LiteLLM, Ollama | ✅ Stable |
-| Vector & Feature Stores | Milvus, Feast | ✅ Stable |
-| Data & Streaming | PostgreSQL, Redis, MinIO, Kafka | ✅ Stable |
-| Observability | InfluxDB, OpenTelemetry | ✅ Stable |
-| Secrets & Access | OpenBao, Tiny Secret Manager, Registry3 | ✅ Stable |
-| Kubernetes Add-ons | K8s Dashboard, Headlamp, KubeApps | 🔄 Experimental |
-| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | ✅ Stable |
-| Source Control | GitHub repository import | ✅ Stable |
-| Apps | MLOX Repo Deploy | ✅ Stable |
+| ML Platforms | MLflow 2.x, MLflow 3.x, Airflow 2.x, Airflow 3.x | Functional |
+| Model Serving | MLflow MLServer, MLflow Gateway | Functional |
+| LLMs & Inference | LiteLLM, Ollama | Functional |
+| Vector & Feature Stores | Milvus, Feast | Functional |
+| Data & Streaming | PostgreSQL, Redis, MinIO, Kafka | Functional |
+| Observability | InfluxDB, OpenTelemetry | Functional |
+| Secrets & Access | OpenBao, Tiny Secret Manager, Registry 3 | Functional / Beta |
+| Kubernetes Add-ons | Kubernetes Dashboard, Headlamp, KubeApps | Experimental |
+| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | Functional |
+| Source Control | GitHub repository import | Beta |
+| Applications | Repository Docker Deploy | Beta |
 
 ---
 
@@ -98,9 +102,9 @@ CLI     TUI     Streamlit Web UI     Other UIs
                     execution via `mlox/executors.py` + `mlox/execution/*`
 ```
 
-`MloxSession` is the runtime center: it always carries project metadata, an encrypted key-value secret manager, and the current `Infrastructure`. The important shared application layer is `mlox/application/use_cases/*`; CLI already routes through it, and TUI/Web/future UIs should do the same. `Infrastructure` models topology through bundles, where each bundle groups one compute/server with its services. Anything executed on a compute goes through the execution layer, while compute capabilities already exist (`git`, `docker`, `kubernetes`, ...) and service capabilities are an emerging architectural direction.
+`MloxSession` holds the current project, its encrypted secret manager, and its infrastructure. Infrastructure is organized into bundles that pair a compute/server with its deployed services, keeping the product and its supporting stack connected in one topology. The CLI, TUI, and Web UI operate on this shared model through common application use cases.
 
-YAML stays focused on deployable configs and Python build classes. Frontend-specific setup/settings components live in the frontend packages (`mlox/view/*`, `mlox/tui/*`) and are resolved through `mlox/ui/registry.py`, which keeps UI code out of service/server config definitions and creates a future extension point for plugin-provided UI handlers.
+Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 
 For deeper reading:
 

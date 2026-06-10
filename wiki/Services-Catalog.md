@@ -127,7 +127,7 @@ A reference to the ML/AI infrastructure services and integrations currently incl
 
 | Status | Meaning |
 |--------|---------|
-| Functional | Implemented and usable within the current alpha release |
+| Functional | Implemented and available in the current release |
 | Beta | Usable, but the workflow or interface is still evolving |
 | Experimental | Early implementation with a higher likelihood of change |
 

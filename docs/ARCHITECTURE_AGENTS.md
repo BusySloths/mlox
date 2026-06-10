@@ -4,7 +4,7 @@ Use this when changing core MLOX behavior.
 
 ## Mental Model
 
-MLOX is a configuration-driven control plane:
+MLOX is a configuration-driven system for managing a connected topology of ML/AI servers, services, secrets, and dependencies:
 
 1. YAML configs describe service/server metadata and `build.class_name`.
 2. `mlox/config.py` loads built-in configs and Python entry-point plugins.

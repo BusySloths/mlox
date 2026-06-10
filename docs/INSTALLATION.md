@@ -1,6 +1,6 @@
 # Installation
 
-MLOX is a Python 3.11/3.12 project. The repository uses [Task](https://taskfile.dev/installation/) as the main command runner.
+MLOX deploys and manages the servers, services, and integrations around your ML/AI product. It is a Python 3.11/3.12 project, and the repository uses [Task](https://taskfile.dev/installation/) as the main command runner.
 
 ## From Source
 

@@ -21,7 +21,7 @@
 
 ## 1. Fast Orientation
 
-MLOX is a Python project that manages MLOps infrastructure through **three user interfaces**:
+MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. It exposes **three user interfaces**:
 
 | Interface | Entry Point |
 |-----------|------------|
@@ -105,7 +105,8 @@ Key tasks:
 |-----------|---------|
 | [`examples/`](https://github.com/BusySloths/mlox/blob/main/examples/) | User-oriented usage snippets (OTel, MLflow tracking, DAG templates) |
 | [`docs/`](https://github.com/BusySloths/mlox/blob/main/docs/) | Project documentation |
-| [`scripts/`](https://github.com/BusySloths/mlox/blob/main/scripts/) | Experimental/hacky area — not a stable architecture reference |
+| [`wiki/`](https://github.com/BusySloths/mlox/blob/main/wiki/) | Source pages for the GitHub Wiki |
+| [`scripts/`](https://github.com/BusySloths/mlox/blob/main/scripts/) | Development, recovery, and service-testing utilities |
 | [`website/`](https://github.com/BusySloths/mlox/blob/main/website/) | Astro-based landing page |
 
 ### Documentation and Packaging
@@ -119,19 +120,21 @@ Key tasks:
 
 ```
 mlox/
-├── application/    # facade + session-based use_cases
+├── application/    # Shared use cases and infrastructure operations
 ├── cli/            # Typer CLI package (root app + command modules)
-├── services/       # 20+ deployable ML services (one directory each)
-├── servers/        # Native and Ubuntu/SSH backends
+├── execution/      # Backend and system execution helpers
+├── migrations/     # Persisted project format migrations
+├── servers/        # Local, connector, and Ubuntu compute backends
+├── services/       # Deployable ML/AI services and integrations
 ├── tui/            # Textual terminal UI + TUI-specific UI handlers
-├── ui/             # frontend UI handler registry
+├── ui/             # Frontend UI handler registry
 ├── view/           # Streamlit web UI + Streamlit-specific UI handlers
+├── assets/         # Runtime templates and packaged assets
+├── resources/      # Images and other static resources
 ├── session.py      # Runtime state & persistence
 ├── infra.py        # Service/server graph
 ├── config.py       # YAML loading + plugin discovery + UI handler lookup
-├── execution/      # backend/system execution helpers
-├── executors.py    # remote task executor layer used by services/servers
-└── assets/         # Outdated scripts/assets (not canonical)
+└── executors.py    # Remote task executor layer used by services/servers
 ```
 
 ### Configuration-Driven Building

@@ -4,7 +4,7 @@ This is the contributor-facing map of the current codebase.
 
 ## Runtime Shape
 
-MLOX is a configuration-driven control plane for MLOps infrastructure. It exposes three local interfaces:
+MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. It exposes three local interfaces:
 
 - CLI: `mlox/cli/`
 - TUI: `mlox/tui/`

@@ -4,67 +4,50 @@ This guide explains how to update the content on the MLOX landing page.
 
 ## Content Structure
 
-The landing page content is stored in the `src/pages/index.astro` file. While we have markdown files in `src/content/` for reference, the actual content used by the site is defined in the frontmatter section of `index.astro`.
+The main landing-page copy is stored under `src/content/pages/` and rendered by `src/pages/index.astro`. Layout-specific labels, screenshots, sponsors, and the footer remain in `index.astro`.
 
 ## How to Update Content
 
 ### 1. Hero Section
 
-Edit the `hero` object in `/website/src/pages/index.astro`:
+Edit `/website/src/content/pages/hero.md`:
 
-```typescript
-const hero = {
-  frontmatter: {
-    title: "Accelerate your ML journey",
-    subtitle: "Deploy production-ready MLOps in minutes, not months.",
-    cta_primary: "Get Started",
-    cta_primary_link: "https://github.com/BusySloths/mlox",
-    cta_secondary: "View Documentation",
-    cta_secondary_link: "https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md"
-  },
-  content: "Your main hero content here..."
-};
+```yaml
+---
+title: "Deploy and manage ML/AI infrastructure on your own servers."
+subtitle: "Slothfully simple."
+description: "Servers, Docker, Kubernetes, databases, workflows, model serving, data services, tracking, and monitoring, with your product at the center. Managed in one place and connected by design."
+cta_primary: "Get Started"
+cta_primary_link: "https://github.com/BusySloths/mlox"
+cta_secondary: "View Documentation"
+cta_secondary_link: "https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md"
+---
 ```
 
 **Fields:**
 - `title` - Main heading
 - `subtitle` - Subheading below the title
+- `description` - Supporting line shown in the hero and used as page metadata
 - `cta_primary` - Text for primary call-to-action button
 - `cta_primary_link` - URL for primary button
 - `cta_secondary` - Text for secondary button
 - `cta_secondary_link` - URL for secondary button
-- `content` - Main descriptive text
+
+Markdown below the frontmatter is rendered in the product overview section.
 
 ### 2. Features Section
 
-The features are hardcoded in the HTML but can be easily modified by editing the feature cards in the `<!-- Features Section -->` part of `index.astro`.
-
-To add or modify features:
-
-1. Locate the `<div class="features-grid">` section
-2. Add or edit `<div class="feature-card">` blocks
-3. Each card has:
-   - An emoji icon in the `<h3>` tag
-   - A list of features in `<ul>` tags
-
-Example:
-```html
-<div class="feature-card">
-  <h3>🏗️ Infrastructure</h3>
-  <ul>
-    <li>Feature 1</li>
-    <li>Feature 2</li>
-  </ul>
-</div>
-```
+Edit `src/content/pages/features.md`. Each feature has a title, text icon, color, optional description, and list of items.
 
 ### 3. Getting Started Section
 
-The getting started content is also in `index.astro`. Locate the `<!-- Getting Started Section -->` and modify:
+Edit `src/content/pages/getting-started.md` to modify:
 
-- The `<h3>` and `<p>` tags for instructions
-- The `<ol>` list items for steps
-- Links in `<a>` tags
+- section title, subtitle, and description
+- setup steps and commands
+- notes and documentation links
+
+Edit `src/content/pages/why-mlox.md` for the reason cards.
 
 ### 4. Sponsors and Supporters
 

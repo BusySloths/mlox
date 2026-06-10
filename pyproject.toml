@@ -7,17 +7,17 @@ name = "busysloths-mlox"
 readme = "README.md"
 keywords = ["Infrastructure", "Server", "Service", "Dashboard", "Opinionated", "MLOps"]
 license = { file = "LICENSE" }
-description = "Accelerate your ML journey—deploy production-ready MLOps in minutes, not months."
+description = "Deploy and manage connected ML/AI infrastructure on your own servers."
 requires-python = ">=3.11,<3.13"
 authors = [{ name = "drbusysloth", email = "contact@mlox.org" }]
 classifiers = [
-    # How mature is this project? Common values are
+   # How mature is this project? Common values are
     #   1 - Planning
     #   2 - Pre-Alpha 
     #   3 - Alpha
     #   4 - Beta
     #   5 - Production/Stable
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
 
     # Indicate who your project is intended for
     "Intended Audience :: Developers",

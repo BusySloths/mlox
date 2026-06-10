@@ -1,6 +1,6 @@
 # Documentation Index
 
-Start here when working in the repository.
+MLOX deploys and manages connected ML/AI infrastructure on your own servers, with your product at the center. These documents cover setup, architecture, integrations, and contribution workflows.
 
 ## User And Contributor Setup
 

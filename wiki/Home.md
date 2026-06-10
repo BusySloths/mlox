@@ -4,19 +4,19 @@
 
 # Welcome to the MLOX Wiki
 
-> **Your ML/AI Infrastructure. Open by Design. Slothfully Simple.**
+> **Deploy and manage ML/AI infrastructure on your own servers. Slothfully simple.**
 
-Manage servers and deploy production-ready MLOps infrastructure with ease, without cloud lock-in.
+Servers, Docker, Kubernetes, databases, workflows, model serving, data services, tracking, and monitoring, with your product at the center. Managed in one place and connected by design.
 
 ---
 
 ## Why MLOX?
 
-Cloud ML/AI infrastructure can cost thousands per month. Setup is painful. Vendor lock-in is a trap.
+ML/AI infrastructure is fragmented. Setup is painful, managed platforms are expensive, and vendor lock-in limits your choices.
 
-MLOX is a calm, reproducible way to manage ML/AI infrastructure across your own servers and external services. It brings Docker, Kubernetes, firewalls, databases, secret management, monitoring, experiment tracking, workflow orchestration, and model deployment into one place.
+MLOX brings the infrastructure around your product into one connected system. It manages servers, sets up Docker and Kubernetes clusters, deploys open-source services, stores secrets, and wires dependencies across databases, workflows, experiment tracking, model serving, data services, and monitoring.
 
-Use the Web UI, TUI, or CLI while MLOX handles the hard parts: setting up servers and Kubernetes clusters, deploying services, managing secrets, and wiring dependencies. MLOX is built for solopreneurs, startups, and small teams that want to focus on their products instead of infrastructure.
+Use the Web UI, TUI, or CLI to operate the same inspectable, configuration-driven core. MLOX is built for solopreneurs, startups, and small teams that want to focus on their product instead of assembling and maintaining infrastructure.
 
 It's for engineers who prefer thoughtful systems over chaos. Backed by open source. Powered by sloths.
 
@@ -42,6 +42,7 @@ It's for engineers who prefer thoughtful systems over chaos. Backed by open sour
 | **Infrastructure** | Add, remove, and tag servers; use Native, Docker, or Kubernetes execution; spin up single- or multi-node clusters |
 | **Connectors** | Integrate externally hosted services such as BigQuery, Cloud Storage, Sheets, and GCP Secret Manager |
 | **Services** | Deploy, manage, and remove services; centralize secrets; wire dependencies between services |
+| **Applications** | Import repositories and deploy your product alongside its supporting services |
 | **Code** | `busysloths-mlox` PyPI package with client integrations, SDK helpers, and example snippets |
 | **Lifecycle Management** | Migrate, upgrade, export, and decommission services _(planned)_ |
 
@@ -92,7 +93,7 @@ CLI     TUI     Streamlit Web UI     Other UIs
                     execution via `mlox/executors.py` + `mlox/execution/*`
 ```
 
-`MloxSession` holds the current project, its encrypted secret manager, and its infrastructure. Infrastructure is organized into bundles that pair a compute/server with its deployed services. The CLI, TUI, and Web UI operate on this shared model through common application use cases.
+`MloxSession` holds the current project, its encrypted secret manager, and its infrastructure. Infrastructure is organized into bundles that pair a compute/server with its deployed services, keeping the product and its supporting stack connected in one topology. The CLI, TUI, and Web UI operate on this shared model through common application use cases.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 
@@ -124,9 +125,9 @@ See the [Installation](Installation) wiki page or [`docs/INSTALLATION.md`](https
 
 ## Project Status
 
-MLOX is in **active alpha development (v0.x)**. Core infrastructure, Native, Docker, and Kubernetes execution, connector integrations, and the major services are functional. The project has been accepted at **CAIN 2026**.
+Native, Docker, and Kubernetes execution, connector integrations, and the major services are functional. The project has been accepted at **CAIN 2026**.
 
-We welcome contributors, early adopters, and honest feedback.
+We welcome contributors, users, and honest feedback.
 
 - 🐛 [Open an issue](https://github.com/BusySloths/mlox/issues/new/choose)
 - 💬 [Start a discussion](https://github.com/BusySloths/mlox/discussions)
