@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <strong>Sovereign AI Infrastructure. Open by Design. Slothfully Simple.</strong>
+  <strong>Your ML/AI Infrastructure. Open by Design. Slothfully Simple.</strong>
 </p>
 
 <p align="center">
-  A configuration-driven control plane for deploying production-grade MLOps on your own servers — without cloud lock-in.
+  Manage server and deploy production-grade MLOps with ease and without cloud lock-in.
 </p>
 
 <p align="center">
@@ -24,9 +24,9 @@
 
 ## What is MLOX?
 
-Cloud MLOps costs thousands per month. Setup is painful. Vendor lock-in is a trap.
+Cloud ML/AI costs thousands per month. Setup is painful. Vendor lock-in is a trap.
 
-MLOX is a calm, reproducible way to run production-grade ML infrastructure on your own servers or hybrid cloud. You define your stack in YAML, MLOX handles the rest — deploying services, managing secrets, and wiring dependencies across backends. Three interfaces (Web UI, TUI, CLI) share one inspectable config-driven core, while frontend-specific UI handlers are registered separately.
+MLOX is a calm, reproducible way to manage and run production-grade ML/AI infrastructure. Docker, kubernetes, firewalls, databases, secret managers, monitoring, experiment trackers, workflow schedulers, model deployment, and more. Use the Web UI, TUI, or CLI and let MLOX do the hard part — set up servers, create and manage kubernetes clusters, deploying services, managing secrets, and wiring dependencies. Great for solopreneurs, startups and smaller teams who want to focus on building their product not on infrastructure.
 
 It's for engineers who prefer thoughtful systems over chaos. Backed by open source. Powered by sloths.
 
@@ -36,7 +36,7 @@ It's for engineers who prefer thoughtful systems over chaos. Backed by open sour
 
 ## Current Status
 
-MLOX is in **active alpha development (v0.x)**. Core infrastructure, all three backends (Native, Docker, Kubernetes), and the major services are functional. The project has been accepted at **CAIN 2026**.
+MLOX is in **active alpha development (v0.x)**. Core infrastructure, four backends (Native, Docker, Kubernetes, Connectors), and the major services are functional. The project has been accepted at **CAIN 2026**.
 
 We welcome contributors, early adopters, and honest feedback. If you hit something broken, please [open an issue](https://github.com/BusySloths/mlox/issues/new/choose) or reach out at `contact@mlox.org`.
 
@@ -46,7 +46,7 @@ We welcome contributors, early adopters, and honest feedback. If you hit somethi
 
 | Area | What's included |
 |------|----------------|
-| **Infrastructure** | Add/remove/tag servers; choose Native, Docker, or Kubernetes runtime; spin up single- or multi-node clusters |
+| **Infrastructure** | Add/remove/tag servers; choose Connector, Native, Docker, or Kubernetes runtime; spin up single- or multi-node clusters |
 | **Services** | Deploy, update, and remove services; centralized secrets; dependency wiring between services |
 | **Code** | `busysloths-mlox` PyPI package with client integrations, SDK helpers, and example snippets |
 | **Lifecycle Management** | Migrate, upgrade, export, and decommission services *(planned)* |
@@ -58,15 +58,16 @@ We welcome contributors, early adopters, and honest feedback. If you hit somethi
 | Category | Services | Status |
 |----------|----------|--------|
 | ML Platforms | MLflow 2.x, MLflow 3.x, Airflow 2.x, Airflow 3.x | ✅ Stable |
-| Model Serving | MLflow MLServer | ✅ Stable |
+| Model Serving | MLflow MLServer, Lightweight MLFlow-Gateway | ✅ Stable |
 | LLMs & Inference | LiteLLM, Ollama | ✅ Stable |
 | Vector & Feature Stores | Milvus, Feast | ✅ Stable |
 | Data & Streaming | PostgreSQL, Redis, MinIO, Kafka | ✅ Stable |
 | Observability | InfluxDB, OpenTelemetry | ✅ Stable |
-| Secrets & Access | OpenBao, Tiny Secret Manager, Docker Registry | ✅ Stable |
+| Secrets & Access | OpenBao, Tiny Secret Manager, Registry3 | ✅ Stable |
 | Kubernetes Add-ons | K8s Dashboard, Headlamp, KubeApps | 🔄 Experimental |
-| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | 🔄 Experimental |
+| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | ✅ Stable |
 | Source Control | GitHub repository import | ✅ Stable |
+| Apps | MLOX Repo Deploy | ✅ Stable |
 
 ---
 
