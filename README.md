@@ -136,23 +136,28 @@ See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough includin
 ```
 mlox/
 ├── mlox/
-│   ├── application/    # facade + session-based use_cases
+│   ├── application/    # Shared use cases and infrastructure operations
 │   ├── cli/            # Typer CLI package (root app + command modules)
-│   ├── services/       # 20+ deployable ML services (one directory each)
-│   ├── servers/        # Native and Ubuntu/SSH backends
+│   ├── execution/      # Backend and system execution helpers
+│   ├── migrations/     # Persisted project format migrations
+│   ├── servers/        # Local, connector, and Ubuntu compute with Native, Docker, or Kubernetes
+│   ├── services/       # Deployable ML/AI services and integrations
 │   ├── tui/            # Textual terminal UI + TUI-specific UI handlers
-│   ├── ui/             # frontend UI handler registry
+│   ├── ui/             # Frontend UI handler registry
 │   ├── view/           # Streamlit web UI + Streamlit-specific UI handlers
+│   ├── assets/         # Runtime templates and packaged assets
+│   ├── resources/      # Images and other static resources
 │   ├── session.py      # Runtime state & persistence
 │   ├── infra.py        # Service/server graph
 │   ├── config.py       # YAML loading + plugin discovery + UI handler lookup
-│   ├── execution/      # backend/system execution helpers
-│   └── executors.py    # remote task executor layer used by services/servers
+│   └── executors.py    # Remote task executor layer used by services/servers
 ├── tests/
 │   ├── unit/           # Fast tests, no external deps
 │   └── integration/    # Multipass VM tests
 ├── examples/           # OTel, MLflow tracking, DAG templates
 ├── docs/               # Architecture, installation, contribution guides
+├── wiki/               # GitHub Wiki source pages
+├── scripts/            # Development and maintenance utilities
 └── website/            # Astro landing page
 ```
 
