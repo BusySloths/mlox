@@ -5,7 +5,7 @@ import streamlit as st
 from typing import cast
 from datetime import datetime
 
-from mlox.view.services.common import save_infrastructure
+from mlox.application import ProjectApplication
 from mlox.services.airflow.docker import AirflowDockerService
 from mlox.services.github.service import GithubRepoService
 from mlox.infra import Infrastructure, Bundle
@@ -68,7 +68,7 @@ def tab_repositories(
     )
     st.markdown("### Available repositories")
     selection = st.dataframe(
-        df[df["is_in_dags"] == False][["name", "link", "path", "created"]],
+        df[~df["is_in_dags"]][["name", "link", "path", "created"]],
         hide_index=True,
         selection_mode="single-row",
         width="stretch",
@@ -90,10 +90,20 @@ def tab_repositories(
             )
             config = infra.get_service_config(repo_service)
             if config:
-                infra.add_service(bundle.server.ip, config, params={}, service=new_repo)
+                application = cast(ProjectApplication, st.session_state.mlox)
+                result = application.add_service_from_config(
+                    config,
+                    server_ip=bundle.server.ip,
+                    service=new_repo,
+                )
+                if not result.success:
+                    st.error(result.message)
+                    return
+                setup_result = application.setup_service(name=new_repo.name)
+                if not setup_result.success:
+                    st.error(setup_result.message)
+                    return
                 with bundle.server.get_server_connection() as conn:
-                    new_repo.setup(conn)
-                    new_repo.spin_up(conn)
                     try:
                         new_repo.git_clone(conn)
                         new_repo.git_pull(conn)
@@ -101,12 +111,11 @@ def tab_repositories(
                         logger.info(
                             f"Error cloning or pulling repository (repo exists already)): {e}"
                         )
-                save_infrastructure()
                 st.rerun()
 
     st.markdown("#### Associated repositories")
     selection = st.dataframe(
-        df[df["is_in_dags"] == True][["name", "link", "path", "created"]],
+        df[df["is_in_dags"]][["name", "link", "path", "created"]],
         hide_index=True,
         selection_mode="single-row",
         width="stretch",
@@ -118,6 +127,5 @@ def tab_repositories(
         repo_service = cast(AbstractService, my_repos[idx]["repo"])
         if st.button("Remove from DAGs"):
             st.error("Removing repositories from Airflow DAGs is not yet supported.")
-            # infra.teardown_service(repo_service)
-            # save_infrastructure()
+            # application.teardown_service(name=repo_service.name)
             # st.rerun()

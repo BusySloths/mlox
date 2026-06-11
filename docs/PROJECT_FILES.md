@@ -13,6 +13,30 @@ mlox server list
 
 Creation is explicit and refuses to overwrite a file. Opening a missing project never creates one. Keep the password outside source control; `.mlox` files and SQLite sidecars are ignored by the repository.
 
+## Python API
+
+Use `ProjectApplication` for application mutations:
+
+```python
+from mlox.application import ProjectApplication
+
+app = ProjectApplication.open("demo.mlox", password)
+result = app.add_service(server_ip="10.0.0.5", template_id="postgres")
+```
+
+Use `ProjectSession` for low-level SDK access. Direct aggregate changes require an
+explicit commit:
+
+```python
+from mlox.session import ProjectSession
+
+session = ProjectSession.open("demo.mlox", password)
+session.project.descr = "Experiment environment"
+session.commit()
+```
+
+`session.reload()` discards uncommitted in-memory changes.
+
 ## Data-source model
 
 Every project has an active data-source record. Initially it is:

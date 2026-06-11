@@ -7,7 +7,7 @@ import streamlit as st
 from typing import Any, Dict
 
 from mlox.infra import Infrastructure, Bundle
-from mlox.view.services.common import save_infrastructure
+from mlox.view.services.common import commit_project
 from mlox.services.repo_deploy.service import RepoDeployDockerService
 
 
@@ -192,7 +192,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: RepoDeployDockerSer
         new_env = _parse_env_text(env_text)
         with bundle.server.get_server_connection() as conn:
             service.save_env_text(conn, env_text, new_env)
-        save_infrastructure()
+        commit_project()
         st.success("Updated environment file.")
         st.rerun()
 
@@ -208,6 +208,6 @@ def settings(infra: Infrastructure, bundle: Bundle, service: RepoDeployDockerSer
         with st.spinner("Pulling latest git changes and redeploying...", show_time=True):
             with bundle.server.get_server_connection() as conn:
                 service.update_and_redeploy(conn, compose_service=compose_service.strip())
-            save_infrastructure()
+            commit_project()
         st.success("Updated repository and redeployed service.")
         st.rerun()

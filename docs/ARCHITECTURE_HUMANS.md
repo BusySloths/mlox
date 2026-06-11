@@ -10,24 +10,22 @@ MLOX models the infrastructure around an ML/AI product as a connected topology o
 - TUI: `mlox/tui/`
 - Streamlit web UI: `mlox/view/`
 
-Those interfaces should stay thin. Shared behavior belongs in the application/session layer.
+Those interfaces should stay thin. Shared behavior belongs in the application layer.
 
 ```text
 CLI / TUI / Streamlit
         |
         v
-mlox/application/use_cases/*
+ProjectApplication
         |
         v
-MloxSession
-        |
-        +--> secret manager
+ProjectSession
         |
         v
-Infrastructure
+ProjectAggregate
         |
         v
-Bundle = one server/compute + services deployed on it
+Infrastructure -> Bundle = one server/compute + deployed services
         |
         v
 executors + backend adapters
@@ -35,11 +33,11 @@ executors + backend adapters
 
 ## Important Modules
 
-- `mlox/session.py`: `MloxSession`, the runtime container for project metadata, its active data source, infrastructure, and embedded secrets.
+- `mlox/project/aggregate.py`: `ProjectAggregate`, the aggregate root for metadata and infrastructure.
+- `mlox/session.py`: `ProjectSession`, the SQLCipher persistence, migration, and secrets boundary.
 - `mlox/infra.py`: topology model containing bundles, servers, and services.
-- `mlox/application/use_cases/`: shared session-based actions used by interfaces.
-- `mlox/application/facade.py`: thin adapter used by callers that need session loading/caching.
-- `mlox/application/infrastructure_ops.py`: side-effectful setup/teardown helpers used by use-cases.
+- `mlox/application/use_cases/`: project-based server, service, and model actions.
+- `mlox/application/facade.py`: stateful `ProjectApplication` that commits successful mutations and reloads failed ones.
 - `mlox/config.py`: YAML and plugin config loading.
 - `mlox/executors.py` and `mlox/execution/`: command execution and backend helpers.
 - `mlox/ui/registry.py`: frontend handler lookup for Streamlit/TUI-specific setup panels.
@@ -64,7 +62,10 @@ See `docs/PLUGIN_CONFIGS.md` for the minimal plugin contract.
 
 ## State And Persistence
 
-`MloxSession` is the main runtime boundary. It loads project metadata, connects a secret manager, and loads/saves `Infrastructure`.
+`ProjectSession` loads a complete `ProjectAggregate`, exposes project-backed secrets, and
+atomically commits metadata and infrastructure. `ProjectApplication` owns one
+session and is the preferred API for mutations. Use cases receive a `ProjectAggregate`;
+they do not know about persistence.
 
 Supported secret manager paths include:
 
@@ -92,7 +93,7 @@ Rules for new service/server work:
 
 - `requirements` in YAML are parsed but not fully enforced at runtime.
 - Service capabilities are useful metadata but not yet a complete placement policy.
-- Some orchestration still lives close to `Infrastructure` for compatibility.
+- `Infrastructure` contains queries, serialization, and runtime hydration only.
 - UI handler plugin registration is not yet part of the documented external plugin API.
 
 ## Development Commands

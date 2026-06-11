@@ -18,6 +18,12 @@ class Parent:
     child: Child
 
 
+@dataclass
+class VersionedRecord:
+    name: str
+    added_later: str | None = None
+
+
 def test_dataclass_to_dict_and_back_with_hook():
     payload = Parent(name="demo", child=Child(value=7))
 
@@ -26,6 +32,18 @@ def test_dataclass_to_dict_and_back_with_hook():
 
     assert isinstance(restored, Parent)
     assert restored.child.value == 7
+
+
+def test_deserialization_uses_defaults_for_fields_missing_from_old_payloads():
+    payload = {
+        "_module_name_": "tests.unit.test_utils_serialization",
+        "_class_name_": "VersionedRecord",
+        "name": "legacy",
+    }
+
+    restored = utils.dict_to_dataclass(payload)
+
+    assert restored == VersionedRecord(name="legacy", added_later=None)
 
 
 def test_dataclass_to_dict_rejects_non_dataclass():

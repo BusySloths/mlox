@@ -13,8 +13,6 @@ from textual.reactive import reactive
 from textual.widgets import Static
 from textual.renderables.digits import Digits as DigitsRenderable
 
-from mlox.session import MloxSession
-
 from .model import (
     SelectionInfo,
     WELCOME_TEXT,
@@ -57,8 +55,8 @@ class OverviewPanel(Static):
         )
 
     def show_infrastructure_overview(self) -> None:
-        session: Optional[MloxSession] = getattr(self.app, "session", None)
-        summary = summarize_infrastructure(session)
+        application = getattr(self.app, "application", None)
+        summary = summarize_infrastructure(application)
         if not summary["has_data"]:
             self.update(
                 Panel(

@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from textual.widgets import Tree
-
-from mlox.session import MloxSession
 
 from .model import SelectionChanged, SelectionInfo
 
@@ -24,14 +20,15 @@ class InfraTree(Tree[SelectionInfo]):
         """Populate the tree with bundles, servers and services."""
 
         self.clear()
-        session: Optional[MloxSession] = getattr(self.app, "session", None)
-        project_name = getattr(getattr(session, "project", None), "name", None)
+        application = getattr(self.app, "application", None)
+        project = getattr(application, "project", None)
+        project_name = getattr(project, "name", None)
         self.root.label = project_name or "Infrastructure"
         self.root.data = SelectionInfo(
             type="root", bundle=None, server=None, service=None
         )
 
-        infra = getattr(session, "infra", None)
+        infra = getattr(project, "infrastructure", None)
         if not infra or not infra.bundles:
             self.root.add(
                 "No infrastructure available", data=SelectionInfo(type="empty")

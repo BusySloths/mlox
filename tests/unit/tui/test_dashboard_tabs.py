@@ -27,13 +27,16 @@ class DashboardTestApp(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.session = SimpleNamespace(
-            project=SimpleNamespace(name="test-project"),
-            infra=SimpleNamespace(bundles=[]),
-            password="secret",
-            migrations=None,
-            project_path="test-project",
+        project = SimpleNamespace(
+            name="test-project",
+            infrastructure=SimpleNamespace(bundles=[]),
         )
+        session = SimpleNamespace(
+            project=project,
+            password="secret",
+            path="test-project",
+        )
+        self.application = SimpleNamespace(project=project, session=session)
 
     def compose(self) -> ComposeResult:
         yield DashboardScreen()
@@ -150,28 +153,30 @@ def test_sidebar_can_be_widened() -> None:
 
 
 async def _reload_project_infrastructure(monkeypatch) -> tuple[str, object]:
-    class ReloadedSession:
-        def __init__(self, project_name, password, migrations=None) -> None:
-            self.project = SimpleNamespace(name=f"{project_name}-reloaded")
-            self.password = password
-            self.migrations = migrations
-            self.infra = SimpleNamespace(bundles=[])
-
-    monkeypatch.setattr(
-        "mlox.tui.screens.dashboard.screen.MloxSession", ReloadedSession
-    )
-
     app = DashboardTestApp()
+
+    def reload_project() -> None:
+        project = SimpleNamespace(
+            name="test-project-reloaded",
+            infrastructure=SimpleNamespace(bundles=[]),
+        )
+        app.application.project = project
+        app.application.session.project = project
+
+    app.application.reload = reload_project
     async with app.run_test() as pilot:
         await pilot.press("R")
         deadline = time.monotonic() + 2
-        while app.session.project.name == "test-project":
+        while app.application.project.name == "test-project":
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for project reload.")
             await pilot.pause(0.05)
 
         screen = app.query_one(DashboardScreen)
-        return app.session.project.name, screen.query_one("#infra-tree").root.data
+        return (
+            app.application.project.name,
+            screen.query_one("#infra-tree").root.data,
+        )
 
 
 def test_reload_binding_reloads_project_infrastructure(monkeypatch) -> None:

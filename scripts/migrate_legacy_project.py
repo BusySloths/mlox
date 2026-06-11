@@ -56,7 +56,6 @@ def migrate_legacy_project(
         destination, new_password, project.get("name") or source_path.stem
     )
     try:
-        store.import_project_metadata(project)
         manager = _legacy_manager(project)
         secret_values: dict[str, Any] = {}
         if manager:
@@ -69,7 +68,15 @@ def migrate_legacy_project(
             if not infra_payload
             else Infrastructure.from_dict(infra_payload)
         )
-        store.save_infrastructure(infra)
+        destination_project = store.load()
+        destination_project.name = project.get("name") or source_path.stem
+        destination_project.descr = project.get("descr", "")
+        destination_project.version = project.get("version", "0.1.0")
+        destination_project.created_at = (
+            project.get("created_at") or destination_project.created_at
+        )
+        destination_project.infrastructure = infra
+        store.save(destination_project)
         if include_secrets:
             for name, value in secret_values.items():
                 store.save_secret(name, value)

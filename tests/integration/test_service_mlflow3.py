@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import os
 import time
 import pytest
@@ -31,7 +32,7 @@ def install_mlflow3_service(ubuntu_docker_server):
     # Load MLflow service configuration
     config = load_config(get_stacks_path(), "/mlflow", "mlox.mlflow.3.8.1.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add MLflow service from config")
 

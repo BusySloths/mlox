@@ -3,10 +3,10 @@ from __future__ import annotations
 from mlox.application.result import OperationResult
 
 
-def create_project(session, name: str) -> OperationResult:
+def create_project(project) -> OperationResult:
     return OperationResult(
         True,
         0,
-        f"Created project '{name}'.",
-        {"session": session},
+        f"Created project '{project.name}'.",
+        {"project": project},
     )

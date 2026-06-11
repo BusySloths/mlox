@@ -29,14 +29,15 @@ MLOX models the infrastructure around an ML/AI product as a connected topology o
 | **TUI** (terminal UI) | [`mlox/tui/`](https://github.com/BusySloths/mlox/blob/main/mlox/tui/) |
 | **Web App** (Streamlit) | [`mlox/view/`](https://github.com/BusySloths/mlox/blob/main/mlox/view/) |
 
-The shared architecture is centered on a session container and session-based use-cases:
+The shared architecture is centered on a project aggregate and stateful application:
 
 | Object | File | Role |
 |--------|------|------|
-| Use-case modules | [`mlox/application/use_cases/`](https://github.com/BusySloths/mlox/blob/main/mlox/application/use_cases/) | Session-based application actions that should be shared by all UIs |
-| `MloxSession` | [`mlox/session.py`](https://github.com/BusySloths/mlox/blob/main/mlox/session.py) | Project/session container holding metadata, secret manager, and infrastructure |
+| `ProjectApplication` | [`mlox/application/facade.py`](https://github.com/BusySloths/mlox/blob/main/mlox/application/facade.py) | Stateful public mutation API and commit boundary |
+| Use-case modules | [`mlox/application/use_cases/`](https://github.com/BusySloths/mlox/blob/main/mlox/application/use_cases/) | Project-based server, service, and model operations |
+| `ProjectSession` | [`mlox/session.py`](https://github.com/BusySloths/mlox/blob/main/mlox/session.py) | SQLCipher persistence and project-backed secrets |
+| `ProjectAggregate` | [`mlox/project/aggregate.py`](https://github.com/BusySloths/mlox/blob/main/mlox/project/aggregate.py) | Aggregate root containing metadata and infrastructure |
 | `Infrastructure` | [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py) | Project topology made of bundles, compute, and services |
-| Application facade | [`mlox/application/facade.py`](https://github.com/BusySloths/mlox/blob/main/mlox/application/facade.py) | Current stateless adapter used mainly by the CLI and callers that need session loading/caching |
 
 ```text
 CLI     TUI     Streamlit Web UI     Other UIs
@@ -45,12 +46,12 @@ CLI     TUI     Streamlit Web UI     Other UIs
     +----+-------------+--------------+
                     |
                     v
-      `mlox/application/use_cases/*`
-         shared session-based logic
+              `ProjectApplication`
+           shared mutation boundary
                     |
                     v
-              `MloxSession`
-   encrypted `.mlox` project + active data source + infrastructure
+              `ProjectSession`
+       SQLCipher persistence + secrets
              /                               \
             v                                 v
  embedded SQLCipher storage                `Infrastructure`
@@ -120,10 +121,10 @@ Key tasks:
 
 ```
 mlox/
-├── application/    # Shared use cases and infrastructure operations
+├── application/    # Stateful application API and shared use cases
 ├── cli/            # Typer CLI package (root app + command modules)
 ├── execution/      # Backend and system execution helpers
-├── migrations/     # Persisted project format migrations
+├── project/        # Aggregate, SQLCipher repository, and secret adapter
 ├── servers/        # Local, connector, and Ubuntu compute backends
 ├── services/       # Deployable ML/AI services and integrations
 ├── tui/            # Textual terminal UI + TUI-specific UI handlers
@@ -157,22 +158,28 @@ Frontend-specific UI handlers are no longer modeled in YAML. They live in fronte
 
 ## 4. Core Runtime Data Model
 
-### `MloxSession` — Central Entry Point
+### `ProjectApplication` and `ProjectSession`
 
 [`mlox/session.py`](https://github.com/BusySloths/mlox/blob/main/mlox/session.py)
 
-`MloxSession` is the main runtime object. It:
+`ProjectApplication` is the preferred runtime API. It:
 
 - Opens an existing project or explicitly creates a new one
-- Wires the project-backed secret adapter
-- Loads and saves the project infrastructure
-- Gives the runtime one place to find project metadata, secrets, and topology
+- Dispatches project-based use cases
+- Commits successful mutations once
+- Reloads the aggregate after failed mutations
+
+`ProjectSession` is the lower-level persistence API. It loads and atomically saves
+the complete `ProjectAggregate`, exposes project-backed secrets, and
+supports explicit `commit()` and `reload()` calls.
 
 ### `Infrastructure` — Active Project Topology
 
 [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py)
 
-`Infrastructure` holds one project's server bundles and services for a given session.
+`Infrastructure` holds one project's server bundles and services. It provides
+queries, serialization, config hydration, and service lookup binding, but no
+application mutation wrappers.
 
 ### `Bundle` — One Compute plus Its Services
 
@@ -203,9 +210,8 @@ MLOX supports multiple embedded SQLCipher storages:
 | OpenBao (open-source Vault) | [`mlox/services/openbao/`](https://github.com/BusySloths/mlox/blob/main/mlox/services/openbao/) |
 | GCP Secret Manager | [`mlox/services/gcp/secret_manager.py`](https://github.com/BusySloths/mlox/blob/main/mlox/services/gcp/secret_manager.py) |
 
-`MloxProject` metadata stores which secret manager class is used and how to reconnect to it across sessions.
-
-In practice, `MloxSession` is the persistence boundary around `Infrastructure`, and the secret manager is the encrypted key-value store behind that boundary.
+The project database itself is the authoritative secret store. External secret
+managers can be imported through `ProjectSession.import_secrets()`.
 
 ---
 
@@ -217,12 +223,12 @@ The intended control flow is:
 
 - UI layer (`cli`, `tui`, `view`, future UIs)
 - shared application layer (`mlox/application/use_cases/*`)
-- session container (`MloxSession`)
+- stateful application (`ProjectApplication`)
+- persistence boundary (`ProjectSession`)
 - topology root (`Infrastructure`)
 
-The CLI currently reaches that shared layer through `mlox/application/facade.py`. TUI and Streamlit should converge on the same use-cases so behavior stays aligned across interfaces.
-
-`Infrastructure` is primarily the topology model, but it still exposes compatibility wrappers that delegate some lifecycle work into `mlox/application/infrastructure_ops.py`.
+CLI commands open a `ProjectApplication` per invocation. TUI and Streamlit retain
+one application in runtime state. All three interfaces share the same use cases.
 
 For custom setup/settings panels, the ownership moved to the frontend packages. Built-in Streamlit and TUI handlers are bootstrapped into `mlox/ui/registry.py`, which keeps deployable configs UI-agnostic and creates a later extension point for plugin UI contributions.
 
@@ -248,9 +254,8 @@ Anything that executes on a compute/server should route through the execution la
 | Area | Notes |
 |------|-------|
 | `mlox/scheduler.py` | Effectively legacy/obsolete — not part of the active architecture |
-| `mlox/application/use_cases/*` | Important shared session-based application layer; keep growing behavior here instead of reintroducing broad operations modules |
-| `mlox/application/facade.py` | Thin stateless adapter that loads/caches session context and dispatches to `application/use_cases/*` |
-| `mlox/application/infrastructure_ops.py` | Orchestration helpers used by session-based use-cases for setup/teardown-style side effects |
+| `mlox/application/use_cases/*` | Project-based operations; persistence stays outside use cases |
+| `mlox/application/facade.py` | Stateful `ProjectApplication` with commit/reload behavior |
 | YAML `requirements` | Present in the config schema but **not yet fully enforced** at runtime |
 | UI registration | Frontend-owned via `mlox/ui/registry.py`; keep UI definitions out of service/server YAML |
 | Server capabilities | Already explicit in code/config |

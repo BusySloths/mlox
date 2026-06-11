@@ -4,6 +4,7 @@ import streamlit as st
 
 from typing import cast, List, Dict, Any
 
+from mlox.application import ProjectApplication
 from mlox.infra import Infrastructure
 from mlox.config import load_all_server_configs
 from mlox.view.utils import plot_config_nicely
@@ -11,9 +12,9 @@ from mlox.view.utils import plot_config_nicely
 logger = logging.getLogger(__name__)
 
 
-def save_infra():
-    with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()
+def commit_project():
+    with st.spinner("Saving project..."):
+        st.session_state.mlox.session.commit()
 
 
 # Lightweight chips styling to match Services templates
@@ -247,14 +248,14 @@ def tab_server_management(infra: Infrastructure):
         if c3.button("Save", type="primary", help="Save", icon=":material/save:"):
             bundle.name = name
             bundle.tags = tags
-            save_infra()
+            commit_project()
             st.rerun()
 
         c1, c2, c3, _, c4, c5, c6 = st.columns([10, 12, 18, 10, 18, 12, 25])
         if c4.button("Refresh Status", icon=":material/refresh:"):
             with st.spinner("Refreshing server status...", show_time=True):
                 check_server_status(bundle.server)
-                save_infra()
+                commit_project()
                 st.rerun()
 
         if c3.button(
@@ -267,32 +268,32 @@ def tab_server_management(infra: Infrastructure):
             with st.spinner("Updating server packages...", show_time=True):
                 bundle.server.update()
                 check_server_status(bundle.server)
-                save_infra()
+                commit_project()
                 st.rerun()
 
         if c2.button("Delete", type="primary"):
             st.info(f"Backend for server with IP {selected_server} will be deleted.")
-            infra.remove_bundle(bundle, teardown_server=True)
+            application = cast(ProjectApplication, st.session_state.mlox)
+            result = application.teardown_server(ip=bundle.server.ip)
+            if not result.success:
+                st.error(result.message)
+                return
             st.session_state.pop("server-select", None)
-            save_infra()
             st.rerun()
 
         # if c2.button("Clear Backend", disabled=bundle.server.state != "running"):
         #     st.info(f"Backend for server with IP {selected_server} will be cleared.")
         #     bundle.server.teardown_backend()
-        #     save_infra()
+        #     commit_project()
         #     st.rerun()
         if c1.button("Setup", disabled=not bundle.server.state == "un-initialized"):
             st.info(f"Initialize the server with IP {selected_server}.")
             with st.spinner("Initializing server...", show_time=True):
-                try:
-                    bundle.server.setup()
-                except Exception as exc:
-                    logger.exception("Server setup failed for %s.", selected_server)
-                    save_infra()
-                    st.error(f"Server setup failed: {exc}")
+                application = cast(ProjectApplication, st.session_state.mlox)
+                result = application.setup_server(ip=bundle.server.ip)
+                if not result.success:
+                    st.error(result.message)
                     return
-            save_infra()
             st.rerun()
         current_access = "mlox.debug" in bundle.tags
         if (
@@ -309,7 +310,7 @@ def tab_server_management(infra: Infrastructure):
                 st.info("Enable debug access")
                 bundle.tags.append("mlox.debug")
                 bundle.server.enable_debug_access()
-            save_infra()
+            commit_project()
             st.rerun()
 
         with st.container(border=True):
@@ -415,17 +416,19 @@ def tab_server_templates(infra: Infrastructure):
                 disabled=params is None,
             ):
                 st.info(f"Adding server {config.name} {config.version}.")
-                ret = infra.add_server(config, params or {})
-                if not ret:
-                    st.error("Failed to add server")
-                save_infra()
+                application = cast(ProjectApplication, st.session_state.mlox)
+                result = application.add_server_from_config(config, params or {})
+                if result.success:
+                    st.success(result.message)
+                else:
+                    st.error(result.message)
 
 
 # tab_avail, tab_installed = st.tabs(["Templates", "Server Management"])
 tab_installed, tab_avail = st.tabs(["Server Management", "Templates"])
 infra = None
 try:
-    infra = cast(Infrastructure, st.session_state.mlox.infra)
+    infra = cast(Infrastructure, st.session_state.mlox.project.infrastructure)
 except BaseException:
     st.error("Could not load infrastructure configuration.")
     st.stop()

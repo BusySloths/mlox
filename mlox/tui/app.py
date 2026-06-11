@@ -5,13 +5,13 @@ from typing import Optional
 
 from textual.app import App
 
+from mlox.application import ProjectApplication
 from mlox.project.store import (
     InvalidProjectPasswordError,
     ProjectAlreadyExistsError,
     ProjectDatabaseError,
     ProjectNotFoundError,
 )
-from mlox.session import MloxSession
 from mlox.tui.screens.login import LoginScreen
 from mlox.tui.screens.dashboard import DashboardScreen
 
@@ -30,7 +30,7 @@ class MLOXTextualApp(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.session: Optional[MloxSession] = None
+        self.application: Optional[ProjectApplication] = None
         self.login_error: Optional[str] = None
 
     def on_mount(self) -> None:
@@ -42,7 +42,11 @@ class MLOXTextualApp(App):
 
         self.login_error = None
         try:
-            session = MloxSession(project, password, create=create)
+            application = (
+                ProjectApplication.create(project, password)
+                if create
+                else ProjectApplication.open(project, password)
+            )
         except ProjectNotFoundError:
             self.login_error = "Project not found"
         except ProjectAlreadyExistsError:
@@ -55,7 +59,7 @@ class MLOXTextualApp(App):
             logger.exception("Could not open MLOX project %s", project)
             self.login_error = "Could not load project"
         else:
-            self.session = session
+            self.application = application
             return True
         return False
 

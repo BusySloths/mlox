@@ -88,12 +88,15 @@ async def _open_terminal_with_binding(monkeypatch, selection) -> list[object]:
     class DashboardBindingTestApp(App):
         def __init__(self) -> None:
             super().__init__()
-            self.session = SimpleNamespace(
-                project=SimpleNamespace(name="test-project"),
-                infra=SimpleNamespace(bundles=[]),
-                password="secret",
-                migrations=None,
+            project = SimpleNamespace(
+                name="test-project",
+                infrastructure=SimpleNamespace(bundles=[]),
             )
+            session = SimpleNamespace(
+                project=project,
+                password="secret",
+            )
+            self.application = SimpleNamespace(project=project, session=session)
 
         def compose(self) -> ComposeResult:
             yield DashboardScreen()

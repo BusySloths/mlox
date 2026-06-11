@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import logging
 import os
 import time
@@ -24,7 +25,9 @@ class IdentityModel(mlflow.pyfunc.PythonModel):  # type: ignore
         return pd.DataFrame(model_input)
 
 
-def _register_identity_model(service_url: str, username: str, password: str) -> tuple[str, str]:
+def _register_identity_model(
+    service_url: str, username: str, password: str
+) -> tuple[str, str]:
     mlflow.set_tracking_uri(service_url)
     mlflow.set_registry_uri(service_url)
     os.environ["MLFLOW_TRACKING_USERNAME"] = username
@@ -75,8 +78,8 @@ def deploy_mlflow_gateway(ubuntu_docker_server, install_mlflow3_service):
         "${MODEL_REGISTRY_UUID}": mlflow_service.uuid,
     }
 
-    gateway_bundle = infra.add_service(
-        ubuntu_docker_server.ip, gateway_config, params=params
+    gateway_bundle = add_service(
+        infra, ubuntu_docker_server.ip, gateway_config, params=params
     )
     if not gateway_bundle:
         pytest.skip("Failed to add MLflow Gateway service from config")
@@ -122,7 +125,9 @@ def test_mlflow_gateway_identity_prediction(deploy_mlflow_gateway):
         f"{gateway_service.service_url}/prod/predict",
         json=payload,
         auth=(gateway_service.user, gateway_service.pw),
-        headers={"Host": gateway_service.service_url.split("//", 1)[1].split(":", 1)[0]},
+        headers={
+            "Host": gateway_service.service_url.split("//", 1)[1].split(":", 1)[0]
+        },
         verify=False,
         timeout=120,
     )

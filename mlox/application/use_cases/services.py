@@ -2,58 +2,102 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from mlox.application import infrastructure_ops as infra_use_cases
 from mlox.application.result import OperationResult
+from mlox.config import get_stacks_path
+from mlox.project.aggregate import ProjectAggregate
+from mlox.service import AbstractService
+from mlox.utils import auto_map_ports, generate_pw, generate_username
 
 
-def list_services(session) -> OperationResult:
-    services: List[Dict[str, Any]] = []
-    for bundle in session.infra.bundles:
-        for svc in bundle.services:
-            labels = list(getattr(svc, "compose_service_names", {}).keys())
-            ports_dict = getattr(svc, "service_ports", {}) or {}
-            ports = [f"{name}:{port}" for name, port in ports_dict.items()]
-            urls_dict = getattr(svc, "service_urls", {}) or {}
-            urls = [f"{name}: {url}" for name, url in urls_dict.items()]
-            services.append(
+def list_services(project: ProjectAggregate) -> OperationResult:
+    payload: List[Dict[str, Any]] = []
+    for bundle in project.infrastructure.bundles:
+        for service in bundle.services:
+            payload.append(
                 {
-                    "name": svc.name,
-                    "service_config_id": getattr(svc, "service_config_id", "unknown"),
+                    "name": service.name,
+                    "service_config_id": getattr(
+                        service, "service_config_id", "unknown"
+                    ),
                     "server_ip": bundle.server.ip,
-                    "state": getattr(svc, "state", "unknown"),
-                    "labels": labels,
-                    "ports": ports,
-                    "urls": urls,
+                    "state": getattr(service, "state", "unknown"),
+                    "labels": list(
+                        getattr(service, "compose_service_names", {}).keys()
+                    ),
+                    "ports": [
+                        f"{name}:{port}"
+                        for name, port in (
+                            getattr(service, "service_ports", {}) or {}
+                        ).items()
+                    ],
+                    "urls": [
+                        f"{name}: {url}"
+                        for name, url in (
+                            getattr(service, "service_urls", {}) or {}
+                        ).items()
+                    ],
                 }
             )
-
-    message = "No services found." if not services else "Services retrieved successfully."
-    return OperationResult(True, 0, message, {"services": services})
+    message = "No services found." if not payload else "Services retrieved successfully."
+    return OperationResult(True, 0, message, {"services": payload})
 
 
 def add_service(
-    session,
+    project: ProjectAggregate,
     load_service_config,
     *,
     server_ip: str,
     template_id: str,
     params: Optional[Dict[str, str]] = None,
+    service: AbstractService | None = None,
 ) -> OperationResult:
     config = load_service_config(template_id)
     if not config:
         return OperationResult(False, 6, "Service template not found.")
-
-    bundle = infra_use_cases.add_service(
-        session.infra,
-        server_ip,
-        config,
-        params or {},
-    )
-    if not bundle:
+    infra = project.infrastructure
+    bundle = infra.get_bundle_by_ip(server_ip)
+    if not bundle or not bundle.server or not bundle.server.mlox_user:
         return OperationResult(False, 7, "Failed to add service to server.")
 
-    session.save_infrastructure()
-    service = bundle.services[-1]
+    values: Dict[str, Any] = dict(params or {})
+    if service is None:
+        values.update(
+            {
+                "${MLOX_STACKS_PATH}": get_stacks_path(),
+                "${MLOX_USER}": bundle.server.mlox_user.name,
+                "${MLOX_USER_HOME}": bundle.server.mlox_user.home,
+                "${MLOX_AUTO_USER}": generate_username(),
+                "${MLOX_AUTO_PW}": generate_pw(),
+                "${MLOX_AUTO_API_KEY}": generate_pw(),
+                "${MLOX_SERVER_IP}": bundle.server.ip,
+                "${MLOX_SERVER_UUID}": bundle.server.uuid,
+            }
+        )
+        ports = dict(config.ports)
+        restricted = ports.pop("restricted", [])
+        used_ports = list(restricted) if isinstance(restricted, list) else []
+        for existing in bundle.services:
+            used_ports.extend(existing.service_ports.values())
+        values.update(
+            {
+                f"${{MLOX_AUTO_PORT_{name.upper()}}}": str(port)
+                for name, port in auto_map_ports(used_ports, ports).items()
+            }
+        )
+        service = config.instantiate_service(params=values)
+    if not service:
+        return OperationResult(False, 7, "Failed to instantiate service.")
+
+    existing_names = infra.list_service_names()
+    base_name = service.name
+    counter = 0
+    while service.name in existing_names:
+        service.name = f"{base_name}_{counter}"
+        counter += 1
+    infra.configs[config.id] = config
+    service.set_task_executor(bundle.server.create_new_task_executor())
+    service.bind_service_lookup(infra)
+    bundle.services.append(service)
     return OperationResult(
         True,
         0,
@@ -62,69 +106,106 @@ def add_service(
     )
 
 
-def setup_service(
-    session,
-    *,
-    name: str,
-) -> OperationResult:
-    service = session.infra.get_service(name)
+def setup_service(project: ProjectAggregate, *, name: str) -> OperationResult:
+    infra = project.infrastructure
+    service = infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")
-
-    infra_use_cases.setup_service(session.infra, service)
-    session.save_infrastructure()
+    bundle = infra.get_bundle_by_service(service)
+    if not bundle:
+        return OperationResult(False, 10, "Could not find server bundle for service.")
+    with bundle.server.get_server_connection() as conn:
+        service.setup(conn)
+        service.spin_up(conn)
     return OperationResult(True, 0, f"Service {name} set up.", {"service": service})
 
 
-def teardown_service(
-    session,
-    *,
-    name: str,
-) -> OperationResult:
-    service = session.infra.get_service(name)
+def teardown_service(project: ProjectAggregate, *, name: str) -> OperationResult:
+    infra = project.infrastructure
+    service = infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")
-
-    infra_use_cases.teardown_service(session.infra, service)
-    session.save_infrastructure()
+    bundle = infra.get_bundle_by_service(service)
+    if not bundle:
+        return OperationResult(False, 10, "Could not find server bundle for service.")
+    with bundle.server.get_server_connection() as conn:
+        service.spin_down(conn)
+        service.teardown(conn)
+    bundle.services.remove(service)
+    service.clear_service_lookup()
     return OperationResult(True, 0, f"Service {name} removed.", {"service": service})
 
 
+def start_service(project: ProjectAggregate, *, name: str) -> OperationResult:
+    infra = project.infrastructure
+    service = infra.get_service(name)
+    if not service:
+        return OperationResult(False, 8, "Service not found in infrastructure.")
+    bundle = infra.get_bundle_by_service(service)
+    if not bundle:
+        return OperationResult(False, 10, "Could not find server bundle for service.")
+    with bundle.server.get_server_connection() as conn:
+        service.spin_up(conn)
+    return OperationResult(True, 0, f"Service {name} started.", {"service": service})
+
+
+def stop_service(project: ProjectAggregate, *, name: str) -> OperationResult:
+    infra = project.infrastructure
+    service = infra.get_service(name)
+    if not service:
+        return OperationResult(False, 8, "Service not found in infrastructure.")
+    bundle = infra.get_bundle_by_service(service)
+    if not bundle:
+        return OperationResult(False, 10, "Could not find server bundle for service.")
+    with bundle.server.get_server_connection() as conn:
+        service.spin_down(conn)
+    return OperationResult(True, 0, f"Service {name} stopped.", {"service": service})
+
+
+def rename_service(project: ProjectAggregate, *, name: str, new_name: str) -> OperationResult:
+    infra = project.infrastructure
+    service = infra.get_service(name)
+    if not service:
+        return OperationResult(False, 8, "Service not found in infrastructure.")
+    if new_name in infra.list_service_names():
+        return OperationResult(False, 11, "Service name must be unique.")
+    service.name = new_name
+    return OperationResult(
+        True,
+        0,
+        f"Service {name} renamed to {new_name}.",
+        {"service": service},
+    )
+
+
 def service_logs(
-    session,
+    project: ProjectAggregate,
     *,
     name: str,
     label: Optional[str] = None,
     tail: int = 200,
 ) -> OperationResult:
-    service = session.infra.get_service(name)
+    infra = project.infrastructure
+    service = infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")
-
     chosen_label = label
     if chosen_label is None:
         compose_names = getattr(service, "compose_service_names", {})
-        if compose_names:
-            chosen_label = next(iter(compose_names.keys()))
-        else:
+        if not compose_names:
             return OperationResult(
-                False,
-                9,
-                "No compose service labels configured for this service.",
+                False, 9, "No compose service labels configured for this service."
             )
-
-    bundle = session.infra.get_bundle_by_service(service)
+        chosen_label = next(iter(compose_names))
+    bundle = infra.get_bundle_by_service(service)
     if not bundle:
         return OperationResult(False, 10, "Could not find server bundle for service.")
-
     with bundle.server.get_server_connection() as conn:
         logs = service.compose_service_log_tail(conn, label=chosen_label, tail=tail)
-
     return OperationResult(True, 0, "Fetched service logs.", {"logs": logs})
 
 
 def list_service_configs(list_configs) -> OperationResult:
-    configs = list_configs()
-    payload = [{"id": cfg.id, "path": cfg.path} for cfg in configs]
+    payload = [{"id": cfg.id, "path": cfg.path} for cfg in list_configs()]
     message = "No service configs found." if not payload else "Service configs retrieved."
     return OperationResult(True, 0, message, {"configs": payload})

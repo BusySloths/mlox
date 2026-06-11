@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import gzip
 import hashlib
 import io
@@ -31,7 +32,7 @@ def install_registry_service(ubuntu_docker_server):
 
     config = load_config(get_stacks_path(), "/registry", "mlox.registry.3.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add registry service from config")
 

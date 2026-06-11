@@ -2,7 +2,7 @@ import os
 
 from influxdb import InfluxDBClient  # type: ignore
 
-from mlox.session import MloxSession
+from mlox.session import ProjectSession
 
 
 def main():
@@ -14,8 +14,8 @@ def main():
             "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_PATH environment variable is not set."
         )
         exit(1)
-    session = MloxSession(mlox_path, mlox_password)
-    infra = session.infra
+    session = ProjectSession.open(mlox_path, mlox_password)
+    infra = session.project.infrastructure
 
     dbs = infra.filter_by_group("database")
     my_influx = None

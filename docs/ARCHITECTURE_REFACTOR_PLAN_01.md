@@ -5,8 +5,10 @@ This document is a compact status note for the architecture simplification work 
 ## Completed
 
 - The old large CLI module was split into `mlox/cli/app.py`, `mlox/cli/commands/*`, rendering helpers, and context helpers.
-- The application layer now has focused session-based use-cases under `mlox/application/use_cases/`.
-- `mlox/application/facade.py` is now a thin adapter for callers that need session loading/caching.
+- The application layer has project-based use cases under `mlox/application/use_cases/`.
+- `ProjectApplication` owns one `ProjectSession` and controls commit/reload behavior.
+- `ProjectAggregate` is the aggregate root for metadata and infrastructure.
+- `Infrastructure` contains topology queries, serialization, and runtime hydration only.
 - Frontend-specific setup handlers are outside YAML and are resolved through `mlox/ui/registry.py`.
 
 ## Current Architecture
@@ -17,27 +19,28 @@ Current runtime flow:
 CLI / TUI / Streamlit
         |
         v
-mlox/application/use_cases/*
+ProjectApplication
         |
         v
-MloxSession
+ProjectSession
         |
         v
-Infrastructure
+ProjectAggregate
         |
         v
-Bundle(server + services)
+Infrastructure -> Bundle(server + services)
 ```
 
-`Infrastructure` still contains compatibility methods around lifecycle behavior. Side-effectful orchestration is increasingly concentrated in `mlox/application/infrastructure_ops.py`, but this separation is not complete.
+Server, service, and model orchestration lives in focused use-case modules.
+Use cases accept `ProjectAggregate`; persistence remains the responsibility of
+`ProjectApplication` and `ProjectSession`.
 
 ## Still Open
 
-1. Make `Infrastructure` the single source of truth for service lookup.
-2. Move more setup/teardown orchestration out of topology entities and into application-layer handlers.
-3. Add clearer port/naming/dependency policies.
-4. Keep service capability metadata moving toward a real placement model.
-5. Add boundary tests around config loading, session reload, service dependency lookup, and CLI/use-case behavior.
+1. Add clearer port, naming, and dependency policies.
+2. Keep service capability metadata moving toward a real placement model.
+3. Continue moving specialized UI settings mutations behind application methods.
+4. Add PostgreSQL repository support behind the existing data-source boundary.
 
 ## Practical Direction
 
@@ -56,12 +59,12 @@ Prefer incremental moves:
 - keep UI code thin
 - grow use-cases for shared workflows
 - keep executor boundaries intact
-- remove compatibility wrappers only after tests cover the replacement path
+- keep persistence out of use cases and topology objects
 
 ## Done Criteria For The Remaining Refactor
 
 - Service lookup has one authoritative path.
-- UI commands do not mutate infrastructure directly.
-- Domain/topology objects are testable without network or subprocess calls.
+- Standard UI lifecycle commands do not mutate infrastructure directly.
+- Domain/topology objects are testable independently from persistence.
 - Config loading remains backward compatible for existing YAML and plugins.
 - Adding a new UI path mostly means wiring to existing use-cases.

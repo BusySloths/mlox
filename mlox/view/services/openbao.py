@@ -50,7 +50,7 @@ def _mask_secret(value: str) -> str:
 
 def _save_infra() -> None:
     try:
-        st.session_state.mlox.save_infrastructure()
+        st.session_state.mlox.session.commit()
     except Exception:
         pass
 

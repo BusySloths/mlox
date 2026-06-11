@@ -3,8 +3,8 @@ import streamlit as st
 
 from typing import cast
 
+from mlox.application import ProjectApplication
 from mlox.infra import Infrastructure
-from mlox.session import MloxSession
 
 # --- Path setup ---
 # Get the absolute path to the directory containing this script (app.py)
@@ -28,8 +28,8 @@ def auto_login():
         pw = os.environ.get("MLOX_PROJECT_PASSWORD") or os.environ.get("MLOX_PASSWORD")
         if prj and pw:
             try:
-                ms = MloxSession(prj, pw)
-                st.session_state["mlox"] = ms
+                application = ProjectApplication.open(prj, pw)
+                st.session_state["mlox"] = application
                 st.session_state.is_logged_in = True
             except Exception:
                 return
@@ -71,7 +71,10 @@ def welcome():
     # Project snapshot (if logged in)
     if "mlox" in st.session_state:
         try:
-            infra = cast(Infrastructure, st.session_state.mlox.infra)
+            infra = cast(
+                Infrastructure,
+                st.session_state.mlox.project.infrastructure,
+            )
             bundles = infra.bundles
             server_count = len(bundles)
             service_count = sum(len(b.services) for b in bundles)
@@ -168,7 +171,7 @@ pages_infrastructure = [
 ]
 
 if st.session_state.get("mlox", None):
-    infra = cast(Infrastructure, st.session_state.mlox.infra)
+    infra = cast(Infrastructure, st.session_state.mlox.project.infrastructure)
 
     if len(infra.filter_by_group("repository")) > 0:
         pages_infrastructure.append(

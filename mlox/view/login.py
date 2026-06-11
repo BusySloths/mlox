@@ -6,7 +6,7 @@ import streamlit as st
 
 from importlib import metadata as importlib_metadata  # py3.8+
 
-from mlox.session import MloxSession
+from mlox.application import ProjectApplication
 from mlox.view.utils import st_hack_align
 
 logger = logging.getLogger(__name__)
@@ -14,18 +14,20 @@ logger = logging.getLogger(__name__)
 
 def create_session(project_name, password, create_new_project: bool) -> bool:
     if not create_new_project:
-        if not MloxSession.check_project_exists_and_loads(project_name, password):
+        try:
+            application = ProjectApplication.open(project_name, password)
+        except Exception:
             logger.warning(
                 f"Project {project_name} does not exist or cannot be loaded."
             )
             return False
-    ms = None
+    else:
+        application = None
     try:
-        print(f"Creating session for project: {project_name}")
-        ms = MloxSession(project_name, password, create=create_new_project)
-        st.session_state["mlox"] = ms
+        if application is None:
+            application = ProjectApplication.create(project_name, password)
+        st.session_state["mlox"] = application
         st.session_state.is_logged_in = True
-        print(f"Done Creating session for project: {project_name}")
     except Exception as e:
         logger.error(f"Error creating session for project {project_name}: {e}")
         return False
@@ -86,7 +88,7 @@ def project_settings_and_logout():
         st.error("No active project session found. Please open a project first.")
         return
 
-    infra = session.infra
+    infra = session.project.infrastructure
 
     # Header
     st.markdown(f"# 🗂️ Project: {session.project.name}")
@@ -258,7 +260,7 @@ def project_settings_and_logout():
                 "created_at": session.project.created_at,
                 "last_opened_at": session.project.last_opened_at,
                 "data_source": session.project.data_source_kind,
-                "project_path": str(session.project_path),
+                "project_path": str(session.session.path),
             },
             "secret_manager": {
                 "class": sm_cls,

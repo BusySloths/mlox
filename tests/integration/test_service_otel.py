@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import time
 import logging
 import grpc  # type: ignore
@@ -22,7 +23,8 @@ def install_otel_service(ubuntu_docker_server):
     infra.bundles.append(bundle)
 
     config = load_config(get_stacks_path(), "/otel", "mlox.otel.0.146.1.yaml")
-    bundle_added = infra.add_service(
+    bundle_added = add_service(
+        infra,
         ubuntu_docker_server.ip,
         config,
         params={

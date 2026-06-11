@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import time
 import pytest
 
@@ -20,7 +21,7 @@ def install_milvus_service(ubuntu_docker_server):
     # Load Milvus service configuration
     config = load_config(get_stacks_path(), "/milvus", "mlox.milvus.2.5.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add Milvus service from config")
 

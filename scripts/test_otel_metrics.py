@@ -12,7 +12,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 
 
-from mlox.session import MloxSession
+from mlox.session import ProjectSession
 
 
 mlox_path = os.environ.get("MLOX_PROJECT_PATH", None)
@@ -23,8 +23,8 @@ if not mlox_password or not mlox_path:
         "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_PATH environment variable is not set."
     )
     exit(1)
-session = MloxSession(mlox_path, mlox_password)
-infra = session.infra
+session = ProjectSession.open(mlox_path, mlox_password)
+infra = session.project.infrastructure
 
 monitors = infra.filter_by_group("monitor")
 if len(monitors) == 0:

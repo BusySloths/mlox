@@ -83,10 +83,10 @@ CLI     TUI     Streamlit Web UI
    +------+------------+
           |
           v
-   shared application use-cases
+      `ProjectApplication`
           |
           v
-      `MloxSession`
+       `ProjectSession`
           |
           v
  encrypted `project.mlox` (SQLCipher)
@@ -96,7 +96,12 @@ CLI     TUI     Streamlit Web UI
           +-- PostgreSQL-ready repository boundary later
 ```
 
-`MloxSession` opens one encrypted `.mlox` project database containing metadata, infrastructure, and secrets. The project also records its active data source (`sqlcipher/self` initially), leaving a clean migration path to PostgreSQL. Infrastructure is organized into bundles that pair a compute/server with its deployed services, keeping the product and its supporting stack connected in one topology. The CLI, TUI, and Web UI operate on this shared model through common application use cases.
+`ProjectApplication` is the preferred mutation API. It owns a `ProjectSession`,
+which loads and atomically persists a `ProjectAggregate` containing metadata and
+its `Infrastructure`; secrets remain available through the session. The project
+also records its active data source (`sqlcipher/self` initially), leaving a clean
+migration path to PostgreSQL. CLI commands open an application per invocation,
+while the TUI and Web UI retain one application in runtime state.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 
@@ -134,11 +139,10 @@ See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough includin
 ```
 mlox/
 ├── mlox/
-│   ├── application/    # Shared use cases and infrastructure operations
+│   ├── application/    # Stateful application API and shared use cases
 │   ├── cli/            # Typer CLI package (root app + command modules)
 │   ├── execution/      # Backend and system execution helpers
-│   ├── migrations/     # Persisted project format migrations
-│   ├── project/        # SQLCipher project repository and embedded secret adapter
+│   ├── project/        # Aggregate, SQLCipher repository, and secret adapter
 │   ├── servers/        # Local, connector, and Ubuntu compute with Native, Docker, or Kubernetes
 │   ├── services/       # Deployable ML/AI services and integrations
 │   ├── tui/            # Textual terminal UI + TUI-specific UI handlers

@@ -21,9 +21,9 @@ from collections.abc import Generator
 import logging
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Literal, Dict, Any
+from typing import Dict, Iterable, List, Literal, Optional
 
-from mlox.config import ServiceConfig
+from mlox.config import ServiceConfig, load_all_service_configs, load_service_config_by_id
 from mlox.server import AbstractServer, ServerCapability
 from mlox.service import AbstractService
 
@@ -47,7 +47,7 @@ class Infrastructure:
     configs: Dict[str, ServiceConfig] = field(default_factory=dict, init=False)
 
     def __post_init__(self):
-        self.populate_configs()
+        self.hydrate_runtime()
 
     def filter_by_group(
         self, group: str, bundle: Bundle | None = None
@@ -144,75 +144,40 @@ class Infrastructure:
         return infra_dict
 
     @classmethod
-    def from_dict(cls, infra_dict: Dict) -> "Infrastructure":
+    def from_dict(
+        cls,
+        infra_dict: Dict,
+        configs: Iterable[ServiceConfig] | None = None,
+    ) -> "Infrastructure":
         infra = dict_to_dataclass(infra_dict, hooks=[AbstractServer, AbstractService])
-        infra.populate_configs()
-        infra.populate_service_registry()
+        if configs is None:
+            infra.hydrate_runtime()
+        else:
+            infra.hydrate_runtime(configs)
         return infra
-
-    # -------------------------------------------------------------------------
-    # Legacy compatibility wrappers around application-level infrastructure ops.
-    # These methods remain on Infrastructure temporarily and will be removed
-    # once callers use the application layer directly.
-
-    def clear_service_registry(self) -> None:
-        """Clear bound service lookups (legacy compatibility name)."""
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.clear_service_lookups(self)
-
-    def remove_bundle(self, bundle: Bundle, *, teardown_server: bool = False) -> None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.remove_bundle(
-            self,
-            bundle,
-            teardown_server=teardown_server,
-        )
-        return None
-
-    def setup_service(self, service: AbstractService) -> None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.setup_service(self, service)
-
-    def teardown_service(self, service: AbstractService) -> None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.teardown_service(self, service)
-
-    def add_service(
-        self,
-        ip: str,
-        config: ServiceConfig,
-        params: Dict[str, Any],
-        service: AbstractService | None = None,
-    ) -> Bundle | None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        return infra_use_cases.add_service(self, ip, config, params, service=service)
 
     def get_service_config(
         self, service: AbstractService | AbstractServer
     ) -> ServiceConfig | None:
-        from mlox.application import infrastructure_ops as infra_use_cases
+        if service.service_config_id in self.configs:
+            return self.configs[service.service_config_id]
+        config = load_service_config_by_id(service.service_config_id)
+        if config:
+            self.configs[service.service_config_id] = config
+        return config
 
-        return infra_use_cases.get_service_config(self, service)
-
-    def add_server(
-        self, config: ServiceConfig, params: Dict[str, str]
-    ) -> Bundle | None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        return infra_use_cases.add_server(self, config, params)
-
-    def populate_service_registry(self) -> None:
-        """Bind service lookup context to loaded services (legacy compatibility name)."""
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.populate_service_registry(self)
-
-    def populate_configs(self) -> None:
-        from mlox.application import infrastructure_ops as infra_use_cases
-
-        infra_use_cases.populate_configs(self)
+    def hydrate_runtime(
+        self,
+        configs: Iterable[ServiceConfig] | None = None,
+    ) -> None:
+        """Populate non-persistent config and service lookup state."""
+        self.configs = {}
+        catalog = list(configs) if configs is not None else load_all_service_configs(
+            prefix="mlox"
+        )
+        if configs is None:
+            catalog.extend(load_all_service_configs(prefix="mlox-server"))
+        for config in catalog:
+            self.configs[config.id] = config
+        for service in self.services():
+            service.bind_service_lookup(self)

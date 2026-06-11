@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from mlox.infra import Infrastructure
 from mlox.project.store import ProjectDatabase, resolve_project_path
 
@@ -22,13 +24,31 @@ def test_schema_contains_portable_resource_and_data_source_tables(tmp_path):
 
 def test_infrastructure_and_secrets_round_trip(tmp_path):
     store = ProjectDatabase.create(tmp_path / "demo", "pw")
-    store.save_infrastructure(Infrastructure())
+    project = store.load()
+    project.infrastructure = Infrastructure()
+    store.save(project)
     store.save_secret("API_KEY", {"token": "abc"})
     reopened = ProjectDatabase(tmp_path / "demo", "pw").open()
-    assert reopened.load_infrastructure().bundles == []
+    assert reopened.load().infrastructure.bundles == []
     assert reopened.load_secret("API_KEY") == {"token": "abc"}
     assert reopened.list_secrets(keys_only=True) == {"API_KEY": None}
     assert reopened.integrity_check()
+
+
+def test_project_metadata_and_infrastructure_commit_atomically(tmp_path, monkeypatch):
+    store = ProjectDatabase.create(tmp_path / "demo", "pw")
+    project = store.load()
+    project.name = "changed"
+
+    def fail_infrastructure_save(*args, **kwargs):
+        raise RuntimeError("infrastructure write failed")
+
+    monkeypatch.setattr(store, "_save_infrastructure", fail_infrastructure_save)
+
+    with pytest.raises(RuntimeError, match="infrastructure write failed"):
+        store.save(project)
+
+    assert store.load().name == "demo"
 
 
 def test_project_database_is_not_plain_json(tmp_path):

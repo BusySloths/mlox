@@ -15,10 +15,13 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 from uuid import uuid4
 
 from mlox.infra import Infrastructure
+
+if TYPE_CHECKING:
+    from mlox.config import ServiceConfig
 
 PROJECT_SUFFIX = ".mlox"
 PROJECT_FORMAT_VERSION = 1
@@ -89,12 +92,14 @@ class ProjectDatabase:
         path: str | Path,
         password: str,
         connector: Callable[[Path], Any] = _connect,
+        config_catalog: Callable[[], Iterable[ServiceConfig]] | None = None,
     ) -> None:
         if not password:
             raise ValueError("A non-empty project password is required.")
         self.path = resolve_project_path(path)
         self.password = password
         self._connector = connector
+        self._config_catalog = config_catalog
 
     @classmethod
     def create(cls, path: str | Path, password: str, name: str | None = None):
@@ -269,91 +274,121 @@ class ProjectDatabase:
         with self.connection() as owned:
             return self.project_id(owned)
 
-    def load_project(self) -> dict[str, Any]:
+    def load(self):
+        """Load the complete project aggregate."""
+        from mlox.project.aggregate import ProjectAggregate
+
         with self.connection() as conn:
             row = conn.execute(
                 "SELECT p.id, p.name, p.description, p.application_version, p.created_at, "
                 "p.last_opened_at, d.id, d.kind, d.location, d.config_json "
                 "FROM projects p JOIN data_sources d ON d.id = p.active_data_source_id"
             ).fetchone()
-        return {
-            "id": row[0], "name": row[1], "descr": row[2], "version": str(row[3]),
-            "created_at": row[4], "last_opened_at": row[5],
-            "data_source_id": row[6], "data_source_kind": row[7],
-            "data_source_location": row[8], "data_source_config": json.loads(row[9]),
-        }
-
-    def save_project(self, project: Any) -> None:
-        with self.connection() as conn:
-            conn.execute(
-                "UPDATE projects SET name=?, description=?, application_version=?, "
-                "created_at=?, last_opened_at=? WHERE id=?",
-                (
-                    project.name, project.descr, project.version, project.created_at,
-                    project.last_opened_at, project.id,
-                ),
-            )
-
-    def import_project_metadata(self, metadata: dict[str, Any]) -> None:
-        """Copy user-facing metadata from a decrypted legacy project."""
-        with self.connection() as conn:
-            conn.execute(
-                "UPDATE projects SET name=?, description=?, application_version=?, "
-                "created_at=? WHERE id=?",
-                (
-                    metadata.get("name") or self.path.stem,
-                    metadata.get("descr", ""),
-                    metadata.get("version", "0.1.0"),
-                    metadata.get("created_at") or utcnow(),
-                    self.project_id(conn),
-                ),
-            )
-
-    def load_infrastructure(self) -> Infrastructure:
-        with self.connection() as conn:
-            pid = self.project_id(conn)
-            row = conn.execute(
-                "SELECT payload_json FROM infrastructure_snapshots WHERE project_id=?", (pid,)
+            infra_row = conn.execute(
+                "SELECT payload_json FROM infrastructure_snapshots WHERE project_id=?",
+                (row[0],),
             ).fetchone()
-        return Infrastructure() if row is None else Infrastructure.from_dict(json.loads(row[0]))
-
-    def save_infrastructure(self, infra: Infrastructure) -> None:
-        payload = infra.to_dict()
-        bundles = payload.get("bundles", [])
-        with self.connection() as conn:
-            pid = self.project_id(conn)
-            now = utcnow()
-            conn.execute(
-                "INSERT INTO infrastructure_snapshots(project_id,payload_json,updated_at) "
-                "VALUES(?,?,?) ON CONFLICT(project_id) DO UPDATE SET "
-                "payload_json=excluded.payload_json, updated_at=excluded.updated_at",
-                (pid, json.dumps(payload), now),
+        infrastructure = (
+            Infrastructure()
+            if infra_row is None
+            else Infrastructure.from_dict(
+                json.loads(infra_row[0]),
+                configs=(
+                    self._config_catalog()
+                    if self._config_catalog is not None
+                    else None
+                ),
             )
-            conn.execute("DELETE FROM services WHERE project_id=?", (pid,))
-            conn.execute("DELETE FROM servers WHERE project_id=?", (pid,))
-            conn.execute("DELETE FROM bundles WHERE project_id=?", (pid,))
-            for bundle in bundles:
-                bid = str(uuid4())
+        )
+        return ProjectAggregate(
+            id=row[0],
+            name=row[1],
+            descr=row[2],
+            version=str(row[3]),
+            created_at=row[4],
+            last_opened_at=row[5],
+            data_source_id=row[6],
+            data_source_kind=row[7],
+            data_source_location=row[8],
+            data_source_config=json.loads(row[9]),
+            infrastructure=infrastructure,
+        )
+
+    def save(self, project: Any) -> None:
+        """Persist project metadata and infrastructure atomically."""
+        payload = project.infrastructure.to_dict()
+        with self.connection() as conn:
+            self._save_project(conn, project)
+            self._save_infrastructure(conn, project.id, payload)
+
+    @staticmethod
+    def _save_project(conn: Any, project: Any) -> None:
+        conn.execute(
+            "UPDATE projects SET name=?, description=?, application_version=?, "
+            "created_at=?, last_opened_at=? WHERE id=?",
+            (
+                project.name,
+                project.descr,
+                project.version,
+                project.created_at,
+                project.last_opened_at,
+                project.id,
+            ),
+        )
+
+    @staticmethod
+    def _save_infrastructure(
+        conn: Any,
+        project_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        now = utcnow()
+        conn.execute(
+            "INSERT INTO infrastructure_snapshots(project_id,payload_json,updated_at) "
+            "VALUES(?,?,?) ON CONFLICT(project_id) DO UPDATE SET "
+            "payload_json=excluded.payload_json, updated_at=excluded.updated_at",
+            (project_id, json.dumps(payload), now),
+        )
+        conn.execute("DELETE FROM services WHERE project_id=?", (project_id,))
+        conn.execute("DELETE FROM servers WHERE project_id=?", (project_id,))
+        conn.execute("DELETE FROM bundles WHERE project_id=?", (project_id,))
+        for bundle in payload.get("bundles", []):
+            bundle_id = str(uuid4())
+            conn.execute(
+                "INSERT INTO bundles VALUES(?,?,?,?)",
+                (
+                    bundle_id,
+                    project_id,
+                    bundle.get("name", ""),
+                    json.dumps(bundle),
+                ),
+            )
+            server = bundle.get("server", {})
+            server_id = str(server.get("uuid") or uuid4())
+            conn.execute(
+                "INSERT INTO servers VALUES(?,?,?,?,?,?)",
+                (
+                    server_id,
+                    project_id,
+                    bundle_id,
+                    server.get("name"),
+                    server.get("ip"),
+                    json.dumps(server),
+                ),
+            )
+            for service in bundle.get("services", []):
+                service_id = str(service.get("uuid") or uuid4())
                 conn.execute(
-                    "INSERT INTO bundles VALUES(?,?,?,?)",
-                    (bid, pid, bundle.get("name", ""), json.dumps(bundle)),
+                    "INSERT INTO services VALUES(?,?,?,?,?,?)",
+                    (
+                        service_id,
+                        project_id,
+                        bundle_id,
+                        service.get("name"),
+                        service.get("_type") or service.get("type"),
+                        json.dumps(service),
+                    ),
                 )
-                server = bundle.get("server", {})
-                sid = str(server.get("uuid") or uuid4())
-                conn.execute(
-                    "INSERT INTO servers VALUES(?,?,?,?,?,?)",
-                    (sid, pid, bid, server.get("name"), server.get("ip"), json.dumps(server)),
-                )
-                for service in bundle.get("services", []):
-                    service_id = str(service.get("uuid") or uuid4())
-                    conn.execute(
-                        "INSERT INTO services VALUES(?,?,?,?,?,?)",
-                        (
-                            service_id, pid, bid, service.get("name"),
-                            service.get("_type") or service.get("type"),
-                            json.dumps(service),
-                        ),
-                    )
 
     def save_secret(self, name: str, value: Any) -> None:
         with self.connection() as conn:

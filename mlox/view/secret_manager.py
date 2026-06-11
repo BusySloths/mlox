@@ -47,7 +47,7 @@ st.markdown(
 
 def save_infra() -> None:
     with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()
+        st.session_state.mlox.session.commit()
 
 
 def _collect_secret_manager_rows(infra: Infrastructure) -> list[dict[str, Any]]:
@@ -86,7 +86,10 @@ def secrets() -> None:
     st.divider()
 
     try:
-        infra = cast(Infrastructure, st.session_state.mlox.infra)
+        infra = cast(
+            Infrastructure,
+            st.session_state.mlox.project.infrastructure,
+        )
     except Exception:  # pragma: no cover - defensive path for UI runtime
         st.error("Could not load infrastructure configuration.")
         st.stop()
@@ -212,7 +215,7 @@ def secrets() -> None:
                     )
                     st.session_state[signature_key] = keyfile_signature
                     try:
-                        st.session_state.mlox.save_infrastructure()
+                        st.session_state.mlox.session.commit()
                     except Exception:
                         pass
                 encrypted_keyfile = st.session_state[generated_key]

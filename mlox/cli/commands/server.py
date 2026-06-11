@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import typer
 
-from mlox.application import facade as ops
+from mlox.application import ProjectApplication
 from mlox.cli.common import handle_result, parse_kv
 from mlox.cli.context import resolve_credentials
 from mlox.cli.rendering.table import render_table
@@ -28,7 +28,7 @@ def server_list(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.list_servers(project=resolved_project, password=resolved_password)
+        ProjectApplication.open(resolved_project, resolved_password).list_servers()
     )
     servers = result.data.get("servers", []) if result.data else []
     if not servers:
@@ -80,9 +80,7 @@ def server_add(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.add_server(
-            project=resolved_project,
-            password=resolved_password,
+        ProjectApplication.open(resolved_project, resolved_password).add_server(
             template_path=f"ubuntu/mlox-server.{server_template}.yaml",
             ip=ip,
             port=port,
@@ -109,7 +107,7 @@ def server_setup(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.setup_server(project=resolved_project, password=resolved_password, ip=ip)
+        ProjectApplication.open(resolved_project, resolved_password).setup_server(ip=ip)
     )
     typer.echo(result.message)
 
@@ -129,7 +127,9 @@ def server_teardown(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.teardown_server(project=resolved_project, password=resolved_password, ip=ip)
+        ProjectApplication.open(resolved_project, resolved_password).teardown_server(
+            ip=ip
+        )
     )
     typer.echo(result.message)
 
@@ -150,9 +150,9 @@ def server_save_key(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.save_server_key(
-            project=resolved_project,
-            password=resolved_password,
+        ProjectApplication.open(
+            resolved_project, resolved_password
+        ).save_server_key(
             ip=ip,
             output_path=output,
         )
@@ -164,7 +164,7 @@ def server_save_key(
 def server_configs_list() -> None:
     """List available server configuration templates."""
 
-    result = handle_result(ops.list_server_configs())
+    result = handle_result(ProjectApplication.list_server_configs())
     configs = result.data.get("configs", []) if result.data else []
     if not configs:
         typer.echo(result.message)

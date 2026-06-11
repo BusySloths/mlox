@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from mlox.session import MloxProject
 from mlox.utils import dict_to_dataclass, load_from_json
-from scripts.recover_project_from_dump import recover_project
+from scripts.recover_project_from_dump import _LegacyProjectDump, recover_project
 
 
 def test_recover_project_writes_encrypted_project_file(tmp_path, monkeypatch):
@@ -29,7 +28,7 @@ def test_recover_project_writes_encrypted_project_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     restored = dict_to_dataclass(
         load_from_json("/restored_project.project", "Recovered12345", encrypted=True),
-        [MloxProject],
+        [_LegacyProjectDump],
     )
 
     assert output_path == tmp_path / "restored_project.project"

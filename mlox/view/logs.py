@@ -1,9 +1,9 @@
 import streamlit as st
 
-from mlox.session import MloxSession
+from mlox.application import ProjectApplication
 
 
-def show_service_logs_ui(session: MloxSession, service_name: str):
+def show_service_logs_ui(application: ProjectApplication, service_name: str):
     """Simple Streamlit widget to show logs for a service.
 
     Example usage from the main app:
@@ -12,12 +12,13 @@ def show_service_logs_ui(session: MloxSession, service_name: str):
     """
     # st.header(f"Logs for {service_name}")
 
-    svc = session.infra.get_service(service_name)
+    infra = application.project.infrastructure
+    svc = infra.get_service(service_name)
     if not svc:
         st.error("Service not found in infrastructure")
         return
 
-    bundle = session.infra.get_bundle_by_service(svc)
+    bundle = infra.get_bundle_by_service(svc)
     if not bundle:
         st.error("Could not find server bundle for this service")
         return

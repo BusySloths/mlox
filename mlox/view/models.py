@@ -115,7 +115,10 @@ def models():
     )
 
     try:
-        infra = cast(Infrastructure, st.session_state.mlox.infra)
+        infra = cast(
+            Infrastructure,
+            st.session_state.mlox.project.infrastructure,
+        )
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()

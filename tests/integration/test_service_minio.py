@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import boto3
 import pytest
 
@@ -20,7 +21,7 @@ def install_minio_service(ubuntu_docker_server):
         get_stacks_path(), "/minio", "mlox.minio.RELEASE.2025-07-23.yaml"
     )
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add MinIO service from config")
 

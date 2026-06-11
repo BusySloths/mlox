@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import logging
 from datetime import datetime
 
@@ -75,7 +76,7 @@ def github_repo_service(ubuntu_docker_server):
         "${GITHUB_PRIVATE}": False,
     }
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
         pytest.skip("Failed to add GitHub repository service to the infrastructure")
 
@@ -163,7 +164,7 @@ def github_private_repo_service(ubuntu_docker_server):
         "${GITHUB_PRIVATE}": True,
     }
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
         pytest.skip(
             "Failed to add private GitHub repository service to the infrastructure"

@@ -52,11 +52,11 @@ def test_migration_copies_data_without_altering_source(tmp_path):
 
     assert source.read_bytes() == original
     store = ProjectDatabase(output, "new-password").open()
-    metadata = store.load_project()
-    assert metadata["name"] == "legacy"
-    assert metadata["descr"] == "Imported project"
-    assert metadata["version"] == "0.9.0"
-    assert metadata["created_at"] == "2024-01-01T00:00:00+00:00"
+    migrated_project = store.load()
+    assert migrated_project.name == "legacy"
+    assert migrated_project.descr == "Imported project"
+    assert migrated_project.version == "0.9.0"
+    assert migrated_project.created_at == "2024-01-01T00:00:00+00:00"
     assert store.load_secret("TOKEN") == {"value": "legacy"}
     assert store.load_secret("MLOX_CONFIG_INFRASTRUCTURE") is None
     with store.connection() as conn:

@@ -4,7 +4,7 @@ from typing import Optional
 
 import typer
 
-from mlox.application import facade as ops
+from mlox.application import ProjectApplication
 from mlox.cli.common import handle_result
 from mlox.cli.context import resolve_credentials
 from mlox.cli.rendering.table import render_table
@@ -43,9 +43,7 @@ def model_list(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.list_models(
-            project=resolved_project,
-            password=resolved_password,
+        ProjectApplication.open(resolved_project, resolved_password).list_models(
             registry_name=registry,
         )
     )
@@ -108,9 +106,7 @@ def model_deploy(
     resolved_project, resolved_password = resolve_credentials(project, password)
     registry_name, model_name, model_version = _parse_model_identifier(model)
     result = handle_result(
-        ops.deploy_model(
-            project=resolved_project,
-            password=resolved_password,
+        ProjectApplication.open(resolved_project, resolved_password).deploy_model(
             registry_name=registry_name,
             model_name=model_name,
             model_version=model_version,

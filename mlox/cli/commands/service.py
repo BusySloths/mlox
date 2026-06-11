@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import typer
 
-from mlox.application import facade as ops
+from mlox.application import ProjectApplication
 from mlox.cli.common import handle_result, parse_kv
 from mlox.cli.context import resolve_credentials
 from mlox.cli.rendering.table import render_table
@@ -28,7 +28,7 @@ def service_list(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.list_services(project=resolved_project, password=resolved_password)
+        ProjectApplication.open(resolved_project, resolved_password).list_services()
     )
     services = result.data.get("services", []) if result.data else []
     if not services:
@@ -73,9 +73,7 @@ def service_add(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.add_service(
-            project=resolved_project,
-            password=resolved_password,
+        ProjectApplication.open(resolved_project, resolved_password).add_service(
             server_ip=server_ip,
             template_id=template_id,
             params=parse_kv(param),
@@ -103,8 +101,8 @@ def service_setup(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.setup_service(
-            project=resolved_project, password=resolved_password, name=name
+        ProjectApplication.open(resolved_project, resolved_password).setup_service(
+            name=name
         )
     )
     typer.echo(result.message)
@@ -129,9 +127,9 @@ def service_teardown(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.teardown_service(
-            project=resolved_project,
-            password=resolved_password,
+        ProjectApplication.open(
+            resolved_project, resolved_password
+        ).teardown_service(
             name=name,
         )
     )
@@ -158,9 +156,7 @@ def service_logs(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ops.service_logs(
-            project=resolved_project,
-            password=resolved_password,
+        ProjectApplication.open(resolved_project, resolved_password).service_logs(
             name=name,
             label=label,
             tail=tail,
@@ -174,7 +170,7 @@ def service_logs(
 def service_configs_list() -> None:
     """List available service configuration templates."""
 
-    result = handle_result(ops.list_service_configs())
+    result = handle_result(ProjectApplication.list_service_configs())
     configs = result.data.get("configs", []) if result.data else []
     if not configs:
         typer.echo(result.message)

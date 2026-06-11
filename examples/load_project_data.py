@@ -1,9 +1,9 @@
 import os
 
-from mlox.session import MloxSession
+from mlox.session import ProjectSession
 
 
-def load_mlox_session() -> MloxSession:
+def load_project_session() -> ProjectSession:
     mlox_path = os.environ.get("MLOX_PROJECT_PATH", None)
     mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
     # Make sure your environment variable is set!
@@ -12,7 +12,7 @@ def load_mlox_session() -> MloxSession:
             "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_PATH environment variable is not set."
         )
         exit(1)
-    return MloxSession(mlox_path, mlox_password)
+    return ProjectSession.open(mlox_path, mlox_password)
 
 
 if __name__ == "__main__":
@@ -20,5 +20,5 @@ if __name__ == "__main__":
     print(
         "Make sure MLOX_PROJECT_PATH and MLOX_PROJECT_PASSWORD environment variables are set and a project exists."
     )
-    session = load_mlox_session()
+    session = load_project_session()
     print("Project loaded:", session.project.name)

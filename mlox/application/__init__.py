@@ -1,1 +1,4 @@
-"""Application-layer types, use-cases, and stateless facade for MLOX."""
+"""Application-layer types and the stateful project API."""
+from mlox.application.facade import ProjectApplication
+
+__all__ = ["ProjectApplication"]

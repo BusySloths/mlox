@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import pytest
 
 from mlox.config import load_config, get_stacks_path
@@ -18,7 +19,7 @@ def install_openbao_service(ubuntu_docker_server):
 
     config = load_config(get_stacks_path(), "/openbao", "mlox.openbao.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add OpenBao service from config")
 

@@ -44,7 +44,7 @@ def help():
         st.info("Open a project to see installed service documentation.")
         return
 
-    infra = ms.infra
+    infra = ms.project.infrastructure
 
     # Build installed services list
     entries = []

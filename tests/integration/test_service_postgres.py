@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import pytest
 import logging
 
@@ -21,7 +22,7 @@ def install_postgres_service(ubuntu_docker_server):
 
     config = load_config(get_stacks_path(), "/postgres", "mlox.postgres.16.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add Postgres service from config")
 

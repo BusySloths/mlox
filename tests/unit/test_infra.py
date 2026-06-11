@@ -2,9 +2,6 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
-import pytest
-
-from mlox.application import infrastructure_ops as infra_use_cases
 from mlox.infra import Bundle, Infrastructure
 from mlox.service import AbstractService
 from mlox.server import AbstractServer, ServerCapability
@@ -259,18 +256,14 @@ def test_to_dict_excludes_configs_from_serialized_payload():
 
 
 def test_from_dict_rehydrates_and_populates_runtime_bindings(monkeypatch):
-    calls: list[tuple[str, object]] = []
+    calls: list[object] = []
     expected_payload = {"bundles": [{"name": "demo"}]}
     fake_infra = make_infra()
 
-    def fake_populate_configs() -> None:
-        calls.append(("populate_configs", fake_infra))
+    def fake_hydrate_runtime() -> None:
+        calls.append(fake_infra)
 
-    def fake_populate_registry() -> None:
-        calls.append(("populate_service_registry", fake_infra))
-
-    fake_infra.populate_configs = fake_populate_configs
-    fake_infra.populate_service_registry = fake_populate_registry
+    fake_infra.hydrate_runtime = fake_hydrate_runtime
 
     captured: dict[str, object] = {}
 
@@ -285,74 +278,24 @@ def test_from_dict_rehydrates_and_populates_runtime_bindings(monkeypatch):
 
     assert result is fake_infra
     assert captured["payload"] == expected_payload
-    assert calls == [
-        ("populate_configs", fake_infra),
-        ("populate_service_registry", fake_infra),
-    ]
+    assert calls == [fake_infra]
 
 
-@pytest.mark.parametrize(
-    ("method_name", "patched_name", "args", "expected"),
-    [
-        ("clear_service_registry", "clear_service_lookups", (), None),
-        ("remove_bundle", "remove_bundle", ("bundle",), None),
-        ("teardown_service", "teardown_service", ("service",), None),
-        ("populate_service_registry", "populate_service_registry", (), None),
-        ("populate_configs", "populate_configs", (), None),
-        ("get_service_config", "get_service_config", ("service",), "config-result"),
-        (
-            "add_service",
-            "add_service",
-            ("10.0.0.1", "config", {"x": "y"}),
-            "bundle-result",
-        ),
-        ("add_server", "add_server", ("config", {"x": "y"}), "server-result"),
-    ],
-)
-def test_infrastructure_methods_delegate_to_application_layer(
-    monkeypatch, method_name: str, patched_name: str, args: tuple[object, ...], expected: object
-):
-    infra = make_infra()
-    recorded: list[tuple[tuple[object, ...], dict[str, object]]] = []
+def test_from_dict_accepts_injected_runtime_config_catalog(monkeypatch):
+    config = SimpleNamespace(id="injected")
+    fake_infra = make_infra()
+    captured = {}
 
-    def fake_delegate(*delegate_args, **delegate_kwargs):
-        recorded.append((delegate_args, delegate_kwargs))
-        return expected
+    def fake_hydrate_runtime(configs) -> None:
+        captured["configs"] = list(configs)
 
-    monkeypatch.setattr(infra_use_cases, patched_name, fake_delegate)
+    fake_infra.hydrate_runtime = fake_hydrate_runtime
+    monkeypatch.setattr(
+        "mlox.infra.dict_to_dataclass",
+        lambda payload, hooks: fake_infra,
+    )
 
-    result = getattr(infra, method_name)(*args)
+    result = Infrastructure.from_dict({"bundles": []}, configs=[config])
 
-    if method_name == "add_service":
-        assert recorded == [((infra, *args), {"service": None})]
-    elif method_name == "remove_bundle":
-        assert recorded == [((infra, *args), {"teardown_server": False})]
-    else:
-        assert recorded == [((infra, *args), {})]
-    assert result == expected
-
-
-def test_remove_bundle_removes_bundle_without_tearing_down_server_by_default():
-    server = make_server(RecordingServer, "10.0.0.1")
-    service = make_service("svc", "test-service", "svc-1")
-    service.bind_service_lookup(object())
-    bundle = Bundle(name="server", server=server)
-    bundle.services.append(service)
-    infra = make_infra(bundles=[bundle])
-
-    infra_use_cases.remove_bundle(infra, bundle)
-
-    assert server.teardown_calls == 0
-    assert infra.bundles == []
-    assert service._service_lookup is None
-
-
-def test_remove_bundle_can_teardown_server_before_removal():
-    server = make_server(RecordingServer, "10.0.0.1")
-    bundle = Bundle(name="server", server=server)
-    infra = make_infra(bundles=[bundle])
-
-    infra_use_cases.remove_bundle(infra, bundle, teardown_server=True)
-
-    assert server.teardown_calls == 1
-    assert infra.bundles == []
+    assert result is fake_infra
+    assert captured["configs"] == [config]

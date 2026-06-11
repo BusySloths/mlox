@@ -7,9 +7,9 @@ from mlox.secret_manager import AbstractSecretManagerService
 from mlox.view.utils import st_hack_align
 
 
-def save_infrastructure():
-    with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()
+def commit_project():
+    with st.spinner("Saving project..."):
+        st.session_state.mlox.session.commit()
 
 
 def save_to_secret_store(infra: Infrastructure, secret_name: str, secrets: Dict | str):
