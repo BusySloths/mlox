@@ -11,7 +11,7 @@ Registration behavior:
 - If it is empty, only experiment tracking is performed.
 
 Credentials:
-Load a MLOX project (via env ``MLOX_PROJECT_NAME`` and ``MLOX_PROJECT_PASSWORD``) and extract credentials
+Load a MLOX project (via env ``MLOX_PROJECT_PATH`` and ``MLOX_PROJECT_PASSWORD``) and extract credentials
 from a running MLflow service.
 """
 

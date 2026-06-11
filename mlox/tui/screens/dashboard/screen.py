@@ -109,7 +109,7 @@ class DashboardScreen(Screen):
 
     def action_reload_infrastructure(self) -> None:
         session = getattr(self.app, "session", None)
-        project = getattr(getattr(session, "project", None), "name", None)
+        project = str(getattr(session, "project_path", "")) or None
         password = getattr(session, "password", None)
         migrations = getattr(session, "migrations", None)
         if not project or not password:

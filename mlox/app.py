@@ -20,8 +20,12 @@ def get_resource_path(filename: str) -> str:
 
 def auto_login():
     if not st.session_state.get("is_logged_in", False):
-        prj = os.environ.get("MLOX_PROJECT", None)
-        pw = os.environ.get("MLOX_PASSWORD", None)
+        prj = (
+            os.environ.get("MLOX_PROJECT_PATH")
+            or os.environ.get("MLOX_PROJECT")
+            or os.environ.get("MLOX_PROJECT_NAME")
+        )
+        pw = os.environ.get("MLOX_PROJECT_PASSWORD") or os.environ.get("MLOX_PASSWORD")
         if prj and pw:
             try:
                 ms = MloxSession(prj, pw)

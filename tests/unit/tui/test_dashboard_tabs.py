@@ -32,6 +32,7 @@ class DashboardTestApp(App):
             infra=SimpleNamespace(bundles=[]),
             password="secret",
             migrations=None,
+            project_path="test-project",
         )
 
     def compose(self) -> ComposeResult:

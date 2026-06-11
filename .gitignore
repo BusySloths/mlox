@@ -171,3 +171,7 @@ services/features/feature_repo
 services/features/my_project
 
 CLAUDE.md
+# Encrypted MLOX project databases and SQLite sidecars
+*.mlox
+*.mlox-wal
+*.mlox-shm

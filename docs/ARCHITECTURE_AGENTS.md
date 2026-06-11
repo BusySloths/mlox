@@ -8,7 +8,7 @@ MLOX is a configuration-driven system for managing a connected topology of ML/AI
 
 1. YAML configs describe service/server metadata and `build.class_name`.
 2. `mlox/config.py` loads built-in configs and Python entry-point plugins.
-3. `MloxSession` owns project metadata, secret manager, and infrastructure.
+3. `MloxSession` owns project metadata, its active data source, infrastructure, and embedded secrets.
 4. `Infrastructure` owns the project topology: bundles, servers, and services.
 5. Application use-cases in `mlox/application/use_cases/` should hold shared UI behavior.
 6. CLI, TUI, and Streamlit should call shared use-cases instead of duplicating workflows.
@@ -36,7 +36,7 @@ When changing one of these, check impact across CLI, TUI, Streamlit, saved proje
 ## State Rules
 
 - `MloxSession` is the runtime boundary.
-- A session should always end with a secret manager instance, even if only the in-memory fallback is available.
+- A session should expose the project-backed secret adapter; production project storage must fail closed when SQLCipher is unavailable.
 - Persisted objects must remain JSON-compatible.
 - Service dependencies should be stable by UUID, not by display name.
 

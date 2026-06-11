@@ -50,11 +50,11 @@ CLI     TUI     Streamlit Web UI     Other UIs
                     |
                     v
               `MloxSession`
-   project + encrypted secret manager + infrastructure
+   encrypted `.mlox` project + active data source + infrastructure
              /                               \
             v                                 v
- secret-manager backend                `Infrastructure`
- (InMemory/TinySM/OpenBao/GCP)      topology for one project
+ embedded SQLCipher storage                `Infrastructure`
+ (metadata + topology + secrets)      topology for one project
                                             |
                                             v
                            `Bundle` = compute/server + services[*]
@@ -163,8 +163,8 @@ Frontend-specific UI handlers are no longer modeled in YAML. They live in fronte
 
 `MloxSession` is the main runtime object. It:
 
-- Loads or creates a project
-- Wires the secret manager
+- Opens an existing project or explicitly creates a new one
+- Wires the project-backed secret adapter
 - Loads and saves the project infrastructure
 - Gives the runtime one place to find project metadata, secrets, and topology
 
@@ -187,14 +187,14 @@ This makes `Infrastructure` the topology root for "what runs where".
 ### Persistent Storage
 
 - Runtime structures are **dataclass-based** and serialized to JSON-compatible dicts.
-- Project and infrastructure data are stored through a **secret manager** abstraction.
-- A session always has a secret manager configured (falls back to in-memory if no external store is available).
+- Project metadata, infrastructure, and secrets are stored transactionally in an encrypted **SQLCipher** `.mlox` database.
+- A session always exposes a secret-manager-compatible adapter backed by the active project database.
 
 ---
 
 ## 5. Secret Manager Model
 
-MLOX supports multiple secret-manager backends:
+MLOX supports multiple embedded SQLCipher storages:
 
 | Type | Implementation |
 |------|---------------|

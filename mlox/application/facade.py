@@ -14,7 +14,8 @@ from mlox.config import (
     load_config,
     load_service_config_by_id,
 )
-from mlox.infra import ModelRegistry, ModelServer
+from mlox.infra import ModelRegistry, ModelServer  # noqa: F401 compatibility exports
+from mlox.project.store import resolve_project_path
 from mlox.session import MloxSession
 from mlox.utils import save_to_json
 
@@ -28,17 +29,18 @@ class _SessionCache:
         self._sessions: Dict[Tuple[str, str], MloxSession] = {}
 
     def get(self, project: str, password: str) -> Optional[MloxSession]:
-        return self._sessions.get((project, password))
+        return self._sessions.get((str(resolve_project_path(project)), password))
 
     def set(self, project: str, password: str, session: MloxSession) -> None:
-        self._sessions[(project, password)] = session
+        self._sessions[(str(resolve_project_path(project)), password)] = session
 
     def invalidate(self, project: Optional[str] = None) -> None:
         if project is None:
             self._sessions.clear()
             return
 
-        keys_to_remove = [key for key in self._sessions if key[0] == project]
+        canonical = str(resolve_project_path(project))
+        keys_to_remove = [key for key in self._sessions if key[0] == canonical]
         for key in keys_to_remove:
             self._sessions.pop(key, None)
 
@@ -86,10 +88,12 @@ def _load_config_from_path(path: str):
 
 
 def create_project(name: str, password: str) -> OperationResult:
-    result = _load_session(name, password, refresh=True)
-    if not result.success:
-        return result
-    return project.create_project(result.data, name)
+    try:
+        session = MloxSession.create(name, password)
+    except Exception as exc:
+        return OperationResult(False, 1, f"Failed to create project: {exc}")
+    _SESSION_CACHE.set(name, password, session)
+    return project.create_project(session, session.project.name)
 
 
 def list_servers(project: str, password: str) -> OperationResult:

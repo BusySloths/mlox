@@ -24,3 +24,7 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "integration" in item.keywords:
             item.add_marker(skip_marker)
+
+
+# Unit tests exercise repository semantics without weakening production's SQLCipher requirement.
+os.environ.setdefault("MLOX_ALLOW_PLAINTEXT_SQLITE", "1")

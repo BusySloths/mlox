@@ -5,6 +5,7 @@ MLOX deploys and manages connected ML/AI infrastructure on your own servers, wit
 ## User And Contributor Setup
 
 - `INSTALLATION.md`: local setup, Docker, and integration-test VMs.
+- `PROJECT_FILES.md`: encrypted project files, data sources, backups, and legacy migration.
 - `WORKFLOW_QUICK_REFERENCE.md`: contributor and maintainer checklist.
 
 ## Architecture

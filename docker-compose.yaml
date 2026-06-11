@@ -10,6 +10,9 @@ services:
       - "8501:8501"
     environment:
       - MLOX_DEBUG=false
+      - MLOX_PROJECT_DIR=/var/lib/mlox/projects
+    volumes:
+      - mlox_projects:/var/lib/mlox/projects
     networks:
       - mlox_net
 
@@ -17,3 +20,6 @@ networks:
   mlox_net: 
     name: mlox-network
     driver: bridge 
+
+volumes:
+  mlox_projects:

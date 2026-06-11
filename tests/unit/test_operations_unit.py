@@ -46,6 +46,13 @@ class _Session:
     def __init__(self, secrets=None):
         self.secrets = secrets
         self.infra = _Infra()
+        self.project = SimpleNamespace(name="p")
+
+    @classmethod
+    def create(cls, name, password):
+        session = cls()
+        session.project.name = name
+        return session
 
 
 @pytest.fixture
@@ -104,8 +111,6 @@ def test_load_session_failure(monkeypatch):
 
 
 def test_create_project_success(monkeypatch, patch_session_type):
-    monkeypatch.setattr("mlox.application.facade._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", _Session()))
-
     result = create_project("p", "pw")
 
     assert result.success

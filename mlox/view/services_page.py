@@ -286,13 +286,13 @@ def installed_services():
         if callable_settings_func and svc.state == "running":
             with st.expander("Settings"):
                 if isinstance(svc, AbstractSecretManagerService) and st.button(
-                    "Set as default secret manager",
+                    "Import secrets into project",
                     icon=":material/key:",
                     key=f"set-sm-{svc.uuid}",
                 ):
                     session.set_secret_manager(svc.get_secret_manager(infra))
                     save_infra()
-                    st.success(f"Set {svc.name} as default secret manager.")
+                    st.success(f"Imported secrets from {svc.name} into the encrypted project.")
                 callable_settings_func(infra, bndl, svc)
 
         # Show logs UI when the service is running and the service template

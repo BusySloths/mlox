@@ -6,26 +6,27 @@ from mlox.application import facade
 from mlox.application.result import OperationResult
 
 
-def test_create_project_refreshes_session_and_delegates(monkeypatch):
-    session = SimpleNamespace()
+def test_create_project_creates_session_and_delegates(monkeypatch):
+    session = SimpleNamespace(project=SimpleNamespace(name="demo"))
     calls: dict[str, object] = {}
 
-    def fake_load_session(project, password, *, refresh=False):
-        calls["load"] = (project, password, refresh)
-        return OperationResult(True, 0, "ok", session)
+    monkeypatch.setattr(facade.MloxSession, "create", lambda name, password: session)
+    monkeypatch.setattr(
+        facade._SESSION_CACHE,
+        "set",
+        lambda name, password, value: calls.update(cache=(name, password, value)),
+    )
 
     def fake_create_project(current_session, name):
         calls["create"] = (current_session, name)
         return OperationResult(True, 0, "created", {"session": current_session})
 
-    monkeypatch.setattr(facade, "_load_session", fake_load_session)
     monkeypatch.setattr(facade.project, "create_project", fake_create_project)
-
     result = facade.create_project("demo", "pw")
 
     assert result.success is True
-    assert calls["load"] == ("demo", "pw", True)
     assert calls["create"] == (session, "demo")
+    assert calls["cache"] == ("demo", "pw", session)
 
 
 def test_list_server_configs_uses_catalog_loader(monkeypatch):

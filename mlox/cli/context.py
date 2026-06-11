@@ -5,18 +5,18 @@ from typing import Optional, Tuple
 
 import typer
 
-PROJECT_ENVVAR = "MLOX_PROJECT_NAME"
+PROJECT_ENVVAR = "MLOX_PROJECT_PATH"
 PASSWORD_ENVVAR = "MLOX_PROJECT_PASSWORD"
 
 
 def resolve_project(raw: Optional[str]) -> str:
     if raw:
         return raw
-    env_value = os.getenv(PROJECT_ENVVAR)
+    env_value = os.getenv(PROJECT_ENVVAR) or os.getenv("MLOX_PROJECT_NAME")
     if env_value:
         return env_value
     raise typer.BadParameter(
-        f"Provide a project name or set {PROJECT_ENVVAR}.",
+        f"Provide a project file or set {PROJECT_ENVVAR}.",
         param_hint="project",
     )
 

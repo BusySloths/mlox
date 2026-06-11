@@ -80,11 +80,11 @@ CLI     TUI     Streamlit Web UI     Other UIs
                     |
                     v
               `MloxSession`
-   project + encrypted secret manager + infrastructure
+   encrypted `.mlox` project + active data source + infrastructure
              /                               \
             v                                 v
- secret-manager backend                `Infrastructure`
- (InMemory/TinySM/OpenBao/GCP)      topology for one project
+ embedded SQLCipher storage                `Infrastructure`
+ (metadata + topology + secrets)      topology for one project
                                             |
                                             v
                            `Bundle` = compute/server + services[*]
@@ -93,7 +93,7 @@ CLI     TUI     Streamlit Web UI     Other UIs
                     execution via `mlox/executors.py` + `mlox/execution/*`
 ```
 
-`MloxSession` holds the current project, its encrypted secret manager, and its infrastructure. Infrastructure is organized into bundles that pair a compute/server with its deployed services, keeping the product and its supporting stack connected in one topology. The CLI, TUI, and Web UI operate on this shared model through common application use cases.
+`MloxSession` holds the current encrypted project file, its active data source, and its infrastructure. Infrastructure is organized into bundles that pair a compute/server with its deployed services, keeping the product and its supporting stack connected in one topology. The CLI, TUI, and Web UI operate on this shared model through common application use cases.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 

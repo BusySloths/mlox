@@ -1,4 +1,5 @@
 import os
+import time
 import grpc  # type: ignore
 
 from typing import Iterable
@@ -14,22 +15,23 @@ from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExp
 from mlox.session import MloxSession
 
 
-mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
+mlox_path = os.environ.get("MLOX_PROJECT_PATH", None)
 mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
 # Make sure your environment variable is set!
-if not mlox_password or not mlox_name:
+if not mlox_password or not mlox_path:
     print(
-        "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_NAME environment variable is not set."
+        "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_PATH environment variable is not set."
     )
     exit(1)
-session = MloxSession(mlox_name, mlox_password)
+session = MloxSession(mlox_path, mlox_password)
 infra = session.infra
 
 monitors = infra.filter_by_group("monitor")
 if len(monitors) == 0:
     print("No monitors found.")
     exit()
-# collector_url = f"{infra.bundles[0].server.ip}:{infra.bundles[0].services[2].service.service_ports['OTLP gRPC receiver']}"
+# Example collector URL can be derived from a monitor service
+# in the loaded project infrastructure.
 # trusted_certs = infra.bundles[0].services[2].service.certificate.encode("utf-8")
 collector_url = monitors[-1].service_url
 trusted_certs = monitors[-1].certificate.encode("utf-8")
@@ -111,8 +113,6 @@ gauge.set(-10, {"attrib1": -10})
 gauge.set(2, {"attrib1": 2})
 
 print("WAITING...")
-import time
-
 time.sleep(5)
 metric_exporter.shutdown()
 print("FINAL")

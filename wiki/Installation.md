@@ -115,3 +115,8 @@ For Kubernetes deployment, refer to the [Architecture](Architecture) page for ba
 - [Architecture](Architecture) — Codebase walkthrough
 - [Contributing](Contributing) — How to contribute
 - [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) — Source document
+
+
+## Encrypted project files
+
+New projects are portable SQLCipher `.mlox` files. Create one with `mlox project new ./projects/demo`, then set `MLOX_PROJECT_PATH` and `MLOX_PROJECT_PASSWORD`. See [Project Files](Project-Files) for storage, backup, and legacy migration.

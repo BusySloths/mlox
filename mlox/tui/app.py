@@ -27,11 +27,11 @@ class MLOXTextualApp(App):
         """Start the application on the login screen."""
         self.push_screen("login")
 
-    def login(self, project: str, password: str) -> bool:
+    def login(self, project: str, password: str, *, create: bool = False) -> bool:
         """Attempt to authenticate and load a project session."""
 
         try:
-            session = MloxSession(project, password)
+            session = MloxSession(project, password, create=create)
             if not session.secrets or session.secrets.is_working():
                 self.session = session
                 return True

@@ -1,212 +1,121 @@
-"""Session and project persistence orchestration for MLOX runtime state.
+"""Session orchestration backed by an encrypted, single-file MLOX project."""
+from __future__ import annotations
 
-Purpose:
-- Manage project loading/saving, secret manager wiring, migrations, and infrastructure persistence.
-
-Key public classes/functions:
-- ``MloxSession`` for authenticated project sessions and infrastructure access
-- ``MloxProject`` persisted project metadata model
-- ``GlobalProcessScheduler`` singleton wrapper around background process scheduling
-
-Expected runtime mode:
-- CLI/UI/TUI runtime coordinator (local control plane with remote executor integration)
-
-Related modules (plain-text links):
-- mlox.infra
-- mlox.secret_manager
-- mlox.scheduler
-- mlox.migrations
-- mlox.utils
-"""
-
-import os
 import logging
-
-from datetime import datetime, timezone
-
-from typing import List, Dict, Any
+import os
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, List
 
-from mlox.migrations.base import MloxMigrations
 from mlox.infra import Infrastructure
-from mlox.secret_manager import AbstractSecretManager, InMemorySecretManager
-from mlox.utils import (
-    dataclass_to_dict,
-    save_to_json,
-    load_from_json,
-    dict_to_dataclass,
-)
+from mlox.migrations.base import MloxMigrations
+from mlox.project.secret_manager import ProjectSecretManager
+from mlox.project.store import ProjectDatabase, resolve_project_path
+from mlox.secret_manager import AbstractSecretManager
 
 logger = logging.getLogger(__name__)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
 class MloxProject:
     name: str
-    descr: str = field(default="", init=False)
-    version: str = field(default="0.1.0", init=False)
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    last_opened_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    id: str = ""
+    descr: str = ""
+    version: str = "1"
+    created_at: str = field(default_factory=_now)
+    last_opened_at: str = field(default_factory=_now)
+    data_source_id: str = ""
+    data_source_kind: str = "sqlcipher"
+    data_source_location: str = "self"
+    data_source_config: Dict[str, Any] = field(default_factory=dict)
+    # Read-only legacy fields retained for dump recovery and old plugin compatibility.
     secret_manager_class: str | None = None
     secret_manager_info: Dict[str, Any] = field(default_factory=dict)
 
     def touch(self) -> None:
-        self.last_opened_at = datetime.now(timezone.utc).isoformat()
+        self.last_opened_at = _now()
 
 
 class MloxSession:
-    password: str
-    project: MloxProject
-    infra: Infrastructure
-    secrets: AbstractSecretManager | None = None
-    migrations: List[MloxMigrations] | None = None
-
-    def _has_persisted_secret_manager(self) -> bool:
-        return bool(self.project.secret_manager_class)
+    """An authenticated handle to one project and its active data source."""
 
     def __init__(
         self,
         project_name: str,
         password: str,
         migrations: List[MloxMigrations] | None = None,
-    ):
-        self.secrets = None
+        *,
+        create: bool = False,
+    ) -> None:
         self.password = password
         self.migrations = migrations
+        self.project_path = resolve_project_path(project_name)
+        self.store = (
+            ProjectDatabase.create(self.project_path, password, self.project_path.stem)
+            if create
+            else ProjectDatabase(self.project_path, password).open()
+        )
+        self.secrets: AbstractSecretManager = ProjectSecretManager(self.store)
         self.load_project(project_name)
-        self.load_secret_manager()
-        if not self.secrets and self._has_persisted_secret_manager():
-            raise RuntimeError(
-                "Configured secret manager "
-                f"{self.project.secret_manager_class} could not be loaded."
-            )
         self.load_infrastructure()
-        if not self.secrets:
-            logger.info(
-                "No secret manager configured. Initialising in-memory secret manager."
-            )
-            self.set_secret_manager(InMemorySecretManager())
 
-    def save_project(self) -> None:
-        self.project.touch()
-        if self.secrets:
-            info = self.secrets.get_access_secrets()
-            if info:
-                self.project.secret_manager_info = info
-            else:
-                logger.warning(
-                    "Secret manager %s did not return any access info.",
-                    self.project.secret_manager_class,
-                )
-
-        prj_dict = dataclass_to_dict(self.project)
-        if prj_dict:
-            save_to_json(
-                prj_dict, f"./{self.project.name}.project", self.password, True
-            )
+    @classmethod
+    def create(
+        cls, project_name: str, password: str, migrations: List[MloxMigrations] | None = None
+    ) -> "MloxSession":
+        return cls(project_name, password, migrations=migrations, create=True)
 
     @classmethod
     def check_project_exists_and_loads(cls, project_name: str, password: str) -> bool:
-        load_path = f"/{project_name}.project"
         try:
-            _ = load_from_json(load_path, password, encrypted=True)
+            ProjectDatabase(project_name, password).open()
             return True
         except Exception:
             return False
 
-    def load_project(self, project_name: str) -> None:
-        load_path = f"/{project_name}.project"
-        try:
-            data = load_from_json(load_path, self.password, encrypted=True)
-            project = dict_to_dataclass(data, [MloxProject])
-            if not project or not isinstance(project, MloxProject):
-                raise ValueError("Loaded project data is not valid.")
-        except FileNotFoundError:
-            logger.info("Project file not found for %s. Initialising a blank project.")
-            project = MloxProject(name=project_name)
-        project.touch()
-        self.project = project
-        self.save_project()
+    def load_project(self, project_name: str | None = None) -> None:
+        self.project = MloxProject(**self.store.load_project())
 
-    def set_secret_manager(self, sm: AbstractSecretManager) -> None:
-        self.secrets = sm
-        if sm:
-            self.project.secret_manager_class = (
-                sm.__class__.__module__ + "." + sm.__class__.__name__
-            )
-        else:
-            self.project.secret_manager_class = None
-            self.project.secret_manager_info = {}
-        self.save_project()
+    def save_project(self) -> None:
+        self.project.touch()
+        self.store.save_project(self.project)
 
     def load_secret_manager(self) -> None:
-        info = self.project.secret_manager_info
-        class_name = self.project.secret_manager_class
-        if not class_name:
-            return None
-        try:
-            module_path, class_name = class_name.rsplit(".", 1)
-            module = __import__(module_path, fromlist=[class_name])
-            class_ = getattr(module, class_name)
-            self.secrets = class_.instantiate_secret_manager(info)
-            if not self.secrets:
-                logger.warning(
-                    "Secret manager class %s could not be instantiated.",
-                    self.project.secret_manager_class,
-                )
-        except (ImportError, AttributeError) as e:
-            logger.error(
-                f"Could not load secret manager class {self.project.secret_manager_class}: {e}"
-            )
-            self.secrets = None
+        """Compatibility no-op: project secrets always live in the project database."""
+        self.secrets = ProjectSecretManager(self.store)
 
-    def save_infrastructure(self) -> None:
-        if not self.secrets:
-            logger.info(
-                "No secret manager configured for project %s. Skipping infrastructure persistence.",
-                self.project,
-            )
+    def set_secret_manager(self, manager: AbstractSecretManager | None) -> None:
+        """Import an external manager's secrets; never move persistence out of the project."""
+        if manager is None or isinstance(manager, ProjectSecretManager):
             return
-        infra_dict = self.infra.to_dict()
-        self.secrets.save_secret("MLOX_CONFIG_INFRASTRUCTURE", infra_dict)
-        self.save_project()
+        for name, value in manager.list_secrets(keys_only=False).items():
+            if name != "MLOX_CONFIG_INFRASTRUCTURE":
+                self.secrets.save_secret(name, value)
 
     def load_infrastructure(self) -> None:
-        if not self.secrets:
-            logger.info(
-                "No secret manager configured for project %s. Initialising blank infrastructure.",
-                self.project,
-            )
-            self.infra = Infrastructure()
-            return None
-        logger.info(
-            "Loading infrastructure for project %s from secret manager.",
-            self.project.name,
-        )
-        infra_dict = self.secrets.load_secret("MLOX_CONFIG_INFRASTRUCTURE")
-        if not infra_dict:
-            self.infra = Infrastructure()
-            return None
-        if not isinstance(infra_dict, dict):
-            raise ValueError("Infrastructure data is not in the expected format.")
+        self.infra = self.store.load_infrastructure()
         if self.migrations:
+            payload = self.infra.to_dict()
             for migration in self.migrations:
-                logger.info(f"Applying migration: {migration.name}")
-                infra_dict = migration._migrate_childs(infra_dict)
-        self.infra = Infrastructure.from_dict(infra_dict)
+                logger.info("Applying migration: %s", migration.name)
+                payload = migration._migrate_childs(payload)
+            self.infra = Infrastructure.from_dict(payload)
+            self.save_infrastructure()
+
+    def save_infrastructure(self) -> None:
+        self.store.save_infrastructure(self.infra)
+        self.save_project()
 
 
 def load_mlox_session(migrations: List[MloxMigrations] | None = None) -> MloxSession:
-    mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
-    mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
-    # Make sure your environment variable is set!
-    if not mlox_password or not mlox_name:
-        print(
-            "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_NAME environment variable is not set."
+    project = os.environ.get("MLOX_PROJECT_PATH") or os.environ.get("MLOX_PROJECT_NAME")
+    password = os.environ.get("MLOX_PROJECT_PASSWORD")
+    if not project or not password:
+        raise RuntimeError(
+            "MLOX_PROJECT_PATH and MLOX_PROJECT_PASSWORD environment variables are required."
         )
-        exit(1)
-    return MloxSession(mlox_name, mlox_password, migrations=migrations)
+    return MloxSession(project, password, migrations=migrations)

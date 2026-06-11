@@ -239,3 +239,19 @@ def test_start_ui_invokes_streamlit(monkeypatch):
     assert command[1:4] == ["-m", "streamlit", "run"]
     assert command[4].endswith("mlox/app.py")
     assert call_args.kwargs["check"] is False
+
+
+def test_project_new_prints_canonical_project_path_without_password(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        cli.ops,
+        "create_project",
+        mock.Mock(return_value=OperationResult(True, 0, "created")),
+    )
+    result = runner.invoke(
+        cli.app,
+        ["project", "new", str(tmp_path / "demo"), "--password", "super-secret"],
+    )
+    assert result.exit_code == 0
+    assert str((tmp_path / "demo.mlox").resolve()) in result.stdout
+    assert "super-secret" not in result.stdout
+    assert "MLOX_PROJECT_PATH" in result.stdout

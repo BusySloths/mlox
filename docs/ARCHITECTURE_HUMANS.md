@@ -35,7 +35,7 @@ executors + backend adapters
 
 ## Important Modules
 
-- `mlox/session.py`: `MloxSession`, the runtime container for project metadata, secret manager, and infrastructure.
+- `mlox/session.py`: `MloxSession`, the runtime container for project metadata, its active data source, infrastructure, and embedded secrets.
 - `mlox/infra.py`: topology model containing bundles, servers, and services.
 - `mlox/application/use_cases/`: shared session-based actions used by interfaces.
 - `mlox/application/facade.py`: thin adapter used by callers that need session loading/caching.

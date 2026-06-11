@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
     print("Loading MLOX project...")
     print(
-        "Make sure MLOX_PROJECT_NAME and MLOX_PROJECT_PASSWORD environment variables are set and a project exists."
+        "Make sure MLOX_PROJECT_PATH and MLOX_PROJECT_PASSWORD environment variables are set and a project exists."
     )
     migration = AddFieldModelServerRegistryUUID()
     session = load_mlox_session([migration])

@@ -6,7 +6,7 @@ What this demonstrates:
 - Emit spans, metrics, and logs in one short run
 
 Prerequisites:
-- Environment variables: ``MLOX_PROJECT_NAME`` and ``MLOX_PROJECT_PASSWORD``
+- Environment variables: ``MLOX_PROJECT_PATH`` and ``MLOX_PROJECT_PASSWORD``
 - A running OpenTelemetry Collector service in your project
 """
 

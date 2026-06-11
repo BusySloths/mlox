@@ -76,3 +76,14 @@ task vm:purge
 ```
 
 Use `task vm:purge` carefully; it removes the local Multipass VMs created for MLOX testing.
+
+
+## Create an encrypted project
+
+```bash
+mlox project new ./projects/demo --password 'choose-a-strong-password'
+export MLOX_PROJECT_PATH="$PWD/projects/demo.mlox"
+export MLOX_PROJECT_PASSWORD='choose-a-strong-password'
+```
+
+See [Encrypted Project Files](PROJECT_FILES.md), including the non-destructive legacy importer.

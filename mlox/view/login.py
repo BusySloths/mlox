@@ -22,7 +22,7 @@ def create_session(project_name, password, create_new_project: bool) -> bool:
     ms = None
     try:
         print(f"Creating session for project: {project_name}")
-        ms = MloxSession(project_name, password)
+        ms = MloxSession(project_name, password, create=create_new_project)
         st.session_state["mlox"] = ms
         st.session_state.is_logged_in = True
         print(f"Done Creating session for project: {project_name}")
@@ -36,7 +36,7 @@ def login():
     with st.form("Open Project"):
         st.markdown("### 🔐 Open Existing Project")
         project_name = st.text_input(
-            "Project Name", value=os.environ.get("MLOX_PROJECT_NAME", "mlox")
+            "Project File", value=os.environ.get("MLOX_PROJECT_PATH") or os.environ.get("MLOX_PROJECT_NAME", "mlox.mlox")
         )
         password = st.text_input(
             "Password",
@@ -62,7 +62,7 @@ def new_project():
         st.markdown("### 🆕 Create New Project")
 
         c1, c2, c3 = st.columns(3)
-        project_name = c1.text_input("Project Name", value="mlox")
+        project_name = c1.text_input("Project File", value="mlox.mlox")
         password = c2.text_input(
             "Password",
             value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),
@@ -104,7 +104,7 @@ def project_settings_and_logout():
             if getattr(session, "secrets", None)
             else "(none)"
         )
-        st.metric(label="Secret Manager", value=sm_name)
+        st.metric(label="Secret Storage", value=sm_name)
 
     st.markdown("---")
 
@@ -225,7 +225,9 @@ def project_settings_and_logout():
         for bundle in infra.bundles:
             with st.container(border=True):
                 st.markdown(
-                    f"**Server:** `{bundle.server.ip}` • Backend: `{bundle.server.backend}` • State: `{bundle.server.state}`"
+                    f"**Server:** `{bundle.server.ip}` • "
+                    f"Backend: `{bundle.server.backend}` • "
+                    f"State: `{bundle.server.state}`"
                 )
                 if bundle.services:
                     for svc in bundle.services:
@@ -255,7 +257,8 @@ def project_settings_and_logout():
                 "version": getattr(session.project, "version", ""),
                 "created_at": session.project.created_at,
                 "last_opened_at": session.project.last_opened_at,
-                "secret_manager_class": session.project.secret_manager_class,
+                "data_source": session.project.data_source_kind,
+                "project_path": str(session.project_path),
             },
             "secret_manager": {
                 "class": sm_cls,
