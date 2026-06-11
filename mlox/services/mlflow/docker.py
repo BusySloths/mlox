@@ -23,8 +23,7 @@ from typing import Any, Dict, List
 from datetime import datetime
 from dataclasses import dataclass, field
 
-from mlox.service import AbstractService
-from mlox.infra import ModelRegistry
+from mlox.service import AbstractModelRegistryService, AbstractService
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ def _fmt_ts(ts: int | None) -> str:
 
 
 @dataclass
-class MLFlowDockerService(AbstractService, ModelRegistry):
+class MLFlowDockerService(AbstractService, AbstractModelRegistryService):
     ui_user: str
     ui_pw: str
     port: str | int

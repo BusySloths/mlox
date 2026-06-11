@@ -52,6 +52,13 @@ Input {
   color: #e6edf7;
 }
 
+#login-actions {
+  layout: horizontal;
+  width: 32;
+  height: 3;
+  margin-top: 1;
+}
+
 Button {
   background: #cc19aeff;
   color: #e6edf7;
@@ -63,7 +70,13 @@ Button {
   width: 16;
   min-height: 3;
   height: 3;
-  margin: 1 0 0 0;
+  content-align: center middle;
+}
+
+#create-btn {
+  width: 16;
+  min-height: 3;
+  height: 3;
   content-align: center middle;
 }
 

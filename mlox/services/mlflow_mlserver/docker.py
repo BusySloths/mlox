@@ -23,15 +23,18 @@ from typing import Dict, cast
 from passlib.hash import apr_md5_crypt  # type: ignore
 from dataclasses import dataclass, field
 
-from mlox.infra import ModelRegistry, ModelServer
-from mlox.service import AbstractService
 from mlox.executors import TaskGroup
+from mlox.service import (
+    AbstractModelRegistryService,
+    AbstractModelServerService,
+    AbstractService,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MLFlowMLServerDockerService(AbstractService, ModelServer):
+class MLFlowMLServerDockerService(AbstractService, AbstractModelServerService):
     dockerfile: str
     port: str | int
     model: str
@@ -180,7 +183,7 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
 
         return secrets
 
-    def get_registry(self) -> ModelRegistry | None:
+    def get_registry(self) -> AbstractModelRegistryService | None:
         if not self.registry_uuid:
             logger.warning("No registry UUID set for MLFlow MLServer service.")
             return None
@@ -189,7 +192,7 @@ class MLFlowMLServerDockerService(AbstractService, ModelServer):
         if not registry:
             logger.warning("No registry service found for UUID %s", self.registry_uuid)
             return None
-        return cast(ModelRegistry, registry)  # type: ignore
+        return cast(AbstractModelRegistryService, registry)  # type: ignore
 
     def is_model(self, name: str) -> bool:
         if ":" in name:

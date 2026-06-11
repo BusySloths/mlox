@@ -208,8 +208,6 @@ def test_list_models_and_deploy_model(monkeypatch, patch_session_type):
     session = _Session()
     session.infra = infra
     monkeypatch.setattr("mlox.application.facade._load_session", lambda *args, **kwargs: OperationResult(True, 0, "ok", session))
-    monkeypatch.setattr("mlox.application.facade.ModelRegistry", object)
-    monkeypatch.setattr("mlox.application.facade.ModelServer", object)
 
     models = list_models("p", "pw")
 
@@ -219,7 +217,6 @@ def test_list_models_and_deploy_model(monkeypatch, patch_session_type):
     svc = SimpleNamespace(name="ms")
     monkeypatch.setattr("mlox.application.facade.add_service", lambda **kwargs: OperationResult(True, 0, "ok", {"service": svc}))
     monkeypatch.setattr("mlox.application.facade.setup_service", lambda project, password, name: OperationResult(True, 0, "ok", {"name": name}))
-    monkeypatch.setattr("mlox.application.facade.ModelServer", object)
 
     deployed = deploy_model("p", "pw", registry_name="reg", model_name="m", model_version="1", server_ip="10.0.0.1")
     assert deployed.success

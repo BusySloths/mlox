@@ -1,12 +1,21 @@
 """Application entry point for the Textual based TUI."""
 
+import logging
 from typing import Optional
 
 from textual.app import App
 
+from mlox.project.store import (
+    InvalidProjectPasswordError,
+    ProjectAlreadyExistsError,
+    ProjectDatabaseError,
+    ProjectNotFoundError,
+)
 from mlox.session import MloxSession
 from mlox.tui.screens.login import LoginScreen
 from mlox.tui.screens.dashboard import DashboardScreen
+
+logger = logging.getLogger(__name__)
 
 
 class MLOXTextualApp(App):
@@ -22,6 +31,7 @@ class MLOXTextualApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.session: Optional[MloxSession] = None
+        self.login_error: Optional[str] = None
 
     def on_mount(self) -> None:
         """Start the application on the login screen."""
@@ -30,13 +40,23 @@ class MLOXTextualApp(App):
     def login(self, project: str, password: str, *, create: bool = False) -> bool:
         """Attempt to authenticate and load a project session."""
 
+        self.login_error = None
         try:
             session = MloxSession(project, password, create=create)
-            if not session.secrets or session.secrets.is_working():
-                self.session = session
-                return True
+        except ProjectNotFoundError:
+            self.login_error = "Project not found"
+        except ProjectAlreadyExistsError:
+            self.login_error = "Project already exists; use Open"
+        except InvalidProjectPasswordError:
+            self.login_error = "Invalid project password"
+        except (ProjectDatabaseError, ValueError) as exc:
+            self.login_error = str(exc)
         except Exception:
-            pass
+            logger.exception("Could not open MLOX project %s", project)
+            self.login_error = "Could not load project"
+        else:
+            self.session = session
+            return True
         return False
 
 

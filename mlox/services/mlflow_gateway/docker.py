@@ -10,8 +10,11 @@ from typing import Dict, cast
 from passlib.hash import apr_md5_crypt  # type: ignore
 
 from mlox.executors import TaskGroup
-from mlox.infra import ModelRegistry, ModelServer
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractModelRegistryService,
+    AbstractModelServerService,
+    AbstractService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,7 @@ def _resolved_setting(value: str | int | float, default: str) -> str:
 
 
 @dataclass
-class MLFlowGatewayDockerService(AbstractService, ModelServer):
+class MLFlowGatewayDockerService(AbstractService, AbstractModelServerService):
     dockerfile: str
     serve_script: str
     start_script: str
@@ -170,7 +173,7 @@ class MLFlowGatewayDockerService(AbstractService, ModelServer):
         }
         return secrets
 
-    def get_registry(self) -> ModelRegistry | None:
+    def get_registry(self) -> AbstractModelRegistryService | None:
         if not self.registry_uuid:
             logger.warning("No registry UUID set for MLflow Gateway service.")
             return None
@@ -179,7 +182,7 @@ class MLFlowGatewayDockerService(AbstractService, ModelServer):
         if not registry:
             logger.warning("No registry service found for UUID %s", self.registry_uuid)
             return None
-        return cast(ModelRegistry, registry)  # type: ignore
+        return cast(AbstractModelRegistryService, registry)  # type: ignore
 
     def is_model(self, name: str) -> bool:
         if ":" not in name:

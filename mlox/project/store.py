@@ -57,13 +57,14 @@ def resolve_project_path(project: str | Path) -> Path:
 
 
 def _connect(path: Path):
+    if os.environ.get(PLAINTEXT_TEST_ENV) == "1":
+        return sqlite3.connect(str(path))
+
     try:
         from sqlcipher3 import dbapi2 as sqlcipher
 
         return sqlcipher.connect(str(path))
     except ImportError as exc:
-        if os.environ.get(PLAINTEXT_TEST_ENV) == "1":
-            return sqlite3.connect(str(path))
         raise ProjectDatabaseError(
             "SQLCipher support is unavailable. Install the sqlcipher3 package."
         ) from exc

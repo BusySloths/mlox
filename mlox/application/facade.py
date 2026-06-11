@@ -14,7 +14,6 @@ from mlox.config import (
     load_config,
     load_service_config_by_id,
 )
-from mlox.infra import ModelRegistry, ModelServer  # noqa: F401 compatibility exports
 from mlox.project.store import resolve_project_path
 from mlox.session import MloxSession
 from mlox.utils import save_to_json

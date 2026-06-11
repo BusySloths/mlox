@@ -6,8 +6,6 @@ Purpose:
 Key public classes/functions:
 - ``Infrastructure`` for top-level infrastructure orchestration and serialization
 - ``Bundle`` for grouping services by server
-- ``ModelRegistry`` and ``ModelServer`` interfaces for model-serving integrations
-- ``Repo`` domain metadata container
 
 Expected runtime mode:
 - Remote executor + CLI/UI/TUI backend state management
@@ -25,20 +23,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional, List, Literal, Dict, Any
 
-from mlox.config import (
-    ServiceConfig,
-)
+from mlox.config import ServiceConfig
 from mlox.server import AbstractServer, ServerCapability
-from mlox.service import (
-    AbstractModelRegistryService as ModelRegistry,
-    AbstractModelServerService as ModelServer,
-    AbstractRepositoryService as Repo,
-    AbstractService,
-)
-from mlox.utils import (
-    dataclass_to_dict,
-    dict_to_dataclass,
-)
+from mlox.service import AbstractService
+
+from mlox.utils import dataclass_to_dict, dict_to_dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +130,7 @@ class Infrastructure:
         return [
             bundle
             for bundle in self.bundles
-            if "kubernetes" in bundle.server.backend
-            and bundle.server.state == "running"
+            if "kubernetes" in bundle.server.backend and bundle.server.state == "running"
         ]
 
     def filter_bundles_by_backend(
