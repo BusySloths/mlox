@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import uuid
 import logging
 from pathlib import Path
@@ -24,7 +25,7 @@ def install_kafka_service(ubuntu_docker_server):
 
     config = load_config(get_stacks_path(), "/kafka", "mlox.kafka.3.7.0.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add Kafka service from config")
 

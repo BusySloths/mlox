@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import random
 import time
 import pytest
@@ -22,7 +23,7 @@ def install_airflow_service(ubuntu_docker_server):
     # Load Airflow stack config
     config = load_config(get_stacks_path(), "/airflow", "mlox.3.1.3.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add Airflow service from config")
 

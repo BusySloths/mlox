@@ -27,11 +27,15 @@ class DashboardTestApp(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.session = SimpleNamespace(
-            project=SimpleNamespace(name="test-project"),
-            infra=SimpleNamespace(bundles=[]),
-            password="secret",
-            migrations=None,
+        project = SimpleNamespace(
+            name="test-project",
+            infrastructure=SimpleNamespace(bundles=[]),
+        )
+        self.workspace = SimpleNamespace(
+            name=project.name,
+            infrastructure=project.infrastructure,
+            path="test-project",
+            active_secret_manager_name="Embedded Project Storage",
         )
 
     def compose(self) -> ComposeResult:
@@ -58,6 +62,18 @@ def test_root_selection_shows_only_server_templates_tab() -> None:
 
     assert server_display == "block"
     assert service_display == "none"
+
+
+async def _root_label() -> str:
+    app = DashboardTestApp()
+    async with app.run_test():
+        return app.query_one("#infra-tree").root.label.plain
+
+
+def test_root_highlights_active_secret_manager() -> None:
+    assert asyncio.run(_root_label()) == (
+        "test-project  Secrets: Embedded Project Storage"
+    )
 
 
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
@@ -149,28 +165,26 @@ def test_sidebar_can_be_widened() -> None:
 
 
 async def _reload_project_infrastructure(monkeypatch) -> tuple[str, object]:
-    class ReloadedSession:
-        def __init__(self, project_name, password, migrations=None) -> None:
-            self.project = SimpleNamespace(name=f"{project_name}-reloaded")
-            self.password = password
-            self.migrations = migrations
-            self.infra = SimpleNamespace(bundles=[])
-
-    monkeypatch.setattr(
-        "mlox.tui.screens.dashboard.screen.MloxSession", ReloadedSession
-    )
-
     app = DashboardTestApp()
+
+    def reload_project() -> None:
+        app.workspace.name = "test-project-reloaded"
+        app.workspace.infrastructure = SimpleNamespace(bundles=[])
+
+    app.workspace.reload = reload_project
     async with app.run_test() as pilot:
         await pilot.press("R")
         deadline = time.monotonic() + 2
-        while app.session.project.name == "test-project":
+        while app.workspace.name == "test-project":
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for project reload.")
             await pilot.pause(0.05)
 
         screen = app.query_one(DashboardScreen)
-        return app.session.project.name, screen.query_one("#infra-tree").root.data
+        return (
+            app.workspace.name,
+            screen.query_one("#infra-tree").root.data,
+        )
 
 
 def test_reload_binding_reloads_project_infrastructure(monkeypatch) -> None:

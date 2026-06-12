@@ -39,6 +39,7 @@ dependencies = [
     "fabric==3.2.2",  # M
     "paramiko==3.4.1",  # M            # SSH support used by Fabric
     "cryptography==43.0.1",  # M
+    "sqlcipher3==0.6.2",  # encrypted single-file project storage
     "passlib==1.7.4",  # M
     "typer==0.17.4",  # M               # CLI helpers
     "grpcio==1.73.1",  # M
@@ -136,4 +137,5 @@ dev_template = "{tag}.post{ccount}"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["mlox"]
+[tool.setuptools.packages.find]
+include = ["mlox*"]

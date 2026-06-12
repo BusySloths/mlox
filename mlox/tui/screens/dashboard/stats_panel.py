@@ -10,8 +10,6 @@ from rich.table import Table
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from mlox.session import MloxSession
-
 from .model import SelectionInfo, summarize_infrastructure
 
 
@@ -127,8 +125,8 @@ class StatsPanel(Static):
         self.update(Panel(table, title="Stats", border_style="green"))
 
     def show_global_stats(self) -> None:
-        session: Optional[MloxSession] = getattr(self.app, "session", None)
-        summary = summarize_infrastructure(session)
+        workspace = getattr(self.app, "workspace", None)
+        summary = summarize_infrastructure(workspace)
         if not summary["has_data"]:
             self.update(Panel("No infrastructure available.", title="Stats"))
             return

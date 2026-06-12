@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import logging
 import pytest
 from influxdb import InfluxDBClient
@@ -22,7 +23,7 @@ def install_influx_service(ubuntu_docker_server):
 
     config = load_config(get_stacks_path(), "/influx", "mlox.influx.1.11.8.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add InfluxDB service from config")
 
@@ -72,7 +73,9 @@ def test_influxdb_write_and_read(install_influx_service):
     password = service.pw
     dbname = "test_integration_db"
 
-    client = InfluxDBClient(host, port, user, password, dbname, ssl=True, verify_ssl=False)
+    client = InfluxDBClient(
+        host, port, user, password, dbname, ssl=True, verify_ssl=False
+    )
     client.create_database(dbname)
 
     json_body = [

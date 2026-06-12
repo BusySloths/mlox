@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import os
 import pytest
 from pathlib import Path
@@ -11,10 +12,8 @@ from mlox.services.feast.client import (
 from mlox.services.feast.docker import FeastDockerService
 from mlox.services.postgres.docker import PostgresDockerService
 from mlox.services.redis.docker import RedisDockerService
-from mlox.secret_manager import (
-    InMemorySecretManager,
-    get_encrypted_access_keyfile,
-)
+from mlox.secret_manager import get_encrypted_access_keyfile
+from tests.secret_manager_fakes import SerializableSecretManager
 
 from tests.integration.conftest import wait_for_service_ready
 
@@ -30,7 +29,7 @@ def install_feast_service(ubuntu_docker_server):
 
     # Install Redis online store
     redis_config = load_config(get_stacks_path(), "/redis", "mlox.redis.8.yaml")
-    redis_bundle = infra.add_service(ubuntu_docker_server.ip, redis_config, params={})
+    redis_bundle = add_service(infra, ubuntu_docker_server.ip, redis_config, params={})
     if not redis_bundle:
         pytest.skip("Failed to add Redis service")
     redis_service = next(
@@ -48,8 +47,8 @@ def install_feast_service(ubuntu_docker_server):
         get_stacks_path(), "/postgres", "mlox.postgres.16.yaml"
     )
     postgres_params = {"${POSTGRES_DB}": "feast_integration"}
-    postgres_bundle = infra.add_service(
-        ubuntu_docker_server.ip, postgres_config, params=postgres_params
+    postgres_bundle = add_service(
+        infra, ubuntu_docker_server.ip, postgres_config, params=postgres_params
     )
     if not postgres_bundle:
         pytest.skip("Failed to add Postgres service")
@@ -73,8 +72,8 @@ def install_feast_service(ubuntu_docker_server):
         "${ONLINE_STORE_UUID}": redis_service.uuid,
         "${OFFLINE_STORE_UUID}": postgres_service.uuid,
     }
-    feast_bundle = infra.add_service(
-        ubuntu_docker_server.ip, feast_config, params=params
+    feast_bundle = add_service(
+        infra, ubuntu_docker_server.ip, feast_config, params=params
     )
     if not feast_bundle:
         pytest.skip("Failed to add Feast service")
@@ -120,7 +119,7 @@ def test_feast_service_links_remote_stores(install_feast_service):
 
 def test_get_repo_config(install_feast_service):
     infra, _, service, redis_service, postgres_service = install_feast_service
-    secret_manager = InMemorySecretManager()
+    secret_manager = SerializableSecretManager()
 
     registry_secret = service.get_secrets()
     secret_manager.save_secret(

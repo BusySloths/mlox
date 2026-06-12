@@ -7,7 +7,8 @@ import streamlit as st
 
 from typing import Dict, cast
 
-from mlox.infra import Bundle, Infrastructure, ModelRegistry
+from mlox.infra import Bundle, Infrastructure
+from mlox.service import AbstractModelRegistryService
 from mlox.services.mlflow_gateway.docker import MLFlowGatewayDockerService
 
 logger = logging.getLogger(__name__)
@@ -191,7 +192,10 @@ def settings(
             st.info("Cache state is available after the service is running.")
 
     with versions_tab:
-        my_registry = cast(ModelRegistry | None, service.get_registry())
+        my_registry = cast(
+            AbstractModelRegistryService | None,
+            service.get_registry(),
+        )
         if not my_registry:
             st.warning("No model registry associated with this MLflow Gateway.")
         else:

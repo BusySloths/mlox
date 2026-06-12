@@ -1,1 +1,4 @@
-"""Application-layer types, use-cases, and stateless facade for MLOX."""
+"""Application result types and internal use cases."""
+from mlox.application.result import OperationResult
+
+__all__ = ["OperationResult"]

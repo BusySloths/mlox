@@ -78,31 +78,32 @@ We welcome contributors, users, and honest feedback. If you hit something broken
 ## Architecture in 30 Seconds
 
 ```text
-CLI     TUI     Streamlit Web UI     Other UIs
-  \      |             |                /
-   \     |             |               /
-    +----+-------------+--------------+
-                    |
-                    v
-      `mlox/application/use_cases/*`
-         shared session-based logic
-                    |
-                    v
-              `MloxSession`
-   project + encrypted secret manager + infrastructure
-             /                               \
-            v                                 v
- secret-manager backend                `Infrastructure`
- (InMemory/TinySM/OpenBao/GCP)      topology for one project
-                                            |
-                                            v
-                           `Bundle` = compute/server + services[*]
-                                      |
-                                      v
-                    execution via `mlox/executors.py` + `mlox/execution/*`
+CLI     TUI     Streamlit Web UI
+  \      |             /
+   +------+------------+
+          |
+          v
+      `ProjectWorkspace`
+          |
+          v
+   internal state + repository
+          |
+          v
+ encrypted `project.mlox` (SQLCipher)
+ metadata + data-source pointer + infrastructure + secrets
+          |
+          +-- active source: `self` today
+          +-- PostgreSQL-ready repository boundary later
 ```
 
-`MloxSession` holds the current project, its encrypted secret manager, and its infrastructure. Infrastructure is organized into bundles that pair a compute/server with its deployed services, keeping the product and its supporting stack connected in one topology. The CLI, TUI, and Web UI operate on this shared model through common application use cases.
+`ProjectWorkspace` is the single public runtime API. It loads and atomically
+persists internal workspace state containing metadata and `Infrastructure`;
+the single selected secret manager is available through `workspace.secrets`.
+Encrypted project storage is selected initially, with no silent fallback when an
+external provider is unavailable. The project
+also records its active data source (`sqlcipher/self` initially), leaving a clean
+migration path to PostgreSQL. CLI commands open a workspace per invocation,
+while the TUI and Web UI retain one workspace in runtime state.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 
@@ -131,7 +132,7 @@ task ui:streamlit
 task ui:cli CLI_ARGS="--help"
 ```
 
-See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough including Docker and Kubernetes setup.
+See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough including Docker and Kubernetes setup. See [Encrypted Project Files](docs/PROJECT_FILES.md) for creation, storage, backup, and legacy migration details.
 
 ---
 
@@ -140,10 +141,10 @@ See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough includin
 ```
 mlox/
 ├── mlox/
-│   ├── application/    # Shared use cases and infrastructure operations
+│   ├── application/    # Stateful application API and shared use cases
 │   ├── cli/            # Typer CLI package (root app + command modules)
 │   ├── execution/      # Backend and system execution helpers
-│   ├── migrations/     # Persisted project format migrations
+│   ├── project/        # Aggregate, SQLCipher repository, and secret adapter
 │   ├── servers/        # Local, connector, and Ubuntu compute with Native, Docker, or Kubernetes
 │   ├── services/       # Deployable ML/AI services and integrations
 │   ├── tui/            # Textual terminal UI + TUI-specific UI handlers
@@ -151,7 +152,7 @@ mlox/
 │   ├── view/           # Streamlit web UI + Streamlit-specific UI handlers
 │   ├── assets/         # Runtime templates and packaged assets
 │   ├── resources/      # Images and other static resources
-│   ├── session.py      # Runtime state & persistence
+│   ├── project/        # Public workspace and internal SQLCipher persistence
 │   ├── infra.py        # Service/server graph
 │   ├── config.py       # YAML loading + plugin discovery + UI handler lookup
 │   └── executors.py    # Remote task executor layer used by services/servers

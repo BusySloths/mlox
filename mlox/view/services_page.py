@@ -3,9 +3,9 @@ import streamlit as st
 
 from typing import cast
 
-from mlox.session import MloxSession
+from mlox.project import ProjectWorkspace
 from mlox.config import load_all_service_configs
-from mlox.secret_manager import AbstractSecretManagerService
+from mlox.service import AbstractSecretManagerService
 from mlox.view.logs import show_service_logs_ui
 
 
@@ -37,9 +37,9 @@ st.markdown(
 )
 
 
-def save_infra():
+def commit_project():
     with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()
+        st.session_state.mlox.commit()
 
 
 def _state_badge(state: str) -> str:
@@ -87,8 +87,8 @@ def installed_services():
     )
     infra = None
     try:
-        session = cast(MloxSession, st.session_state.mlox)
-        infra = session.infra
+        application = cast(ProjectWorkspace, st.session_state.mlox)
+        infra = application.infrastructure
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()
@@ -228,22 +228,23 @@ def installed_services():
             type="primary",
         ):
             with st.spinner(f"Setting up {svc.name}…", show_time=True):
-                infra.setup_service(svc)
-            save_infra()
+                result = application.setup_service(name=svc.name)
+            if not result.success:
+                st.error(result.message)
             st.rerun()
         if b1.button(
             "Resume",
             key=f"start-{svc.uuid}",
             disabled=svc.state == "running" or svc.state == "un-initialized",
         ):
-            with bndl.server.get_server_connection() as conn:
-                svc.spin_up(conn)
-            save_infra()
+            result = application.start_service(name=svc.name)
+            if not result.success:
+                st.error(result.message)
             st.rerun()
         if b2.button("Pause", key=f"stop-{svc.uuid}", disabled=svc.state != "running"):
-            with bndl.server.get_server_connection() as conn:
-                svc.spin_down(conn)
-            save_infra()
+            result = application.stop_service(name=svc.name)
+            if not result.success:
+                st.error(result.message)
             st.rerun()
         if b3.button("Check", key=f"check-{svc.uuid}"):
             with bndl.server.get_server_connection() as conn:
@@ -251,8 +252,9 @@ def installed_services():
             st.toast(f"{svc.name} status: {status}")
         if b7.button("Teardown", key=f"teardown-{svc.uuid}", type="primary"):
             with st.spinner(f"Deleting {svc.name}…", show_time=True):
-                infra.teardown_service(svc)
-            save_infra()
+                result = application.teardown_service(name=svc.name)
+            if not result.success:
+                st.error(result.message)
             st.rerun()
 
         new_name = b4.text_input(
@@ -266,8 +268,12 @@ def installed_services():
             if new_name in infra.list_service_names():
                 st.error("Service name must be unique.")
             else:
-                svc.name = new_name
-                save_infra()
+                result = application.rename_service(
+                    name=svc.name,
+                    new_name=new_name,
+                )
+                if not result.success:
+                    st.error(result.message)
                 st.rerun()
 
         # Helpful links
@@ -286,13 +292,15 @@ def installed_services():
         if callable_settings_func and svc.state == "running":
             with st.expander("Settings"):
                 if isinstance(svc, AbstractSecretManagerService) and st.button(
-                    "Set as default secret manager",
+                    "Use as active secret manager",
                     icon=":material/key:",
                     key=f"set-sm-{svc.uuid}",
                 ):
-                    session.set_secret_manager(svc.get_secret_manager(infra))
-                    save_infra()
-                    st.success(f"Set {svc.name} as default secret manager.")
+                    result = application.set_secret_manager(svc.uuid)
+                    if result.success:
+                        st.success(result.message)
+                    else:
+                        st.error(result.message)
                 callable_settings_func(infra, bndl, svc)
 
         # Show logs UI when the service is running and the service template
@@ -329,15 +337,15 @@ def installed_services():
                             },
                         )
                 with tab_logs:
-                    show_service_logs_ui(session, svc.name)
+                    show_service_logs_ui(application, svc.name)
 
 
 def available_services():
     st.markdown("### Templates")
     infra = None
     try:
-        session = cast(MloxSession, st.session_state.mlox)
-        infra = session.infra
+        application = cast(ProjectWorkspace, st.session_state.mlox)
+        infra = application.infrastructure
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()
@@ -437,6 +445,7 @@ def _render_add_service_dialog():
     config = st.session_state.get("dialog_config")
     supported_backends = st.session_state.get("dialog_backends", [])
     infra = st.session_state.get("dialog_infra")
+    application = cast(ProjectWorkspace, st.session_state.mlox)
 
     if not config or not infra:
         st.error("Dialog configuration error")
@@ -489,16 +498,17 @@ def _render_add_service_dialog():
                 target_server_ip = setup_params.pop(
                     "__MLOX_TARGET_SERVER_IP", selected_bundle.server.ip
                 )
-                ret = infra.add_service(target_server_ip, config, setup_params)
-                if ret:
-                    st.success(
-                        f"Successfully added {config.name} to {ret.name}"
-                    )
-                    save_infra()
+                result = application.add_service_from_config(
+                    config,
+                    server_ip=target_server_ip,
+                    params=setup_params,
+                )
+                if result.success:
+                    st.success(result.message)
                     st.session_state.show_add_dialog = False
                     st.rerun()
                 else:
-                    st.error("Failed to add service")
+                    st.error(result.message)
 
     with col2:
         if st.button("Cancel", width="stretch"):

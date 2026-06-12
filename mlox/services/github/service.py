@@ -1,14 +1,10 @@
 import logging
 
-import logging
-
 from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Dict, Literal
 
-from mlox.infra import Bundle, Repo
-from mlox.service import AbstractService
-from mlox.server import AbstractGitServer
+from mlox.service import AbstractRepositoryService, AbstractService
 
 
 # Configure logging (optional, but recommended)
@@ -20,7 +16,7 @@ logging.basicConfig(
 
 
 @dataclass
-class GithubRepoService(AbstractService, Repo):
+class GithubRepoService(AbstractService, AbstractRepositoryService):
     link: str
     is_private: bool = field(default=False, init=True)
     repo_name: str = field(default="", init=False)
@@ -236,7 +232,7 @@ class GithubRepoService(AbstractService, Repo):
     #         logging.warning("Server is not a git server.")
     #         self.state = "unknown"
 
-    # def remove_repo(self, ip: str, repo: Repo) -> None:
+    # def remove_repo(self, ip: str, repo: AbstractRepositoryService) -> None:
     #     bundle = next(
     #         (bundle for bundle in self.bundles if bundle.server.ip == ip), None
     #     )

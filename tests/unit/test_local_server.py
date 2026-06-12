@@ -5,6 +5,8 @@ from unittest.mock import patch
 from fabric import Connection  # type: ignore
 from mlox.service import AbstractService
 from mlox.infra import Infrastructure
+from mlox.application.use_cases import servers, services
+from mlox.project.state import WorkspaceState
 from mlox.config import ServiceConfig, BuildConfig, get_stacks_path, load_config
 from mlox.server import ServerCapability
 from mlox.servers.local.local import LocalhostServer, LocalConnection
@@ -58,11 +60,22 @@ def test_localhost_server_adds_custom_service():
     )
 
     infra = Infrastructure()
+    project = WorkspaceState(name="demo", infrastructure=infra)
 
     server_config = load_config(
         get_stacks_path(prefix="mlox-server"), "/local", "mlox-server.local.yaml"
     )
-    bundle = infra.add_server(server_config, {})
+    server_result = servers.add_server(
+        project,
+        lambda path: server_config,
+        template_path="local",
+        ip=server.ip,
+        port=0,
+        root_user=server.root,
+        root_password="",
+    )
+    bundle = server_result.data["bundle"]
+    server = bundle.server
 
     build_config = BuildConfig(
         class_name="tests.unit.test_local_server.ExampleService",
@@ -83,8 +96,14 @@ def test_localhost_server_adds_custom_service():
         version="0.1.0",
         build=build_config,
     )
-    bundle = infra.add_service(server.ip, service_config, params={})
-    assert bundle is not None
+    service_result = services.add_service(
+        project,
+        lambda template_id: service_config,
+        server_ip=server.ip,
+        template_id=service_config.id,
+        params={},
+    )
+    assert service_result.success
     assert len(bundle.services) == 1
     assert bundle.services[0].target_path == f"{server.mlox_user.home}/tmp/example"
 

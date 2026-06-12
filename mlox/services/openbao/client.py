@@ -134,6 +134,10 @@ class OpenBaoSecretManager(AbstractSecretManager):
             health.get("sealed", True)
         )
 
+    @property
+    def supports_keyfile_export(self) -> bool:
+        return True
+
     def init_status(self) -> bool:
         response = self._request("GET", "/v1/sys/init")
         return bool(response.get("initialized", False))

@@ -9,7 +9,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter  # type: ignore
 
-from mlox.session import MloxSession
+from mlox.project import ProjectWorkspace
 
 # NOTES:
 # - check the certificate on a remote collector:
@@ -26,16 +26,16 @@ resource = Resource.create(
     }
 )
 
-mlox_name = os.environ.get("MLOX_PROJECT_NAME", None)
+mlox_path = os.environ.get("MLOX_PROJECT_PATH", None)
 mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
 # Make sure your environment variable is set!
-if not mlox_password or not mlox_name:
+if not mlox_password or not mlox_path:
     print(
-        "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_NAME environment variable is not set."
+        "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_PATH environment variable is not set."
     )
     exit(1)
-session = MloxSession(mlox_name, mlox_password)
-infra = session.infra
+workspace = ProjectWorkspace.open(mlox_path, mlox_password)
+infra = workspace.infrastructure
 
 monitors = infra.filter_by_group("monitor")
 if len(monitors) == 0:

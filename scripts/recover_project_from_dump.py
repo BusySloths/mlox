@@ -9,10 +9,10 @@ from __future__ import annotations
 import argparse
 import ast
 import copy
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mlox.session import MloxProject
 from mlox.utils import dataclass_to_dict, save_to_json
 
 DEFAULT_INPUT_PATH = Path("mlox_project_content.key")
@@ -34,6 +34,17 @@ _SERVER_CLASS_BY_CONFIG_PREFIX = {
     "ubuntu-k3s": "mlox.servers.ubuntu.k3s.UbuntuK3sServer",
     "local-server": "mlox.servers.local.local.LocalhostServer",
 }
+
+
+@dataclass
+class _LegacyProjectDump:
+    name: str
+    created_at: str = ""
+    last_opened_at: str = ""
+    secret_manager_class: str | None = None
+    secret_manager_info: dict[str, Any] = field(default_factory=dict)
+    descr: str = ""
+    version: str = "1"
 
 
 def _eval_node(node: ast.AST) -> Any:
@@ -89,7 +100,7 @@ def _repair_server_dict_metadata(server_dict: dict[str, Any]) -> dict[str, Any]:
     return repaired
 
 
-def _repair_secret_manager_info(project: MloxProject) -> None:
+def _repair_secret_manager_info(project: _LegacyProjectDump) -> None:
     if project.secret_manager_class != "mlox.secret_manager.TinySecretManager":
         return
     keyfile = project.secret_manager_info.get("keyfile")
@@ -97,7 +108,7 @@ def _repair_secret_manager_info(project: MloxProject) -> None:
         project.secret_manager_info["keyfile"] = _repair_server_dict_metadata(keyfile)
 
 
-def parse_project_dump(text: str) -> MloxProject:
+def parse_project_dump(text: str) -> _LegacyProjectDump:
     module = ast.parse(text.strip(), mode="eval")
     expr = module.body
     if not isinstance(expr, ast.Call):
@@ -112,7 +123,7 @@ def parse_project_dump(text: str) -> MloxProject:
         raise ValueError("Project dump is missing the 'name' field.")
 
     init_kwargs = {key: value for key, value in raw_fields.items() if key in _INIT_FIELDS}
-    project = MloxProject(**init_kwargs)
+    project = _LegacyProjectDump(**init_kwargs)
     for field_name in _ASSIGNABLE_FIELDS:
         if field_name in raw_fields:
             setattr(project, field_name, raw_fields[field_name])

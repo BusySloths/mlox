@@ -75,16 +75,15 @@ CLI     TUI     Streamlit Web UI     Other UIs
     +----+-------------+--------------+
                     |
                     v
-      `mlox/application/use_cases/*`
-         shared session-based logic
+             `ProjectWorkspace`
+          stateful mutation boundary
                     |
                     v
-              `MloxSession`
-   project + encrypted secret manager + infrastructure
+     internal state + SQLCipher repository
              /                               \
             v                                 v
- secret-manager backend                `Infrastructure`
- (InMemory/TinySM/OpenBao/GCP)      topology for one project
+ embedded SQLCipher storage                `Infrastructure`
+ (metadata + topology + secrets)      topology for one project
                                             |
                                             v
                            `Bundle` = compute/server + services[*]
@@ -93,7 +92,10 @@ CLI     TUI     Streamlit Web UI     Other UIs
                     execution via `mlox/executors.py` + `mlox/execution/*`
 ```
 
-`MloxSession` holds the current project, its encrypted secret manager, and its infrastructure. Infrastructure is organized into bundles that pair a compute/server with its deployed services, keeping the product and its supporting stack connected in one topology. The CLI, TUI, and Web UI operate on this shared model through common application use cases.
+`ProjectWorkspace` exposes the shared mutation and direct SDK API. It loads
+internal state containing metadata and `Infrastructure`, and commits both
+atomically to the encrypted project file. CLI commands open a workspace per
+invocation; the TUI and Web UI retain one in runtime state.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 

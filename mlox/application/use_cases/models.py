@@ -3,15 +3,16 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 from mlox.application.result import OperationResult
+from mlox.project.state import WorkspaceState
 
 
 def list_models(
-    session,
+    project: WorkspaceState,
     *,
     registry_name: Optional[str] = None,
 ) -> OperationResult:
-    model_servers = session.infra.filter_by_group("model-server")
-    registries = session.infra.filter_by_group("model-registry")
+    model_servers = project.infrastructure.filter_by_group("model-server")
+    registries = project.infrastructure.filter_by_group("model-registry")
     if not registries:
         return OperationResult(False, 11, "No model registry service found in the project.")
 
@@ -47,7 +48,7 @@ def list_models(
 
 
 def deploy_model(
-    session,
+    project: WorkspaceState,
     add_service,
     setup_service,
     *,
@@ -57,11 +58,11 @@ def deploy_model(
     server_ip: str,
     template_id: str,
 ) -> OperationResult:
-    target_bundle = session.infra.get_bundle_by_ip(server_ip)
+    target_bundle = project.infrastructure.get_bundle_by_ip(server_ip)
     if not target_bundle:
         return OperationResult(False, 14, f"Server {server_ip} not found in infrastructure.")
 
-    registries = session.infra.filter_by_group("model-registry")
+    registries = project.infrastructure.filter_by_group("model-registry")
     registry_service = next(
         (service for service in registries if service.name == registry_name),
         None,
@@ -78,7 +79,7 @@ def deploy_model(
     }
 
     add_result = add_service(
-        session,
+        project,
         server_ip=server_ip,
         template_id=template_id,
         params=params,
@@ -89,4 +90,4 @@ def deploy_model(
         return OperationResult(False, 15, "Failed to retrieve deployed service.")
 
     service = add_result.data["service"]
-    return setup_service(session, name=service.name)
+    return setup_service(project, name=service.name)

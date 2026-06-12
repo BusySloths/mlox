@@ -12,5 +12,5 @@ cards:
     description: "We believe in thoughtful, calm systems over rushed chaos. Move fast by moving deliberately, with sensible defaults and clear documentation."
   - title: "Connected by Design"
     icon: "∞"
-    description: "Keep servers, services, secrets, dependencies, and your product in one inspectable topology operated through the Web UI, TUI, or CLI."
+    description: "Keep servers, services, secrets, dependencies, and your product in one portable encrypted project file and inspectable topology operated through the Web UI, TUI, or CLI."
 ---

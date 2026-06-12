@@ -6,7 +6,7 @@ from typing import cast, Dict
 
 from mlox.services.gcp.storage_service import GCPStorageService
 from mlox.infra import Infrastructure, Bundle
-from mlox.secret_manager import AbstractSecretManagerService
+from mlox.service import AbstractSecretManagerService
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> dict | None:

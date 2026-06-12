@@ -1,13 +1,22 @@
 import pytest
+from types import SimpleNamespace
 from unittest import mock
 
 from typer.testing import CliRunner
 
 from mlox import cli
+from mlox.project import ProjectWorkspace
 from mlox.application.result import OperationResult
 
 typer = pytest.importorskip("typer")
 runner = CliRunner()
+
+
+def _patch_application(monkeypatch, method_name, result):
+    method = mock.Mock(return_value=result)
+    application = SimpleNamespace(**{method_name: method})
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
+    return method
 
 
 def test_parse_kv_parses_pairs():
@@ -40,9 +49,7 @@ def test_handle_result_failure(capsys):
 
 def test_server_list_no_servers(monkeypatch):
     operation_result = OperationResult(True, 0, "No servers found.", {"servers": []})
-    monkeypatch.setattr(
-        cli.ops, "list_servers", mock.Mock(return_value=operation_result)
-    )
+    _patch_application(monkeypatch, "list_servers", operation_result)
 
     result = runner.invoke(cli.app, ["server", "list", "proj", "--password", "pw"])
 
@@ -56,7 +63,8 @@ def test_server_list_outputs_servers(monkeypatch):
         True, 0, "Servers retrieved successfully.", payload
     )
     mock_list = mock.Mock(return_value=operation_result)
-    monkeypatch.setattr(cli.ops, "list_servers", mock_list)
+    application = SimpleNamespace(list_servers=mock_list)
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
 
     result = runner.invoke(cli.app, ["server", "list", "proj", "--password", "pw"])
 
@@ -65,13 +73,14 @@ def test_server_list_outputs_servers(monkeypatch):
     assert "| IP" in result.stdout
     assert "| 1.1.1.1" in result.stdout
     assert "running" in result.stdout
-    mock_list.assert_called_once_with(project="proj", password="pw")
+    mock_list.assert_called_once_with()
 
 
 def test_server_add_failure(monkeypatch):
     operation_result = OperationResult(False, 1, "Server template not found.")
     mock_add = mock.Mock(return_value=operation_result)
-    monkeypatch.setattr(cli.ops, "add_server", mock_add)
+    application = SimpleNamespace(add_server=mock_add)
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
 
     result = runner.invoke(
         cli.app,
@@ -98,7 +107,8 @@ def test_server_add_failure(monkeypatch):
 def test_server_add_success(monkeypatch):
     operation_result = OperationResult(True, 0, "Added server 1.2.3.4.")
     mock_add = mock.Mock(return_value=operation_result)
-    monkeypatch.setattr(cli.ops, "add_server", mock_add)
+    application = SimpleNamespace(add_server=mock_add)
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
 
     result = runner.invoke(
         cli.app,
@@ -128,9 +138,7 @@ def test_server_add_success(monkeypatch):
 
 def test_service_list_no_services(monkeypatch):
     operation_result = OperationResult(True, 0, "No services found.", {"services": []})
-    monkeypatch.setattr(
-        cli.ops, "list_services", mock.Mock(return_value=operation_result)
-    )
+    _patch_application(monkeypatch, "list_services", operation_result)
 
     result = runner.invoke(cli.app, ["service", "list", "proj", "--password", "pw"])
 
@@ -151,9 +159,7 @@ def test_service_list_outputs(monkeypatch):
     operation_result = OperationResult(
         True, 0, "Services retrieved successfully.", payload
     )
-    monkeypatch.setattr(
-        cli.ops, "list_services", mock.Mock(return_value=operation_result)
-    )
+    _patch_application(monkeypatch, "list_services", operation_result)
 
     result = runner.invoke(cli.app, ["service", "list", "proj", "--password", "pw"])
 
@@ -170,7 +176,9 @@ def test_server_configs_list_no_configs(monkeypatch):
         True, 0, "No server configs found.", {"configs": []}
     )
     monkeypatch.setattr(
-        cli.ops, "list_server_configs", mock.Mock(return_value=operation_result)
+        ProjectWorkspace,
+        "list_server_configs",
+        mock.Mock(return_value=operation_result),
     )
 
     result = runner.invoke(cli.app, ["server", "configs", "list"])
@@ -183,7 +191,9 @@ def test_server_configs_list_outputs(monkeypatch):
     payload = {"configs": [{"id": "srv", "path": "servers/srv.yaml"}]}
     operation_result = OperationResult(True, 0, "Server configs retrieved.", payload)
     monkeypatch.setattr(
-        cli.ops, "list_server_configs", mock.Mock(return_value=operation_result)
+        ProjectWorkspace,
+        "list_server_configs",
+        mock.Mock(return_value=operation_result),
     )
 
     result = runner.invoke(cli.app, ["server", "configs", "list"])
@@ -200,7 +210,9 @@ def test_service_configs_list_no_configs(monkeypatch):
         True, 0, "No service configs found.", {"configs": []}
     )
     monkeypatch.setattr(
-        cli.ops, "list_service_configs", mock.Mock(return_value=operation_result)
+        ProjectWorkspace,
+        "list_service_configs",
+        mock.Mock(return_value=operation_result),
     )
 
     result = runner.invoke(cli.app, ["service", "configs", "list"])
@@ -213,7 +225,9 @@ def test_service_configs_list_outputs(monkeypatch):
     payload = {"configs": [{"id": "svc", "path": "services/svc.yaml"}]}
     operation_result = OperationResult(True, 0, "Service configs retrieved.", payload)
     monkeypatch.setattr(
-        cli.ops, "list_service_configs", mock.Mock(return_value=operation_result)
+        ProjectWorkspace,
+        "list_service_configs",
+        mock.Mock(return_value=operation_result),
     )
 
     result = runner.invoke(cli.app, ["service", "configs", "list"])
@@ -239,3 +253,24 @@ def test_start_ui_invokes_streamlit(monkeypatch):
     assert command[1:4] == ["-m", "streamlit", "run"]
     assert command[4].endswith("mlox/app.py")
     assert call_args.kwargs["check"] is False
+
+
+def test_project_new_prints_canonical_project_path_without_password(monkeypatch, tmp_path):
+    application = SimpleNamespace(
+        project_created=mock.Mock(
+            return_value=OperationResult(True, 0, "created")
+        )
+    )
+    monkeypatch.setattr(
+        ProjectWorkspace,
+        "create",
+        mock.Mock(return_value=application),
+    )
+    result = runner.invoke(
+        cli.app,
+        ["project", "new", str(tmp_path / "demo"), "--password", "super-secret"],
+    )
+    assert result.exit_code == 0
+    assert str((tmp_path / "demo.mlox").resolve()) in result.stdout
+    assert "super-secret" not in result.stdout
+    assert "MLOX_PROJECT_PATH" in result.stdout

@@ -1,3 +1,5 @@
+from tests.integration.helpers import add_service
+
 """Integration tests for standalone Ollama service."""
 
 import logging
@@ -25,7 +27,7 @@ def install_ollama_service(ubuntu_docker_server):
     config = load_config(get_stacks_path(), "/ollama", "mlox.ollama.0.23.3.yaml")
     params = {"${OLLAMA_MODELS}": []}
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
         pytest.skip("Failed to add Ollama service from config")
 
@@ -35,7 +37,9 @@ def install_ollama_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
 
-    wait_for_service_ready(service, bundle_added, retries=6, interval=10, no_checks=True)
+    wait_for_service_ready(
+        service, bundle_added, retries=6, interval=10, no_checks=True
+    )
 
     yield bundle_added, service
 

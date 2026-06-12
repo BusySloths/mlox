@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import logging
 
 import pytest
@@ -26,7 +27,8 @@ def install_repo_deploy_service(ubuntu_docker_server):
         "${GITHUB_LINK}": PUBLIC_MLOX_REPO,
         "${GITHUB_PRIVATE}": False,
     }
-    bundle_added = infra.add_service(
+    bundle_added = add_service(
+        infra,
         ubuntu_docker_server.ip,
         github_config,
         params=github_params,
@@ -52,7 +54,8 @@ def install_repo_deploy_service(ubuntu_docker_server):
         "${REPO_DEPLOY_REPO_UUID}": repo_service.uuid,
         "${REPO_DEPLOY_COMPOSE_FILE}": "mlox/services/redis/docker-compose-redis-8-bookworm.yaml",
     }
-    bundle_added = infra.add_service(
+    bundle_added = add_service(
+        infra,
         ubuntu_docker_server.ip,
         deploy_config,
         params=deploy_params,

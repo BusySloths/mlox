@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import os
 import time
 import logging
@@ -91,8 +92,8 @@ def deploy_mlflow_mlserver(ubuntu_docker_server, install_mlflow3_service):
         "${MODEL_REGISTRY_UUID}": mlflow_service.uuid,
     }
 
-    mlserver_bundle = infra.add_service(
-        ubuntu_docker_server.ip, mlserver_config, params=params
+    mlserver_bundle = add_service(
+        infra, ubuntu_docker_server.ip, mlserver_config, params=params
     )
     if not mlserver_bundle:
         pytest.skip("Failed to add MLServer service from config")

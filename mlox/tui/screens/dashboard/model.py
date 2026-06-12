@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 from textual.message import Message
 
-from mlox.session import MloxSession
+from mlox.project import ProjectWorkspace
 
 WELCOME_TEXT = """\
 Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
@@ -48,8 +48,10 @@ def get_server_backends(server: Any | None) -> list[str]:
     ]
 
 
-def summarize_infrastructure(session: Optional[MloxSession]) -> Dict[str, Any]:
-    """Return aggregate statistics and listings for the active session."""
+def summarize_infrastructure(
+    workspace: Optional[ProjectWorkspace],
+) -> Dict[str, Any]:
+    """Return aggregate statistics and listings for the active workspace."""
 
     summary: Dict[str, Any] = {
         "has_data": False,
@@ -59,9 +61,9 @@ def summarize_infrastructure(session: Optional[MloxSession]) -> Dict[str, Any]:
         "server_rows": [],
         "service_rows": [],
     }
-    if not session:
+    if not workspace:
         return summary
-    infra = getattr(session, "infra", None)
+    infra = workspace.infrastructure
     if not infra or not getattr(infra, "bundles", None):
         return summary
 

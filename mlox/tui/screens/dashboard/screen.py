@@ -17,7 +17,7 @@ from .server_actions import ServerActions
 from .stats_panel import StatsPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
-from mlox.session import MloxSession
+from mlox.project import ProjectWorkspace
 from mlox.services.otel.docker import OtelDockerService
 
 
@@ -108,26 +108,20 @@ class DashboardScreen(Screen):
         self._update_tui_panel(selection)
 
     def action_reload_infrastructure(self) -> None:
-        session = getattr(self.app, "session", None)
-        project = getattr(getattr(session, "project", None), "name", None)
-        password = getattr(session, "password", None)
-        migrations = getattr(session, "migrations", None)
-        if not project or not password:
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
             self.notify(
-                "Cannot reload infrastructure because the project session is incomplete.",
+                "Cannot reload infrastructure because the project workspace is incomplete.",
                 severity="error",
             )
             return
+        project = str(workspace.path)
 
         self.notify(f"Reloading project infrastructure for {project}...")
 
-        def reload_session() -> None:
+        def reload_workspace() -> None:
             try:
-                reloaded_session = MloxSession(
-                    project_name=project,
-                    password=password,
-                    migrations=migrations,
-                )
+                workspace.reload()
             except Exception as exc:
                 self.app.call_from_thread(
                     self._show_reload_error,
@@ -135,13 +129,12 @@ class DashboardScreen(Screen):
                 )
                 return
             self.app.call_from_thread(
-                self._apply_reloaded_session,
+                self._apply_reloaded_workspace,
                 project,
-                reloaded_session,
             )
 
         self.app.run_worker(
-            reload_session,
+            reload_workspace,
             thread=True,
             exclusive=True,
             group="project-reload",
@@ -150,8 +143,7 @@ class DashboardScreen(Screen):
     def _show_reload_error(self, message: str) -> None:
         self.notify(message, severity="error")
 
-    def _apply_reloaded_session(self, project: str, reloaded_session: MloxSession) -> None:
-        self.app.session = reloaded_session
+    def _apply_reloaded_workspace(self, project: str) -> None:
         tree = self.query_one(InfraTree)
         tree.populate_tree()
         self._apply_selection(tree.root.data)
@@ -187,8 +179,8 @@ class DashboardScreen(Screen):
             )
             return
 
-        session = getattr(self.app, "session", None)
-        infra = getattr(session, "infra", None) if session else None
+        workspace: ProjectWorkspace | None = getattr(self.app, "workspace", None)
+        infra = workspace.infrastructure if workspace else None
         if not infra or not selection.bundle:
             self._mount_placeholder(
                 container,

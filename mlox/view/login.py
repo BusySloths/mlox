@@ -6,28 +6,30 @@ import streamlit as st
 
 from importlib import metadata as importlib_metadata  # py3.8+
 
-from mlox.session import MloxSession
+from mlox.project import ProjectWorkspace
 from mlox.view.utils import st_hack_align
 
 logger = logging.getLogger(__name__)
 
 
-def create_session(project_name, password, create_new_project: bool) -> bool:
+def create_workspace(project_name, password, create_new_project: bool) -> bool:
     if not create_new_project:
-        if not MloxSession.check_project_exists_and_loads(project_name, password):
+        try:
+            workspace = ProjectWorkspace.open(project_name, password)
+        except Exception:
             logger.warning(
                 f"Project {project_name} does not exist or cannot be loaded."
             )
             return False
-    ms = None
+    else:
+        workspace = None
     try:
-        print(f"Creating session for project: {project_name}")
-        ms = MloxSession(project_name, password)
-        st.session_state["mlox"] = ms
+        if workspace is None:
+            workspace = ProjectWorkspace.create(project_name, password)
+        st.session_state["mlox"] = workspace
         st.session_state.is_logged_in = True
-        print(f"Done Creating session for project: {project_name}")
     except Exception as e:
-        logger.error(f"Error creating session for project {project_name}: {e}")
+        logger.error(f"Error creating workspace for project {project_name}: {e}")
         return False
     return True
 
@@ -36,7 +38,7 @@ def login():
     with st.form("Open Project"):
         st.markdown("### 🔐 Open Existing Project")
         project_name = st.text_input(
-            "Project Name", value=os.environ.get("MLOX_PROJECT_NAME", "mlox")
+            "Project File", value=os.environ.get("MLOX_PROJECT_PATH") or os.environ.get("MLOX_PROJECT_NAME", "mlox.mlox")
         )
         password = st.text_input(
             "Password",
@@ -47,7 +49,7 @@ def login():
             "Open Project", icon=":material/login:", type="primary"
         )
         if submitted:
-            if create_session(project_name, password, create_new_project=False):
+            if create_workspace(project_name, password, create_new_project=False):
                 st.success("Project opened successfully!")
                 st.rerun()
             else:
@@ -62,7 +64,7 @@ def new_project():
         st.markdown("### 🆕 Create New Project")
 
         c1, c2, c3 = st.columns(3)
-        project_name = c1.text_input("Project Name", value="mlox")
+        project_name = c1.text_input("Project File", value="mlox.mlox")
         password = c2.text_input(
             "Password",
             value=os.environ.get("MLOX_CONFIG_PASSWORD", ""),
@@ -70,7 +72,7 @@ def new_project():
         )
         st_hack_align(c3, px=28)
         if c3.button("Create Project", icon=":material/add_circle:", type="primary"):
-            if create_session(project_name, password, create_new_project=True):
+            if create_workspace(project_name, password, create_new_project=True):
                 st.success("Project created successfully!")
                 st.rerun()
             else:
@@ -81,30 +83,30 @@ def new_project():
 
 
 def project_settings_and_logout():
-    session = st.session_state.get("mlox")
-    if not session:
-        st.error("No active project session found. Please open a project first.")
+    workspace = st.session_state.get("mlox")
+    if not workspace:
+        st.error("No active project workspace found. Please open a project first.")
         return
 
-    infra = session.infra
+    infra = workspace.infrastructure
 
     # Header
-    st.markdown(f"# 🗂️ Project: {session.project.name}")
+    st.markdown(f"# 🗂️ Project: {workspace.name}")
     cols = st.columns([2, 1])
     with cols[0]:
         st.caption(
-            f"Created: {session.project.created_at.split('.')[0].replace('T', ' ')}"
+            f"Created: {workspace.created_at.split('.')[0].replace('T', ' ')}"
         )
         st.caption(
-            f"Last opened: {session.project.last_opened_at.split('.')[0].replace('T', ' ')}"
+            f"Last opened: {workspace.last_opened_at.split('.')[0].replace('T', ' ')}"
         )
     with cols[1]:
         sm_name = (
-            session.secrets.__class__.__name__
-            if getattr(session, "secrets", None)
+            workspace.secrets.__class__.__name__
+            if getattr(workspace, "secrets", None)
             else "(none)"
         )
-        st.metric(label="Secret Manager", value=sm_name)
+        st.metric(label="Secret Storage", value=sm_name)
 
     st.markdown("---")
 
@@ -138,7 +140,7 @@ def project_settings_and_logout():
     # Danger zone with clear CTA
     st.markdown("## ❗ Danger Zone")
     st.warning(
-        "Closing the project will remove the current session from memory and you will be logged out."
+        "Closing the project will remove the current workspace from memory and you will be logged out."
     )
 
     col_confirm, col_cancel = st.columns([1, 1])
@@ -146,7 +148,7 @@ def project_settings_and_logout():
         if st.button(
             "Close Project",
             key="close_project",
-            help="Close and remove the current project session",
+            help="Close and remove the current project workspace",
             width="stretch",
         ):
             st.session_state.is_logged_in = False
@@ -194,7 +196,7 @@ def project_settings_and_logout():
         r3.metric("OS", f"{os_name} {os_ver}")
 
         # --- Secret manager details ---
-        sm = getattr(session, "secrets", None)
+        sm = getattr(workspace, "secrets", None)
         sm_cls = sm.__class__.__name__ if sm else "(none)"
         sm_ok = sm.is_working() if sm else False
         st.markdown("#### Secret Manager")
@@ -225,7 +227,9 @@ def project_settings_and_logout():
         for bundle in infra.bundles:
             with st.container(border=True):
                 st.markdown(
-                    f"**Server:** `{bundle.server.ip}` • Backend: `{bundle.server.backend}` • State: `{bundle.server.state}`"
+                    f"**Server:** `{bundle.server.ip}` • "
+                    f"Backend: `{bundle.server.backend}` • "
+                    f"State: `{bundle.server.state}`"
                 )
                 if bundle.services:
                     for svc in bundle.services:
@@ -251,11 +255,12 @@ def project_settings_and_logout():
             "python": py_ver,
             "os": f"{os_name} {os_ver}",
             "project": {
-                "name": session.project.name,
-                "version": getattr(session.project, "version", ""),
-                "created_at": session.project.created_at,
-                "last_opened_at": session.project.last_opened_at,
-                "secret_manager_class": session.project.secret_manager_class,
+                "name": workspace.name,
+                "version": workspace.version,
+                "created_at": workspace.created_at,
+                "last_opened_at": workspace.last_opened_at,
+                "data_source": workspace.data_source_kind,
+                "project_path": str(workspace.path),
             },
             "secret_manager": {
                 "class": sm_cls,
@@ -286,7 +291,7 @@ def project_settings_and_logout():
         st.download_button(
             "Download Debug Snapshot",
             data=json.dumps(debug, indent=2).encode("utf-8"),
-            file_name=f"mlox_debug_{session.project.name}.json",
+            file_name=f"mlox_debug_{workspace.name}.json",
             mime="application/json",
             width="stretch",
         )

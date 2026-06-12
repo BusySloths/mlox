@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_server
 import uuid
 import time
 import socket
@@ -170,7 +171,7 @@ def ubuntu_docker_server(multipass_instance):
         "${MLOX_ROOT}": "root",
         "${MLOX_ROOT_PW}": "pass",
     }
-    bundle = infra.add_server(config, params)
+    bundle = add_server(infra, config, params)
     if not bundle:
         pytest.fail("Failed to add server to infrastructure")
     server = bundle.server
@@ -230,7 +231,7 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
         "${MLOX_ROOT_PRIVATE_KEY}": private_key,
         "${MLOX_ROOT_PASSPHRASE}": passphrase,
     }
-    bundle = infra.add_server(config, params)
+    bundle = add_server(infra, config, params)
     if not bundle:
         pytest.fail("Failed to add simple server to infrastructure")
     server = bundle.server
@@ -258,7 +259,7 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
 #         "${MLOX_ROOT}": "root",
 #         "${MLOX_ROOT_PW}": "pass",
 #     }
-#     bundle = infra.add_server(config, params)
+#     bundle = add_server(infra, config, params)
 #     if not bundle:
 #         pytest.fail("Failed to add server to infrastructure")
 #     server = bundle.server

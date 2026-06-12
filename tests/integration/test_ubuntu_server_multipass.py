@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_server
 import logging
 import shutil
 import uuid
@@ -44,7 +45,7 @@ def test_multipass_ubuntu_server_lifecycle(template, expected_backend):
         "${K3S_CONTROLLER_TOKEN}": "",
         "${K3S_CONTROLLER_UUID}": "",
     }
-    bundle = infra.add_server(config, params)
+    bundle = add_server(infra, config, params)
     assert bundle is not None
     server = bundle.server
     try:

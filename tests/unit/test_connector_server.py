@@ -1,5 +1,7 @@
 from mlox.config import get_stacks_path, load_config
+from mlox.application.use_cases import servers
 from mlox.infra import Infrastructure
+from mlox.project.state import WorkspaceState
 from mlox.server import ServerCapability
 from mlox.servers.connector.virtual import VirtualConnectorServer
 from mlox.ui.registry import clear_handlers
@@ -51,8 +53,29 @@ def test_connector_server_config_can_be_added_and_filtered():
     assert config is not None
 
     infra = Infrastructure()
-    first_bundle = infra.add_server(config, {"${MLOX_IP}": "mlox-connector-first"})
-    second_bundle = infra.add_server(config, {"${MLOX_IP}": "mlox-connector-second"})
+    project = WorkspaceState(name="demo", infrastructure=infra)
+    first = servers.add_server(
+        project,
+        lambda path: config,
+        template_path="connector",
+        ip="mlox-connector-first",
+        port=0,
+        root_user="",
+        root_password="",
+        extra_params={"${MLOX_IP}": "mlox-connector-first"},
+    )
+    second = servers.add_server(
+        project,
+        lambda path: config,
+        template_path="connector",
+        ip="mlox-connector-second",
+        port=0,
+        root_user="",
+        root_password="",
+        extra_params={"${MLOX_IP}": "mlox-connector-second"},
+    )
+    first_bundle = first.data["bundle"]
+    second_bundle = second.data["bundle"]
 
     assert first_bundle is not None
     assert second_bundle is not None

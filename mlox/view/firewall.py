@@ -165,7 +165,10 @@ def firewall() -> None:
     )
 
     try:
-        infra = cast(Infrastructure, st.session_state.mlox.infra)
+        infra = cast(
+            Infrastructure,
+            st.session_state.mlox.infrastructure,
+        )
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()

@@ -4,7 +4,8 @@ import streamlit as st
 
 from typing import Dict, cast
 
-from mlox.infra import Infrastructure, Bundle, ModelRegistry
+from mlox.infra import Infrastructure, Bundle
+from mlox.service import AbstractModelRegistryService
 from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ def setup(infra: Infrastructure, bundle: Bundle) -> Dict | None:
         )
         return None
 
-    svc = cast(ModelRegistry, svc)  # type: ignore
+    svc = cast(AbstractModelRegistryService, svc)  # type: ignore
     models = svc.list_models()
     my_model = st.selectbox(
         "Select Model to Deploy",

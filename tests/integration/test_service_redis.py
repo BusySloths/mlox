@@ -1,3 +1,4 @@
+from tests.integration.helpers import add_service
 import logging
 import pytest
 import redis
@@ -23,7 +24,7 @@ def install_redis_service(ubuntu_docker_server):
     # Load Redis stack config
     config = load_config(get_stacks_path(), "/redis", "mlox.redis.8.yaml")
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params={})
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
         pytest.skip("Failed to add Redis service from config")
 

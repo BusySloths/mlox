@@ -40,6 +40,14 @@ def test_registry_streamlit_settings_handler_is_registered(monkeypatch):
     )
     assert callable(handler)
 
+    secret_manager_handler = get_handler(
+        config_id="openbao-docker",
+        frontend="streamlit",
+        function_name="settings",
+    )
+    assert callable(secret_manager_handler)
+    assert secret_manager_handler.is_secret_manager_settings
+
     clear_handlers()
 
 

@@ -6,7 +6,7 @@ What this demonstrates:
 - Emit spans, metrics, and logs in one short run
 
 Prerequisites:
-- Environment variables: ``MLOX_PROJECT_NAME`` and ``MLOX_PROJECT_PASSWORD``
+- Environment variables: ``MLOX_PROJECT_PATH`` and ``MLOX_PROJECT_PASSWORD``
 - A running OpenTelemetry Collector service in your project
 """
 
@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import time
 
-from mlox.session import MloxSession
+from mlox.project import ProjectWorkspace
 from mlox.services.otel.client import OTelClient
 
-from examples.load_project_data import load_mlox_session
+from examples.load_project_data import load_project_workspace
 
 
-def _otel_client(session: MloxSession) -> OTelClient:
-    monitors = session.infra.filter_by_group("monitor")
+def _otel_client(workspace: ProjectWorkspace) -> OTelClient:
+    monitors = workspace.infrastructure.filter_by_group("monitor")
     if not monitors:
         raise RuntimeError("No monitor services found. Start an OTEL collector first.")
 
@@ -43,8 +43,8 @@ def _otel_client(session: MloxSession) -> OTelClient:
 
 
 def main() -> None:
-    session = load_mlox_session()
-    client = _otel_client(session)
+    workspace = load_project_workspace()
+    client = _otel_client(workspace)
 
     # Traces: parent + nested span
     with client.span(

@@ -29,14 +29,15 @@ MLOX models the infrastructure around an ML/AI product as a connected topology o
 | **TUI** (terminal UI) | [`mlox/tui/`](https://github.com/BusySloths/mlox/blob/main/mlox/tui/) |
 | **Web App** (Streamlit) | [`mlox/view/`](https://github.com/BusySloths/mlox/blob/main/mlox/view/) |
 
-The shared architecture is centered on a session container and session-based use-cases:
+The shared architecture is centered on one public project workspace:
 
 | Object | File | Role |
 |--------|------|------|
-| Use-case modules | [`mlox/application/use_cases/`](https://github.com/BusySloths/mlox/blob/main/mlox/application/use_cases/) | Session-based application actions that should be shared by all UIs |
-| `MloxSession` | [`mlox/session.py`](https://github.com/BusySloths/mlox/blob/main/mlox/session.py) | Project/session container holding metadata, secret manager, and infrastructure |
+| `ProjectWorkspace` | [`mlox/project/workspace.py`](https://github.com/BusySloths/mlox/blob/main/mlox/project/workspace.py) | Stateful public mutation API and commit boundary |
+| Use-case modules | [`mlox/application/use_cases/`](https://github.com/BusySloths/mlox/blob/main/mlox/application/use_cases/) | Project-based server, service, and model operations |
+| `SqlCipherRepository` | [`mlox/project/repository.py`](https://github.com/BusySloths/mlox/blob/main/mlox/project/repository.py) | Internal SQLCipher persistence |
+| `WorkspaceState` | [`mlox/project/state.py`](https://github.com/BusySloths/mlox/blob/main/mlox/project/state.py) | Internal metadata and infrastructure state |
 | `Infrastructure` | [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py) | Project topology made of bundles, compute, and services |
-| Application facade | [`mlox/application/facade.py`](https://github.com/BusySloths/mlox/blob/main/mlox/application/facade.py) | Current stateless adapter used mainly by the CLI and callers that need session loading/caching |
 
 ```text
 CLI     TUI     Streamlit Web UI     Other UIs
@@ -45,16 +46,15 @@ CLI     TUI     Streamlit Web UI     Other UIs
     +----+-------------+--------------+
                     |
                     v
-      `mlox/application/use_cases/*`
-         shared session-based logic
+              `ProjectWorkspace`
+           shared mutation boundary
                     |
                     v
-              `MloxSession`
-   project + encrypted secret manager + infrastructure
+     internal state + SQLCipher repository
              /                               \
             v                                 v
- secret-manager backend                `Infrastructure`
- (InMemory/TinySM/OpenBao/GCP)      topology for one project
+ embedded SQLCipher storage                `Infrastructure`
+ (metadata + topology + secrets)      topology for one project
                                             |
                                             v
                            `Bundle` = compute/server + services[*]
@@ -120,10 +120,10 @@ Key tasks:
 
 ```
 mlox/
-├── application/    # Shared use cases and infrastructure operations
+├── application/    # Stateful application API and shared use cases
 ├── cli/            # Typer CLI package (root app + command modules)
 ├── execution/      # Backend and system execution helpers
-├── migrations/     # Persisted project format migrations
+├── project/        # Aggregate, SQLCipher repository, and secret adapter
 ├── servers/        # Local, connector, and Ubuntu compute backends
 ├── services/       # Deployable ML/AI services and integrations
 ├── tui/            # Textual terminal UI + TUI-specific UI handlers
@@ -131,7 +131,6 @@ mlox/
 ├── view/           # Streamlit web UI + Streamlit-specific UI handlers
 ├── assets/         # Runtime templates and packaged assets
 ├── resources/      # Images and other static resources
-├── session.py      # Runtime state & persistence
 ├── infra.py        # Service/server graph
 ├── config.py       # YAML loading + plugin discovery + UI handler lookup
 └── executors.py    # Remote task executor layer used by services/servers
@@ -157,22 +156,26 @@ Frontend-specific UI handlers are no longer modeled in YAML. They live in fronte
 
 ## 4. Core Runtime Data Model
 
-### `MloxSession` — Central Entry Point
+### `ProjectWorkspace`
 
-[`mlox/session.py`](https://github.com/BusySloths/mlox/blob/main/mlox/session.py)
+[`mlox/project/workspace.py`](https://github.com/BusySloths/mlox/blob/main/mlox/project/workspace.py)
 
-`MloxSession` is the main runtime object. It:
+`ProjectWorkspace` is the only public project runtime API. It:
 
-- Loads or creates a project
-- Wires the secret manager
-- Loads and saves the project infrastructure
-- Gives the runtime one place to find project metadata, secrets, and topology
+- Opens an existing project or explicitly creates a new one
+- Dispatches project-based use cases
+- Commits successful mutations once
+- Reloads internal state after failed mutations
+- Exposes project-backed secrets
+- Supports explicit `commit()` and `reload()` for direct SDK changes
 
 ### `Infrastructure` — Active Project Topology
 
 [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py)
 
-`Infrastructure` holds one project's server bundles and services for a given session.
+`Infrastructure` holds one project's server bundles and services. It provides
+queries, serialization, config hydration, and service lookup binding, but no
+application mutation wrappers.
 
 ### `Bundle` — One Compute plus Its Services
 
@@ -187,25 +190,33 @@ This makes `Infrastructure` the topology root for "what runs where".
 ### Persistent Storage
 
 - Runtime structures are **dataclass-based** and serialized to JSON-compatible dicts.
-- Project and infrastructure data are stored through a **secret manager** abstraction.
-- A session always has a secret manager configured (falls back to in-memory if no external store is available).
+- Project metadata, infrastructure, the active secret-manager pointer, and
+  embedded secrets are stored transactionally in an encrypted **SQLCipher**
+  `.mlox` database.
+- A workspace exposes exactly one active secret-manager-compatible adapter.
+
+SQLModel is intentionally deferred while the infrastructure snapshot remains
+authoritative. If partial queries, concurrent updates, or PostgreSQL become active
+requirements, add separate persistence records rather than converting runtime
+server and service classes into ORM objects.
 
 ---
 
 ## 5. Secret Manager Model
 
-MLOX supports multiple secret-manager backends:
+MLOX supports one active provider selected from:
 
 | Type | Implementation |
 |------|---------------|
-| In-memory (dev/testing) | `InMemorySecretManager` |
+| Embedded project storage | `EmbeddedSecretManager` |
 | File-based lightweight | `TinySecretManager` |
 | OpenBao (open-source Vault) | [`mlox/services/openbao/`](https://github.com/BusySloths/mlox/blob/main/mlox/services/openbao/) |
 | GCP Secret Manager | [`mlox/services/gcp/secret_manager.py`](https://github.com/BusySloths/mlox/blob/main/mlox/services/gcp/secret_manager.py) |
 
-`MloxProject` metadata stores which secret manager class is used and how to reconnect to it across sessions.
-
-In practice, `MloxSession` is the persistence boundary around `Infrastructure`, and the secret manager is the encrypted key-value store behind that boundary.
+Embedded storage is selected initially. Changing providers copies and verifies
+secrets before persisting the service UUID. If the selected external provider is
+unavailable, it remains active and no fallback occurs. Embedded storage is always
+visible but is not installable and cannot export application keyfiles.
 
 ---
 
@@ -217,12 +228,12 @@ The intended control flow is:
 
 - UI layer (`cli`, `tui`, `view`, future UIs)
 - shared application layer (`mlox/application/use_cases/*`)
-- session container (`MloxSession`)
+- public runtime and mutation boundary (`ProjectWorkspace`)
+- internal persistence boundary (`SqlCipherRepository`)
 - topology root (`Infrastructure`)
 
-The CLI currently reaches that shared layer through `mlox/application/facade.py`. TUI and Streamlit should converge on the same use-cases so behavior stays aligned across interfaces.
-
-`Infrastructure` is primarily the topology model, but it still exposes compatibility wrappers that delegate some lifecycle work into `mlox/application/infrastructure_ops.py`.
+CLI commands open a `ProjectWorkspace` per invocation. TUI and Streamlit retain
+one workspace in runtime state. All three interfaces share the same use cases.
 
 For custom setup/settings panels, the ownership moved to the frontend packages. Built-in Streamlit and TUI handlers are bootstrapped into `mlox/ui/registry.py`, which keeps deployable configs UI-agnostic and creates a later extension point for plugin UI contributions.
 
@@ -248,9 +259,8 @@ Anything that executes on a compute/server should route through the execution la
 | Area | Notes |
 |------|-------|
 | `mlox/scheduler.py` | Effectively legacy/obsolete — not part of the active architecture |
-| `mlox/application/use_cases/*` | Important shared session-based application layer; keep growing behavior here instead of reintroducing broad operations modules |
-| `mlox/application/facade.py` | Thin stateless adapter that loads/caches session context and dispatches to `application/use_cases/*` |
-| `mlox/application/infrastructure_ops.py` | Orchestration helpers used by session-based use-cases for setup/teardown-style side effects |
+| `mlox/application/use_cases/*` | Project-based operations; persistence stays outside use cases |
+| `mlox/project/workspace.py` | Stateful `ProjectWorkspace` with commit/reload behavior |
 | YAML `requirements` | Present in the config schema but **not yet fully enforced** at runtime |
 | UI registration | Frontend-owned via `mlox/ui/registry.py`; keep UI definitions out of service/server YAML |
 | Server capabilities | Already explicit in code/config |

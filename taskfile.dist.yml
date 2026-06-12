@@ -16,6 +16,8 @@ vars:
     - tests:integration:run     : run integration tests (requires Multipass)
     - tests:integration:cleanup : clean up test Multipass VMs
     - docker:build        : build local Docker image
+    - project:new         : create an encrypted .mlox project
+    - project:migrate     : copy a legacy project into SQLCipher
 
     Get started by following these steps:
     1) Install Task: https://taskfile.dev/installation
@@ -319,3 +321,17 @@ tasks:
         fi
       - "export MLOX_TUI=true; textual serve --dev mlox/tui/app.py"
       - "export MLOX_TUI=false"
+
+  project:new:
+    desc: Create an encrypted .mlox project (NAME=demo PASSWORD=...)
+    requires:
+      vars: [NAME, PASSWORD]
+    cmds:
+      - 'mlox project new "{{.NAME}}" --password "{{.PASSWORD}}"'
+
+  project:migrate:
+    desc: Copy a legacy .project into SQLCipher (SOURCE=... DESTINATION=... OLD_PASSWORD=... NEW_PASSWORD=...)
+    requires:
+      vars: [SOURCE, DESTINATION, OLD_PASSWORD, NEW_PASSWORD]
+    cmds:
+      - 'python scripts/migrate_legacy_project.py "{{.SOURCE}}" "{{.DESTINATION}}" --legacy-password "{{.OLD_PASSWORD}}" --new-password "{{.NEW_PASSWORD}}"'

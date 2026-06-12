@@ -1,3 +1,5 @@
+from tests.integration.helpers import add_service
+
 """Integration tests for LiteLLM + Ollama service."""
 
 import logging
@@ -26,7 +28,7 @@ def install_litellm_service(ubuntu_docker_server):
     # Test with minimal model selection for faster tests
     params = {"${OLLAMA_MODELS}": ["tinyllama"]}
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
         pytest.skip("Failed to add LiteLLM service from config")
 
@@ -95,7 +97,7 @@ def test_litellm_multiple_models_selection(ubuntu_docker_server):
     # Test with multiple models
     params = {"${OLLAMA_MODELS}": ["tinyllama", "qwen2.5:0.5b"]}
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
         pytest.skip("Failed to add LiteLLM service from config")
 
@@ -120,7 +122,7 @@ def test_litellm_no_models_selection(ubuntu_docker_server):
     # Test with empty model selection
     params = {"${OLLAMA_MODELS}": []}
 
-    bundle_added = infra.add_service(ubuntu_docker_server.ip, config, params=params)
+    bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params=params)
     if not bundle_added:
         pytest.skip("Failed to add LiteLLM service from config")
 

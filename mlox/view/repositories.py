@@ -4,13 +4,13 @@ import streamlit as st
 from datetime import datetime
 from typing import cast
 
-# from mlox.session import MloxSession
+# from mlox.project import ProjectWorkspace
 from mlox.infra import Infrastructure
 
 
 def save_infra():
     with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.save_infrastructure()
+        st.session_state.mlox.commit()
 
 
 def manage_repositories():
@@ -20,7 +20,10 @@ def manage_repositories():
 
     infra = None
     try:
-        infra = cast(Infrastructure, st.session_state.mlox.infra)
+        infra = cast(
+            Infrastructure,
+            st.session_state.mlox.infrastructure,
+        )
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()
