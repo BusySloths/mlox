@@ -5,7 +5,7 @@ from unittest import mock
 from typer.testing import CliRunner
 
 from mlox import cli
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 from mlox.application.result import OperationResult
 
 typer = pytest.importorskip("typer")
@@ -15,7 +15,7 @@ runner = CliRunner()
 def _patch_application(monkeypatch, method_name, result):
     method = mock.Mock(return_value=result)
     application = SimpleNamespace(**{method_name: method})
-    monkeypatch.setattr(ProjectApplication, "open", mock.Mock(return_value=application))
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
     return method
 
 
@@ -64,7 +64,7 @@ def test_server_list_outputs_servers(monkeypatch):
     )
     mock_list = mock.Mock(return_value=operation_result)
     application = SimpleNamespace(list_servers=mock_list)
-    monkeypatch.setattr(ProjectApplication, "open", mock.Mock(return_value=application))
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
 
     result = runner.invoke(cli.app, ["server", "list", "proj", "--password", "pw"])
 
@@ -80,7 +80,7 @@ def test_server_add_failure(monkeypatch):
     operation_result = OperationResult(False, 1, "Server template not found.")
     mock_add = mock.Mock(return_value=operation_result)
     application = SimpleNamespace(add_server=mock_add)
-    monkeypatch.setattr(ProjectApplication, "open", mock.Mock(return_value=application))
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
 
     result = runner.invoke(
         cli.app,
@@ -108,7 +108,7 @@ def test_server_add_success(monkeypatch):
     operation_result = OperationResult(True, 0, "Added server 1.2.3.4.")
     mock_add = mock.Mock(return_value=operation_result)
     application = SimpleNamespace(add_server=mock_add)
-    monkeypatch.setattr(ProjectApplication, "open", mock.Mock(return_value=application))
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
 
     result = runner.invoke(
         cli.app,
@@ -176,7 +176,7 @@ def test_server_configs_list_no_configs(monkeypatch):
         True, 0, "No server configs found.", {"configs": []}
     )
     monkeypatch.setattr(
-        ProjectApplication,
+        ProjectWorkspace,
         "list_server_configs",
         mock.Mock(return_value=operation_result),
     )
@@ -191,7 +191,7 @@ def test_server_configs_list_outputs(monkeypatch):
     payload = {"configs": [{"id": "srv", "path": "servers/srv.yaml"}]}
     operation_result = OperationResult(True, 0, "Server configs retrieved.", payload)
     monkeypatch.setattr(
-        ProjectApplication,
+        ProjectWorkspace,
         "list_server_configs",
         mock.Mock(return_value=operation_result),
     )
@@ -210,7 +210,7 @@ def test_service_configs_list_no_configs(monkeypatch):
         True, 0, "No service configs found.", {"configs": []}
     )
     monkeypatch.setattr(
-        ProjectApplication,
+        ProjectWorkspace,
         "list_service_configs",
         mock.Mock(return_value=operation_result),
     )
@@ -225,7 +225,7 @@ def test_service_configs_list_outputs(monkeypatch):
     payload = {"configs": [{"id": "svc", "path": "services/svc.yaml"}]}
     operation_result = OperationResult(True, 0, "Service configs retrieved.", payload)
     monkeypatch.setattr(
-        ProjectApplication,
+        ProjectWorkspace,
         "list_service_configs",
         mock.Mock(return_value=operation_result),
     )
@@ -262,7 +262,7 @@ def test_project_new_prints_canonical_project_path_without_password(monkeypatch,
         )
     )
     monkeypatch.setattr(
-        ProjectApplication,
+        ProjectWorkspace,
         "create",
         mock.Mock(return_value=application),
     )

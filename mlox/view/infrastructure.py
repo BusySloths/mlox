@@ -4,7 +4,7 @@ import streamlit as st
 
 from typing import cast, List, Dict, Any
 
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 from mlox.infra import Infrastructure
 from mlox.config import load_all_server_configs
 from mlox.view.utils import plot_config_nicely
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def commit_project():
     with st.spinner("Saving project..."):
-        st.session_state.mlox.session.commit()
+        st.session_state.mlox.commit()
 
 
 # Lightweight chips styling to match Services templates
@@ -273,7 +273,7 @@ def tab_server_management(infra: Infrastructure):
 
         if c2.button("Delete", type="primary"):
             st.info(f"Backend for server with IP {selected_server} will be deleted.")
-            application = cast(ProjectApplication, st.session_state.mlox)
+            application = cast(ProjectWorkspace, st.session_state.mlox)
             result = application.teardown_server(ip=bundle.server.ip)
             if not result.success:
                 st.error(result.message)
@@ -289,7 +289,7 @@ def tab_server_management(infra: Infrastructure):
         if c1.button("Setup", disabled=not bundle.server.state == "un-initialized"):
             st.info(f"Initialize the server with IP {selected_server}.")
             with st.spinner("Initializing server...", show_time=True):
-                application = cast(ProjectApplication, st.session_state.mlox)
+                application = cast(ProjectWorkspace, st.session_state.mlox)
                 result = application.setup_server(ip=bundle.server.ip)
                 if not result.success:
                     st.error(result.message)
@@ -416,7 +416,7 @@ def tab_server_templates(infra: Infrastructure):
                 disabled=params is None,
             ):
                 st.info(f"Adding server {config.name} {config.version}.")
-                application = cast(ProjectApplication, st.session_state.mlox)
+                application = cast(ProjectWorkspace, st.session_state.mlox)
                 result = application.add_server_from_config(config, params or {})
                 if result.success:
                     st.success(result.message)
@@ -428,7 +428,7 @@ def tab_server_templates(infra: Infrastructure):
 tab_installed, tab_avail = st.tabs(["Server Management", "Templates"])
 infra = None
 try:
-    infra = cast(Infrastructure, st.session_state.mlox.project.infrastructure)
+    infra = cast(Infrastructure, st.session_state.mlox.infrastructure)
 except BaseException:
     st.error("Could not load infrastructure configuration.")
     st.stop()

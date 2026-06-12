@@ -15,7 +15,7 @@ from typing import Any
 from cryptography.fernet import Fernet
 
 from mlox.infra import Infrastructure
-from mlox.project.store import ProjectDatabase, resolve_project_path
+from mlox.project.repository import SqlCipherRepository, resolve_project_path
 from mlox.utils import _get_encryption_key
 
 INFRASTRUCTURE_SECRET = "MLOX_CONFIG_INFRASTRUCTURE"
@@ -52,7 +52,7 @@ def migrate_legacy_project(
     if not isinstance(project, dict):
         raise ValueError("Legacy project metadata is invalid.")
 
-    store = ProjectDatabase.create(
+    store = SqlCipherRepository.create(
         destination, new_password, project.get("name") or source_path.stem
     )
     try:

@@ -25,23 +25,23 @@ if TYPE_CHECKING:
 
 PROJECT_SUFFIX = ".mlox"
 PROJECT_FORMAT_VERSION = 1
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PLAINTEXT_TEST_ENV = "MLOX_ALLOW_PLAINTEXT_SQLITE"
 
 
-class ProjectDatabaseError(RuntimeError):
-    """Base error for project database failures."""
+class ProjectStorageError(RuntimeError):
+    """Base error for project storage failures."""
 
 
-class ProjectAlreadyExistsError(ProjectDatabaseError):
+class ProjectAlreadyExistsError(ProjectStorageError):
     """Raised when creating over an existing project."""
 
 
-class ProjectNotFoundError(ProjectDatabaseError):
+class ProjectNotFoundError(ProjectStorageError):
     """Raised when a project file does not exist."""
 
 
-class InvalidProjectPasswordError(ProjectDatabaseError):
+class InvalidProjectPasswordError(ProjectStorageError):
     """Raised when a project cannot be decrypted or validated."""
 
 
@@ -68,7 +68,7 @@ def _connect(path: Path):
 
         return sqlcipher.connect(str(path))
     except ImportError as exc:
-        raise ProjectDatabaseError(
+        raise ProjectStorageError(
             "SQLCipher support is unavailable. Install the sqlcipher3 package."
         ) from exc
 
@@ -84,7 +84,7 @@ def _password_check(password: str, salt_hex: str) -> str:
     ).hex()
 
 
-class ProjectDatabase:
+class SqlCipherRepository:
     """Repository for one encrypted MLOX project file."""
 
     def __init__(
@@ -103,13 +103,15 @@ class ProjectDatabase:
 
     @classmethod
     def create(cls, path: str | Path, password: str, name: str | None = None):
-        store = cls(path, password)
-        if store.path.exists():
-            raise ProjectAlreadyExistsError(f"Project already exists: {store.path}")
-        store.path.parent.mkdir(parents=True, exist_ok=True)
+        repository = cls(path, password)
+        if repository.path.exists():
+            raise ProjectAlreadyExistsError(
+                f"Project already exists: {repository.path}"
+            )
+        repository.path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with store.connection() as conn:
-                store._create_schema(conn)
+            with repository.connection() as conn:
+                repository._create_schema(conn)
                 salt = os.urandom(16).hex()
                 conn.execute(
                     "UPDATE schema_info SET key_salt=?, key_check=? WHERE singleton=1",
@@ -118,7 +120,7 @@ class ProjectDatabase:
                 project_id = str(uuid4())
                 data_source_id = str(uuid4())
                 now = utcnow()
-                project_name = name or store.path.stem
+                project_name = name or repository.path.stem
                 conn.execute(
                     "INSERT INTO projects "
                     "(id, name, description, format_version, application_version, created_at, "
@@ -135,9 +137,9 @@ class ProjectDatabase:
                     "VALUES (?, ?, ?, ?, ?, ?)",
                     (data_source_id, project_id, "sqlcipher", "self", "{}", now),
                 )
-            return store.open()
+            return repository.open()
         except Exception:
-            store.discard()
+            repository.discard()
             raise
 
     def open(self):
@@ -149,13 +151,14 @@ class ProjectDatabase:
                     "SELECT schema_version, key_salt, key_check FROM schema_info WHERE singleton = 1"
                 ).fetchone()
                 if row is None or int(row[0]) > SCHEMA_VERSION:
-                    raise ProjectDatabaseError("Unsupported project schema version.")
+                    raise ProjectStorageError("Unsupported project schema version.")
                 if row[1] is not None and _password_check(self.password, row[1]) != row[2]:
                     raise InvalidProjectPasswordError("Invalid project password.")
+                self._upgrade_schema(conn, int(row[0]))
                 conn.execute(
                     "UPDATE projects SET last_opened_at = ?", (utcnow(),)
                 )
-        except ProjectDatabaseError:
+        except ProjectStorageError:
             raise
         except Exception as exc:
             raise InvalidProjectPasswordError(
@@ -171,7 +174,7 @@ class ProjectDatabase:
             if os.environ.get(PLAINTEXT_TEST_ENV) != "1":
                 cipher = conn.execute("PRAGMA cipher_version").fetchone()
                 if not cipher or not cipher[0]:
-                    raise ProjectDatabaseError("The database driver is not SQLCipher-enabled.")
+                    raise ProjectStorageError("The database driver is not SQLCipher-enabled.")
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA busy_timeout = 5000")
             conn.execute("PRAGMA journal_mode = DELETE")
@@ -198,7 +201,7 @@ class ProjectDatabase:
                 key_salt TEXT,
                 key_check TEXT
             );
-            INSERT INTO schema_info VALUES (1, 1, CURRENT_TIMESTAMP, NULL, NULL);
+            INSERT INTO schema_info VALUES (1, 2, CURRENT_TIMESTAMP, NULL, NULL);
 
             CREATE TABLE projects (
                 id TEXT PRIMARY KEY,
@@ -208,7 +211,9 @@ class ProjectDatabase:
                 application_version TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 last_opened_at TEXT NOT NULL,
-                active_data_source_id TEXT NOT NULL
+                active_data_source_id TEXT NOT NULL,
+                active_secret_manager_kind TEXT NOT NULL DEFAULT 'embedded',
+                active_secret_manager_service_uuid TEXT
             );
             CREATE TABLE data_sources (
                 id TEXT PRIMARY KEY,
@@ -268,6 +273,21 @@ class ProjectDatabase:
             """
         )
 
+    @staticmethod
+    def _upgrade_schema(conn: Any, current_version: int) -> None:
+        if current_version < 2:
+            conn.execute(
+                "ALTER TABLE projects ADD COLUMN "
+                "active_secret_manager_kind TEXT NOT NULL DEFAULT 'embedded'"
+            )
+            conn.execute(
+                "ALTER TABLE projects ADD COLUMN active_secret_manager_service_uuid TEXT"
+            )
+            conn.execute(
+                "UPDATE schema_info SET schema_version=2, applied_at=CURRENT_TIMESTAMP "
+                "WHERE singleton=1"
+            )
+
     def project_id(self, conn: Any | None = None) -> str:
         if conn is not None:
             return str(conn.execute("SELECT id FROM projects LIMIT 1").fetchone()[0])
@@ -275,13 +295,14 @@ class ProjectDatabase:
             return self.project_id(owned)
 
     def load(self):
-        """Load the complete project aggregate."""
-        from mlox.project.aggregate import ProjectAggregate
+        """Load the complete workspace state."""
+        from mlox.project.state import WorkspaceState
 
         with self.connection() as conn:
             row = conn.execute(
                 "SELECT p.id, p.name, p.description, p.application_version, p.created_at, "
-                "p.last_opened_at, d.id, d.kind, d.location, d.config_json "
+                "p.last_opened_at, d.id, d.kind, d.location, d.config_json, "
+                "p.active_secret_manager_kind, p.active_secret_manager_service_uuid "
                 "FROM projects p JOIN data_sources d ON d.id = p.active_data_source_id"
             ).fetchone()
             infra_row = conn.execute(
@@ -300,7 +321,7 @@ class ProjectDatabase:
                 ),
             )
         )
-        return ProjectAggregate(
+        return WorkspaceState(
             id=row[0],
             name=row[1],
             descr=row[2],
@@ -311,6 +332,8 @@ class ProjectDatabase:
             data_source_kind=row[7],
             data_source_location=row[8],
             data_source_config=json.loads(row[9]),
+            secret_manager_kind=row[10],
+            secret_manager_service_uuid=row[11],
             infrastructure=infrastructure,
         )
 
@@ -325,13 +348,16 @@ class ProjectDatabase:
     def _save_project(conn: Any, project: Any) -> None:
         conn.execute(
             "UPDATE projects SET name=?, description=?, application_version=?, "
-            "created_at=?, last_opened_at=? WHERE id=?",
+            "created_at=?, last_opened_at=?, active_secret_manager_kind=?, "
+            "active_secret_manager_service_uuid=? WHERE id=?",
             (
                 project.name,
                 project.descr,
                 project.version,
                 project.created_at,
                 project.last_opened_at,
+                project.secret_manager_kind,
+                project.secret_manager_service_uuid,
                 project.id,
             ),
         )

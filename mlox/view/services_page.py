@@ -3,9 +3,9 @@ import streamlit as st
 
 from typing import cast
 
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 from mlox.config import load_all_service_configs
-from mlox.secret_manager import AbstractSecretManagerService
+from mlox.service import AbstractSecretManagerService
 from mlox.view.logs import show_service_logs_ui
 
 
@@ -39,7 +39,7 @@ st.markdown(
 
 def commit_project():
     with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.session.commit()
+        st.session_state.mlox.commit()
 
 
 def _state_badge(state: str) -> str:
@@ -87,8 +87,8 @@ def installed_services():
     )
     infra = None
     try:
-        application = cast(ProjectApplication, st.session_state.mlox)
-        infra = application.project.infrastructure
+        application = cast(ProjectWorkspace, st.session_state.mlox)
+        infra = application.infrastructure
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()
@@ -292,13 +292,15 @@ def installed_services():
         if callable_settings_func and svc.state == "running":
             with st.expander("Settings"):
                 if isinstance(svc, AbstractSecretManagerService) and st.button(
-                    "Import secrets into project",
+                    "Use as active secret manager",
                     icon=":material/key:",
                     key=f"set-sm-{svc.uuid}",
                 ):
-                    application.session.import_secrets(svc.get_secret_manager(infra))
-                    commit_project()
-                    st.success(f"Imported secrets from {svc.name} into the encrypted project.")
+                    result = application.set_secret_manager(svc.uuid)
+                    if result.success:
+                        st.success(result.message)
+                    else:
+                        st.error(result.message)
                 callable_settings_func(infra, bndl, svc)
 
         # Show logs UI when the service is running and the service template
@@ -342,8 +344,8 @@ def available_services():
     st.markdown("### Templates")
     infra = None
     try:
-        application = cast(ProjectApplication, st.session_state.mlox)
-        infra = application.project.infrastructure
+        application = cast(ProjectWorkspace, st.session_state.mlox)
+        infra = application.infrastructure
     except BaseException:
         st.error("Could not load infrastructure configuration.")
         st.stop()
@@ -443,7 +445,7 @@ def _render_add_service_dialog():
     config = st.session_state.get("dialog_config")
     supported_backends = st.session_state.get("dialog_backends", [])
     infra = st.session_state.get("dialog_infra")
-    application = cast(ProjectApplication, st.session_state.mlox)
+    application = cast(ProjectWorkspace, st.session_state.mlox)
 
     if not config or not infra:
         st.error("Dialog configuration error")

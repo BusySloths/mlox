@@ -4,12 +4,12 @@ from typing import Any, Dict, List, Optional
 
 from mlox.application.result import OperationResult
 from mlox.config import get_stacks_path
-from mlox.project.aggregate import ProjectAggregate
+from mlox.project.state import WorkspaceState
 from mlox.service import AbstractService
 from mlox.utils import auto_map_ports, generate_pw, generate_username
 
 
-def list_services(project: ProjectAggregate) -> OperationResult:
+def list_services(project: WorkspaceState) -> OperationResult:
     payload: List[Dict[str, Any]] = []
     for bundle in project.infrastructure.bundles:
         for service in bundle.services:
@@ -43,7 +43,7 @@ def list_services(project: ProjectAggregate) -> OperationResult:
 
 
 def add_service(
-    project: ProjectAggregate,
+    project: WorkspaceState,
     load_service_config,
     *,
     server_ip: str,
@@ -106,7 +106,7 @@ def add_service(
     )
 
 
-def setup_service(project: ProjectAggregate, *, name: str) -> OperationResult:
+def setup_service(project: WorkspaceState, *, name: str) -> OperationResult:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -120,7 +120,7 @@ def setup_service(project: ProjectAggregate, *, name: str) -> OperationResult:
     return OperationResult(True, 0, f"Service {name} set up.", {"service": service})
 
 
-def teardown_service(project: ProjectAggregate, *, name: str) -> OperationResult:
+def teardown_service(project: WorkspaceState, *, name: str) -> OperationResult:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -136,7 +136,7 @@ def teardown_service(project: ProjectAggregate, *, name: str) -> OperationResult
     return OperationResult(True, 0, f"Service {name} removed.", {"service": service})
 
 
-def start_service(project: ProjectAggregate, *, name: str) -> OperationResult:
+def start_service(project: WorkspaceState, *, name: str) -> OperationResult:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -149,7 +149,7 @@ def start_service(project: ProjectAggregate, *, name: str) -> OperationResult:
     return OperationResult(True, 0, f"Service {name} started.", {"service": service})
 
 
-def stop_service(project: ProjectAggregate, *, name: str) -> OperationResult:
+def stop_service(project: WorkspaceState, *, name: str) -> OperationResult:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -162,7 +162,7 @@ def stop_service(project: ProjectAggregate, *, name: str) -> OperationResult:
     return OperationResult(True, 0, f"Service {name} stopped.", {"service": service})
 
 
-def rename_service(project: ProjectAggregate, *, name: str, new_name: str) -> OperationResult:
+def rename_service(project: WorkspaceState, *, name: str, new_name: str) -> OperationResult:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -179,7 +179,7 @@ def rename_service(project: ProjectAggregate, *, name: str, new_name: str) -> Op
 
 
 def service_logs(
-    project: ProjectAggregate,
+    project: WorkspaceState,
     *,
     name: str,
     label: Optional[str] = None,

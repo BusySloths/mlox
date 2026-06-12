@@ -9,7 +9,7 @@ except ImportError:
     print("Please install it by running: pip install psycopg2-binary")
     sys.exit(1)
 
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 
 
 # --- DATABASE CONNECTION PARAMETERS ---
@@ -25,8 +25,8 @@ password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
 if not password:
     print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
     exit(1)
-session = ProjectSession.open("mlox", password)
-infra = session.project.infrastructure
+workspace = ProjectWorkspace.open("mlox", password)
+infra = workspace.infrastructure
 
 pdb = infra.get_service("postgres-16-bullseye")
 if not pdb:

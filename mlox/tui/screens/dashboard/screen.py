@@ -17,7 +17,7 @@ from .server_actions import ServerActions
 from .stats_panel import StatsPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 from mlox.services.otel.docker import OtelDockerService
 
 
@@ -108,20 +108,20 @@ class DashboardScreen(Screen):
         self._update_tui_panel(selection)
 
     def action_reload_infrastructure(self) -> None:
-        application = getattr(self.app, "application", None)
-        if not application:
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
             self.notify(
-                "Cannot reload infrastructure because the project session is incomplete.",
+                "Cannot reload infrastructure because the project workspace is incomplete.",
                 severity="error",
             )
             return
-        project = str(application.session.path)
+        project = str(workspace.path)
 
         self.notify(f"Reloading project infrastructure for {project}...")
 
-        def reload_application() -> None:
+        def reload_workspace() -> None:
             try:
-                application.reload()
+                workspace.reload()
             except Exception as exc:
                 self.app.call_from_thread(
                     self._show_reload_error,
@@ -129,12 +129,12 @@ class DashboardScreen(Screen):
                 )
                 return
             self.app.call_from_thread(
-                self._apply_reloaded_application,
+                self._apply_reloaded_workspace,
                 project,
             )
 
         self.app.run_worker(
-            reload_application,
+            reload_workspace,
             thread=True,
             exclusive=True,
             group="project-reload",
@@ -143,7 +143,7 @@ class DashboardScreen(Screen):
     def _show_reload_error(self, message: str) -> None:
         self.notify(message, severity="error")
 
-    def _apply_reloaded_application(self, project: str) -> None:
+    def _apply_reloaded_workspace(self, project: str) -> None:
         tree = self.query_one(InfraTree)
         tree.populate_tree()
         self._apply_selection(tree.root.data)
@@ -179,10 +179,8 @@ class DashboardScreen(Screen):
             )
             return
 
-        application: ProjectApplication | None = getattr(
-            self.app, "application", None
-        )
-        infra = application.project.infrastructure if application else None
+        workspace: ProjectWorkspace | None = getattr(self.app, "workspace", None)
+        infra = workspace.infrastructure if workspace else None
         if not infra or not selection.bundle:
             self._mount_placeholder(
                 container,

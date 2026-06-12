@@ -3,7 +3,7 @@ import streamlit as st
 
 from typing import cast
 
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 from mlox.infra import Infrastructure
 
 # --- Path setup ---
@@ -28,8 +28,8 @@ def auto_login():
         pw = os.environ.get("MLOX_PROJECT_PASSWORD") or os.environ.get("MLOX_PASSWORD")
         if prj and pw:
             try:
-                application = ProjectApplication.open(prj, pw)
-                st.session_state["mlox"] = application
+                workspace = ProjectWorkspace.open(prj, pw)
+                st.session_state["mlox"] = workspace
                 st.session_state.is_logged_in = True
             except Exception:
                 return
@@ -73,7 +73,7 @@ def welcome():
         try:
             infra = cast(
                 Infrastructure,
-                st.session_state.mlox.project.infrastructure,
+                st.session_state.mlox.infrastructure,
             )
             bundles = infra.bundles
             server_count = len(bundles)
@@ -126,14 +126,12 @@ st.logo(
 auto_login()
 
 if "mlox" in st.session_state:
-    session = st.session_state.mlox
-    if not session.secrets or not session.secrets.is_working():
+    workspace = st.session_state.mlox
+    if not workspace.secrets or not workspace.secrets.is_working():
         st.warning(
-            "Project does not have an active secret manager configured "
-            "meaning changes to infrastructure or services will not be saved. "
-            "To resolve this issue, please follow these steps: \n"
-            " - Add at least one server to your infrastructure\n"
-            " - Set up a secret manager service (first secret manager will be used automatically)\n",
+            "The selected project secret manager is unavailable. "
+            "Secret operations will fail until it becomes available or another "
+            "manager is selected.",
             icon=":material/warning:",
         )
 
@@ -171,7 +169,7 @@ pages_infrastructure = [
 ]
 
 if st.session_state.get("mlox", None):
-    infra = cast(Infrastructure, st.session_state.mlox.project.infrastructure)
+    infra = cast(Infrastructure, st.session_state.mlox.infrastructure)
 
     if len(infra.filter_by_group("repository")) > 0:
         pages_infrastructure.append(
@@ -222,7 +220,7 @@ pages_docs = {
 pages = pages_logged_out
 if st.session_state.get("is_logged_in", False):
     pages = pages_logged_in
-    prj_name = st.session_state["mlox"].project.name
+    prj_name = st.session_state["mlox"].name
     pages[prj_name] = pages_infrastructure
     pages.update(pages_docs)
 

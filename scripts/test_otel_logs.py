@@ -12,7 +12,7 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry._logs.severity import SeverityNumber
 from opentelemetry.trace import get_current_span
 
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 
 mlox_path = os.environ.get("MLOX_PROJECT_PATH", None)
 mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
@@ -22,8 +22,8 @@ if not mlox_password or not mlox_path:
         "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_PATH environment variable is not set."
     )
     exit(1)
-session = ProjectSession.open(mlox_path, mlox_password)
-infra = session.project.infrastructure
+workspace = ProjectWorkspace.open(mlox_path, mlox_password)
+infra = workspace.infrastructure
 
 
 monitors = infra.filter_by_group("monitor")

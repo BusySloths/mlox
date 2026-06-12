@@ -15,22 +15,32 @@ Creation is explicit and refuses to overwrite a file. Opening a missing project 
 
 ## Python API
 
-Use `ProjectApplication` for mutations and `ProjectSession` for low-level access:
+Use `ProjectWorkspace` for both application operations and direct SDK access:
 
 ```python
-from mlox.application import ProjectApplication
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 
-app = ProjectApplication.open("demo.mlox", password)
-result = app.setup_server(ip="10.0.0.5")
+workspace = ProjectWorkspace.open("demo.mlox", password)
+result = workspace.setup_server(ip="10.0.0.5")
 
-session = ProjectSession.open("demo.mlox", password)
-session.project.descr = "Experiment environment"
-session.commit()
+workspace.descr = "Experiment environment"
+workspace.commit()
 ```
 
 Application mutations commit only after success and reload after failure.
-`ProjectSession.reload()` discards uncommitted aggregate changes.
+`ProjectWorkspace.reload()` discards uncommitted direct changes.
+
+## Active secret manager
+
+Each workspace has one active secret manager. Embedded encrypted project storage
+is selected initially. Choosing a Tiny Secret Manager, OpenBao, or GCP service
+copies and verifies existing secrets before persisting that service UUID as the
+new pointer.
+
+An unavailable selected service remains active and is reported as unavailable;
+MLOX never silently falls back to embedded storage. Switching back to embedded
+storage is explicit. Embedded storage is always listed in the UI, is not an
+installable service, and does not support keyfile export.
 
 ## Data-source model
 

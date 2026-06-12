@@ -6,8 +6,8 @@ This document is a compact status note for the architecture simplification work 
 
 - The old large CLI module was split into `mlox/cli/app.py`, `mlox/cli/commands/*`, rendering helpers, and context helpers.
 - The application layer has project-based use cases under `mlox/application/use_cases/`.
-- `ProjectApplication` owns one `ProjectSession` and controls commit/reload behavior.
-- `ProjectAggregate` is the aggregate root for metadata and infrastructure.
+- `ProjectWorkspace` controls commit/reload behavior as the only public project runtime.
+- Internal `WorkspaceState` contains metadata and infrastructure.
 - `Infrastructure` contains topology queries, serialization, and runtime hydration only.
 - Frontend-specific setup handlers are outside YAML and are resolved through `mlox/ui/registry.py`.
 
@@ -19,21 +19,18 @@ Current runtime flow:
 CLI / TUI / Streamlit
         |
         v
-ProjectApplication
+ProjectWorkspace
         |
         v
-ProjectSession
-        |
-        v
-ProjectAggregate
+internal WorkspaceState + SqlCipherRepository
         |
         v
 Infrastructure -> Bundle(server + services)
 ```
 
 Server, service, and model orchestration lives in focused use-case modules.
-Use cases accept `ProjectAggregate`; persistence remains the responsibility of
-`ProjectApplication` and `ProjectSession`.
+Use cases accept `WorkspaceState`; persistence remains controlled by
+`ProjectWorkspace` through the internal repository.
 
 ## Still Open
 
@@ -51,7 +48,7 @@ Avoid a large package rename. The current paths are already usable and known:
 - `mlox/view/`
 - `mlox/application/`
 - `mlox/infra.py`
-- `mlox/session.py`
+- `mlox/project/workspace.py`
 - `mlox/config.py`
 
 Prefer incremental moves:

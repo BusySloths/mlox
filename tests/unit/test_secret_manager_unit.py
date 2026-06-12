@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from cryptography.fernet import Fernet
 
 from mlox.secret_manager import (
-    InMemorySecretManager,
     SECRET_MANAGER_KEYFILE_ENV,
     SECRET_MANAGER_KEYFILE_PW_ENV,
     TinySecretManager,
@@ -17,6 +16,7 @@ from mlox.secret_manager import (
     load_secret_manager_from_keyfile,
 )
 from mlox.utils import _get_encryption_key, decrypt_dict
+from tests.secret_manager_fakes import SerializableSecretManager
 
 
 class _Conn:
@@ -60,8 +60,8 @@ def _encrypt(payload, token):
     return Fernet(key).encrypt(json.dumps(payload).encode("utf-8"))
 
 
-def test_inmemory_secret_manager_basic_roundtrip():
-    sm = InMemorySecretManager()
+def test_serializable_secret_manager_basic_roundtrip():
+    sm = SerializableSecretManager()
     sm.save_secret("a", {"x": 1})
 
     assert sm.is_working()
@@ -70,8 +70,10 @@ def test_inmemory_secret_manager_basic_roundtrip():
     assert sm.get_access_secrets() == {"secrets": {"a": {"x": 1}}}
 
 
-def test_inmemory_instantiate_secret_manager_prefills_store():
-    sm = InMemorySecretManager.instantiate_secret_manager({"secrets": {"k": "v"}})
+def test_serializable_secret_manager_prefills_store():
+    sm = SerializableSecretManager.instantiate_secret_manager(
+        {"secrets": {"k": "v"}}
+    )
     assert sm is not None
     assert sm.load_secret("k") == "v"
 
@@ -148,20 +150,22 @@ def test_tiny_secret_manager_instantiate_and_access(monkeypatch):
 
 
 def test_get_encrypted_access_keyfile_roundtrip():
-    sm = InMemorySecretManager()
+    sm = SerializableSecretManager()
     sm.save_secret("token", "abc")
 
     encrypted = get_encrypted_access_keyfile(sm, "pw")
     payload = decrypt_dict(encrypted, "pw")
 
-    assert payload["secret_manager_class"].endswith("InMemorySecretManager")
+    assert payload["secret_manager_class"].endswith("SerializableSecretManager")
 
 
 def test_load_secret_manager_from_keyfile_paths(monkeypatch):
     monkeypatch.setattr(
         "mlox.secret_manager.load_from_json",
         lambda keyfile, pw: {
-            "secret_manager_class": "mlox.secret_manager.InMemorySecretManager",
+            "secret_manager_class": (
+                "tests.secret_manager_fakes.SerializableSecretManager"
+            ),
             "access_secret": {"secrets": {"z": 1}},
         },
     )
@@ -178,7 +182,7 @@ def test_load_secret_manager_from_keyfile_paths(monkeypatch):
 
 
 def test_load_secret_manager_from_env(monkeypatch):
-    source_sm = InMemorySecretManager()
+    source_sm = SerializableSecretManager()
     source_sm.save_secret("z", 1)
     monkeypatch.setenv(
         SECRET_MANAGER_KEYFILE_ENV, get_encrypted_access_keyfile(source_sm, "pw")
@@ -191,7 +195,7 @@ def test_load_secret_manager_from_env(monkeypatch):
 
 
 def test_load_secret_manager_from_env_custom_names():
-    source_sm = InMemorySecretManager()
+    source_sm = SerializableSecretManager()
     source_sm.save_secret("custom", "value")
 
     sm = load_secret_manager_from_env(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual.widgets import Tree
 
 from .model import SelectionChanged, SelectionInfo
@@ -20,15 +21,20 @@ class InfraTree(Tree[SelectionInfo]):
         """Populate the tree with bundles, servers and services."""
 
         self.clear()
-        application = getattr(self.app, "application", None)
-        project = getattr(application, "project", None)
-        project_name = getattr(project, "name", None)
-        self.root.label = project_name or "Infrastructure"
+        workspace = getattr(self.app, "workspace", None)
+        project_name = getattr(workspace, "name", None)
+        active_secret_manager = getattr(
+            workspace, "active_secret_manager_name", "Unknown"
+        )
+        root_label = Text(project_name or "Infrastructure")
+        root_label.append("  Secrets: ", style="dim")
+        root_label.append(active_secret_manager, style="bold green")
+        self.root.label = root_label
         self.root.data = SelectionInfo(
             type="root", bundle=None, server=None, service=None
         )
 
-        infra = getattr(project, "infrastructure", None)
+        infra = getattr(workspace, "infrastructure", None)
         if not infra or not infra.bundles:
             self.root.add(
                 "No infrastructure available", data=SelectionInfo(type="empty")

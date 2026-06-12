@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, cast
 
-from mlox.secret_manager import AbstractSecretManagerService
+from mlox.service import AbstractSecretManagerService
 from mlox.service import AbstractService, ServiceCapability
 from mlox.infra import Infrastructure
 from mlox.services.gcp.cloud_storage import GCPStorage

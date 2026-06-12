@@ -31,12 +31,12 @@ class DashboardTestApp(App):
             name="test-project",
             infrastructure=SimpleNamespace(bundles=[]),
         )
-        session = SimpleNamespace(
-            project=project,
-            password="secret",
+        self.workspace = SimpleNamespace(
+            name=project.name,
+            infrastructure=project.infrastructure,
             path="test-project",
+            active_secret_manager_name="Embedded Project Storage",
         )
-        self.application = SimpleNamespace(project=project, session=session)
 
     def compose(self) -> ComposeResult:
         yield DashboardScreen()
@@ -62,6 +62,18 @@ def test_root_selection_shows_only_server_templates_tab() -> None:
 
     assert server_display == "block"
     assert service_display == "none"
+
+
+async def _root_label() -> str:
+    app = DashboardTestApp()
+    async with app.run_test():
+        return app.query_one("#infra-tree").root.label.plain
+
+
+def test_root_highlights_active_secret_manager() -> None:
+    assert asyncio.run(_root_label()) == (
+        "test-project  Secrets: Embedded Project Storage"
+    )
 
 
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
@@ -156,25 +168,21 @@ async def _reload_project_infrastructure(monkeypatch) -> tuple[str, object]:
     app = DashboardTestApp()
 
     def reload_project() -> None:
-        project = SimpleNamespace(
-            name="test-project-reloaded",
-            infrastructure=SimpleNamespace(bundles=[]),
-        )
-        app.application.project = project
-        app.application.session.project = project
+        app.workspace.name = "test-project-reloaded"
+        app.workspace.infrastructure = SimpleNamespace(bundles=[])
 
-    app.application.reload = reload_project
+    app.workspace.reload = reload_project
     async with app.run_test() as pilot:
         await pilot.press("R")
         deadline = time.monotonic() + 2
-        while app.application.project.name == "test-project":
+        while app.workspace.name == "test-project":
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for project reload.")
             await pilot.pause(0.05)
 
         screen = app.query_one(DashboardScreen)
         return (
-            app.application.project.name,
+            app.workspace.name,
             screen.query_one("#infra-tree").root.data,
         )
 

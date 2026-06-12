@@ -5,7 +5,7 @@ from typing import Any
 from mlox.application.use_cases import servers, services
 from mlox.config import ServiceConfig
 from mlox.infra import Bundle, Infrastructure
-from mlox.project.aggregate import ProjectAggregate
+from mlox.project.state import WorkspaceState
 from mlox.service import AbstractService
 
 
@@ -14,7 +14,7 @@ def add_server(
     config: ServiceConfig,
     params: dict[str, str],
 ) -> Bundle | None:
-    project = ProjectAggregate(name="integration-test", infrastructure=infrastructure)
+    project = WorkspaceState(name="integration-test", infrastructure=infrastructure)
     result = servers.add_server(
         project,
         lambda _: config,
@@ -35,7 +35,7 @@ def add_service(
     params: dict[str, Any],
     service: AbstractService | None = None,
 ) -> Bundle | None:
-    project = ProjectAggregate(name="integration-test", infrastructure=infrastructure)
+    project = WorkspaceState(name="integration-test", infrastructure=infrastructure)
     result = services.add_service(
         project,
         lambda _: config,

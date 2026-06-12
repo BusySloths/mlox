@@ -8,7 +8,7 @@ from mlox.config import ServiceConfig
 
 def save_infra():
     with st.spinner("Saving infrastructure..."):
-        st.session_state.mlox.session.commit()
+        st.session_state.mlox.commit()
 
 
 def st_hack_align(container, px=28):

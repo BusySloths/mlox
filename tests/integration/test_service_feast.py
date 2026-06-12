@@ -12,10 +12,8 @@ from mlox.services.feast.client import (
 from mlox.services.feast.docker import FeastDockerService
 from mlox.services.postgres.docker import PostgresDockerService
 from mlox.services.redis.docker import RedisDockerService
-from mlox.secret_manager import (
-    InMemorySecretManager,
-    get_encrypted_access_keyfile,
-)
+from mlox.secret_manager import get_encrypted_access_keyfile
+from tests.secret_manager_fakes import SerializableSecretManager
 
 from tests.integration.conftest import wait_for_service_ready
 
@@ -121,7 +119,7 @@ def test_feast_service_links_remote_stores(install_feast_service):
 
 def test_get_repo_config(install_feast_service):
     infra, _, service, redis_service, postgres_service = install_feast_service
-    secret_manager = InMemorySecretManager()
+    secret_manager = SerializableSecretManager()
 
     registry_secret = service.get_secrets()
     secret_manager.save_secret(

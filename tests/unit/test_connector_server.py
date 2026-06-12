@@ -1,7 +1,7 @@
 from mlox.config import get_stacks_path, load_config
 from mlox.application.use_cases import servers
 from mlox.infra import Infrastructure
-from mlox.project.aggregate import ProjectAggregate
+from mlox.project.state import WorkspaceState
 from mlox.server import ServerCapability
 from mlox.servers.connector.virtual import VirtualConnectorServer
 from mlox.ui.registry import clear_handlers
@@ -53,7 +53,7 @@ def test_connector_server_config_can_be_added_and_filtered():
     assert config is not None
 
     infra = Infrastructure()
-    project = ProjectAggregate(name="demo", infrastructure=infra)
+    project = WorkspaceState(name="demo", infrastructure=infra)
     first = servers.add_server(
         project,
         lambda path: config,

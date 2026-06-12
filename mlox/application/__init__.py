@@ -1,4 +1,4 @@
-"""Application-layer types and the stateful project API."""
-from mlox.application.facade import ProjectApplication
+"""Application result types and internal use cases."""
+from mlox.application.result import OperationResult
 
-__all__ = ["ProjectApplication"]
+__all__ = ["OperationResult"]

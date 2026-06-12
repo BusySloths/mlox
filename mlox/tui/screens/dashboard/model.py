@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 from textual.message import Message
 
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 
 WELCOME_TEXT = """\
 Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
@@ -49,9 +49,9 @@ def get_server_backends(server: Any | None) -> list[str]:
 
 
 def summarize_infrastructure(
-    application: Optional[ProjectApplication],
+    workspace: Optional[ProjectWorkspace],
 ) -> Dict[str, Any]:
-    """Return aggregate statistics and listings for the active session."""
+    """Return aggregate statistics and listings for the active workspace."""
 
     summary: Dict[str, Any] = {
         "has_data": False,
@@ -61,9 +61,9 @@ def summarize_infrastructure(
         "server_rows": [],
         "service_rows": [],
     }
-    if not application:
+    if not workspace:
         return summary
-    infra = getattr(application.project, "infrastructure", None)
+    infra = workspace.infrastructure
     if not infra or not getattr(infra, "bundles", None):
         return summary
 

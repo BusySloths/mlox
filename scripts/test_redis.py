@@ -11,7 +11,7 @@ except ImportError:
     print("Please install it by running: pip install redis")
     sys.exit(1)
 
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 from mlox.services.redis.docker import RedisDockerService
 from mlox.services.gcp.secret_manager import load_secret_from_gcp
 
@@ -28,8 +28,8 @@ def load_connection_from_infrastructure() -> dict:
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
         exit(1)
 
-    session = ProjectSession.open("mlox", password)
-    infra = session.project.infrastructure
+    workspace = ProjectWorkspace.open("mlox", password)
+    infra = workspace.infrastructure
 
     redis_service = None
     for bundle in infra.bundles:

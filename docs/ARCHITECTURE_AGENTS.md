@@ -8,11 +8,11 @@ MLOX is a configuration-driven system for managing a connected topology of ML/AI
 
 1. YAML configs describe service/server metadata and `build.class_name`.
 2. `mlox/config.py` loads built-in configs and Python entry-point plugins.
-3. `ProjectAggregate` is the aggregate root for metadata and `Infrastructure`.
-4. `ProjectSession` owns SQLCipher persistence and embedded secrets.
-5. `ProjectApplication` owns one session and is the public mutation boundary.
-6. Application use-cases accept `ProjectAggregate` and never persist directly.
-7. CLI, TUI, and Streamlit should call `ProjectApplication` instead of mutating topology directly.
+3. Internal `WorkspaceState` contains metadata and `Infrastructure`.
+4. Internal `SqlCipherRepository` owns SQLCipher persistence.
+5. `ProjectWorkspace` is the only public project runtime and mutation boundary.
+6. Application use-cases accept `WorkspaceState` and never persist directly.
+7. CLI, TUI, and Streamlit should call `ProjectWorkspace` instead of mutating topology directly.
 8. Remote/system commands should route through `mlox/executors.py` and `mlox/execution/*`.
 
 ## High-Risk Areas
@@ -20,9 +20,9 @@ MLOX is a configuration-driven system for managing a connected topology of ML/AI
 Treat these as high blast-radius:
 
 - `mlox/config.py`: schema, YAML loading, plugin entry points, build class resolution.
-- `mlox/session.py`: project loading, atomic persistence, secret access, migrations.
+- `mlox/project/repository.py`: project loading, atomic persistence, and secret storage.
 - `mlox/infra.py`: bundle/service topology, naming, port assignment, dependency lookup.
-- `mlox/application/facade.py`: stateful application commit and rollback behavior.
+- `mlox/project/workspace.py`: public API, commit, and rollback behavior.
 - `mlox/application/use_cases/`: setup/teardown and domain mutations.
 - `mlox/ui/registry.py`: frontend handler lookup.
 
@@ -37,9 +37,12 @@ When changing one of these, check impact across CLI, TUI, Streamlit, saved proje
 
 ## State Rules
 
-- `ProjectApplication` is the mutation boundary; `ProjectSession` is the persistence boundary.
-- Successful mutations commit once. Failed mutations reload the aggregate.
-- A session exposes the project-backed secret adapter; production project storage must fail closed when SQLCipher is unavailable.
+- `ProjectWorkspace` is the public mutation and explicit-commit boundary.
+- Successful application mutations commit once. Failed mutations reload workspace state.
+- `workspace.secrets` exposes the single selected provider. Embedded SQLCipher
+  storage is the initial provider, but unavailable external providers must remain
+  selected rather than falling back.
+- Block removal of the active secret-manager service or its server.
 - Metadata and infrastructure must be stored in one transaction.
 - Persisted objects must remain JSON-compatible.
 - Service dependencies should be stable by UUID, not by display name.

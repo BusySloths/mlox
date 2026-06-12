@@ -6,7 +6,7 @@ from fabric import Connection  # type: ignore
 from mlox.service import AbstractService
 from mlox.infra import Infrastructure
 from mlox.application.use_cases import servers, services
-from mlox.project.aggregate import ProjectAggregate
+from mlox.project.state import WorkspaceState
 from mlox.config import ServiceConfig, BuildConfig, get_stacks_path, load_config
 from mlox.server import ServerCapability
 from mlox.servers.local.local import LocalhostServer, LocalConnection
@@ -60,7 +60,7 @@ def test_localhost_server_adds_custom_service():
     )
 
     infra = Infrastructure()
-    project = ProjectAggregate(name="demo", infrastructure=infra)
+    project = WorkspaceState(name="demo", infrastructure=infra)
 
     server_config = load_config(
         get_stacks_path(prefix="mlox-server"), "/local", "mlox-server.local.yaml"

@@ -28,7 +28,8 @@ from typing import Any, Dict
 
 from mlox.execution.base import TaskGroup
 from mlox.infra import Infrastructure
-from mlox.secret_manager import AbstractSecretManager, AbstractSecretManagerService
+from mlox.secret_manager import AbstractSecretManager
+from mlox.service import AbstractSecretManagerService
 from mlox.service import AbstractService
 from .client import OpenBaoSecretManager
 from mlox.utils import generate_password
@@ -611,7 +612,6 @@ path "sys/internal/ui/mounts/*" {{
             raise RuntimeError("OpenBao remained sealed after submitting unseal keys.")
         if not self.root_token:
             raise RuntimeError("OpenBao is initialized but no root token is available.")
-
 
     def _wait_for_container_health(self, conn) -> Dict:
         last_error: Exception | None = None

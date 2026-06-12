@@ -3,7 +3,8 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, cast
 
-from mlox.secret_manager import AbstractSecretManager, AbstractSecretManagerService
+from mlox.secret_manager import AbstractSecretManager
+from mlox.service import AbstractSecretManagerService
 from mlox.service import AbstractService
 from mlox.infra import Infrastructure
 from mlox.services.gcp.secret_manager import GCPSecretManager
@@ -54,4 +55,3 @@ class GCPSecretService(AbstractService, AbstractSecretManagerService):
 
     def get_secrets(self) -> Dict[str, Dict]:
         return {}
-    

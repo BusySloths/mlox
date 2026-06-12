@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -12,7 +10,10 @@ import streamlit as st
 from mlox.infra import Infrastructure, Bundle
 from mlox.secret_manager import get_encrypted_access_keyfile
 from mlox.utils import generate_pw
-from mlox.view.services.common import save_to_secret_store
+from mlox.view.services.common import (
+    dedicated_secret_manager_settings,
+    render_secret_manager_settings,
+)
 
 from mlox.services.openbao import OpenBaoDockerService
 
@@ -25,14 +26,6 @@ APPLICATION_PERIOD_OPTIONS: dict[str, str] = {
     "30 days": "720h",
     "90 days": "2160h",
 }
-
-
-def _format_secret_value(value: Any) -> str:
-    if isinstance(value, dict):
-        return json.dumps(value, indent=2)
-    if isinstance(value, str):
-        return value
-    return json.dumps(value, indent=2, default=str)
 
 
 def setup(infra: Infrastructure, bundle: Bundle):
@@ -50,7 +43,7 @@ def _mask_secret(value: str) -> str:
 
 def _save_infra() -> None:
     try:
-        st.session_state.mlox.session.commit()
+        st.session_state.mlox.commit()
     except Exception:
         pass
 
@@ -96,6 +89,7 @@ def _usage_markdown() -> str:
         return ""
 
 
+@dedicated_secret_manager_settings
 def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerService):
     key = f"openbao_secret_manager_{service.uuid}"
     manager = st.session_state.get(key)
@@ -234,7 +228,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
                 _save_infra()
                 st.success("OpenBao client token renewed.")
                 st.rerun()
-            except Exception as exc:
+            except Exception:
                 st.error(
                     "Could not renew the mlox service token. If it already expired, "
                     "use `Rotate client token` to create and save a replacement."
@@ -426,65 +420,13 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
                 "return here."
             )
         else:
-            try:
-                if manager is None:
-                    raise RuntimeError("OpenBao mlox service token is unavailable.")
-                secrets = manager.list_secrets(keys_only=True)
-            except Exception as exc:
-                st.warning(f"Could not list OpenBao secrets: {exc}")
-                secrets = {}
-
-            df = pd.DataFrame(
-                [[name, "****"] for name in secrets.keys()], columns=["Key", "Value"]
-            )
-            selection = st.dataframe(
-                df,
-                hide_index=True,
-                selection_mode="single-row",
-                width="stretch",
-                on_select="rerun",
-                key=f"openbao_secrets_table_{service.uuid}",
-            )
-
-            if len(selection["selection"]["rows"]) > 0:
-                idx = selection["selection"]["rows"][0]
-                secret_key = df.iloc[idx]["Key"]
-                secret_value = manager.load_secret(secret_key)
-                if secret_value is None:
-                    st.info("Could not load secret from OpenBao.")
-                else:
-                    save_to_secret_store(infra, secret_key, secret_value)
-                    st.markdown(f"#### `{secret_key}`")
-                    formatted = _format_secret_value(secret_value)
-                    if isinstance(secret_value, dict) and st.toggle(
-                        "Tree View",
-                        value=False,
-                        key=f"openbao_tree_{secret_key}",
-                    ):
-                        st.write(secret_value)
-                    else:
-                        st.text_area(
-                            "Value",
-                            value=formatted,
-                            height=240,
-                            disabled=True,
-                            key=f"openbao_value_{secret_key}",
-                        )
-                    st.download_button(
-                        "Download secret",
-                        data=formatted,
-                        file_name=f"{secret_key.lower()}.json",
-                        mime="application/json",
-                        icon=":material/download:",
-                        key=f"openbao_download_{secret_key}",
-                    )
+            if manager is None:
+                st.warning("OpenBao mlox service token is unavailable.")
             else:
-                with st.form("openbao_add_secret"):
-                    name = st.text_input("Key")
-                    value = st.text_area("Value", placeholder="JSON or text")
-                    if st.form_submit_button("Add Secret"):
-                        manager.save_secret(name, value)
-                        st.rerun()
+                render_secret_manager_settings(
+                    manager,
+                    key_prefix=f"openbao-{service.uuid}",
+                )
 
     with recovery_tab:
         st.markdown("#### Seal Recovery")

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from mlox.application.use_cases import servers, services
 from mlox.infra import Infrastructure
-from mlox.project.aggregate import ProjectAggregate
+from mlox.project.state import WorkspaceState
 
 
 class _Connection:
@@ -115,7 +115,7 @@ def test_add_server_appends_bundle_and_sets_discovered():
     infra.bundles = []
     infra.configs = {}
     infra.get_bundle_by_ip = lambda ip: None
-    current = ProjectAggregate(name="demo", infrastructure=infra)
+    current = WorkspaceState(name="demo", infrastructure=infra)
 
     result = servers.add_server(
         current,

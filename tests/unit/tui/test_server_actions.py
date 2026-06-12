@@ -92,11 +92,10 @@ async def _open_terminal_with_binding(monkeypatch, selection) -> list[object]:
                 name="test-project",
                 infrastructure=SimpleNamespace(bundles=[]),
             )
-            session = SimpleNamespace(
-                project=project,
-                password="secret",
+            self.workspace = SimpleNamespace(
+                name=project.name,
+                infrastructure=project.infrastructure,
             )
-            self.application = SimpleNamespace(project=project, session=session)
 
         def compose(self) -> ComposeResult:
             yield DashboardScreen()

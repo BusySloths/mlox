@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from mlox.infra import Infrastructure
-from mlox.project.store import ProjectDatabase
+from mlox.project.repository import SqlCipherRepository
 from mlox.secret_manager import AbstractSecretManager
 from mlox.utils import save_to_json
 from scripts.migrate_legacy_project import migrate_legacy_project
@@ -51,7 +51,7 @@ def test_migration_copies_data_without_altering_source(tmp_path):
     )
 
     assert source.read_bytes() == original
-    store = ProjectDatabase(output, "new-password").open()
+    store = SqlCipherRepository(output, "new-password").open()
     migrated_project = store.load()
     assert migrated_project.name == "legacy"
     assert migrated_project.descr == "Imported project"

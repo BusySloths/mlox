@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import typer
 
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 from mlox.cli.common import handle_result, parse_kv
 from mlox.cli.context import resolve_credentials
 from mlox.cli.rendering.table import render_table
@@ -20,7 +20,7 @@ def server_list(
     password: Optional[str] = typer.Option(
         None,
         "--password",
-        help="Password for the session",
+        help="Password for the project",
         show_default=False,
     ),
 ) -> None:
@@ -28,7 +28,7 @@ def server_list(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ProjectApplication.open(resolved_project, resolved_password).list_servers()
+        ProjectWorkspace.open(resolved_project, resolved_password).list_servers()
     )
     servers = result.data.get("servers", []) if result.data else []
     if not servers:
@@ -60,7 +60,7 @@ def server_add(
     password: Optional[str] = typer.Option(
         None,
         "--password",
-        help="Password for the session",
+        help="Password for the project",
         show_default=False,
     ),
     server_template: str = typer.Option(
@@ -80,7 +80,7 @@ def server_add(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ProjectApplication.open(resolved_project, resolved_password).add_server(
+        ProjectWorkspace.open(resolved_project, resolved_password).add_server(
             template_path=f"ubuntu/mlox-server.{server_template}.yaml",
             ip=ip,
             port=port,
@@ -98,7 +98,7 @@ def server_setup(
     password: Optional[str] = typer.Option(
         None,
         "--password",
-        help="Password for the session",
+        help="Password for the project",
         show_default=False,
     ),
     ip: str = typer.Argument(..., help="Server IP or hostname"),
@@ -107,7 +107,7 @@ def server_setup(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ProjectApplication.open(resolved_project, resolved_password).setup_server(ip=ip)
+        ProjectWorkspace.open(resolved_project, resolved_password).setup_server(ip=ip)
     )
     typer.echo(result.message)
 
@@ -118,7 +118,7 @@ def server_teardown(
     password: Optional[str] = typer.Option(
         None,
         "--password",
-        help="Password for the session",
+        help="Password for the project",
         show_default=False,
     ),
     ip: str = typer.Argument(..., help="Server IP or hostname"),
@@ -127,7 +127,7 @@ def server_teardown(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ProjectApplication.open(resolved_project, resolved_password).teardown_server(
+        ProjectWorkspace.open(resolved_project, resolved_password).teardown_server(
             ip=ip
         )
     )
@@ -140,7 +140,7 @@ def server_save_key(
     password: Optional[str] = typer.Option(
         None,
         "--password",
-        help="Password for the session",
+        help="Password for the project",
         show_default=False,
     ),
     ip: str = typer.Argument(..., help="Server IP or hostname"),
@@ -150,7 +150,7 @@ def server_save_key(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ProjectApplication.open(
+        ProjectWorkspace.open(
             resolved_project, resolved_password
         ).save_server_key(
             ip=ip,
@@ -164,7 +164,7 @@ def server_save_key(
 def server_configs_list() -> None:
     """List available server configuration templates."""
 
-    result = handle_result(ProjectApplication.list_server_configs())
+    result = handle_result(ProjectWorkspace.list_server_configs())
     configs = result.data.get("configs", []) if result.data else []
     if not configs:
         typer.echo(result.message)

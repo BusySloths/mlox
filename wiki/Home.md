@@ -75,12 +75,11 @@ CLI     TUI     Streamlit Web UI     Other UIs
     +----+-------------+--------------+
                     |
                     v
-             `ProjectApplication`
+             `ProjectWorkspace`
           stateful mutation boundary
                     |
                     v
-              `ProjectSession`
-       SQLCipher persistence + secrets
+     internal state + SQLCipher repository
              /                               \
             v                                 v
  embedded SQLCipher storage                `Infrastructure`
@@ -93,10 +92,10 @@ CLI     TUI     Streamlit Web UI     Other UIs
                     execution via `mlox/executors.py` + `mlox/execution/*`
 ```
 
-`ProjectApplication` owns one `ProjectSession` and exposes the shared mutation API.
-The session loads a `ProjectAggregate` containing metadata and `Infrastructure`,
-and commits both atomically to the encrypted project file. CLI commands open an
-application per invocation; the TUI and Web UI retain one in runtime state.
+`ProjectWorkspace` exposes the shared mutation and direct SDK API. It loads
+internal state containing metadata and `Infrastructure`, and commits both
+atomically to the encrypted project file. CLI commands open a workspace per
+invocation; the TUI and Web UI retain one in runtime state.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 

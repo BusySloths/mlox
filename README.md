@@ -83,10 +83,10 @@ CLI     TUI     Streamlit Web UI
    +------+------------+
           |
           v
-      `ProjectApplication`
+      `ProjectWorkspace`
           |
           v
-       `ProjectSession`
+   internal state + repository
           |
           v
  encrypted `project.mlox` (SQLCipher)
@@ -96,12 +96,14 @@ CLI     TUI     Streamlit Web UI
           +-- PostgreSQL-ready repository boundary later
 ```
 
-`ProjectApplication` is the preferred mutation API. It owns a `ProjectSession`,
-which loads and atomically persists a `ProjectAggregate` containing metadata and
-its `Infrastructure`; secrets remain available through the session. The project
+`ProjectWorkspace` is the single public runtime API. It loads and atomically
+persists internal workspace state containing metadata and `Infrastructure`;
+the single selected secret manager is available through `workspace.secrets`.
+Encrypted project storage is selected initially, with no silent fallback when an
+external provider is unavailable. The project
 also records its active data source (`sqlcipher/self` initially), leaving a clean
-migration path to PostgreSQL. CLI commands open an application per invocation,
-while the TUI and Web UI retain one application in runtime state.
+migration path to PostgreSQL. CLI commands open a workspace per invocation,
+while the TUI and Web UI retain one workspace in runtime state.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 
@@ -150,7 +152,7 @@ mlox/
 │   ├── view/           # Streamlit web UI + Streamlit-specific UI handlers
 │   ├── assets/         # Runtime templates and packaged assets
 │   ├── resources/      # Images and other static resources
-│   ├── session.py      # Runtime state & persistence
+│   ├── project/        # Public workspace and internal SQLCipher persistence
 │   ├── infra.py        # Service/server graph
 │   ├── config.py       # YAML loading + plugin discovery + UI handler lookup
 │   └── executors.py    # Remote task executor layer used by services/servers

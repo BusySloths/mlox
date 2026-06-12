@@ -1,7 +1,7 @@
 import os
 import requests  # type: ignore
 
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 
 
 password = os.environ.get("MLOX_CONFIG_PASSWORD", None)
@@ -9,9 +9,9 @@ if not password:
     print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
     exit(1)
 
-session = ProjectSession.open("mlox", password)
-# infrastructure = session.project.infrastructure
-infra = session.project.infrastructure
+workspace = ProjectWorkspace.open("mlox", password)
+# infrastructure = workspace.infrastructure
+infra = workspace.infrastructure
 
 service = infra.get_service("litellm-ollama-1.73.0")
 if not service:

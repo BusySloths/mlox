@@ -114,10 +114,10 @@ class SktimeTrackedModel(DeployableModel):
 
 def setup_tracker(tracker_service_name: str) -> None:
     """Configure MLflow environment variables."""
-    from examples.load_project_data import load_project_session
+    from examples.load_project_data import load_project_workspace
 
-    session = load_project_session()
-    candidates = session.project.infrastructure.filter_by_group(
+    workspace = load_project_workspace()
+    candidates = workspace.infrastructure.filter_by_group(
         "experiment-tracking"
     )
     mlflow_service = next(

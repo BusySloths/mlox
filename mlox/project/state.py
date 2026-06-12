@@ -1,4 +1,4 @@
-"""Domain aggregate for an MLOX project."""
+"""Internal in-memory state for an MLOX project workspace."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def _now() -> str:
 
 
 @dataclass
-class ProjectAggregate:
+class WorkspaceState:
     """Project metadata and its infrastructure graph."""
 
     name: str
@@ -27,6 +27,8 @@ class ProjectAggregate:
     data_source_kind: str = "sqlcipher"
     data_source_location: str = "self"
     data_source_config: Dict[str, Any] = field(default_factory=dict)
+    secret_manager_kind: str = "embedded"
+    secret_manager_service_uuid: str | None = None
     infrastructure: Infrastructure = field(default_factory=Infrastructure)
 
     def touch(self) -> None:

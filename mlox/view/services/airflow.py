@@ -5,7 +5,7 @@ import streamlit as st
 from typing import cast
 from datetime import datetime
 
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 from mlox.services.airflow.docker import AirflowDockerService
 from mlox.services.github.service import GithubRepoService
 from mlox.infra import Infrastructure, Bundle
@@ -90,7 +90,7 @@ def tab_repositories(
             )
             config = infra.get_service_config(repo_service)
             if config:
-                application = cast(ProjectApplication, st.session_state.mlox)
+                application = cast(ProjectWorkspace, st.session_state.mlox)
                 result = application.add_service_from_config(
                     config,
                     server_ip=bundle.server.ip,

@@ -16,13 +16,13 @@ Those interfaces should stay thin. Shared behavior belongs in the application la
 CLI / TUI / Streamlit
         |
         v
-ProjectApplication
+ProjectWorkspace
         |
         v
-ProjectSession
+internal WorkspaceState + SqlCipherRepository
         |
         v
-ProjectAggregate
+WorkspaceState
         |
         v
 Infrastructure -> Bundle = one server/compute + deployed services
@@ -33,11 +33,11 @@ executors + backend adapters
 
 ## Important Modules
 
-- `mlox/project/aggregate.py`: `ProjectAggregate`, the aggregate root for metadata and infrastructure.
-- `mlox/session.py`: `ProjectSession`, the SQLCipher persistence, migration, and secrets boundary.
+- `mlox/project/state.py`: internal `WorkspaceState` for metadata and infrastructure.
+- `mlox/project/repository.py`: internal `SqlCipherRepository` for SQLCipher persistence.
 - `mlox/infra.py`: topology model containing bundles, servers, and services.
 - `mlox/application/use_cases/`: project-based server, service, and model actions.
-- `mlox/application/facade.py`: stateful `ProjectApplication` that commits successful mutations and reloads failed ones.
+- `mlox/project/workspace.py`: public `ProjectWorkspace` API and mutation boundary.
 - `mlox/config.py`: YAML and plugin config loading.
 - `mlox/executors.py` and `mlox/execution/`: command execution and backend helpers.
 - `mlox/ui/registry.py`: frontend handler lookup for Streamlit/TUI-specific setup panels.
@@ -62,19 +62,25 @@ See `docs/PLUGIN_CONFIGS.md` for the minimal plugin contract.
 
 ## State And Persistence
 
-`ProjectSession` loads a complete `ProjectAggregate`, exposes project-backed secrets, and
-atomically commits metadata and infrastructure. `ProjectApplication` owns one
-session and is the preferred API for mutations. Use cases receive a `ProjectAggregate`;
-they do not know about persistence.
+`ProjectWorkspace` loads internal workspace state, exposes project-backed secrets,
+and atomically commits metadata and infrastructure. It is the only public project
+runtime object. Use cases receive `WorkspaceState`; they do not know about persistence.
 
-Supported secret manager paths include:
+Exactly one secret manager is active per workspace. Supported providers include:
 
-- in-memory fallback
+- embedded SQLCipher project storage
 - TinySecretManager
 - OpenBao
 - GCP Secret Manager
 
-Runtime objects are serialized to JSON-compatible dictionaries and stored through the configured secret manager.
+The active provider is persisted as either `embedded` or a secret-manager service
+UUID. Unavailable external providers remain selected; there is no automatic
+fallback. Provider changes copy and verify secrets before the pointer is committed.
+
+SQLModel is intentionally deferred. The infrastructure graph remains behavior-heavy
+and polymorphic, while the JSON snapshot is still authoritative. Reconsider separate
+SQLModel persistence records when partial queries, concurrent updates, or PostgreSQL
+become active requirements.
 
 ## Services, Servers, And Execution
 

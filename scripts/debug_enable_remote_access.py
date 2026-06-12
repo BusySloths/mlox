@@ -1,7 +1,7 @@
 import os
 
 from mlox.executors import TaskGroup
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 
 
 def enable_password_authentication(bundle_name: str):
@@ -15,12 +15,12 @@ def enable_password_authentication(bundle_name: str):
         os.environ.get("MLOX_CONFIG_USER") or os.environ.get("MLOX_PROJECT") or "mlox"
     )
 
-    session = ProjectSession.open(project, password)
-    if not session.secrets or not session.secrets.is_working():
-        print("Project does not have an active secret manager configured.")
+    workspace = ProjectWorkspace.open(project, password)
+    if not workspace.secrets or not workspace.secrets.is_working():
+        print("The active project secret manager is unavailable.")
         return
 
-    infra = session.project.infrastructure
+    infra = workspace.infrastructure
     if not infra or not infra.bundles:
         print("Could not load infrastructure")
         return

@@ -15,27 +15,48 @@ Creation is explicit and refuses to overwrite a file. Opening a missing project 
 
 ## Python API
 
-Use `ProjectApplication` for application mutations:
+Use `ProjectWorkspace` for application mutations:
 
 ```python
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 
-app = ProjectApplication.open("demo.mlox", password)
-result = app.add_service(server_ip="10.0.0.5", template_id="postgres")
+workspace = ProjectWorkspace.open("demo.mlox", password)
+result = workspace.add_service(server_ip="10.0.0.5", template_id="postgres")
 ```
 
-Use `ProjectSession` for low-level SDK access. Direct aggregate changes require an
-explicit commit:
+Direct SDK changes require an explicit commit:
 
 ```python
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 
-session = ProjectSession.open("demo.mlox", password)
-session.project.descr = "Experiment environment"
-session.commit()
+workspace = ProjectWorkspace.open("demo.mlox", password)
+workspace.descr = "Experiment environment"
+workspace.commit()
 ```
 
-`session.reload()` discards uncommitted in-memory changes.
+`workspace.reload()` discards uncommitted in-memory changes.
+
+## Active secret manager
+
+Every workspace has exactly one active secret manager. New and upgraded projects
+start with encrypted storage inside the `.mlox` file. An installed Tiny Secret
+Manager, OpenBao, or GCP Secret Manager service can be selected later:
+
+```python
+result = workspace.set_secret_manager(service_uuid)
+```
+
+MLOX copies and verifies the current secrets before committing the new pointer.
+The previous store is retained. If the selected service becomes unavailable, it
+remains selected and secret operations fail rather than silently falling back to
+embedded storage. Returning to embedded storage is explicit:
+
+```python
+workspace.use_embedded_secret_manager()
+```
+
+Embedded storage cannot export an application keyfile. An active secret-manager
+service cannot be removed until another manager is selected.
 
 ## Data-source model
 

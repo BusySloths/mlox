@@ -167,7 +167,7 @@ def firewall() -> None:
     try:
         infra = cast(
             Infrastructure,
-            st.session_state.mlox.project.infrastructure,
+            st.session_state.mlox.infrastructure,
         )
     except BaseException:
         st.error("Could not load infrastructure configuration.")

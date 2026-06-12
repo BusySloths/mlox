@@ -55,8 +55,8 @@ class OverviewPanel(Static):
         )
 
     def show_infrastructure_overview(self) -> None:
-        application = getattr(self.app, "application", None)
-        summary = summarize_infrastructure(application)
+        workspace = getattr(self.app, "workspace", None)
+        summary = summarize_infrastructure(workspace)
         if not summary["has_data"]:
             self.update(
                 Panel(

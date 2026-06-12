@@ -73,6 +73,10 @@ class GCPSecretManager(AbstractSecretManager):
     def is_working(self) -> bool:
         return self._get_credentials() is not None
 
+    @property
+    def supports_keyfile_export(self) -> bool:
+        return True
+
     def list_secrets(self, keys_only: bool = False) -> Dict[str, Any]:
         """List all secrets stored in the secret manager."""
         return {

@@ -1,9 +1,9 @@
 import streamlit as st
 
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 
 
-def show_service_logs_ui(application: ProjectApplication, service_name: str):
+def show_service_logs_ui(application: ProjectWorkspace, service_name: str):
     """Simple Streamlit widget to show logs for a service.
 
     Example usage from the main app:
@@ -12,7 +12,7 @@ def show_service_logs_ui(application: ProjectApplication, service_name: str):
     """
     # st.header(f"Logs for {service_name}")
 
-    infra = application.project.infrastructure
+    infra = application.infrastructure
     svc = infra.get_service(service_name)
     if not svc:
         st.error("Service not found in infrastructure")

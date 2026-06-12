@@ -6,7 +6,7 @@ from typing import cast, Dict
 
 from mlox.infra import Infrastructure, Bundle
 from mlox.services.gcp.bq_service import GCPBigQueryService
-from mlox.secret_manager import AbstractSecretManagerService
+from mlox.service import AbstractSecretManagerService
 
 
 def setup(infra: Infrastructure, bundle: Bundle) -> dict | None:

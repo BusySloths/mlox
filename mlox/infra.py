@@ -14,7 +14,7 @@ Related modules (plain-text links):
 - mlox.server
 - mlox.service
 - mlox.config
-- mlox.session
+- mlox.project
 """
 
 from collections.abc import Generator

@@ -6,13 +6,13 @@ from typing import Dict, Optional
 
 from mlox.application.result import OperationResult
 from mlox.infra import Bundle
-from mlox.project.aggregate import ProjectAggregate
+from mlox.project.state import WorkspaceState
 from mlox.utils import dataclass_to_dict
 
 logger = logging.getLogger(__name__)
 
 
-def list_servers(project: ProjectAggregate) -> OperationResult:
+def list_servers(project: WorkspaceState) -> OperationResult:
     payload = [
         {
             "ip": bundle.server.ip,
@@ -30,7 +30,7 @@ def list_servers(project: ProjectAggregate) -> OperationResult:
 
 
 def add_server(
-    project: ProjectAggregate,
+    project: WorkspaceState,
     load_server_config,
     *,
     template_path: str,
@@ -68,7 +68,7 @@ def add_server(
     return OperationResult(True, 0, f"Added server {ip}.", {"bundle": bundle})
 
 
-def setup_server(project: ProjectAggregate, *, ip: str) -> OperationResult:
+def setup_server(project: WorkspaceState, *, ip: str) -> OperationResult:
     bundle = project.infrastructure.get_bundle_by_ip(ip)
     if not bundle:
         return OperationResult(False, 5, "Server not found in infrastructure.")
@@ -76,7 +76,7 @@ def setup_server(project: ProjectAggregate, *, ip: str) -> OperationResult:
     return OperationResult(True, 0, f"Server {ip} set up.")
 
 
-def teardown_server(project: ProjectAggregate, *, ip: str) -> OperationResult:
+def teardown_server(project: WorkspaceState, *, ip: str) -> OperationResult:
     infra = project.infrastructure
     bundle = infra.get_bundle_by_ip(ip)
     if not bundle:
@@ -89,7 +89,7 @@ def teardown_server(project: ProjectAggregate, *, ip: str) -> OperationResult:
 
 
 def save_server_key(
-    project: ProjectAggregate,
+    project: WorkspaceState,
     save_json,
     password: str,
     *,

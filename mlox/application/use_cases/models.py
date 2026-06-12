@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import Dict, Optional
 
 from mlox.application.result import OperationResult
+from mlox.project.state import WorkspaceState
 
 
 def list_models(
-    project,
+    project: WorkspaceState,
     *,
     registry_name: Optional[str] = None,
 ) -> OperationResult:
@@ -47,7 +48,7 @@ def list_models(
 
 
 def deploy_model(
-    project,
+    project: WorkspaceState,
     add_service,
     setup_service,
     *,

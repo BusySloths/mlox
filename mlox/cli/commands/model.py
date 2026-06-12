@@ -4,7 +4,7 @@ from typing import Optional
 
 import typer
 
-from mlox.application import ProjectApplication
+from mlox.project import ProjectWorkspace
 from mlox.cli.common import handle_result
 from mlox.cli.context import resolve_credentials
 from mlox.cli.rendering.table import render_table
@@ -29,7 +29,7 @@ def model_list(
     password: Optional[str] = typer.Option(
         None,
         "--password",
-        help="Password for the session",
+        help="Password for the project",
         show_default=False,
     ),
     registry: Optional[str] = typer.Option(
@@ -43,7 +43,7 @@ def model_list(
 
     resolved_project, resolved_password = resolve_credentials(project, password)
     result = handle_result(
-        ProjectApplication.open(resolved_project, resolved_password).list_models(
+        ProjectWorkspace.open(resolved_project, resolved_password).list_models(
             registry_name=registry,
         )
     )
@@ -85,7 +85,7 @@ def model_deploy(
     password: Optional[str] = typer.Option(
         None,
         "--password",
-        help="Password for the session",
+        help="Password for the project",
         show_default=False,
     ),
     model: str = typer.Option(
@@ -106,7 +106,7 @@ def model_deploy(
     resolved_project, resolved_password = resolve_credentials(project, password)
     registry_name, model_name, model_version = _parse_model_identifier(model)
     result = handle_result(
-        ProjectApplication.open(resolved_project, resolved_password).deploy_model(
+        ProjectWorkspace.open(resolved_project, resolved_password).deploy_model(
             registry_name=registry_name,
             model_name=model_name,
             model_version=model_version,

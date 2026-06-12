@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import time
 
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 from mlox.services.otel.client import OTelClient
 
-from examples.load_project_data import load_project_session
+from examples.load_project_data import load_project_workspace
 
 
-def _otel_client(session: ProjectSession) -> OTelClient:
-    monitors = session.project.infrastructure.filter_by_group("monitor")
+def _otel_client(workspace: ProjectWorkspace) -> OTelClient:
+    monitors = workspace.infrastructure.filter_by_group("monitor")
     if not monitors:
         raise RuntimeError("No monitor services found. Start an OTEL collector first.")
 
@@ -43,8 +43,8 @@ def _otel_client(session: ProjectSession) -> OTelClient:
 
 
 def main() -> None:
-    session = load_project_session()
-    client = _otel_client(session)
+    workspace = load_project_workspace()
+    client = _otel_client(workspace)
 
     # Traces: parent + nested span
     with client.span(

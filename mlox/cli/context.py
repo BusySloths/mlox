@@ -23,7 +23,7 @@ def resolve_project(raw: Optional[str]) -> str:
 
 def resolve_password(
     raw: Optional[str],
-    prompt_text: str = "Password for the session",
+    prompt_text: str = "Password for the project",
 ) -> str:
     if raw:
         return raw
@@ -36,6 +36,6 @@ def resolve_password(
 def resolve_credentials(
     project: Optional[str],
     password: Optional[str],
-    prompt_text: str = "Password for the session",
+    prompt_text: str = "Password for the project",
 ) -> Tuple[str, str]:
     return resolve_project(project), resolve_password(password, prompt_text)

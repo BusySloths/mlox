@@ -1,5 +1,5 @@
 import os
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 from mlox.secret_manager import TinySecretManager
 from mlox.infra import Infrastructure, Bundle
 from mlox.utils import dataclass_to_dict
@@ -9,11 +9,11 @@ if __name__ == "__main__":
     if not password:
         print("Error: MLOX_CONFIG_PASSWORD environment variable is not set.")
     else:
-        session = ProjectSession.open("mlox", password)
+        workspace = ProjectWorkspace.open("mlox", password)
 
-        # print(session.project.infrastructure)
+        # print(workspace.infrastructure)
 
-        # session.commit()
+        # workspace.commit()
         # server = Infrastructure.load("/mlox333.key", password)
         # infra = Infrastructure()
         # infra.bundles.append(Bundle(name="test", server=server))

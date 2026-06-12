@@ -2,7 +2,7 @@ import os
 import logging
 
 from mlox.infra import Infrastructure
-from mlox.session import ProjectSession
+from mlox.project import ProjectWorkspace
 
 logger = logging.getLogger(__name__)
 
@@ -16,5 +16,5 @@ def load_mlox_infra() -> Infrastructure:
             "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_PATH environment variable is not set."
         )
         exit(1)
-    session = ProjectSession.open(mlox_path, mlox_password)
-    return session.project.infrastructure
+    workspace = ProjectWorkspace.open(mlox_path, mlox_password)
+    return workspace.infrastructure

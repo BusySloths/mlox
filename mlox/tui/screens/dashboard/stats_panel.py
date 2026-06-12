@@ -125,8 +125,8 @@ class StatsPanel(Static):
         self.update(Panel(table, title="Stats", border_style="green"))
 
     def show_global_stats(self) -> None:
-        application = getattr(self.app, "application", None)
-        summary = summarize_infrastructure(application)
+        workspace = getattr(self.app, "workspace", None)
+        summary = summarize_infrastructure(workspace)
         if not summary["has_data"]:
             self.update(Panel("No infrastructure available.", title="Stats"))
             return

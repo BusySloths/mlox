@@ -72,7 +72,7 @@ def manage_monitors() -> None:
     try:
         infra = cast(
             Infrastructure,
-            st.session_state.mlox.project.infrastructure,
+            st.session_state.mlox.infrastructure,
         )
     except Exception:  # pragma: no cover - defensive path for UI runtime
         st.error("Could not load infrastructure configuration.")
