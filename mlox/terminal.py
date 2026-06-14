@@ -139,7 +139,16 @@ def _write_launch_files(
             f"  rm -rf -- {shlex.quote(str(temp_dir))}\n"
             "}\n"
             "trap cleanup EXIT HUP INT TERM\n"
-            f"{ssh_command}\n",
+            f"{ssh_command}\n"
+            "status=$?\n"
+            "cleanup\n"
+            "trap - EXIT HUP INT TERM\n"
+            "if [ \"$status\" -ne 0 ]; then\n"
+            '  printf \'\\nSSH connection failed (exit status %s).\\n\' "$status"\n'
+            "  printf 'Press Enter to close this terminal... '\n"
+            "  read -r _ </dev/tty || true\n"
+            "fi\n"
+            'exit "$status"\n',
             encoding="utf-8",
         )
         script_path.chmod(0o700)

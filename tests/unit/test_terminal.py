@@ -172,7 +172,12 @@ def test_launch_files_use_safe_permissions_and_quoted_arguments() -> None:
         assert key_path.read_text(encoding="utf-8") == "private-key"
         assert script_path.stat().st_mode & 0o777 == 0o700
 
-        command = shlex.split(script_path.read_text(encoding="utf-8").splitlines()[-1])
+        command_line = next(
+            line
+            for line in script_path.read_text(encoding="utf-8").splitlines()
+            if line.startswith("/usr/bin/ssh ")
+        )
+        command = shlex.split(command_line)
         assert command == [
             "/usr/bin/ssh",
             "-p",
@@ -217,6 +222,21 @@ def test_wrapper_removes_temporary_credentials_after_ssh_exits() -> None:
     subprocess.run([str(script_path)], check=True)
 
     assert not temp_dir.exists()
+
+
+def test_wrapper_keeps_terminal_open_when_ssh_fails() -> None:
+    temp_dir, script_path = _write_launch_files(
+        SSHLaunchSpec(host="example.test", port=22, user="mlox"),
+        "/usr/bin/false",
+    )
+    script = script_path.read_text(encoding="utf-8")
+
+    try:
+        assert 'if [ "$status" -ne 0 ]; then' in script
+        assert "SSH connection failed" in script
+        assert "read -r _ </dev/tty || true" in script
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def test_terminal_commands_for_macos_and_linux(monkeypatch, tmp_path) -> None:
