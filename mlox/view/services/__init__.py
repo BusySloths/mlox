@@ -84,7 +84,10 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "function_names": ("settings", "setup"),
     },
     "mlox.view.services.mlflow_gateway": {
-        "config_ids": ("mlflow-gateway-3.8.1-docker",),
+        "config_ids": (
+            "mlflow-gateway-3.8.1-docker",
+            "mlflow-gateway-3.8.1-k3s",
+        ),
         "function_names": ("settings", "setup"),
     },
     "mlox.view.services.openbao": {
