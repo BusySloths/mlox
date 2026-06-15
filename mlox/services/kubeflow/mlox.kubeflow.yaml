@@ -28,7 +28,7 @@ capabilities:
   backend:
     - kubernetes
 ports:
-  web_ui: 80
+  web_ui: 8443
 build:
   class_name: mlox.services.kubeflow.k8s.KubeflowService
   params:
