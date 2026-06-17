@@ -42,7 +42,7 @@ def get_server_backends(server: Any | None) -> list[str]:
     if isinstance(raw_backends, str):
         raw_backends = [raw_backends]
     return [
-        str(backend).strip().lower()
+        str(backend).strip().lower().replace("-", "_")
         for backend in raw_backends or []
         if str(backend).strip()
     ]

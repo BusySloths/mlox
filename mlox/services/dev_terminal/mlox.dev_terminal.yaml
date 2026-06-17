@@ -1,0 +1,45 @@
+id: dev-terminal-0.1-beta
+name: Developers Terminal Dream
+version: 0.1-beta
+maintainer: Busy Sloths
+description_short: Install a terminal-first developer workstation on MLOX backends.
+description: 'Developers Terminal Dream turns a remote backend into a comfortable
+  terminal developer machine. It installs and configures LazyVim, zsh, Atuin shell
+  history, Midnight Commander, Yazi, LazyVim integrations for Yazi and Claude Code, Spaceship prompt, git, pyenv,
+  and practical terminal utilities. OpenSSH is expected to come from the MLOX
+  server bootstrap. Although it is implemented as a native host
+  bootstrapper, it also fits Docker and Kubernetes-capable Ubuntu backends because
+  those backends expose the same remote host where developers run shells and tools.
+
+  '
+links:
+  project: https://mlox.org
+  documentation: https://github.com/busysloths/mlox/
+requirements:
+  cpus: 1.0
+  ram_gb: 1.0
+  disk_gb: 2.0
+groups:
+  service: null
+  developer-tools: null
+  backend:
+    native: null
+    docker: null
+    kubernetes: null
+    kubernetes-agent: null
+    k3s-agent: null
+capabilities:
+  service:
+  - developer_tools
+  backend:
+  - native
+  - docker
+  - kubernetes
+  - kubernetes_agent
+  - k3s_agent
+build:
+  class_name: mlox.services.dev_terminal.service.DeveloperTerminalService
+  params:
+    name: dev-terminal:${MLOX_SERVER_IP}
+    template: ${MLOX_STACKS_PATH}/dev_terminal/mlox.dev_terminal.yaml
+    target_path: ${MLOX_USER_HOME}/.mlox/dev-terminal
