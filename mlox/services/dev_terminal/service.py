@@ -110,6 +110,53 @@ if [ "$INSTALL_LAZYVIM" = true ]; then
     sudo -u "$TARGET_USER" git clone https://github.com/LazyVim/starter "$TARGET_HOME/.config/nvim" || true
     rm -rf "$TARGET_HOME/.config/nvim/.git"
   fi
+
+  install -d -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.config/nvim/lua/plugins"
+  NVIM_PLUGIN="$TARGET_HOME/.config/nvim/lua/plugins/mlox-dev-terminal.lua"
+  cat > "$NVIM_PLUGIN" <<'MLOX_LAZYVIM_DEV_TERMINAL'
+-- MLOX Developers Terminal Dream: Claude Code and Yazi integrations for LazyVim.
+return {{
+  {{
+    "coder/claudecode.nvim",
+    opts = {{}},
+    keys = {{
+      {{ "<leader>a", "", desc = "+ai", mode = {{ "n", "v" }} }},
+      {{ "<leader>ac", "<cmd>ClaudeCode<cr>", desc = "Toggle Claude" }},
+      {{ "<leader>af", "<cmd>ClaudeCodeFocus<cr>", desc = "Focus Claude" }},
+      {{ "<leader>ar", "<cmd>ClaudeCode --resume<cr>", desc = "Resume Claude" }},
+      {{ "<leader>aC", "<cmd>ClaudeCode --continue<cr>", desc = "Continue Claude" }},
+      {{ "<leader>ab", "<cmd>ClaudeCodeAdd %<cr>", desc = "Add current buffer" }},
+      {{ "<leader>as", "<cmd>ClaudeCodeSend<cr>", mode = "v", desc = "Send to Claude" }},
+      {{ "<leader>aa", "<cmd>ClaudeCodeDiffAccept<cr>", desc = "Accept diff" }},
+      {{ "<leader>ad", "<cmd>ClaudeCodeDiffDeny<cr>", desc = "Deny diff" }},
+    }},
+  }},
+  {{
+    "mikavilpas/yazi.nvim",
+    version = "*",
+    event = "VeryLazy",
+    dependencies = {{
+      {{ "nvim-lua/plenary.nvim", lazy = true }},
+    }},
+    keys = {{
+      {{ "<leader>-", "<cmd>Yazi<cr>", mode = {{ "n", "v" }}, desc = "Open yazi at the current file" }},
+      {{ "<leader>cw", "<cmd>Yazi cwd<cr>", desc = "Open yazi in nvim cwd" }},
+      {{ "<c-up>", "<cmd>Yazi toggle<cr>", desc = "Resume yazi" }},
+    }},
+    opts = {{
+      open_for_directories = true,
+      open_multiple_tabs = true,
+      keymaps = {{
+        show_help = "<f1>",
+      }},
+    }},
+    init = function()
+      vim.g.loaded_netrwPlugin = 1
+    end,
+  }},
+}}
+MLOX_LAZYVIM_DEV_TERMINAL
+  chown "$TARGET_USER:$TARGET_USER" "$NVIM_PLUGIN" || true
 fi
 
 ZSHRC="$TARGET_HOME/.zshrc"
