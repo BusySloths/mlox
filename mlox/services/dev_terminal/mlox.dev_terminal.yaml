@@ -5,8 +5,9 @@ maintainer: Busy Sloths
 description_short: Install a terminal-first developer workstation on MLOX backends.
 description: 'Developers Terminal Dream turns a remote backend into a comfortable
   terminal developer machine. It installs and configures LazyVim, zsh, Atuin shell
-  history, Midnight Commander, Yazi, Claude Code, Spaceship prompt, OpenSSH, git,
-  and practical terminal utilities. Although it is implemented as a native host
+  history, Midnight Commander, Yazi, Claude Code, Spaceship prompt, git, pyenv,
+  and practical terminal utilities. OpenSSH is expected to come from the MLOX
+  server bootstrap. Although it is implemented as a native host
   bootstrapper, it also fits Docker and Kubernetes-capable Ubuntu backends because
   those backends expose the same remote host where developers run shells and tools.
 

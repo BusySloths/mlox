@@ -23,6 +23,7 @@ class DeveloperTerminalService(AbstractService):
     install_lazyvim: bool = True
     install_yazi: bool = True
     install_spaceship: bool = True
+    install_pyenv: bool = True
     installed_tools: list[str] = field(default_factory=list, init=False)
 
     def _install_script(self) -> str:
@@ -31,6 +32,7 @@ class DeveloperTerminalService(AbstractService):
         lazyvim = "true" if self.install_lazyvim else "false"
         yazi = "true" if self.install_yazi else "false"
         spaceship = "true" if self.install_spaceship else "false"
+        pyenv = "true" if self.install_pyenv else "false"
         return f"""#!/usr/bin/env bash
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -39,6 +41,7 @@ INSTALL_ATUIN={atuin}
 INSTALL_LAZYVIM={lazyvim}
 INSTALL_YAZI={yazi}
 INSTALL_SPACESHIP={spaceship}
+INSTALL_PYENV={pyenv}
 TARGET_USER="${{SUDO_USER:-$(id -un)}}"
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 if [ -z "$TARGET_HOME" ] || [ ! -d "$TARGET_HOME" ]; then
@@ -48,17 +51,14 @@ fi
 apt-get update
 apt-get install -yq \
   bash bat btop build-essential ca-certificates curl direnv fd-find fzf git \
-  gnupg gzip htop jq lsb-release mc neovim nodejs npm openssh-client \
-  openssh-server pipx python3 python3-pip ripgrep tar tmux unzip wget xz-utils zsh
+  gnupg gzip htop jq libbz2-dev libffi-dev liblzma-dev libncursesw5-dev \
+  libreadline-dev libsqlite3-dev libssl-dev libxml2-dev libxmlsec1-dev \
+  llvm lsb-release make mc neovim nodejs npm pipx python3 python3-pip \
+  ripgrep tar tk-dev tmux unzip wget xz-utils zlib1g-dev zsh
 
 # Ubuntu/Debian package names the fd and bat binaries differently.
 ln -sf /usr/bin/fdfind /usr/local/bin/fd 2>/dev/null || true
 ln -sf /usr/bin/batcat /usr/local/bin/bat 2>/dev/null || true
-
-if command -v systemctl >/dev/null 2>&1; then
-  systemctl enable ssh || systemctl enable sshd || true
-  systemctl start ssh || systemctl start sshd || true
-fi
 
 npm install -g neovim tree-sitter-cli || true
 if [ "$INSTALL_CLAUDE_CODE" = true ]; then
@@ -94,6 +94,16 @@ if [ "$INSTALL_YAZI" = true ] && ! command -v yazi >/dev/null 2>&1; then
   rm -rf "$tmpdir"
 fi
 
+
+if [ "$INSTALL_PYENV" = true ] && ! command -v pyenv >/dev/null 2>&1; then
+  if [ ! -d "$TARGET_HOME/.pyenv" ]; then
+    sudo -u "$TARGET_USER" git clone https://github.com/pyenv/pyenv.git "$TARGET_HOME/.pyenv" || true
+  fi
+  if [ -x "$TARGET_HOME/.pyenv/bin/pyenv" ]; then
+    ln -sf "$TARGET_HOME/.pyenv/bin/pyenv" /usr/local/bin/pyenv
+  fi
+fi
+
 if [ "$INSTALL_LAZYVIM" = true ]; then
   install -d -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.config"
   if [ ! -d "$TARGET_HOME/.config/nvim" ]; then
@@ -111,6 +121,9 @@ append_once() {{
 }}
 append_once 'export EDITOR=nvim'
 append_once 'export VISUAL=nvim'
+append_once 'export PYENV_ROOT="$HOME/.pyenv"'
+append_once '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+append_once 'command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init - zsh)"'
 append_once 'alias ll="ls -lah"'
 append_once 'alias vim="nvim"'
 append_once 'alias vi="nvim"'
@@ -152,7 +165,7 @@ fi
         return True
 
     def check(self, conn) -> Dict[str, str]:
-        command = "command -v zsh git ssh nvim mc yazi atuin claude >/dev/null"
+        command = "command -v zsh git nvim mc yazi atuin claude pyenv >/dev/null"
         try:
             self.exec.execute(conn, command, group=TaskGroup.AD_HOC)
             self.state = "running"

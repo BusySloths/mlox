@@ -120,7 +120,7 @@ A reference to the ML/AI infrastructure services and integrations currently incl
 
 | Service | Version(s) | Description | Status |
 |---------|-----------|-------------|--------|
-| **Developers Terminal Dream** | 0.1-beta | Native-host bootstrap for LazyVim, zsh, Atuin, Midnight Commander, Yazi, Claude Code, Spaceship prompt, OpenSSH, git, and useful terminal utilities. Advertised for native, Docker, and Kubernetes-capable backends because all three expose a remote Ubuntu host where developers can use these tools. | Beta |
+| **Developers Terminal Dream** | 0.1-beta | Native-host bootstrap for LazyVim, zsh, Atuin, Midnight Commander, Yazi, Claude Code, Spaceship prompt, git, pyenv-based Python version management, and useful terminal utilities; OpenSSH is expected from the MLOX server bootstrap. Advertised for native, Docker, and Kubernetes-capable backends because all three expose a remote Ubuntu host where developers can use these tools. | Beta |
 
 ---
 
