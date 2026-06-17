@@ -1,0 +1,37 @@
+id: kubeflow-1.10.1-k3s
+name: Kubeflow
+version: 1.10.1
+maintainer: Kubeflow Community
+description_short: A Kubernetes-native platform for machine learning workflows.
+description: >-
+  Kubeflow provides notebooks, pipelines, model serving, training operators, and
+  a central dashboard for running machine learning workloads on Kubernetes. This
+  service installs the upstream Kubeflow manifests and exposes the Istio gateway
+  through the Traefik ingress controller included with k3s.
+links:
+  project: https://www.kubeflow.org/
+  documentation: https://www.kubeflow.org/docs/
+  changelog: https://github.com/kubeflow/manifests/releases
+  security: https://github.com/kubeflow/manifests/security
+requirements:
+  cpus: 8.0
+  ram_gb: 16.0
+  disk_gb: 50.0
+groups:
+  service: null
+  machine-learning: null
+  backend:
+    kubernetes: null
+capabilities:
+  service:
+    - dashboard
+  backend:
+    - kubernetes
+ports:
+  web_ui: 8443
+build:
+  class_name: mlox.services.kubeflow.k8s.KubeflowService
+  params:
+    name: kubeflow
+    template: ${MLOX_STACKS_PATH}/kubeflow/kubeflow.yaml
+    target_path: ${MLOX_USER_HOME}/kubeflow-1.10.1

@@ -55,6 +55,10 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "config_ids": ("kubeapps-newest-k3s",),
         "function_names": ("settings",),
     },
+    "mlox.view.services.kubeflow": {
+        "config_ids": ("kubeflow-1.10.1-k3s",),
+        "function_names": ("settings",),
+    },
     "mlox.view.services.litellm": {
         "config_ids": ("litellm-ollama-1.77.7-docker",),
         "function_names": ("settings", "setup"),
@@ -80,7 +84,10 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "function_names": ("settings", "setup"),
     },
     "mlox.view.services.mlflow_gateway": {
-        "config_ids": ("mlflow-gateway-3.8.1-docker",),
+        "config_ids": (
+            "mlflow-gateway-3.8.1-docker",
+            "mlflow-gateway-3.8.1-k3s",
+        ),
         "function_names": ("settings", "setup"),
     },
     "mlox.view.services.openbao": {

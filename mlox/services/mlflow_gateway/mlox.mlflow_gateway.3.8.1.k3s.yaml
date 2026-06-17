@@ -1,0 +1,49 @@
+id: mlflow-gateway-3.8.1-k3s
+name: MLFlow Gateway
+version: 3.8.1
+maintainer: Busy Sloths
+description_short: Lightweight multi-model HTTP gateway for MLflow on Kubernetes.
+description: Provides an authenticated HTTPS endpoint that loads MLflow pyfunc
+  models dynamically from a configured MLflow registry. The gateway and its
+  dedicated Traefik release run in an isolated Kubernetes namespace.
+links:
+  project: https://mlflow.org/
+  news: https://mlflow.org/releases/
+  security: https://mlflow.org/docs/latest/security.html
+  documentation: https://mlflow.org/docs/latest/index.html
+  changelog: https://mlflow.org/docs/latest/changelog.html
+requirements:
+  cpus: 1.0
+  ram_gb: 2.0
+  disk_gb: 2.0
+groups:
+  service: null
+  model-server: null
+  backend:
+    kubernetes: null
+capabilities:
+  service:
+  - model_server
+  backend:
+  - kubernetes
+ports:
+  rest: 30433
+build:
+  class_name: mlox.services.mlflow_gateway.k3s.MLFlowGatewayK3sService
+  params:
+    name: mlflow-gateway-3.8.1
+    template: ${MLOX_STACKS_PATH}/mlflow_gateway/mlox.mlflow_gateway.3.8.1.k3s.yaml
+    target_path: ${MLOX_USER_HOME}/mlflow-gateway-3.8.1-k3s
+    dockerfile: ${MLOX_STACKS_PATH}/mlflow_gateway/dockerfile-mlflow-gateway-3.8.1
+    serve_script: ${MLOX_STACKS_PATH}/mlflow_gateway/serve.py
+    start_script: ${MLOX_STACKS_PATH}/mlflow_gateway/start_gateway.sh
+    port: ${MLOX_AUTO_PORT_REST}
+    tracking_uri: ${TRACKING_URI}
+    tracking_user: ${TRACKING_USER}
+    tracking_pw: ${TRACKING_PW}
+    requirements_txt: ${GATEWAY_REQUIREMENTS_TXT}
+    cache_max_models: ${GATEWAY_CACHE_MAX_MODELS}
+    cache_ttl_days: ${GATEWAY_CACHE_TTL_DAYS}
+    user: ${MLOX_AUTO_USER}
+    pw: ${MLOX_AUTO_PW}
+    registry_uuid: ${MODEL_REGISTRY_UUID}
