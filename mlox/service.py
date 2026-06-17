@@ -58,6 +58,7 @@ class ServiceCapability(StrEnum):
     DEPLOYMENT = "deployment"
     LLM = "llm"
     DASHBOARD = "dashboard"
+    DEVELOPER_TOOLS = "developer_tools"
 
 
 class AbstractSecretManagerService(ABC):

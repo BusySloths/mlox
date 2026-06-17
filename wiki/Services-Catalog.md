@@ -16,7 +16,8 @@ A reference to the ML/AI infrastructure services and integrations currently incl
 8. [Kubernetes Add-ons](#kubernetes-add-ons)
 9. [Cloud Integrations](#cloud-integrations)
 10. [Source Control](#source-control)
-11. [Applications](#applications)
+11. [Developer Tools](#developer-tools)
+12. [Applications](#applications)
 
 ---
 
@@ -112,6 +113,14 @@ A reference to the ML/AI infrastructure services and integrations currently incl
 | Service | Version(s) | Description | Status |
 |---------|-----------|-------------|--------|
 | **GitHub Repository** | 0.1-beta | Clone and pull GitHub repositories onto managed servers. | Beta |
+
+---
+
+## Developer Tools
+
+| Service | Version(s) | Description | Status |
+|---------|-----------|-------------|--------|
+| **Developers Terminal Dream** | 0.1-beta | Native-host bootstrap for LazyVim, zsh, Atuin, Midnight Commander, Yazi, Claude Code, Spaceship prompt, OpenSSH, git, and useful terminal utilities. Advertised for native, Docker, and Kubernetes-capable backends because all three expose a remote Ubuntu host where developers can use these tools. | Beta |
 
 ---
 

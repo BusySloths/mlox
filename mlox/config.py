@@ -72,6 +72,8 @@ SERVICE_GROUP_ALIASES = {
     "deployment": ServiceCapability.DEPLOYMENT.value,
     "llm": ServiceCapability.LLM.value,
     "dashboard": ServiceCapability.DASHBOARD.value,
+    "developer_tools": ServiceCapability.DEVELOPER_TOOLS.value,
+    "developer-tools": ServiceCapability.DEVELOPER_TOOLS.value,
 }
 
 
