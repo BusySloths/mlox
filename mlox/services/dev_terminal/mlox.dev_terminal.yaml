@@ -26,6 +26,8 @@ groups:
     native: null
     docker: null
     kubernetes: null
+    kubernetes-agent: null
+    k3s-agent: null
 capabilities:
   service:
   - developer_tools
@@ -33,6 +35,8 @@ capabilities:
   - native
   - docker
   - kubernetes
+  - kubernetes_agent
+  - k3s_agent
 build:
   class_name: mlox.services.dev_terminal.service.DeveloperTerminalService
   params:

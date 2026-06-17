@@ -293,6 +293,29 @@ def test_builtin_service_configs_have_matching_explicit_capabilities():
         assert config.service_capabilities() <= class_capabilities, config.path
 
 
+def test_dev_terminal_supports_kubernetes_agent_backends():
+    configs = {
+        config.id: config for config in load_all_service_configs(include_plugins=False)
+    }
+
+    config = configs["dev-terminal-0.1-beta"]
+
+    assert config.backend_capabilities() == {
+        "native",
+        "docker",
+        "kubernetes",
+        "kubernetes_agent",
+        "k3s_agent",
+    }
+    assert set(config.groups["backend"]) == {
+        "native",
+        "docker",
+        "kubernetes",
+        "kubernetes-agent",
+        "k3s-agent",
+    }
+
+
 @pytest.mark.parametrize(
     "config_id",
     [
