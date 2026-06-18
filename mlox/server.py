@@ -145,8 +145,7 @@ class ServerConnection:
             socket.timeout,  # General socket timeout
             NoValidConnectionsError,  # If all resolved IPs for a host fail connection
             EOFError,  # Can sometimes be transient network drop
-            # SSHException can be broad; if specific transient SSH errors are known, list them.
-            # Avoid retrying AuthenticationException or issues due to bad host configuration here.
+            SSHException,  # Covers transient SSH banner resets while sshd restarts.
         )
 
         while current_attempt <= self.retries:
@@ -182,6 +181,17 @@ class ServerConnection:
                 )
                 return self._conn
             except (
+                socket.gaierror,
+                AuthenticationException,
+            ) as e:  # Non-retryable errors
+                logging.error(
+                    f"Non-retryable error connecting to {host}: {type(e).__name__} - {e}"
+                )
+                if self._tmp_dir:
+                    close_connection(None, self._tmp_dir)
+                    self._tmp_dir = None
+                raise  # Re-raise immediately, do not retry
+            except (
                 RETRYABLE_EXCEPTIONS_FOR_CONNECTION
             ) as e:  # Catch only specified retryable exceptions
                 logging.warning(
@@ -201,17 +211,6 @@ class ServerConnection:
                     )
                 time.sleep(self.retry_delay)
                 current_attempt += 1
-            except (
-                socket.gaierror,
-                AuthenticationException,
-            ) as e:  # Non-retryable errors
-                logging.error(
-                    f"Non-retryable error connecting to {host}: {type(e).__name__} - {e}"
-                )
-                if self._tmp_dir:
-                    close_connection(None, self._tmp_dir)
-                    self._tmp_dir = None
-                raise  # Re-raise immediately, do not retry
             except (
                 Exception
             ) as e:  # Catch any other unexpected errors during connection setup

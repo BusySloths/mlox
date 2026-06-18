@@ -160,14 +160,21 @@ def wait_for_service_ready(
     return status
 
 
-def wait_for_k3s_ready(server, timeout: int = 180, interval: float = 5.0) -> None:
-    """Wait until the k3s node is Ready on a provisioned Kubernetes server."""
+def wait_for_k3s_ready(
+    server, timeout: int = 300, interval: float = 5.0, force_root: bool = False
+) -> None:
+    """Wait until the k3s node is Ready on a provisioned Kubernetes server.
+
+    This runs after ``server.setup()``, which creates the normal MLOX SSH user
+    and disables password-based access. Use the default post-setup credentials
+    instead of forcing the initial root/password login path.
+    """
 
     deadline = time.time() + timeout
     last_output = ""
     while time.time() < deadline:
         try:
-            with server.get_server_connection(force_root=True) as conn:
+            with server.get_server_connection(force_root=force_root) as conn:
                 nodes = server.exec.execute(
                     conn,
                     "kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml get nodes --no-headers",
@@ -328,6 +335,7 @@ def ubuntu_k3s_server(multipass_k8s_instance):
     server = bundle.server
     wait_for_server_login(server, timeout=240, interval=5.0, force_root=True)
     server.setup()
+    wait_for_server_login(server, timeout=240, interval=5.0, force_root=False)
     wait_for_k3s_ready(server)
     yield server
     logging.info(
