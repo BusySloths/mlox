@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import pytest
 
 from mlox.config import load_config, get_stacks_path
@@ -34,16 +34,9 @@ def install_openbao_service(ubuntu_docker_server):
 
     yield infra, bundle, service
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            service.spin_down(conn)
-        except Exception:
-            pass
-        try:
-            service.teardown(conn)
-        except Exception:
-            pass
-    infra.bundles.remove(bundle)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_openbao_service_is_running(install_openbao_service):

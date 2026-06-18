@@ -273,12 +273,11 @@ def ubuntu_docker_server(multipass_instance):
         logging.warning(
             "Baseline docker volumes removed during teardown: %s", missing_volumes
         )
-    try:
-        server.teardown()
+    result = remove_server(infra, server.ip)
+    if result.success:
         logging.info("Successfully tore down ubuntu_docker_server.")
-    except Exception as e:
-        logging.warning(f"Could not tear down ubuntu_docker_server: {e}")
-    infra.bundles.remove(bundle)
+    else:
+        logging.warning("Could not tear down ubuntu_docker_server: %s", result.message)
 
 
 @pytest.fixture(scope="package")
@@ -381,11 +380,13 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
     )
     try:
         server.disable_debug_access()
-        server.teardown()
-        logging.info("Successfully tore down ubuntu_simple_server.")
     except Exception as e:
-        logging.warning(f"Could not tear down ubuntu_simple_server: {e}")
-    infra.bundles.remove(bundle)
+        logging.warning(f"Could not disable debug access before teardown: {e}")
+    result = remove_server(infra, server.ip)
+    if result.success:
+        logging.info("Successfully tore down ubuntu_simple_server.")
+    else:
+        logging.warning("Could not tear down ubuntu_simple_server: %s", result.message)
 
 
 # @pytest.fixture(scope="package")
@@ -412,4 +413,4 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
 #         logging.info("Successfully tore down ubuntu_native_server.")
 #     except Exception as e:
 #         logging.warning(f"Could not tear down ubuntu_native_server: {e}")
-#     infra.bundles.remove(bundle)
+#     remove_server(infra, server.ip)

@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 
 """Integration tests for LiteLLM + Ollama service."""
 
@@ -45,16 +45,9 @@ def install_litellm_service(ubuntu_docker_server):
     yield bundle_added, service
 
     # Teardown after tests
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            service.spin_down(conn)
-        except Exception as e:
-            logger.warning(f"Ignoring error during service spin_down for teardown: {e}")
-        try:
-            service.teardown(conn)
-        except Exception as e:
-            logger.warning(f"Ignoring error during service teardown: {e}")
-    infra.bundles.remove(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_litellm_service_is_running(install_litellm_service):
@@ -108,7 +101,9 @@ def test_litellm_multiple_models_selection(ubuntu_docker_server):
     assert "qwen2.5:0.5b" in service.ollama_models
 
     # Cleanup (don't actually spin up to save test time)
-    infra.bundles.remove(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_litellm_no_models_selection(ubuntu_docker_server):
@@ -133,4 +128,6 @@ def test_litellm_no_models_selection(ubuntu_docker_server):
     assert len(service.ollama_models) == 0
 
     # Cleanup (don't actually spin up to save test time)
-    infra.bundles.remove(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)

@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import os
 import time
 import logging
@@ -106,16 +106,9 @@ def deploy_mlflow_mlserver(ubuntu_docker_server, install_mlflow3_service):
 
     yield mlserver_service, bundle
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            mlserver_service.spin_down(conn)
-        except Exception as exc:
-            logger.warning("Error during MLServer spin_down: %s", exc)
-        try:
-            mlserver_service.teardown(conn)
-        except Exception as exc:
-            logger.warning("Error during MLServer teardown: %s", exc)
-    infra.bundles.remove(mlserver_bundle)
+    result = remove_service(infra, mlserver_service.name)
+    if not result.success:
+        logger.warning("Failed to remove MLServer service via application logic: %s", result.message)
 
 
 def test_mlserver_is_ready(deploy_mlflow_mlserver):

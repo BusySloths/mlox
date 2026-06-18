@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_server
+from tests.integration.helpers import add_server, remove_server
 import logging
 import shutil
 import uuid
@@ -57,5 +57,4 @@ def test_multipass_ubuntu_server_lifecycle(template, expected_backend):
             assert conn.run("true", hide=True).ok
     finally:
         logging.info("Tearing down Multipass VM %s", name)
-        server.teardown()
-        infra.bundles.remove(bundle)
+        remove_server(infra, server.ip)

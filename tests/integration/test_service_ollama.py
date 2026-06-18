@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 
 """Integration tests for standalone Ollama service."""
 
@@ -43,16 +43,9 @@ def install_ollama_service(ubuntu_docker_server):
 
     yield bundle_added, service
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            service.spin_down(conn)
-        except Exception as exc:
-            logger.warning("Ignoring error during Ollama spin_down: %s", exc)
-        try:
-            service.teardown(conn)
-        except Exception as exc:
-            logger.warning("Ignoring error during Ollama teardown: %s", exc)
-    infra.bundles.remove(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_ollama_service_is_running(install_ollama_service):
