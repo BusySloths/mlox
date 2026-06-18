@@ -48,76 +48,21 @@ class MLFlowMLServerK3sService(MLFlowMLServerDockerService):
             """
         ).strip()
 
-        return f"""apiVersion: v1
-kind: Namespace
-metadata:
-  name: {self.namespace}
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {self.deployment_name}
-  namespace: {self.namespace}
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {self.service_name}
-  template:
-    metadata:
-      labels:
-        app: {self.service_name}
-    spec:
-      containers:
-      - name: mlserver
-        image: python:3.11-slim
-        imagePullPolicy: IfNotPresent
-        command: ["/bin/bash", "-lc"]
-        args:
-        - |
-{textwrap.indent(startup_cmd, '          ')}
-        ports:
-        - containerPort: {self.container_port}
-          name: http
-        env:
-        - name: MLFLOW_TRACKING_URI
-          value: '{tracking_uri}'
-        - name: MLFLOW_TRACKING_USERNAME
-          value: '{tracking_user}'
-        - name: MLFLOW_TRACKING_PASSWORD
-          value: '{tracking_pw}'
-        - name: MLFLOW_TRACKING_INSECURE_TLS
-          value: "true"
-        - name: MLFLOW_REMOTE_MODEL
-          value: '{model}'
-        readinessProbe:
-          httpGet:
-            path: /v2/health/ready
-            port: {self.container_port}
-          initialDelaySeconds: 20
-          periodSeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /v2/health/live
-            port: {self.container_port}
-          initialDelaySeconds: 40
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {self.service_name}
-  namespace: {self.namespace}
-spec:
-  type: NodePort
-  selector:
-    app: {self.service_name}
-  ports:
-  - name: http
-    port: {self.container_port}
-    targetPort: {self.container_port}
-    nodePort: {self.port}
-"""
+        return self.render_template(
+            "mlserver-manifest.yaml.tmpl",
+            {
+                "namespace": self.namespace,
+                "deployment_name": self.deployment_name,
+                "service_name": self.service_name,
+                "startup_cmd_block": self.indent_block(startup_cmd, 10),
+                "container_port": self.container_port,
+                "tracking_uri": tracking_uri,
+                "tracking_user": tracking_user,
+                "tracking_pw": tracking_pw,
+                "model": model,
+                "port": self.port,
+            },
+        )
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)

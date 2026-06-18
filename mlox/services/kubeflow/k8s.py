@@ -408,44 +408,16 @@ class KubeflowService(AbstractService):
 
     def _write_traefik_values(self, conn) -> str:
         values_path = f"{self.target_path}/kubeflow-traefik-values.yaml"
-        values = f"""ingressClass:
-  enabled: false
-gateway:
-  enabled: false
-providers:
-  kubernetesCRD:
-    enabled: false
-  kubernetesIngress:
-    enabled: false
-  file:
-    enabled: true
-    content: |-
-      http:
-        routers:
-          kubeflow:
-            entryPoints:
-              - websecure
-            rule: PathPrefix(`/`)
-            service: kubeflow
-            tls: {{}}
-        services:
-          kubeflow:
-            loadBalancer:
-              servers:
-                - url: http://{self.ingress_service}.{self.ingress_namespace}.svc.cluster.local:80
-ports:
-  web:
-    expose:
-      default: false
-  websecure:
-    port: {self.ingress_port}
-    exposedPort: {self.ingress_port}
-    expose:
-      default: true
-service:
-  type: LoadBalancer
-"""
-        self.exec.fs_write_file(conn, values_path, values)
+        self.render_template_to_file(
+            conn,
+            "kubeflow-traefik-values.yaml.tmpl",
+            values_path,
+            {
+                "ingress_service": self.ingress_service,
+                "ingress_namespace": self.ingress_namespace,
+                "ingress_port": self.ingress_port,
+            },
+        )
         return values_path
 
     def _install_dedicated_traefik(self, conn, values_path: str) -> bool:

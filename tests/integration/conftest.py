@@ -11,6 +11,7 @@ from typing import Callable, Dict, Optional
 
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure
+from mlox.executors import TaskGroup
 
 logger = logging.getLogger(__name__)
 try:
@@ -126,6 +127,37 @@ def wait_for_service_ready(
     return status
 
 
+def wait_for_k3s_ready(server, timeout: int = 180, interval: float = 5.0) -> None:
+    """Wait until the k3s node is Ready on a provisioned Kubernetes server."""
+
+    deadline = time.time() + timeout
+    last_output = ""
+    while time.time() < deadline:
+        try:
+            with server.get_server_connection(force_root=True) as conn:
+                nodes = server.exec.execute(
+                    conn,
+                    "kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml get nodes --no-headers",
+                    group=TaskGroup.KUBERNETES,
+                    sudo=True,
+                    pty=False,
+                )
+                pods = server.exec.execute(
+                    conn,
+                    "kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml get pods -A --no-headers",
+                    group=TaskGroup.KUBERNETES,
+                    sudo=True,
+                    pty=False,
+                )
+            last_output = f"nodes={nodes!r} pods={pods!r}"
+            if nodes and " Ready " in f" {nodes} ":
+                return
+        except Exception as exc:  # pragma: no cover - remote environment dependent
+            last_output = repr(exc)
+        time.sleep(interval)
+    raise TimeoutError(f"k3s did not become ready after {timeout}s: {last_output}")
+
+
 @pytest.fixture(scope="package")
 def multipass_instance():
     if not _HAS_MULTIPASS:
@@ -206,6 +238,72 @@ def ubuntu_docker_server(multipass_instance):
         logging.info("Successfully tore down ubuntu_docker_server.")
     except Exception as e:
         logging.warning(f"Could not tear down ubuntu_docker_server: {e}")
+    infra.remove_bundle(bundle)
+
+
+@pytest.fixture(scope="package")
+def multipass_k8s_instance():
+    if not _HAS_MULTIPASS:
+        pytest.skip(
+            "multipass package not available; skip integration tests that require Multipass"
+        )
+
+    client = MultipassClient()
+    name = f"mlox-k8s-test-{uuid.uuid4().hex[:8]}"
+    cloud_init_path = (
+        Path(__file__).resolve().parents[2] / "mlox/assets/cloud-init.yaml"
+    )
+    logging.info(
+        f"Launching Kubernetes Multipass VM {name} with cloud-init {cloud_init_path}"
+    )
+    vm = client.launch(
+        vm_name=name, cpu=4, disk="60G", mem="12G", cloud_init=cloud_init_path
+    )
+    ip = wait_for_ssh(vm, name, timeout=180, interval=3.0)
+    vm.info()
+    logging.info(f"Kubernetes Multipass VM {name} is running at IP {ip}")
+    yield {"client": client, "vm": vm, "name": name, "ip": ip}
+    logging.info(f"Cleaning up Kubernetes Multipass VM {name}...")
+    try:
+        vm.delete()
+        client.purge()
+        logging.info(f"Successfully cleaned up Kubernetes Multipass VM {name}.")
+    except Exception as e:
+        logging.warning(f"Could not clean up Kubernetes Multipass VM {name}: {e}")
+
+
+@pytest.fixture(scope="package")
+def ubuntu_k3s_server(multipass_k8s_instance):
+    infra = Infrastructure()
+    config = load_config(
+        get_stacks_path(prefix="mlox-server"),
+        "/ubuntu",
+        "mlox-server.ubuntu.k3s.yaml",
+    )
+    params = {
+        "${MLOX_IP}": multipass_k8s_instance["ip"],
+        "${MLOX_PORT}": "22",
+        "${MLOX_ROOT}": "root",
+        "${MLOX_ROOT_PW}": "pass",
+        "${K3S_CONTROLLER_URL}": "",
+        "${K3S_CONTROLLER_TOKEN}": "",
+        "${K3S_CONTROLLER_UUID}": "",
+    }
+    bundle = add_server(infra, config, params)
+    if not bundle:
+        pytest.fail("Failed to add k3s server to infrastructure")
+    server = bundle.server
+    server.setup()
+    wait_for_k3s_ready(server)
+    yield server
+    logging.info(
+        f"Tearing down ubuntu_k3s_server on VM {multipass_k8s_instance['name']}..."
+    )
+    try:
+        server.teardown()
+        logging.info("Successfully tore down ubuntu_k3s_server.")
+    except Exception as e:
+        logging.warning(f"Could not tear down ubuntu_k3s_server: {e}")
     infra.remove_bundle(bundle)
 
 

@@ -137,5 +137,9 @@ dev_template = "{tag}.post{ccount}"
 
 [tool.setuptools]
 include-package-data = true
+
+[tool.setuptools.package-data]
+mlox = ["services/**/*.tmpl"]
+
 [tool.setuptools.packages.find]
 include = ["mlox*"]
