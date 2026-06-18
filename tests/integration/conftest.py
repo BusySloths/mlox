@@ -32,7 +32,13 @@ pytestmark = pytest.mark.integration
 def wait_for_ssh(
     vm: MultipassVM, vm_name: str, timeout: int = 120, interval: float = 2.0
 ) -> str:
-    """Wait until the VM has an IPv4 and port 22 is reachable. Returns the ip when ready."""
+    """Wait until the VM has an IPv4 and port 22 is reachable. Returns the ip when ready.
+
+    This only proves that sshd is listening on TCP/22. Multipass guests can
+    briefly accept TCP connections before the SSH daemon is ready to complete a
+    protocol handshake, so fixtures should also call ``wait_for_server_login``
+    before running Fabric/MLOX setup commands.
+    """
     deadline = time.time() + timeout
     last_exc = None
     while time.time() < deadline:
@@ -67,6 +73,33 @@ def wait_for_ssh(
         time.sleep(interval)
     raise TimeoutError(
         f"VM {vm_name} SSH not reachable after {timeout}s. Last error: {last_exc!r}"
+    )
+
+
+def wait_for_server_login(
+    server, timeout: int = 180, interval: float = 3.0, force_root: bool = True
+) -> None:
+    """Wait until Fabric can complete an SSH login and run a no-op command."""
+
+    deadline = time.time() + timeout
+    last_exc: Exception | None = None
+    while time.time() < deadline:
+        try:
+            with server.get_server_connection(force_root=force_root) as conn:
+                conn.run("true", hide=True, warn=False, pty=False)
+            return
+        except Exception as exc:  # pragma: no cover - remote environment dependent
+            last_exc = exc
+            logging.warning(
+                "Waiting for stable SSH login to %s after %s: %s",
+                getattr(server, "ip", "?"),
+                type(exc).__name__,
+                exc,
+            )
+            time.sleep(interval)
+    raise TimeoutError(
+        f"Server SSH login did not become ready after {timeout}s. "
+        f"Last error: {last_exc!r}"
     )
 
 
@@ -293,6 +326,7 @@ def ubuntu_k3s_server(multipass_k8s_instance):
     if not bundle:
         pytest.fail("Failed to add k3s server to infrastructure")
     server = bundle.server
+    wait_for_server_login(server, timeout=240, interval=5.0, force_root=True)
     server.setup()
     wait_for_k3s_ready(server)
     yield server
