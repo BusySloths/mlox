@@ -94,34 +94,24 @@ class KubeAppsService(AbstractService):
         host_line = f"    - host: {host}\n      http:" if host else "    - http:"
         tls_hosts = f"\n        - {host}" if host else " []"
 
-        ingress_manifest = f"""apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {ingress_name}
-  namespace: {self.namespace}
-  annotations:
-    kubernetes.io/ingress.class: traefik
-    traefik.ingress.kubernetes.io/router.entrypoints: {entrypoint}
-    traefik.ingress.kubernetes.io/router.tls: "true"
-spec:
-  ingressClassName: traefik
-  rules:
-{host_line}
-        paths:
-          - path: {path}
-            pathType: Prefix
-            backend:
-              service:
-                name: {self.release_name}
-                port:
-                  number: {backend_service_port}
-  tls:
-    - hosts:{tls_hosts}
-      secretName: {tls_secret_name}
-"""
         manifest_path = f"{self.target_path}/{ingress_name}.yaml"
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_write_file(conn, manifest_path, ingress_manifest)
+        self.render_template_to_file(
+            conn,
+            "ingress.yaml.tmpl",
+            manifest_path,
+            {
+                "ingress_name": ingress_name,
+                "namespace": self.namespace,
+                "entrypoint": entrypoint,
+                "host_line": host_line,
+                "path": path,
+                "release_name": self.release_name,
+                "backend_service_port": backend_service_port,
+                "tls_hosts": tls_hosts,
+                "tls_secret_name": tls_secret_name,
+            },
+        )
         self.exec.k8s_apply_manifest(
             conn,
             manifest_path,
@@ -311,27 +301,17 @@ spec:
     def _bind_service_account_cluster_admin(self, conn) -> None:
         binding_name = self._cluster_role_binding_name()
         manifest_path = f"{self.target_path}/{binding_name}.yaml"
-        manifest = f"""apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {self.service_account_name}
-  namespace: {self.namespace}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {binding_name}
-subjects:
-  - kind: ServiceAccount
-    name: {self.service_account_name}
-    namespace: {self.namespace}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-"""
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_write_file(conn, manifest_path, manifest)
+        self.render_template_to_file(
+            conn,
+            "admin-binding.yaml.tmpl",
+            manifest_path,
+            {
+                "service_account_name": self.service_account_name,
+                "namespace": self.namespace,
+                "binding_name": binding_name,
+            },
+        )
         self.exec.k8s_apply_manifest(
             conn,
             manifest_path,

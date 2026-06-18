@@ -127,47 +127,28 @@ class K8sHeadlampService(AbstractService):
             )
         annotations_block = "\n".join(annotations_lines)
 
-        ingress_manifest = f"""apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {ingress_name}
-  namespace: {self.namespace}
-  annotations:
-{annotations_block}
-spec:
-  ingressClassName: traefik
-  rules:
-  - http:
-      paths:
-      - path: {path}
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: {self.service_name}
-            port:
-              number: {backend_port}
-"""
-        middleware_manifest = ""
+        template_vars = {
+            "ingress_name": ingress_name,
+            "namespace": self.namespace,
+            "annotations_block": annotations_block,
+            "path": path,
+            "service_name": self.service_name,
+            "backend_port": backend_port,
+        }
+        manifest = self.render_template("ingress.yaml.tmpl", template_vars)
         if middleware_name:
-            middleware_manifest = f"""---
-apiVersion: traefik.containo.us/v1alpha1
-kind: Middleware
-metadata:
-  name: {middleware_name}
-  namespace: {self.namespace}
-spec:
-  stripPrefix:
-    prefixes:
-    - {path}
-"""
+            manifest += self.render_template(
+                "middleware.yaml.tmpl",
+                {
+                    "middleware_name": middleware_name,
+                    "namespace": self.namespace,
+                    "path": path,
+                },
+            )
 
         manifest_path = f"{self.target_path}/{ingress_name}.yaml"
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_write_file(
-            conn,
-            manifest_path,
-            f"{ingress_manifest}{middleware_manifest}",
-        )
+        self.exec.fs_write_file(conn, manifest_path, manifest)
         self.exec.k8s_apply_manifest(
             conn,
             manifest_path,
@@ -184,40 +165,13 @@ spec:
         logger.info("🔧 Enabling Headlamp Gadgets plugin")
         values_path = f"{self.target_path}/plugin-gadgets-values.yaml"
 
-        values_yaml = f"""initContainers:
-  - name: headlamp-plugins
-    image: ghcr.io/inspektor-gadget/headlamp-plugin:0.1.0-beta.2
-    imagePullPolicy: Always
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "mkdir -p /build/plugins && cp -r /plugins/* /build/plugins/",
-      ]
-    volumeMounts:
-      - name: headlamp-plugins
-        mountPath: /build/plugins
-
-persistentVolumeClaim:
-  enabled: true
-  accessModes:
-    - ReadWriteOnce
-  size: 1Gi
-
-volumeMounts:
-  - name: headlamp-plugins
-    mountPath: /build/plugins
-
-volumes:
-  - name: headlamp-plugins
-    persistentVolumeClaim:
-      claimName: "{self.service_name}"
-
-config:
-  pluginsDir: /build/plugins
-"""
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_write_file(conn, values_path, values_yaml)
+        self.render_template_to_file(
+            conn,
+            "gadgets-values.yaml.tmpl",
+            values_path,
+            {"service_name": self.service_name},
+        )
 
         # Upgrade the existing release with the plugin values.
         self.exec.helm_upgrade_install(
@@ -235,21 +189,17 @@ config:
         """Grant Headlamp service account cluster-admin to enable log access."""
         binding_name = f"{self.service_name}-cluster-admin"
         manifest_path = f"{self.target_path}/{binding_name}.yaml"
-        manifest = f"""apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {binding_name}
-subjects:
-  - kind: ServiceAccount
-    name: {self.service_name}
-    namespace: {self.namespace}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-"""
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_write_file(conn, manifest_path, manifest)
+        self.render_template_to_file(
+            conn,
+            "cluster-admin-binding.yaml.tmpl",
+            manifest_path,
+            {
+                "binding_name": binding_name,
+                "service_name": self.service_name,
+                "namespace": self.namespace,
+            },
+        )
         self.exec.k8s_apply_manifest(
             conn,
             manifest_path,

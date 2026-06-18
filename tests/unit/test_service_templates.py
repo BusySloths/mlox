@@ -6,7 +6,10 @@ from typing import Dict
 import pytest
 
 from mlox.service import AbstractService
+from mlox.services.k8s_headlamp.k8s import K8sHeadlampService
+from mlox.services.kubeapps.k8s import KubeAppsService
 from mlox.services.kubeflow.k8s import KubeflowService
+from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
 from mlox.services.mlflow_mlserver.k3s import MLFlowMLServerK3sService
 
 
@@ -120,3 +123,120 @@ def test_mlflow_mlserver_k3s_manifest_template_renders_valid_documents() -> None
     assert f"nodePort: {service.port}" in rendered
     assert "${" not in rendered
     assert "@" not in rendered
+
+
+def test_kubeapps_templates_render_expected_resources() -> None:
+    service = KubeAppsService(
+        name="KubeApps",
+        service_config_id="kubeapps",
+        template="unused",
+        target_path="/tmp/kubeapps",
+    )
+
+    ingress = service.render_template(
+        "ingress.yaml.tmpl",
+        {
+            "ingress_name": "kubeapps-ingress",
+            "namespace": service.namespace,
+            "entrypoint": "websecure",
+            "host_line": "    - http:",
+            "path": "/kubeapps",
+            "release_name": service.release_name,
+            "backend_service_port": 80,
+            "tls_hosts": " []",
+            "tls_secret_name": "kubeapps-ingress-tls",
+        },
+    )
+    binding = service.render_template(
+        "admin-binding.yaml.tmpl",
+        {
+            "service_account_name": service.service_account_name,
+            "namespace": service.namespace,
+            "binding_name": service._cluster_role_binding_name(),
+        },
+    )
+
+    assert "kind: Ingress" in ingress
+    assert "path: /kubeapps" in ingress
+    assert "kind: ServiceAccount" in binding
+    assert "kind: ClusterRoleBinding" in binding
+    assert "@" not in ingress + binding
+
+
+def test_headlamp_templates_render_expected_resources() -> None:
+    service = K8sHeadlampService(
+        name="Headlamp",
+        service_config_id="headlamp",
+        template="unused",
+        target_path="/tmp/headlamp",
+    )
+
+    ingress = service.render_template(
+        "ingress.yaml.tmpl",
+        {
+            "ingress_name": "headlamp-ingress",
+            "namespace": service.namespace,
+            "annotations_block": "    kubernetes.io/ingress.class: traefik",
+            "path": "/headlamp",
+            "service_name": service.service_name,
+            "backend_port": 8080,
+        },
+    )
+    middleware = service.render_template(
+        "middleware.yaml.tmpl",
+        {
+            "middleware_name": "headlamp-strip-prefix",
+            "namespace": service.namespace,
+            "path": "/headlamp",
+        },
+    )
+    values = service.render_template(
+        "gadgets-values.yaml.tmpl", {"service_name": service.service_name}
+    )
+    binding = service.render_template(
+        "cluster-admin-binding.yaml.tmpl",
+        {
+            "binding_name": "headlamp-cluster-admin",
+            "service_name": service.service_name,
+            "namespace": service.namespace,
+        },
+    )
+
+    rendered = ingress + middleware + values + binding
+    assert "kind: Ingress" in ingress
+    assert "kind: Middleware" in middleware
+    assert f'claimName: "{service.service_name}"' in values
+    assert "kind: ClusterRoleBinding" in binding
+    assert "@" not in rendered
+
+
+def test_mlflow_gateway_k3s_templates_render_expected_resources(tmp_path) -> None:
+    serve_script = tmp_path / "serve.py"
+    serve_script.write_text("print('gateway')\n", encoding="utf-8")
+    service = MLFlowGatewayK3sService(
+        name="MLflow Gateway",
+        service_config_id="mlflow-gateway-3.8.1-k3s",
+        template="unused",
+        target_path="/tmp/mlflow-gateway",
+        dockerfile="unused",
+        serve_script=str(serve_script),
+        start_script="unused",
+        port=30433,
+        tracking_uri="https://mlflow.example.test",
+        tracking_user="user",
+        tracking_pw="pw",
+        requirements_txt="pydantic==2.0.0",
+    )
+
+    manifest = service._render_gateway_manifest()
+    values = service._render_traefik_values()
+
+    assert "kind: ConfigMap" in manifest
+    assert "kind: Secret" in manifest
+    assert "kind: Deployment" in manifest
+    assert "print('gateway')" in manifest
+    assert "pydantic==2.0.0" in manifest
+    assert f"namespace: {service.namespace}" in manifest
+    assert f"exposedPort: {service.port}" in values
+    assert "gateway-auth" in values
+    assert "@" not in manifest + values

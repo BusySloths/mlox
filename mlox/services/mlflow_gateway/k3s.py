@@ -1,7 +1,5 @@
-import json
 import logging
 import shlex
-import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -37,214 +35,47 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
         self.manifest_path = f"{self.target_path}/mlflow-gateway.yaml"
         self.traefik_values_path = f"{self.target_path}/traefik-values.yaml"
 
-    @staticmethod
-    def _yaml_string(value: str) -> str:
-        return json.dumps(value)
-
-    @staticmethod
-    def _config_map_block(value: str) -> str:
-        return textwrap.indent(value.rstrip(), "    ")
-
     def _render_gateway_manifest(self) -> str:
         serve_script = Path(self.serve_script).read_text(encoding="utf-8")
         requirements = _resolved_text(self.requirements_txt)
         cache_size = _resolved_setting(self.cache_max_models, "10")
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")
 
-        return f"""apiVersion: v1
-kind: Namespace
-metadata:
-  name: {self.namespace}
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: mlflow-gateway-code
-  namespace: {self.namespace}
-data:
-  serve.py: |-
-{self._config_map_block(serve_script)}
-  gateway-requirements.txt: |-
-{self._config_map_block(requirements)}
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mlflow-gateway-credentials
-  namespace: {self.namespace}
-type: Opaque
-stringData:
-  gateway-user: {self._yaml_string(self.user)}
-  gateway-password: {self._yaml_string(self.pw)}
-  tracking-uri: {self._yaml_string(self.tracking_uri)}
-  tracking-user: {self._yaml_string(self.tracking_user)}
-  tracking-password: {self._yaml_string(self.tracking_pw)}
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {self.deployment_name}
-  namespace: {self.namespace}
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: mlflow-gateway
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: mlflow-gateway
-    spec:
-      containers:
-        - name: gateway
-          image: python:3.12-slim
-          imagePullPolicy: IfNotPresent
-          workingDir: /app
-          command: ["/bin/bash", "-lc"]
-          args:
-            - |
-              set -euo pipefail
-              pip install --no-cache-dir \
-                "mlflow==3.8.1" \
-                "mlflow[extras]==3.8.1" \
-                "fastapi==0.115.0" \
-                "uvicorn[standard]==0.30.6" \
-                "pandas>=2.2" \
-                "numpy>=1.26"
-              if [ -s /app/gateway-requirements.txt ]; then
-                pip install --no-cache-dir -r /app/gateway-requirements.txt
-              fi
-              exec uvicorn serve:app --host 0.0.0.0 --port {self.container_port}
-          env:
-            - name: MLFLOW_URI
-              valueFrom:
-                secretKeyRef:
-                  name: mlflow-gateway-credentials
-                  key: tracking-uri
-            - name: MLFLOW_TRACKING_URI
-              valueFrom:
-                secretKeyRef:
-                  name: mlflow-gateway-credentials
-                  key: tracking-uri
-            - name: MLFLOW_TRACKING_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: mlflow-gateway-credentials
-                  key: tracking-user
-            - name: MLFLOW_TRACKING_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mlflow-gateway-credentials
-                  key: tracking-password
-            - name: MLFLOW_TRACKING_INSECURE_TLS
-              value: "true"
-            - name: MLOX_GATEWAY_CACHE_MAX_MODELS
-              value: {self._yaml_string(cache_size)}
-            - name: MLOX_GATEWAY_CACHE_TTL_DAYS
-              value: {self._yaml_string(cache_ttl)}
-          ports:
-            - name: http
-              containerPort: {self.container_port}
-          startupProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 5
-            failureThreshold: 120
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 5
-            failureThreshold: 6
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 10
-            failureThreshold: 6
-          volumeMounts:
-            - name: gateway-code
-              mountPath: /app/serve.py
-              subPath: serve.py
-              readOnly: true
-            - name: gateway-code
-              mountPath: /app/gateway-requirements.txt
-              subPath: gateway-requirements.txt
-              readOnly: true
-      volumes:
-        - name: gateway-code
-          configMap:
-            name: mlflow-gateway-code
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {self.service_name}
-  namespace: {self.namespace}
-spec:
-  type: ClusterIP
-  selector:
-    app.kubernetes.io/name: mlflow-gateway
-  ports:
-    - name: http
-      port: {self.container_port}
-      targetPort: http
-"""
+        return self.render_template(
+            "gateway-manifest.yaml.tmpl",
+            {
+                "namespace": self.namespace,
+                "serve_script_block": self.indent_block(serve_script, 4),
+                "requirements_block": self.indent_block(requirements, 4),
+                "gateway_user": self.yaml_scalar(self.user),
+                "gateway_password": self.yaml_scalar(self.pw),
+                "tracking_uri": self.yaml_scalar(self.tracking_uri),
+                "tracking_user": self.yaml_scalar(self.tracking_user),
+                "tracking_password": self.yaml_scalar(self.tracking_pw),
+                "deployment_name": self.deployment_name,
+                "container_port": self.container_port,
+                "cache_size": self.yaml_scalar(cache_size),
+                "cache_ttl": self.yaml_scalar(cache_ttl),
+                "service_name": self.service_name,
+            },
+        )
 
     def _render_traefik_values(self) -> str:
         password_hash = apr_md5_crypt.hash(self.pw)
-        auth_user = self._yaml_string(f"{self.user}:{password_hash}")
+        auth_user = self.yaml_scalar(f"{self.user}:{password_hash}")
         backend_url = (
             f"http://{self.service_name}.{self.namespace}.svc.cluster.local:"
             f"{self.container_port}"
         )
 
-        return f"""deployment:
-  replicas: 1
-ingressClass:
-  enabled: false
-providers:
-  kubernetesCRD:
-    enabled: false
-  kubernetesIngress:
-    enabled: false
-  file:
-    enabled: true
-    watch: true
-    content: |-
-      http:
-        routers:
-          gateway:
-            entryPoints:
-              - websecure
-            rule: PathPrefix(`/`)
-            service: gateway
-            middlewares:
-              - gateway-auth
-            tls: {{}}
-        middlewares:
-          gateway-auth:
-            basicAuth:
-              users:
-                - {auth_user}
-        services:
-          gateway:
-            loadBalancer:
-              servers:
-                - url: {self._yaml_string(backend_url)}
-ports:
-  web:
-    expose:
-      default: false
-  websecure:
-    port: 8443
-    exposedPort: {self.port}
-    expose:
-      default: true
-service:
-  type: LoadBalancer
-"""
+        return self.render_template(
+            "traefik-values.yaml.tmpl",
+            {
+                "auth_user": auth_user,
+                "backend_url": self.yaml_scalar(backend_url),
+                "port": self.port,
+            },
+        )
 
     def _kubectl(self, arguments: str) -> str:
         return f"kubectl --kubeconfig {shlex.quote(self.kubeconfig)} {arguments}"

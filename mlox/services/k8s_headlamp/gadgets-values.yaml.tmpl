@@ -1,0 +1,31 @@
+initContainers:
+  - name: headlamp-plugins
+    image: ghcr.io/inspektor-gadget/headlamp-plugin:0.1.0-beta.2
+    imagePullPolicy: Always
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /build/plugins && cp -r /plugins/* /build/plugins/",
+      ]
+    volumeMounts:
+      - name: headlamp-plugins
+        mountPath: /build/plugins
+
+persistentVolumeClaim:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+
+volumeMounts:
+  - name: headlamp-plugins
+    mountPath: /build/plugins
+
+volumes:
+  - name: headlamp-plugins
+    persistentVolumeClaim:
+      claimName: "@service_name"
+
+config:
+  pluginsDir: /build/plugins

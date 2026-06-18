@@ -1,0 +1,44 @@
+deployment:
+  replicas: 1
+ingressClass:
+  enabled: false
+providers:
+  kubernetesCRD:
+    enabled: false
+  kubernetesIngress:
+    enabled: false
+  file:
+    enabled: true
+    watch: true
+    content: |-
+      http:
+        routers:
+          gateway:
+            entryPoints:
+              - websecure
+            rule: PathPrefix(`/`)
+            service: gateway
+            middlewares:
+              - gateway-auth
+            tls: {}
+        middlewares:
+          gateway-auth:
+            basicAuth:
+              users:
+                - @auth_user
+        services:
+          gateway:
+            loadBalancer:
+              servers:
+                - url: @backend_url
+ports:
+  web:
+    expose:
+      default: false
+  websecure:
+    port: 8443
+    exposedPort: @port
+    expose:
+      default: true
+service:
+  type: LoadBalancer
