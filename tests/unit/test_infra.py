@@ -211,6 +211,22 @@ def test_infrastructure_lookup_helpers_find_services_bundles_and_servers():
     assert infra.get_server_by_uuid("missing") is None
 
 
+def test_remove_bundle_removes_existing_bundle_and_reports_missing():
+    first_bundle = Bundle(name="first", server=make_server(GitServer, "10.0.0.1"))
+    second_bundle = Bundle(
+        name="second", server=make_server(FirewallServer, "10.0.0.2")
+    )
+    missing_bundle = Bundle(
+        name="missing", server=make_server(DummyServer, "10.0.0.3")
+    )
+    infra = make_infra(bundles=[first_bundle, second_bundle])
+
+    assert infra.remove_bundle(first_bundle) is True
+    assert infra.bundles == [second_bundle]
+    assert infra.remove_bundle(missing_bundle) is False
+    assert infra.bundles == [second_bundle]
+
+
 def test_kubernetes_and_backend_filters_only_return_matching_bundles():
     running_k8s_server = make_server(DummyServer, "10.0.0.1")
     running_k8s_server.backend = ["kubernetes"]
