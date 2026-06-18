@@ -43,7 +43,7 @@ def install_openbao_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception:
             pass
-    infra.remove_bundle(bundle)
+    infra.bundles.remove(bundle)
 
 
 def test_openbao_service_is_running(install_openbao_service):

@@ -101,7 +101,7 @@ def deploy_mlflow_gateway(ubuntu_docker_server, install_mlflow3_service):
             gateway_service.teardown(conn)
         except Exception as exc:
             logger.warning("Error during MLflow Gateway teardown: %s", exc)
-    infra.remove_bundle(gateway_bundle)
+    infra.bundles.remove(gateway_bundle)
 
 
 def test_mlflow_gateway_is_ready(deploy_mlflow_gateway):

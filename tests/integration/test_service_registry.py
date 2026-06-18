@@ -55,7 +55,7 @@ def install_registry_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception as exc:
             logger.warning("Error during registry teardown: %s", exc)
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_registry_service_running(install_registry_service):

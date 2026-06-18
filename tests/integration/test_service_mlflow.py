@@ -57,7 +57,7 @@ def install_mlflow_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception:
             pass
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_mlflow_service_is_running(install_mlflow_service):

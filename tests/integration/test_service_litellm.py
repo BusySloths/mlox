@@ -54,7 +54,7 @@ def install_litellm_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception as e:
             logger.warning(f"Ignoring error during service teardown: {e}")
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_litellm_service_is_running(install_litellm_service):
@@ -108,7 +108,7 @@ def test_litellm_multiple_models_selection(ubuntu_docker_server):
     assert "qwen2.5:0.5b" in service.ollama_models
 
     # Cleanup (don't actually spin up to save test time)
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_litellm_no_models_selection(ubuntu_docker_server):
@@ -133,4 +133,4 @@ def test_litellm_no_models_selection(ubuntu_docker_server):
     assert len(service.ollama_models) == 0
 
     # Cleanup (don't actually spin up to save test time)
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)

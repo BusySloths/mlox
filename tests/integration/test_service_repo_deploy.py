@@ -80,7 +80,7 @@ def install_repo_deploy_service(ubuntu_docker_server):
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Ignoring error during github repo teardown: %s", exc)
 
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_repo_deploy_setup_creates_compose_and_env(install_repo_deploy_service):

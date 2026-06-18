@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_server
+from tests.integration.helpers import add_server, remove_server
 import uuid
 import time
 import socket
@@ -278,7 +278,7 @@ def ubuntu_docker_server(multipass_instance):
         logging.info("Successfully tore down ubuntu_docker_server.")
     except Exception as e:
         logging.warning(f"Could not tear down ubuntu_docker_server: {e}")
-    infra.remove_bundle(bundle)
+    infra.bundles.remove(bundle)
 
 
 @pytest.fixture(scope="package")
@@ -341,12 +341,11 @@ def ubuntu_k3s_server(multipass_k8s_instance):
     logging.info(
         f"Tearing down ubuntu_k3s_server on VM {multipass_k8s_instance['name']}..."
     )
-    try:
-        server.teardown()
+    result = remove_server(infra, server.ip)
+    if result.success:
         logging.info("Successfully tore down ubuntu_k3s_server.")
-    except Exception as e:
-        logging.warning(f"Could not tear down ubuntu_k3s_server: {e}")
-    infra.remove_bundle(bundle)
+    else:
+        logging.warning("Could not tear down ubuntu_k3s_server: %s", result.message)
 
 
 @pytest.fixture(scope="package")
@@ -386,7 +385,7 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
         logging.info("Successfully tore down ubuntu_simple_server.")
     except Exception as e:
         logging.warning(f"Could not tear down ubuntu_simple_server: {e}")
-    infra.remove_bundle(bundle)
+    infra.bundles.remove(bundle)
 
 
 # @pytest.fixture(scope="package")
@@ -413,4 +412,4 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
 #         logging.info("Successfully tore down ubuntu_native_server.")
 #     except Exception as e:
 #         logging.warning(f"Could not tear down ubuntu_native_server: {e}")
-#     infra.remove_bundle(bundle)
+#     infra.bundles.remove(bundle)

@@ -95,16 +95,6 @@ class Infrastructure:
                 return bundle
         return None
 
-    def remove_bundle(self, bundle: Bundle) -> bool:
-        """Remove a bundle from the infrastructure if it is present."""
-
-        try:
-            self.bundles.remove(bundle)
-            return True
-        except ValueError:
-            logger.warning("Bundle %s was not present in infrastructure.", bundle.name)
-            return False
-
     def list_service_names(self) -> List[str]:
         return [s.name for bundle in self.bundles for s in bundle.services]
 

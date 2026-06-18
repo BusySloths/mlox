@@ -45,7 +45,7 @@ def install_postgres_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception as e:
             logger.warning(f"Ignoring error during service teardown: {e}")
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_postgres_service_is_running(install_postgres_service):

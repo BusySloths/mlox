@@ -58,4 +58,4 @@ def test_multipass_ubuntu_server_lifecycle(template, expected_backend):
     finally:
         logging.info("Tearing down Multipass VM %s", name)
         server.teardown()
-        infra.remove_bundle(bundle)
+        infra.bundles.remove(bundle)

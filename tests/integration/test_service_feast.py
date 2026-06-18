@@ -97,7 +97,7 @@ def install_feast_service(ubuntu_docker_server):
         redis_service.spin_down(conn)
         redis_service.teardown(conn)
 
-    infra.remove_bundle(bundle)
+    infra.bundles.remove(bundle)
 
 
 def test_feast_service_is_running(install_feast_service):

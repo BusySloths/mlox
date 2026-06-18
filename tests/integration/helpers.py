@@ -47,3 +47,13 @@ def add_service(
     if not result.success:
         return None
     return infrastructure.get_bundle_by_ip(server_ip)
+
+
+def remove_server(infrastructure: Infrastructure, server_ip: str):
+    project = WorkspaceState(name="integration-test", infrastructure=infrastructure)
+    return servers.teardown_server(project, ip=server_ip)
+
+
+def remove_service(infrastructure: Infrastructure, service_name: str):
+    project = WorkspaceState(name="integration-test", infrastructure=infrastructure)
+    return services.teardown_service(project, name=service_name)

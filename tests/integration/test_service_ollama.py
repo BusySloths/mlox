@@ -52,7 +52,7 @@ def install_ollama_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception as exc:
             logger.warning("Ignoring error during Ollama teardown: %s", exc)
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_ollama_service_is_running(install_ollama_service):

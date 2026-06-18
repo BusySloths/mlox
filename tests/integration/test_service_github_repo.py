@@ -95,7 +95,7 @@ def github_repo_service(ubuntu_docker_server):
                 "Ignoring error during GitHub repository service teardown: %s", exc
             )
 
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_github_repo_public_clone(github_repo_service):
@@ -190,7 +190,7 @@ def github_private_repo_service(ubuntu_docker_server):
                 exc,
             )
 
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_github_repo_private_clone(github_private_repo_service):

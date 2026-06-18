@@ -49,7 +49,7 @@ def install_kafka_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception:
             pass
-    infra.remove_bundle(bundle)
+    infra.bundles.remove(bundle)
 
 
 def _write_certificate(tmp_path: Path, certificate: str) -> Path:

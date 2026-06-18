@@ -46,7 +46,7 @@ def install_milvus_service(ubuntu_docker_server):
             service.teardown(conn)
         except Exception:
             pass
-    infra.remove_bundle(bundle_added)
+    infra.bundles.remove(bundle_added)
 
 
 def test_milvus_service_is_running(install_milvus_service):

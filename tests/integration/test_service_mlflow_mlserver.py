@@ -115,7 +115,7 @@ def deploy_mlflow_mlserver(ubuntu_docker_server, install_mlflow3_service):
             mlserver_service.teardown(conn)
         except Exception as exc:
             logger.warning("Error during MLServer teardown: %s", exc)
-    infra.remove_bundle(mlserver_bundle)
+    infra.bundles.remove(mlserver_bundle)
 
 
 def test_mlserver_is_ready(deploy_mlflow_mlserver):
