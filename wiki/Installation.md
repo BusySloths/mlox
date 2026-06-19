@@ -61,6 +61,9 @@ task tests:unit:run
 
 # Integration tests (requires Multipass VMs)
 task tests:integration:run
+
+# Kubernetes integration tests (requires Multipass/k3s)
+task tests:integration:k8s
 ```
 
 ### VM Setup for Integration Testing

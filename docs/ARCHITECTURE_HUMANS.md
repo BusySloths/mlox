@@ -111,8 +111,12 @@ task
 task first:steps
 task tests:unit:run
 task tests:integration:run
+task tests:integration:k8s
 task docker:up
 task docker:down
 ```
 
-Unit tests live in `tests/unit/`. Integration tests live in `tests/integration/` and require Multipass.
+Unit tests live in `tests/unit/`. Integration tests live in `tests/integration/`
+and require Multipass. Kubernetes integration tests are selected with
+`task tests:integration:k8s`, which runs tests marked with both `integration`
+and `kubernetes`.

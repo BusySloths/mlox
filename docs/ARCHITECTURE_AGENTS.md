@@ -77,5 +77,9 @@ Integration tests require Multipass:
 
 ```bash
 task tests:integration:run
+task tests:integration:k8s
 task tests:integration:cleanup
 ```
+
+`tests:integration:k8s` runs only tests marked with both `integration` and
+`kubernetes`; these provision a Multipass/k3s backend.
