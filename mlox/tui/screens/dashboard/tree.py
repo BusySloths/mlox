@@ -36,7 +36,7 @@ class InfraTree(Tree[SelectionInfo]):
 
         infra = getattr(workspace, "infrastructure", None)
         if not infra or not infra.bundles:
-            self.root.add(
+            self.root.add_leaf(
                 "No infrastructure available", data=SelectionInfo(type="empty")
             )
             self.root.expand()
@@ -54,15 +54,15 @@ class InfraTree(Tree[SelectionInfo]):
                 if server
                 else "Server: unknown"
             )
-            bundle_node.add(
+            bundle_node.add_leaf(
                 server_label,
                 data=SelectionInfo(type="server", bundle=bundle, server=server),
             )
             if not bundle.services:
-                bundle_node.add("No services", data=SelectionInfo(type="empty"))
+                bundle_node.add_leaf("No services", data=SelectionInfo(type="empty"))
                 continue
             for svc in bundle.services:
-                bundle_node.add(
+                bundle_node.add_leaf(
                     f"Service: {svc.name}",
                     data=SelectionInfo(
                         type="service", bundle=bundle, server=server, service=svc
