@@ -58,6 +58,15 @@ For running all integration tests just type (assumes multipass VM has been insta
 task tests:integration:run
 ```
 
+For running only the Kubernetes integration tests, which provision a k3s-backed
+Multipass VM and run tests marked with both `integration` and `kubernetes`:
+
+```bash
+task tests:integration:k8s
+# alias:
+task tests:integration:kubernetes
+```
+
 For running a specific integration test use:
 
 ```bash
@@ -71,6 +80,7 @@ task vm:install:macos      # macOS only
 task vm:install:linux      # Linux only
 task vm:start
 task tests:integration:run
+task tests:integration:k8s
 task tests:integration:cleanup
 task vm:purge
 ```

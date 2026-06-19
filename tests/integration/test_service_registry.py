@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import gzip
 import hashlib
 import io
@@ -46,16 +46,9 @@ def install_registry_service(ubuntu_docker_server):
 
     yield bundle_added, service
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            service.spin_down(conn)
-        except Exception as exc:
-            logger.warning("Error during registry spin_down: %s", exc)
-        try:
-            service.teardown(conn)
-        except Exception as exc:
-            logger.warning("Error during registry teardown: %s", exc)
-    infra.remove_bundle(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_registry_service_running(install_registry_service):

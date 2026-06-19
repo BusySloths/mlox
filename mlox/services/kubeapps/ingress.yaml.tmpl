@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: @ingress_name
+  namespace: @namespace
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: @entrypoint
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+@host_line
+        paths:
+          - path: @path
+            pathType: Prefix
+            backend:
+              service:
+                name: @release_name
+                port:
+                  number: @backend_service_port
+  tls:
+    - hosts:@tls_hosts
+      secretName: @tls_secret_name

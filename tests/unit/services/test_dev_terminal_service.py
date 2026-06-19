@@ -1,3 +1,4 @@
+from mlox.execution import TaskGroup
 from mlox.services.dev_terminal.service import DeveloperTerminalService
 
 
@@ -13,12 +14,14 @@ def _service() -> DeveloperTerminalService:
 def test_install_script_installs_modern_neovim_with_snap_when_needed() -> None:
     script = _service()._install_script()
 
+    assert "@install_" not in script
     assert "MIN_NVIM_VERSION=0.11.2" in script
     assert "nvim_version_meets_min" in script
     assert "snapd" in script
     assert "snap install nvim --classic" in script
     assert "ln -sf /snap/bin/nvim /usr/local/bin/nvim" in script
     assert "Neovim $MIN_NVIM_VERSION or newer is required for LazyVim." in script
+    assert "npm install -g @anthropic-ai/claude-code" in script
     assert " mc neovim nodejs " not in script
 
 
@@ -35,6 +38,7 @@ def test_check_requires_lazyvim_compatible_neovim() -> None:
     assert service.check(object()) == {"status": "running"}
     assert commands
     assert "nvim --version" in commands[0]
+    assert "command -v zsh git nvim mc yazi atuin claude pyenv tmux" in commands[0]
     assert 'dpkg --compare-versions "$nvim_version" ge 0.11.2' in commands[0]
 
 
@@ -77,4 +81,109 @@ def test_install_script_configures_utf8_locale_for_zsh_and_pyenv() -> None:
     assert "update-locale LANG=C.UTF-8 LC_CTYPE=C.UTF-8" in script
     assert "append_once 'export LANG=C.UTF-8'" in script
     assert "append_once 'export LC_CTYPE=C.UTF-8'" in script
+    assert "append_once 'export COLORTERM=truecolor'" in script
+    assert (
+        'append_once \'export TERMINFO_DIRS="$HOME/.terminfo:/etc/terminfo:/lib/terminfo:/usr/share/terminfo"\''
+        in script
+    )
+    assert "append_once 'export NCURSES_NO_UTF8_ACS=1'" in script
+    assert "append_once 'export LESSCHARSET=utf-8'" in script
     assert "append_once 'unset LC_ALL'" in script
+
+
+def test_install_script_installs_and_configures_tmux_for_lazyvim() -> None:
+    script = _service()._install_script()
+
+    assert " tmux " in script
+    assert " screen " not in script
+    assert "ncurses-bin ncurses-term" in script
+    assert 'TMUX_CONF="$TARGET_HOME/.tmux.conf"' in script
+    assert 'set -g default-terminal "tmux-256color"' in script
+    assert 'set -ga terminal-overrides ",*:RGB"' in script
+    assert 'set -g focus-events on' in script
+    assert 'set -g escape-time 10' in script
+    assert 'set -g mouse on' in script
+    assert 'setw -g mode-keys vi' in script
+    assert 'set -g set-clipboard on' in script
+    assert 'set -g prefix C-a' in script
+    assert 'bind | split-window -h -c "#{pane_current_path}"' in script
+    assert 'bind - split-window -v -c "#{pane_current_path}"' in script
+    assert 'bind h select-pane -L' in script
+    assert 'bind-key -T copy-mode-vi v send -X begin-selection' in script
+    assert 'bind ? display-popup -E -w 78 -h 24 "cat ~/.tmux-shortcuts"' in script
+
+
+def test_install_script_writes_tmux_shortcut_reference() -> None:
+    script = _service()._install_script()
+
+    assert 'TMUX_SHORTCUTS="$TARGET_HOME/.tmux-shortcuts"' in script
+    assert "tmux essentials for this host" in script
+    assert "tmux new -As dev" in script
+    assert "Ctrl-a |      split right" in script
+    assert "Ctrl-a h/j/k/l move between panes" in script
+    assert "Ctrl-a [      enter copy mode" in script
+    assert 'alias mux="tmux new -As dev"' in script
+    assert 'alias tmux-help="cat ~/.tmux-shortcuts"' in script
+
+
+def test_install_script_installs_oh_my_zsh_without_interactive_installer() -> None:
+    script = _service()._install_script()
+
+    assert "INSTALL_OH_MY_ZSH=true" in script
+    assert "https://github.com/ohmyzsh/ohmyzsh.git" in script
+    assert 'append_once \'export ZSH="$HOME/.oh-my-zsh"\'' in script
+    assert "append_once 'plugins=(git direnv fzf pyenv)'" in script
+    assert 'append_once \'[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"\'' in script
+
+
+def test_sensitive_cleanup_removes_claude_code_and_history_state() -> None:
+    script = _service()._sensitive_cleanup_script()
+
+    assert "TARGET_USER=\"${SUDO_USER:-$(id -un)}\"" in script
+    assert "remove_home_path" in script
+    assert 'rm -rf -- "$TARGET_HOME/$relative_path"' in script
+    assert 'remove_home_path ".claude"' in script
+    assert 'remove_home_path ".claude.json"' in script
+    assert 'remove_home_path ".config/claude-code"' in script
+    assert 'remove_home_path ".cache/claude-code"' in script
+    assert 'remove_home_path ".local/share/claude-code"' in script
+    assert 'remove_home_path ".local/state/claude-code"' in script
+    assert 'remove_home_path ".atuin"' in script
+    assert 'remove_home_path ".local/share/atuin"' in script
+    assert 'remove_home_path ".tmux.conf"' in script
+    assert 'remove_home_path ".tmux-shortcuts"' in script
+
+
+def test_teardown_runs_sensitive_cleanup_before_removing_target_path() -> None:
+    service = _service()
+    calls: list[tuple[str, str, dict]] = []
+
+    class Exec:
+        def fs_write_file(self, _conn, path, content):
+            calls.append(("fs_write_file", path, {"content": content}))
+
+        def execute(self, _conn, command, **kwargs):
+            calls.append(("execute", command, kwargs))
+
+        def fs_delete_dir(self, _conn, path):
+            calls.append(("fs_delete_dir", path, {}))
+
+    service.exec = Exec()  # type: ignore[assignment]
+
+    service.teardown(object())
+
+    assert calls[0][0] == "fs_write_file"
+    assert calls[0][1] == "/tmp/dev-terminal/cleanup-sensitive-state.sh"
+    assert 'remove_home_path ".claude"' in calls[0][2]["content"]
+    assert calls[1] == (
+        "execute",
+        "chmod +x /tmp/dev-terminal/cleanup-sensitive-state.sh",
+        {"group": TaskGroup.FILESYSTEM},
+    )
+    assert calls[2] == (
+        "execute",
+        "/tmp/dev-terminal/cleanup-sensitive-state.sh",
+        {"group": TaskGroup.SECURITY_ASSETS, "sudo": True},
+    )
+    assert calls[3] == ("fs_delete_dir", "/tmp/dev-terminal", {})
+    assert service.state == "un-initialized"

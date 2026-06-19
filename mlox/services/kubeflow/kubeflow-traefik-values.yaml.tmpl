@@ -1,0 +1,36 @@
+ingressClass:
+  enabled: false
+gateway:
+  enabled: false
+providers:
+  kubernetesCRD:
+    enabled: false
+  kubernetesIngress:
+    enabled: false
+  file:
+    enabled: true
+    content: |-
+      http:
+        routers:
+          kubeflow:
+            entryPoints:
+              - websecure
+            rule: PathPrefix(`/`)
+            service: kubeflow
+            tls: {}
+        services:
+          kubeflow:
+            loadBalancer:
+              servers:
+                - url: http://@ingress_service.@ingress_namespace.svc.cluster.local:80
+ports:
+  web:
+    expose:
+      default: false
+  websecure:
+    port: @ingress_port
+    exposedPort: @ingress_port
+    expose:
+      default: true
+service:
+  type: LoadBalancer

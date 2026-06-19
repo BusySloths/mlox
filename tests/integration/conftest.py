@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_server
+from tests.integration.helpers import add_server, remove_server
 import uuid
 import time
 import socket
@@ -11,6 +11,7 @@ from typing import Callable, Dict, Optional
 
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure
+from mlox.executors import TaskGroup
 
 logger = logging.getLogger(__name__)
 try:
@@ -31,7 +32,13 @@ pytestmark = pytest.mark.integration
 def wait_for_ssh(
     vm: MultipassVM, vm_name: str, timeout: int = 120, interval: float = 2.0
 ) -> str:
-    """Wait until the VM has an IPv4 and port 22 is reachable. Returns the ip when ready."""
+    """Wait until the VM has an IPv4 and port 22 is reachable. Returns the ip when ready.
+
+    This only proves that sshd is listening on TCP/22. Multipass guests can
+    briefly accept TCP connections before the SSH daemon is ready to complete a
+    protocol handshake, so fixtures should also call ``wait_for_server_login``
+    before running Fabric/MLOX setup commands.
+    """
     deadline = time.time() + timeout
     last_exc = None
     while time.time() < deadline:
@@ -66,6 +73,33 @@ def wait_for_ssh(
         time.sleep(interval)
     raise TimeoutError(
         f"VM {vm_name} SSH not reachable after {timeout}s. Last error: {last_exc!r}"
+    )
+
+
+def wait_for_server_login(
+    server, timeout: int = 180, interval: float = 3.0, force_root: bool = True
+) -> None:
+    """Wait until Fabric can complete an SSH login and run a no-op command."""
+
+    deadline = time.time() + timeout
+    last_exc: Exception | None = None
+    while time.time() < deadline:
+        try:
+            with server.get_server_connection(force_root=force_root) as conn:
+                conn.run("true", hide=True, warn=False, pty=False)
+            return
+        except Exception as exc:  # pragma: no cover - remote environment dependent
+            last_exc = exc
+            logging.warning(
+                "Waiting for stable SSH login to %s after %s: %s",
+                getattr(server, "ip", "?"),
+                type(exc).__name__,
+                exc,
+            )
+            time.sleep(interval)
+    raise TimeoutError(
+        f"Server SSH login did not become ready after {timeout}s. "
+        f"Last error: {last_exc!r}"
     )
 
 
@@ -124,6 +158,44 @@ def wait_for_service_ready(
             )
         time.sleep(interval)
     return status
+
+
+def wait_for_k3s_ready(
+    server, timeout: int = 300, interval: float = 5.0, force_root: bool = False
+) -> None:
+    """Wait until the k3s node is Ready on a provisioned Kubernetes server.
+
+    This runs after ``server.setup()``, which creates the normal MLOX SSH user
+    and disables password-based access. Use the default post-setup credentials
+    instead of forcing the initial root/password login path.
+    """
+
+    deadline = time.time() + timeout
+    last_output = ""
+    while time.time() < deadline:
+        try:
+            with server.get_server_connection(force_root=force_root) as conn:
+                nodes = server.exec.execute(
+                    conn,
+                    "kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml get nodes --no-headers",
+                    group=TaskGroup.KUBERNETES,
+                    sudo=True,
+                    pty=False,
+                )
+                pods = server.exec.execute(
+                    conn,
+                    "kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml get pods -A --no-headers",
+                    group=TaskGroup.KUBERNETES,
+                    sudo=True,
+                    pty=False,
+                )
+            last_output = f"nodes={nodes!r} pods={pods!r}"
+            if nodes and " Ready " in f" {nodes} ":
+                return
+        except Exception as exc:  # pragma: no cover - remote environment dependent
+            last_output = repr(exc)
+        time.sleep(interval)
+    raise TimeoutError(f"k3s did not become ready after {timeout}s: {last_output}")
 
 
 @pytest.fixture(scope="package")
@@ -201,12 +273,78 @@ def ubuntu_docker_server(multipass_instance):
         logging.warning(
             "Baseline docker volumes removed during teardown: %s", missing_volumes
         )
-    try:
-        server.teardown()
+    result = remove_server(infra, server.ip)
+    if result.success:
         logging.info("Successfully tore down ubuntu_docker_server.")
+    else:
+        logging.warning("Could not tear down ubuntu_docker_server: %s", result.message)
+
+
+@pytest.fixture(scope="package")
+def multipass_k8s_instance():
+    if not _HAS_MULTIPASS:
+        pytest.skip(
+            "multipass package not available; skip integration tests that require Multipass"
+        )
+
+    client = MultipassClient()
+    name = f"mlox-k8s-test-{uuid.uuid4().hex[:8]}"
+    cloud_init_path = (
+        Path(__file__).resolve().parents[2] / "mlox/assets/cloud-init.yaml"
+    )
+    logging.info(
+        f"Launching Kubernetes Multipass VM {name} with cloud-init {cloud_init_path}"
+    )
+    vm = client.launch(
+        vm_name=name, cpu=4, disk="60G", mem="12G", cloud_init=cloud_init_path
+    )
+    ip = wait_for_ssh(vm, name, timeout=180, interval=3.0)
+    vm.info()
+    logging.info(f"Kubernetes Multipass VM {name} is running at IP {ip}")
+    yield {"client": client, "vm": vm, "name": name, "ip": ip}
+    logging.info(f"Cleaning up Kubernetes Multipass VM {name}...")
+    try:
+        vm.delete()
+        client.purge()
+        logging.info(f"Successfully cleaned up Kubernetes Multipass VM {name}.")
     except Exception as e:
-        logging.warning(f"Could not tear down ubuntu_docker_server: {e}")
-    infra.remove_bundle(bundle)
+        logging.warning(f"Could not clean up Kubernetes Multipass VM {name}: {e}")
+
+
+@pytest.fixture(scope="package")
+def ubuntu_k3s_server(multipass_k8s_instance):
+    infra = Infrastructure()
+    config = load_config(
+        get_stacks_path(prefix="mlox-server"),
+        "/ubuntu",
+        "mlox-server.ubuntu.k3s.yaml",
+    )
+    params = {
+        "${MLOX_IP}": multipass_k8s_instance["ip"],
+        "${MLOX_PORT}": "22",
+        "${MLOX_ROOT}": "root",
+        "${MLOX_ROOT_PW}": "pass",
+        "${K3S_CONTROLLER_URL}": "",
+        "${K3S_CONTROLLER_TOKEN}": "",
+        "${K3S_CONTROLLER_UUID}": "",
+    }
+    bundle = add_server(infra, config, params)
+    if not bundle:
+        pytest.fail("Failed to add k3s server to infrastructure")
+    server = bundle.server
+    wait_for_server_login(server, timeout=240, interval=5.0, force_root=True)
+    server.setup()
+    wait_for_server_login(server, timeout=240, interval=5.0, force_root=False)
+    wait_for_k3s_ready(server)
+    yield server
+    logging.info(
+        f"Tearing down ubuntu_k3s_server on VM {multipass_k8s_instance['name']}..."
+    )
+    result = remove_server(infra, server.ip)
+    if result.success:
+        logging.info("Successfully tore down ubuntu_k3s_server.")
+    else:
+        logging.warning("Could not tear down ubuntu_k3s_server: %s", result.message)
 
 
 @pytest.fixture(scope="package")
@@ -242,11 +380,13 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
     )
     try:
         server.disable_debug_access()
-        server.teardown()
-        logging.info("Successfully tore down ubuntu_simple_server.")
     except Exception as e:
-        logging.warning(f"Could not tear down ubuntu_simple_server: {e}")
-    infra.remove_bundle(bundle)
+        logging.warning(f"Could not disable debug access before teardown: {e}")
+    result = remove_server(infra, server.ip)
+    if result.success:
+        logging.info("Successfully tore down ubuntu_simple_server.")
+    else:
+        logging.warning("Could not tear down ubuntu_simple_server: %s", result.message)
 
 
 # @pytest.fixture(scope="package")
@@ -273,4 +413,4 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
 #         logging.info("Successfully tore down ubuntu_native_server.")
 #     except Exception as e:
 #         logging.warning(f"Could not tear down ubuntu_native_server: {e}")
-#     infra.remove_bundle(bundle)
+#     remove_server(infra, server.ip)

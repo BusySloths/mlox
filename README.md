@@ -158,7 +158,7 @@ mlox/
 │   └── executors.py    # Remote task executor layer used by services/servers
 ├── tests/
 │   ├── unit/           # Fast tests, no external deps
-│   └── integration/    # Multipass VM tests
+│   └── integration/    # Multipass VM tests, including Kubernetes/k3s tests
 ├── examples/           # OTel, MLflow tracking, DAG templates
 ├── docs/               # Architecture, installation, contribution guides
 ├── wiki/               # GitHub Wiki source pages
@@ -188,6 +188,7 @@ pip install -e .[dev]
 task dev:lint                   # flake8
 task tests:unit:run             # unit tests (fast, no external deps)
 task tests:integration:run      # integration tests (requires Multipass VMs)
+task tests:integration:k8s      # Kubernetes integration tests (requires Multipass/k3s)
 ```
 
 ### Ways to Contribute

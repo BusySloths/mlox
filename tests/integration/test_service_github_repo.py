@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import logging
 from datetime import datetime
 
@@ -87,15 +87,9 @@ def github_repo_service(ubuntu_docker_server):
 
     yield bundle_added, service
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            service.teardown(conn)
-        except Exception as exc:  # pragma: no cover - teardown best effort
-            logger.warning(
-                "Ignoring error during GitHub repository service teardown: %s", exc
-            )
-
-    infra.remove_bundle(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_github_repo_public_clone(github_repo_service):
@@ -181,16 +175,9 @@ def github_private_repo_service(ubuntu_docker_server):
 
     yield bundle_added, service
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            service.teardown(conn)
-        except Exception as exc:  # pragma: no cover - teardown best effort
-            logger.warning(
-                "Ignoring error during private GitHub repository service teardown: %s",
-                exc,
-            )
-
-    infra.remove_bundle(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_github_repo_private_clone(github_private_repo_service):

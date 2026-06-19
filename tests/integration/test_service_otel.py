@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import time
 import logging
 import grpc  # type: ignore
@@ -46,16 +46,9 @@ def install_otel_service(ubuntu_docker_server):
 
     yield bundle_added, service
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            service.spin_down(conn)
-        except Exception:
-            pass
-        try:
-            service.teardown(conn)
-        except Exception:
-            pass
-    infra.remove_bundle(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_otel_service_is_running(install_otel_service):

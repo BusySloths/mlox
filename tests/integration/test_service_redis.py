@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import logging
 import pytest
 import redis
@@ -40,16 +40,9 @@ def install_redis_service(ubuntu_docker_server):
     yield bundle_added, service
 
     # Teardown after tests
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            service.spin_down(conn)
-        except Exception as e:
-            logger.warning(f"Ignoring error during service spin_down for teardown: {e}")
-        try:
-            service.teardown(conn)
-        except Exception as e:
-            logger.warning(f"Ignoring error during service teardown: {e}")
-    infra.remove_bundle(bundle_added)
+    result = remove_service(infra, service.name)
+    if not result.success:
+        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_redis_service_is_running(install_redis_service):

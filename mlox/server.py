@@ -145,8 +145,7 @@ class ServerConnection:
             socket.timeout,  # General socket timeout
             NoValidConnectionsError,  # If all resolved IPs for a host fail connection
             EOFError,  # Can sometimes be transient network drop
-            # SSHException can be broad; if specific transient SSH errors are known, list them.
-            # Avoid retrying AuthenticationException or issues due to bad host configuration here.
+            SSHException,  # Covers transient SSH banner resets while sshd restarts.
         )
 
         while current_attempt <= self.retries:
@@ -182,26 +181,6 @@ class ServerConnection:
                 )
                 return self._conn
             except (
-                RETRYABLE_EXCEPTIONS_FOR_CONNECTION
-            ) as e:  # Catch only specified retryable exceptions
-                logging.warning(
-                    f"Failed to open connection to {host} "
-                    f"(attempt {current_attempt + 1}/{self.retries + 1}): "
-                    f"{type(e).__name__} - {e}"
-                )
-                if current_attempt == self.retries:
-                    logging.error(f"Max connection retries reached for {host}.")
-                    raise
-                logging.info(f"Retrying connection in {self.retry_delay} seconds...")
-                if self._tmp_dir:  # Clean up temp dir if connection failed partway
-                    # Pass None for conn as it might be in a bad state or not fully initialized
-                    close_connection(None, self._tmp_dir)
-                    self._tmp_dir = (
-                        None  # Reset tmp_dir to avoid trying to clean it again
-                    )
-                time.sleep(self.retry_delay)
-                current_attempt += 1
-            except (
                 socket.gaierror,
                 AuthenticationException,
             ) as e:  # Non-retryable errors
@@ -212,6 +191,29 @@ class ServerConnection:
                     close_connection(None, self._tmp_dir)
                     self._tmp_dir = None
                 raise  # Re-raise immediately, do not retry
+            except (
+                RETRYABLE_EXCEPTIONS_FOR_CONNECTION
+            ) as e:  # Catch only specified retryable exceptions
+                logging.warning(
+                    f"Failed to open connection to {host} "
+                    f"(attempt {current_attempt + 1}/{self.retries + 1}): "
+                    f"{type(e).__name__} - {e}"
+                )
+                if current_attempt == self.retries:
+                    logging.error(f"Max connection retries reached for {host}.")
+                    if self._tmp_dir:
+                        close_connection(None, self._tmp_dir)
+                        self._tmp_dir = None
+                    raise
+                logging.info(f"Retrying connection in {self.retry_delay} seconds...")
+                if self._tmp_dir:  # Clean up temp dir if connection failed partway
+                    # Pass None for conn as it might be in a bad state or not fully initialized
+                    close_connection(None, self._tmp_dir)
+                    self._tmp_dir = (
+                        None  # Reset tmp_dir to avoid trying to clean it again
+                    )
+                time.sleep(self.retry_delay)
+                current_attempt += 1
             except (
                 Exception
             ) as e:  # Catch any other unexpected errors during connection setup

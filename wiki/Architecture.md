@@ -89,6 +89,7 @@ Key tasks:
 | `task ui:textual:terminal` | Launch the TUI |
 | `task tests:unit:run` | Run unit tests (fast, no external deps) |
 | `task tests:integration:run` | Run integration tests (requires Multipass VMs) |
+| `task tests:integration:k8s` | Run Kubernetes integration tests (requires Multipass/k3s) |
 | `task docker:up` / `docker:down` | Spin up/down the local Docker stack |
 | `task vm:start` | Start a Multipass test VM |
 
@@ -98,6 +99,7 @@ Key tasks:
 |-------|----------|-------------|
 | Unit tests | [`tests/unit/`](https://github.com/BusySloths/mlox/blob/main/tests/unit/) | Environment only |
 | Integration tests | [`tests/integration/`](https://github.com/BusySloths/mlox/blob/main/tests/integration/) | Multipass VMs |
+| Kubernetes integration tests | [`tests/integration/`](https://github.com/BusySloths/mlox/blob/main/tests/integration/) marked `kubernetes` | Multipass/k3s |
 
 ### Top-Level Directory Map
 

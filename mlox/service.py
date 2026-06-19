@@ -21,16 +21,38 @@ import io
 import csv
 import json
 import uuid
+import string
+import inspect
 import logging
+import textwrap
+from pathlib import Path
 from datetime import datetime
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Literal, Optional, Protocol
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Protocol,
+)
 from dataclasses import dataclass, field, asdict
 
 from mlox.executors import UbuntuTaskExecutor
 
 logger = logging.getLogger(__name__)
+
+
+class MloxTemplate(string.Template):
+    """Simple service artifact template using ``@variable`` placeholders."""
+
+    delimiter = "@"
+    idpattern = r"[_a-zA-Z][_a-zA-Z0-9]*"
+
 
 if TYPE_CHECKING:
     from mlox.infra import Infrastructure
@@ -168,6 +190,62 @@ class AbstractService(ABC):
 
     def clear_service_lookup(self) -> None:
         self._service_lookup = None
+
+    def service_dir(self) -> Path:
+        """Return the directory containing the concrete service implementation."""
+
+        return Path(inspect.getfile(type(self))).resolve().parent
+
+    def render_template(
+        self, template_name: str, variables: Mapping[str, Any]
+    ) -> str:
+        """Render a service-local template with explicit ``@variable`` values.
+
+        Templates are resolved relative to the concrete service implementation
+        module, so service artifacts can live next to ``k8s.py``, ``docker.py``,
+        and the service ``mlox.*.yaml`` descriptor.
+        """
+
+        template_path = self.service_dir() / template_name
+        if not template_path.is_file():
+            raise FileNotFoundError(f"Template not found: {template_path}")
+
+        template = MloxTemplate(template_path.read_text(encoding="utf-8"))
+        try:
+            return template.substitute(dict(variables))
+        except KeyError as exc:
+            missing = exc.args[0]
+            raise KeyError(
+                f"Missing template variable {missing!r} while rendering "
+                f"{template_path}"
+            ) from exc
+        except ValueError as exc:
+            raise ValueError(f"Invalid template syntax in {template_path}: {exc}") from exc
+
+    def render_template_to_file(
+        self,
+        conn,
+        template_name: str,
+        remote_path: str,
+        variables: Mapping[str, Any],
+    ) -> str:
+        """Render a service-local template and write it to a remote path."""
+
+        rendered = self.render_template(template_name, variables)
+        self.exec.fs_write_file(conn, remote_path, rendered)
+        return rendered
+
+    @staticmethod
+    def yaml_scalar(value: Any) -> str:
+        """Return a safe one-line YAML scalar representation."""
+
+        return json.dumps(value)
+
+    @staticmethod
+    def indent_block(value: str, spaces: int) -> str:
+        """Indent a multiline block for embedding in YAML block scalars."""
+
+        return textwrap.indent(value.rstrip(), " " * spaces)
 
     @abstractmethod
     def setup(self, conn) -> None:

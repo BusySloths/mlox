@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import TabbedContent
 
+from mlox.tui.screens.dashboard.tree import InfraTree
 from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.screen import (
@@ -74,6 +75,35 @@ def test_root_highlights_active_secret_manager() -> None:
     assert asyncio.run(_root_label()) == (
         "test-project  Secrets: Embedded Project Storage"
     )
+
+
+async def _leaf_flags_for_server_and_services() -> tuple[bool, bool, bool]:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5")
+    services = [SimpleNamespace(name="MLflow"), SimpleNamespace(name="Postgres")]
+    bundle = SimpleNamespace(name="dev", server=server, services=services)
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test():
+        tree = app.query_one(InfraTree)
+        bundle_node = tree.root.children[0]
+        server_node = bundle_node.children[0]
+        service_node = bundle_node.children[1]
+        return (
+            bundle_node.allow_expand,
+            server_node.allow_expand,
+            service_node.allow_expand,
+        )
+
+
+def test_server_and_service_tree_entries_are_leaf_nodes() -> None:
+    bundle_allows_expand, server_allows_expand, service_allows_expand = asyncio.run(
+        _leaf_flags_for_server_and_services()
+    )
+
+    assert bundle_allows_expand is True
+    assert server_allows_expand is False
+    assert service_allows_expand is False
 
 
 def test_bundle_selection_shows_only_service_templates_tab() -> None:

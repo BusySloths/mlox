@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+INSTALL_CLAUDE_CODE=@install_claude_code
+INSTALL_ATUIN=@install_atuin
+INSTALL_LAZYVIM=@install_lazyvim
+INSTALL_YAZI=@install_yazi
+INSTALL_SPACESHIP=@install_spaceship
+INSTALL_PYENV=@install_pyenv
+INSTALL_OH_MY_ZSH=@install_oh_my_zsh
+MIN_NVIM_VERSION=0.11.2
+TARGET_USER="${SUDO_USER:-$(id -un)}"
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+if [ -z "$TARGET_HOME" ] || [ ! -d "$TARGET_HOME" ]; then
+  TARGET_HOME="$HOME"
+fi
+
+apt-get update
+apt-get install -yq \
+  bash bat btop build-essential ca-certificates curl direnv fd-find fzf git \
+  gnupg gzip htop jq libbz2-dev libffi-dev liblzma-dev libncursesw5-dev \
+  libreadline-dev libsqlite3-dev libssl-dev libxml2-dev libxmlsec1-dev \
+  llvm locales lsb-release make mc ncurses-bin ncurses-term nodejs npm pipx python3 \
+  python3-pip ripgrep snapd tar tk-dev tmux unzip wget xz-utils \
+  zlib1g-dev zsh
+
+locale-gen C.UTF-8 >/dev/null 2>&1 || true
+update-locale LANG=C.UTF-8 LC_CTYPE=C.UTF-8 >/dev/null 2>&1 || true
+
+# Ubuntu/Debian package names the fd and bat binaries differently.
+ln -sf /usr/bin/fdfind /usr/local/bin/fd 2>/dev/null || true
+ln -sf /usr/bin/batcat /usr/local/bin/bat 2>/dev/null || true
+
+nvim_version() {
+  if command -v nvim >/dev/null 2>&1; then
+    nvim --version | sed -n '1s/^NVIM v//p' | cut -d- -f1
+  fi
+}
+
+nvim_version_meets_min() {
+  local version
+  version="$(nvim_version)"
+  [ -n "$version" ] && dpkg --compare-versions "$version" ge "$MIN_NVIM_VERSION"
+}
+
+if ! nvim_version_meets_min; then
+  systemctl enable --now snapd.socket >/dev/null 2>&1 || true
+  snap wait system seed.loaded >/dev/null 2>&1 || true
+  snap install nvim --classic
+  if [ -x /snap/bin/nvim ]; then
+    ln -sf /snap/bin/nvim /usr/local/bin/nvim
+  fi
+fi
+
+if ! nvim_version_meets_min; then
+  echo "Neovim $MIN_NVIM_VERSION or newer is required for LazyVim." >&2
+  exit 1
+fi
+
+npm install -g neovim tree-sitter-cli || true
+if [ "$INSTALL_CLAUDE_CODE" = true ]; then
+  npm install -g @@anthropic-ai/claude-code || true
+fi
+if [ "$INSTALL_SPACESHIP" = true ]; then
+  npm install -g spaceship-prompt || true
+fi
+
+if [ "$INSTALL_ATUIN" = true ] && ! command -v atuin >/dev/null 2>&1 && [ ! -x "$TARGET_HOME/.atuin/bin/atuin" ]; then
+  sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" sh -c \
+    "curl --proto '=https' --tlsv1.2 -LsSf https://setup.atuin.sh | sh" || true
+  if [ -x "$TARGET_HOME/.atuin/bin/atuin" ]; then
+    ln -sf "$TARGET_HOME/.atuin/bin/atuin" /usr/local/bin/atuin
+  fi
+fi
+
+if [ "$INSTALL_YAZI" = true ] && ! command -v yazi >/dev/null 2>&1; then
+  tmpdir="$(mktemp -d)"
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) yazi_arch="x86_64-unknown-linux-gnu" ;;
+    aarch64|arm64) yazi_arch="aarch64-unknown-linux-gnu" ;;
+    *) yazi_arch="" ;;
+  esac
+  if [ -n "$yazi_arch" ]; then
+    curl -fsSL "https://github.com/sxyazi/yazi/releases/latest/download/yazi-${yazi_arch}.zip" -o "$tmpdir/yazi.zip" || true
+    if [ -s "$tmpdir/yazi.zip" ]; then
+      unzip -q "$tmpdir/yazi.zip" -d "$tmpdir"
+      find "$tmpdir" -type f -name yazi -exec install -m 0755 {} /usr/local/bin/yazi \; -quit
+      find "$tmpdir" -type f -name ya -exec install -m 0755 {} /usr/local/bin/ya \; -quit
+    fi
+  fi
+  rm -rf "$tmpdir"
+fi
+
+if [ "$INSTALL_PYENV" = true ]; then
+  install -d -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.pyenv"
+  if [ ! -x "$TARGET_HOME/.pyenv/bin/pyenv" ]; then
+    if [ -d "$TARGET_HOME/.pyenv/.git" ]; then
+      sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git -C "$TARGET_HOME/.pyenv" pull --ff-only || true
+    elif [ -z "$(find "$TARGET_HOME/.pyenv" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+      sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git clone https://github.com/pyenv/pyenv.git "$TARGET_HOME/.pyenv" || true
+    else
+      sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git -C "$TARGET_HOME/.pyenv" init || true
+      sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git -C "$TARGET_HOME/.pyenv" remote add origin https://github.com/pyenv/pyenv.git 2>/dev/null || \
+        sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git -C "$TARGET_HOME/.pyenv" remote set-url origin https://github.com/pyenv/pyenv.git || true
+      sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git -C "$TARGET_HOME/.pyenv" fetch --depth 1 origin master || true
+      sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git -C "$TARGET_HOME/.pyenv" checkout -f FETCH_HEAD || true
+    fi
+  fi
+  chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.pyenv" || true
+  if [ -x "$TARGET_HOME/.pyenv/bin/pyenv" ]; then
+    ln -sf "$TARGET_HOME/.pyenv/bin/pyenv" /usr/local/bin/pyenv
+  fi
+fi
+
+if [ "$INSTALL_OH_MY_ZSH" = true ]; then
+  install -d -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.oh-my-zsh"
+  if [ ! -f "$TARGET_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
+    if [ -d "$TARGET_HOME/.oh-my-zsh/.git" ]; then
+      sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git -C "$TARGET_HOME/.oh-my-zsh" pull --ff-only || true
+    elif [ -z "$(find "$TARGET_HOME/.oh-my-zsh" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+      sudo -H -u "$TARGET_USER" env HOME="$TARGET_HOME" git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git "$TARGET_HOME/.oh-my-zsh" || true
+    fi
+  fi
+  chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.oh-my-zsh" || true
+fi
+
+if [ "$INSTALL_LAZYVIM" = true ]; then
+  install -d -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.config"
+  if [ ! -d "$TARGET_HOME/.config/nvim" ]; then
+    sudo -u "$TARGET_USER" git clone https://github.com/LazyVim/starter "$TARGET_HOME/.config/nvim" || true
+    rm -rf "$TARGET_HOME/.config/nvim/.git"
+  fi
+
+  install -d -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.config/nvim/lua/plugins"
+  NVIM_PLUGIN="$TARGET_HOME/.config/nvim/lua/plugins/mlox-dev-terminal.lua"
+  cat > "$NVIM_PLUGIN" <<'MLOX_LAZYVIM_DEV_TERMINAL'
+-- MLOX Developers Terminal Dream: Claude Code and Yazi integrations for LazyVim.
+return {
+  {
+    "coder/claudecode.nvim",
+    opts = {},
+    keys = {
+      { "<leader>a", "", desc = "+ai", mode = { "n", "v" } },
+      { "<leader>ac", "<cmd>ClaudeCode<cr>", desc = "Toggle Claude" },
+      { "<leader>af", "<cmd>ClaudeCodeFocus<cr>", desc = "Focus Claude" },
+      { "<leader>ar", "<cmd>ClaudeCode --resume<cr>", desc = "Resume Claude" },
+      { "<leader>aC", "<cmd>ClaudeCode --continue<cr>", desc = "Continue Claude" },
+      { "<leader>ab", "<cmd>ClaudeCodeAdd %<cr>", desc = "Add current buffer" },
+      { "<leader>as", "<cmd>ClaudeCodeSend<cr>", mode = "v", desc = "Send to Claude" },
+      { "<leader>aa", "<cmd>ClaudeCodeDiffAccept<cr>", desc = "Accept diff" },
+      { "<leader>ad", "<cmd>ClaudeCodeDiffDeny<cr>", desc = "Deny diff" },
+    },
+  },
+  {
+    "mikavilpas/yazi.nvim",
+    version = "*",
+    event = "VeryLazy",
+    dependencies = {
+      { "nvim-lua/plenary.nvim", lazy = true },
+    },
+    keys = {
+      { "<leader>-", "<cmd>Yazi<cr>", mode = { "n", "v" }, desc = "Open yazi at the current file" },
+      { "<leader>cw", "<cmd>Yazi cwd<cr>", desc = "Open yazi in nvim cwd" },
+      { "<c-up>", "<cmd>Yazi toggle<cr>", desc = "Resume yazi" },
+    },
+    opts = {
+      open_for_directories = true,
+      open_multiple_tabs = true,
+      keymaps = {
+        show_help = "<f1>",
+      },
+    },
+    init = function()
+      vim.g.loaded_netrwPlugin = 1
+    end,
+  },
+}
+MLOX_LAZYVIM_DEV_TERMINAL
+  chown "$TARGET_USER:$TARGET_USER" "$NVIM_PLUGIN" || true
+fi
+
+TMUX_CONF="$TARGET_HOME/.tmux.conf"
+cat > "$TMUX_CONF" <<'MLOX_TMUX_CONF'
+# MLOX Developer Terminal tmux defaults for LazyVim/Neovim.
+set -g default-terminal "tmux-256color"
+set -ga terminal-overrides ",*:RGB"
+set -ga terminal-overrides ",xterm-256color:Tc"
+set -ga terminal-overrides ",alacritty:Tc"
+set -ga terminal-overrides ",wezterm:Tc"
+set -ga terminal-overrides ",xterm-kitty:Tc"
+set -g focus-events on
+set -g escape-time 10
+set -g repeat-time 600
+set -g renumber-windows on
+set -g base-index 1
+setw -g pane-base-index 1
+set -g mouse on
+setw -g mode-keys vi
+set -g set-clipboard on
+set -g history-limit 100000
+set -g status-position bottom
+set -g status-interval 5
+set -g status-style "bg=colour235,fg=colour250"
+set -g window-status-current-style "bg=colour31,fg=colour255,bold"
+set -g pane-border-style "fg=colour238"
+set -g pane-active-border-style "fg=colour39"
+set -g message-style "bg=colour31,fg=colour255"
+
+unbind C-b
+set -g prefix C-a
+bind C-a send-prefix
+bind r source-file ~/.tmux.conf \; display-message "Reloaded ~/.tmux.conf"
+bind | split-window -h -c "#{pane_current_path}"
+bind - split-window -v -c "#{pane_current_path}"
+bind c new-window -c "#{pane_current_path}"
+bind h select-pane -L
+bind j select-pane -D
+bind k select-pane -U
+bind l select-pane -R
+bind -r H resize-pane -L 5
+bind -r J resize-pane -D 3
+bind -r K resize-pane -U 3
+bind -r L resize-pane -R 5
+bind-key -T copy-mode-vi v send -X begin-selection
+bind-key -T copy-mode-vi y send -X copy-selection-and-cancel
+bind ? display-popup -E -w 78 -h 24 "cat ~/.tmux-shortcuts"
+MLOX_TMUX_CONF
+chown "$TARGET_USER:$TARGET_USER" "$TMUX_CONF" || true
+
+TMUX_SHORTCUTS="$TARGET_HOME/.tmux-shortcuts"
+cat > "$TMUX_SHORTCUTS" <<'MLOX_TMUX_SHORTCUTS'
+tmux essentials for this host
+
+Start or attach:
+  tmux new -As dev
+
+Prefix:
+  Ctrl-a        prefix key
+  Ctrl-a r      reload ~/.tmux.conf
+  Ctrl-a ?      show this shortcut sheet
+
+Windows:
+  Ctrl-a c      new window
+  Ctrl-a n/p    next/previous window
+  Ctrl-a 1..9   switch to window
+  Ctrl-a ,      rename window
+
+Panes:
+  Ctrl-a |      split right
+  Ctrl-a -      split down
+  Ctrl-a h/j/k/l move between panes
+  Ctrl-a H/J/K/L resize pane
+  Ctrl-a z      zoom pane
+
+Copy mode:
+  Ctrl-a [      enter copy mode
+  v             start selection
+  y             copy selection
+  q             quit copy mode
+MLOX_TMUX_SHORTCUTS
+chown "$TARGET_USER:$TARGET_USER" "$TMUX_SHORTCUTS" || true
+
+ZSHRC="$TARGET_HOME/.zshrc"
+touch "$ZSHRC"
+chown "$TARGET_USER:$TARGET_USER" "$ZSHRC" || true
+append_once() {
+  local line="$1"
+  grep -qxF "$line" "$ZSHRC" 2>/dev/null || echo "$line" >> "$ZSHRC"
+}
+remove_line() {
+  local line="$1"
+  if [ -f "$ZSHRC" ]; then
+    grep -vxF "$line" "$ZSHRC" > "$ZSHRC.tmp" 2>/dev/null || true
+    cat "$ZSHRC.tmp" > "$ZSHRC"
+    rm -f "$ZSHRC.tmp"
+  fi
+}
+remove_line '[ -x "$HOME/.atuin/bin/atuin" ] && eval "$($HOME/.atuin/bin/atuin init zsh)"'
+remove_line 'command -v atuin >/dev/null 2>&1 && eval "$(atuin init zsh)"'
+remove_line '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+remove_line 'command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init - zsh)"'
+append_once 'export EDITOR=nvim'
+append_once 'export VISUAL=nvim'
+append_once 'export LANG=C.UTF-8'
+append_once 'export LC_CTYPE=C.UTF-8'
+append_once 'export COLORTERM=truecolor'
+append_once 'export TERMINFO_DIRS="$HOME/.terminfo:/etc/terminfo:/lib/terminfo:/usr/share/terminfo"'
+append_once 'export NCURSES_NO_UTF8_ACS=1'
+append_once 'export LESSCHARSET=utf-8'
+append_once 'unset LC_ALL'
+append_once 'export PYENV_ROOT="$HOME/.pyenv"'
+append_once '[[ -d "$PYENV_ROOT/bin" ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+append_once '[[ -d "$PYENV_ROOT/shims" ]] && export PATH="$PYENV_ROOT/shims:$PATH"'
+append_once '[[ -d "$HOME/.atuin/bin" ]] && export PATH="$HOME/.atuin/bin:$PATH"'
+append_once 'command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init -)"'
+append_once 'alias ll="ls -lah"'
+append_once 'alias vim="nvim"'
+append_once 'alias vi="nvim"'
+append_once 'alias fm="yazi"'
+append_once 'alias mux="tmux new -As dev"'
+append_once 'alias tmux-help="cat ~/.tmux-shortcuts"'
+append_once 'eval "$(direnv hook zsh)"'
+append_once 'if [ -x "$HOME/.atuin/bin/atuin" ]; then eval "$($HOME/.atuin/bin/atuin init zsh)"; elif command -v atuin >/dev/null 2>&1; then eval "$(atuin init zsh)"; fi'
+append_once 'export ZSH="$HOME/.oh-my-zsh"'
+append_once 'ZSH_THEME=""'
+append_once 'plugins=(git direnv fzf pyenv)'
+append_once '[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"'
+append_once '[ -f "$(npm root -g 2>/dev/null)/spaceship-prompt/spaceship.zsh" ] && source "$(npm root -g)/spaceship-prompt/spaceship.zsh"'
+chown "$TARGET_USER:$TARGET_USER" "$ZSHRC" || true
+
+if command -v zsh >/dev/null 2>&1; then
+  chsh -s "$(command -v zsh)" "$TARGET_USER" || true
+fi

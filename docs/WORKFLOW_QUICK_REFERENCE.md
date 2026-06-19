@@ -22,6 +22,7 @@ task
 task first:steps
 task tests:unit:run
 task tests:integration:run
+task tests:integration:k8s
 task docker:up
 task docker:down
 task ui:streamlit

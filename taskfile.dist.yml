@@ -14,6 +14,7 @@ vars:
     - deps:lock:all|dev|gcp : compile extras to requirements-<extra>.txt
     - deps:install:tools    : install tools like Multipass for integration tests
     - tests:integration:run     : run integration tests (requires Multipass)
+    - tests:integration:k8s     : run Kubernetes integration tests (requires Multipass/k3s)
     - tests:integration:cleanup : clean up test Multipass VMs
     - docker:build        : build local Docker image
     - project:new         : create an encrypted .mlox project
@@ -152,6 +153,25 @@ tasks:
           exit 1; \
         fi
       - '{{.PYTHON | default "python"}} -m pytest -m integration --run-integration'
+
+  tests:integration:k8s:
+    aliases: [tests:integration:kubernetes]
+    silent: true
+    desc: Run Kubernetes integration tests (requires Multipass/k3s)
+    cmds:
+      - |
+        if ! command -v multipass >/dev/null 2>&1; then \
+          printf '\n\033[1;31m✖ Multipass is not installed.\033[0m\n'; \
+          printf 'Install it first. Run: \033[1mtask deps:install:tools\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - |
+        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
+          printf '\n\033[1;31m✖ pytest not installed.\033[0m\n'; \
+          printf 'Install dev deps, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          exit 1; \
+        fi
+      - '{{.PYTHON | default "python"}} -m pytest tests/integration -m "integration and kubernetes" --run-integration'
 
   tests:integration:service:
     silent: true

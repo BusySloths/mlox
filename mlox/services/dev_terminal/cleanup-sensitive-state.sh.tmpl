@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TARGET_USER="${SUDO_USER:-$(id -un)}"
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+if [ -z "$TARGET_HOME" ] || [ ! -d "$TARGET_HOME" ]; then
+  TARGET_HOME="$HOME"
+fi
+
+remove_home_path() {
+  local relative_path="$1"
+  if [[ -z "$relative_path" ||
+        "$relative_path" == /* ||
+        "$relative_path" == ".." ||
+        "$relative_path" == ../* ||
+        "$relative_path" == */.. ||
+        "$relative_path" == */../* ]]; then
+    echo "Refusing to remove unsafe relative path: $relative_path" >&2
+    return 1
+  fi
+  rm -rf -- "$TARGET_HOME/$relative_path"
+}
+
+# Claude Code stores authentication, session metadata, project transcripts,
+# settings, and cache/state under these user-level paths depending on version.
+remove_home_path ".claude"
+remove_home_path ".claude.json"
+remove_home_path ".claude.json.backup"
+remove_home_path ".config/claude"
+remove_home_path ".config/claude-code"
+remove_home_path ".cache/claude"
+remove_home_path ".cache/claude-code"
+remove_home_path ".local/share/claude"
+remove_home_path ".local/share/claude-code"
+remove_home_path ".local/state/claude"
+remove_home_path ".local/state/claude-code"
+
+# Atuin stores shell history, which can include pasted tokens and credentials.
+remove_home_path ".atuin"
+remove_home_path ".config/atuin"
+remove_home_path ".local/share/atuin"
+remove_home_path ".local/state/atuin"
+
+# Service-generated terminal manager files do not contain credentials, but
+# removing them prevents stale aliases/configuration after service teardown.
+remove_home_path ".tmux.conf"
+remove_home_path ".tmux-shortcuts"

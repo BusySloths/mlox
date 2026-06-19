@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import logging
 import os
 import time
@@ -92,16 +92,9 @@ def deploy_mlflow_gateway(ubuntu_docker_server, install_mlflow3_service):
 
     yield gateway_service, gateway_bundle, model_name, model_version
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            gateway_service.spin_down(conn)
-        except Exception as exc:
-            logger.warning("Error during MLflow Gateway spin_down: %s", exc)
-        try:
-            gateway_service.teardown(conn)
-        except Exception as exc:
-            logger.warning("Error during MLflow Gateway teardown: %s", exc)
-    infra.remove_bundle(gateway_bundle)
+    result = remove_service(infra, gateway_service.name)
+    if not result.success:
+        logger.warning("Failed to remove MLflow Gateway service via application logic: %s", result.message)
 
 
 def test_mlflow_gateway_is_ready(deploy_mlflow_gateway):

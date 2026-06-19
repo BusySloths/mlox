@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import os
 import pytest
 from pathlib import Path
@@ -89,15 +89,12 @@ def install_feast_service(ubuntu_docker_server):
 
     yield infra, feast_bundle, feast_service, redis_service, postgres_service
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        feast_service.spin_down(conn)
-        feast_service.teardown(conn)
-        postgres_service.spin_down(conn)
-        postgres_service.teardown(conn)
-        redis_service.spin_down(conn)
-        redis_service.teardown(conn)
-
-    infra.remove_bundle(bundle)
+    for service_to_remove in (feast_service, postgres_service, redis_service):
+        result = remove_service(infra, service_to_remove.name)
+        if not result.success:
+            logger.warning(
+                "Failed to remove service via application logic: %s", result.message
+            )
 
 
 def test_feast_service_is_running(install_feast_service):

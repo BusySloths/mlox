@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service
+from tests.integration.helpers import add_service, remove_service
 import logging
 
 import pytest
@@ -70,17 +70,12 @@ def install_repo_deploy_service(ubuntu_docker_server):
 
     yield bundle_added, repo_service, deploy_service
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        try:
-            deploy_service.teardown(conn)
-        except Exception as exc:  # pragma: no cover - best effort
-            logger.warning("Ignoring error during repo deploy teardown: %s", exc)
-        try:
-            repo_service.teardown(conn)
-        except Exception as exc:  # pragma: no cover - best effort
-            logger.warning("Ignoring error during github repo teardown: %s", exc)
-
-    infra.remove_bundle(bundle_added)
+    for service_to_remove in (deploy_service, repo_service):
+        result = remove_service(infra, service_to_remove.name)
+        if not result.success:
+            logger.warning(
+                "Failed to remove service via application logic: %s", result.message
+            )
 
 
 def test_repo_deploy_setup_creates_compose_and_env(install_repo_deploy_service):
