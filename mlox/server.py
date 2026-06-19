@@ -201,6 +201,9 @@ class ServerConnection:
                 )
                 if current_attempt == self.retries:
                     logging.error(f"Max connection retries reached for {host}.")
+                    if self._tmp_dir:
+                        close_connection(None, self._tmp_dir)
+                        self._tmp_dir = None
                     raise
                 logging.info(f"Retrying connection in {self.retry_delay} seconds...")
                 if self._tmp_dir:  # Clean up temp dir if connection failed partway
