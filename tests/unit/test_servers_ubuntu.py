@@ -256,8 +256,8 @@ def test_ubuntu_k3s_backend_paths():
     assert "k3s-agent" in server.backend
     assert server.state == "running"
 
-    fake_exec.responses["systemctl is-active k3s"] = "active"
-    fake_exec.responses["systemctl is-active k3s-agent"] = None
+    fake_exec.responses["systemctl is-active k3s || true"] = "active"
+    fake_exec.responses["systemctl is-active k3s-agent || true"] = "inactive"
     fake_exec.responses["cat /var/lib/rancher/k3s/server/node-token"] = (
         "password: super-token"
     )
@@ -273,6 +273,59 @@ def test_ubuntu_k3s_backend_paths():
     server.stop_backend_runtime()
     server.teardown_backend()
     assert server.state == "no-backend"
+
+
+def test_ubuntu_k3s_agent_status_does_not_fetch_controller_node_info():
+    server = UbuntuK3sServer(
+        ip="10.0.0.13",
+        root="root",
+        root_pw="pw",
+        service_config_id="ubuntu-k3s",
+        controller_url="https://controller:6443",
+        controller_token="tok-123456",
+    )
+    fake_exec = FakeExec()
+    server.exec = fake_exec
+    _server_conn(server)
+
+    fake_exec.responses["systemctl is-active k3s || true"] = "inactive"
+    fake_exec.responses["systemctl is-active k3s-agent || true"] = "active"
+
+    info = server.get_backend_status()
+
+    assert info["backend.is_running"] is True
+    assert info["k3s.is_running"] is False
+    assert info["k3s-agent.is_running"] is True
+    assert "k3s.nodes" not in info
+    commands = [args[0] for name, args, _ in fake_exec.calls if name == "execute"]
+    assert "cat /var/lib/rancher/k3s/server/node-token" not in commands
+    assert "kubectl get nodes -o wide" not in commands
+
+
+def test_ubuntu_k3s_node_info_does_not_depend_on_token_output():
+    server = UbuntuK3sServer(
+        ip="10.0.0.14",
+        root="root",
+        root_pw="pw",
+        service_config_id="ubuntu-k3s",
+    )
+    fake_exec = FakeExec()
+    server.exec = fake_exec
+    _server_conn(server)
+
+    fake_exec.responses["systemctl is-active k3s || true"] = "active"
+    fake_exec.responses["systemctl is-active k3s-agent || true"] = "inactive"
+    fake_exec.responses["cat /var/lib/rancher/k3s/server/node-token"] = None
+    fake_exec.responses["kubectl get nodes -o wide"] = (
+        "NAME  STATUS  ROLES\n" "node-1  Ready  control-plane\n"
+    )
+
+    info = server.get_backend_status()
+
+    assert "k3s.token" not in info
+    assert info["k3s.nodes"] == [
+        {"NAME": "node-1", "STATUS": "Ready", "ROLES": "control-plane"}
+    ]
 
 
 def test_ubuntu_simple_server_noops_and_debug(monkeypatch):

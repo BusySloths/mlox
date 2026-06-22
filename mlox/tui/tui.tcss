@@ -178,6 +178,7 @@ Button {
 
 #selection-overview,
 #selection-server-actions,
+#selection-server-info,
 #selection-stats,
 #selection-logs,
 #selection-history {
@@ -213,6 +214,22 @@ Button {
   margin-left: 1;
 }
 
+#refresh-server-info {
+  width: auto;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#refresh-server-info:hover {
+  background: #12b86aff;
+}
+
+#server-info-controls {
+  height: auto;
+  margin-bottom: 1;
+}
+
 #server-credentials {
   height: auto;
   margin-top: 1;
@@ -245,6 +262,7 @@ Button {
 }
 
 #selection-logs,
+#selection-server-info,
 #selection-history {
   layout: vertical;
   height: 1fr;

@@ -14,6 +14,7 @@ from .log_panel import LogPanel
 from .model import SelectionChanged, SelectionInfo
 from .overview_panel import OverviewPanel
 from .server_actions import ServerActions
+from .server_info_panel import ServerInfoPanel
 from .stats_panel import StatsPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
@@ -26,6 +27,7 @@ SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
 SERVICE_TEMPLATES_TAB_ID = "service-templates-tab"
 OVERVIEW_TAB_ID = "overview-tab"
 LOGS_TAB_ID = "logs-tab"
+SERVER_INFO_TAB_ID = "server-info-tab"
 SIDEBAR_DEFAULT_WIDTH = 32
 SIDEBAR_MIN_WIDTH = 24
 SIDEBAR_MAX_WIDTH = 72
@@ -64,6 +66,8 @@ class DashboardScreen(Screen):
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")
+                            with TabPane("Server Info", id=SERVER_INFO_TAB_ID):
+                                yield ServerInfoPanel(id="selection-server-info")
                             with TabPane("Server Templates", id=SERVER_TEMPLATES_TAB_ID):
                                 yield TemplatePanel(
                                     id="server-template-panel", template_type="server"
@@ -97,6 +101,8 @@ class DashboardScreen(Screen):
         overview.selection = selection
         server_actions = self.query_one(ServerActions)
         server_actions.selection = selection
+        server_info = self.query_one(ServerInfoPanel)
+        server_info.selection = selection
         stats = self.query_one(StatsPanel)
         stats.selection = selection
         logs = self.query_one(LogPanel)
@@ -161,6 +167,10 @@ class DashboardScreen(Screen):
         self._set_tab_visible(
             LOGS_TAB_ID,
             selection.type in {"server", "service"} if selection else False,
+        )
+        self._set_tab_visible(
+            SERVER_INFO_TAB_ID,
+            selection.type in {"bundle", "server"} if selection else False,
         )
 
     def _update_tui_panel(self, selection: SelectionInfo | None) -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from mlox.application.result import OperationResult
 from mlox.config import load_all_server_configs
@@ -142,3 +142,42 @@ def open_server_terminal(
         f"Opened SSH terminal for {getattr(server, 'ip', 'server')}.",
         {"launch": launched},
     )
+
+
+def get_server_runtime_info(server, *, no_cache: bool = True) -> OperationResult:
+    """Collect server and backend information for UI adapters."""
+
+    if not server:
+        return OperationResult(False, 14, "No server selected.")
+
+    data: Dict[str, Any] = {}
+    errors: list[str] = []
+
+    try:
+        data["server_info"] = server.get_server_info(no_cache=no_cache)
+    except Exception as exc:
+        errors.append(f"server info: {exc}")
+
+    backend_info = getattr(server, "get_backend_info", None)
+    if not callable(backend_info):
+        backend_info = getattr(server, "get_backend_status", None)
+
+    if callable(backend_info):
+        try:
+            data["backend_info"] = backend_info()
+        except Exception as exc:
+            errors.append(f"backend info: {exc}")
+    else:
+        data["backend_info"] = {}
+
+    if errors and "server_info" not in data and "backend_info" not in data:
+        return OperationResult(
+            False,
+            15,
+            "Failed to load server information: " + "; ".join(errors),
+            {"errors": errors},
+        )
+
+    if errors:
+        data["errors"] = errors
+    return OperationResult(True, 0, "Loaded server information.", data)

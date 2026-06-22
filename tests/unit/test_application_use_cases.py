@@ -128,6 +128,34 @@ def test_servers_open_server_terminal_uses_launcher():
     assert result.message == "Opened SSH terminal for 1.2.3.4."
 
 
+def test_servers_get_runtime_info_collects_server_and_backend_info():
+    server = SimpleNamespace(
+        get_server_info=lambda no_cache=True: {"cpu_count": 4, "host": "demo"},
+        get_backend_status=lambda: {"backend.is_running": True},
+    )
+
+    result = servers.get_server_runtime_info(server)
+
+    assert result.success
+    assert result.data == {
+        "server_info": {"cpu_count": 4, "host": "demo"},
+        "backend_info": {"backend.is_running": True},
+    }
+
+
+def test_servers_get_runtime_info_prefers_get_backend_info():
+    server = SimpleNamespace(
+        get_server_info=lambda no_cache=True: {"host": "demo"},
+        get_backend_info=lambda: {"backend.kind": "custom"},
+        get_backend_status=lambda: {"backend.kind": "fallback"},
+    )
+
+    result = servers.get_server_runtime_info(server)
+
+    assert result.success
+    assert result.data["backend_info"] == {"backend.kind": "custom"}
+
+
 def test_services_setup_service_runs_runtime_steps():
     calls = []
     service = SimpleNamespace(

@@ -170,41 +170,54 @@ class UbuntuK3sServer(
         backend_info: Dict[str, Any] = {}
         with self.get_server_connection() as conn:
             # Check k3s status
-            res = self.exec.execute(
+            k3s_status = self.exec.execute(
                 conn,
-                "systemctl is-active k3s",
+                "systemctl is-active k3s || true",
                 group=TaskGroup.SERVICE_CONTROL,
                 sudo=True,
                 pty=False,
             )
-            if res is None:
-                backend_info["k3s.is_running"] = False
-            else:
-                backend_info["k3s.is_running"] = True
-            backend_info["backend.is_running"] = backend_info["k3s.is_running"]
+            backend_info["k3s.is_running"] = str(k3s_status).strip() == "active"
 
             # Check k3s-agent status
-            res = self.exec.execute(
+            agent_status = self.exec.execute(
                 conn,
-                "systemctl is-active k3s-agent",
+                "systemctl is-active k3s-agent || true",
                 group=TaskGroup.SERVICE_CONTROL,
                 sudo=True,
                 pty=False,
             )
-            if res is None:
-                backend_info["k3s-agent.is_running"] = False
-            else:
-                backend_info["k3s-agent.is_running"] = True
-            # If k3s is running, get node status
+            backend_info["k3s-agent.is_running"] = (
+                str(agent_status).strip() == "active"
+            )
+            backend_info["backend.is_running"] = bool(
+                backend_info["k3s.is_running"]
+                or backend_info["k3s-agent.is_running"]
+            )
+
+            if not backend_info["k3s.is_running"]:
+                return backend_info
+
+            # If k3s is running, get controller token and node status.
             try:
-                res = self.exec.execute(
+                token_output = self.exec.execute(
                     conn,
                     "cat /var/lib/rancher/k3s/server/node-token",
                     group=TaskGroup.FILESYSTEM,
                     sudo=True,
                     pty=True,
                 )
-                backend_info["k3s.token"] = res.split("password: ")[1].strip()
+                if token_output:
+                    if "password: " in token_output:
+                        token = token_output.split("password: ", 1)[1].strip()
+                    else:
+                        token = token_output.strip()
+                    if token:
+                        backend_info["k3s.token"] = token
+            except Exception as e:
+                logger.warning(f"Could not get k3s token: {e}")
+
+            try:
                 node_output = self.exec.execute(
                     conn,
                     "kubectl get nodes -o wide",
@@ -214,15 +227,16 @@ class UbuntuK3sServer(
                 )
                 # Parse kubectl get nodes output (simple parsing assuming standard format)
                 nodes = []
-                lines = node_output.strip().split("\n")
+                lines = node_output.strip().split("\n") if node_output else []
                 if len(lines) > 1:  # Skip header line
                     header_parts = lines[0].split()
-                    print(header_parts)
                     for line in lines[1:]:
                         parts = re.split(r"\s{2,}", line)
-                        print(parts)
                         if len(parts) >= 2:
-                            res = {header_parts[i]: parts[i] for i in range(len(parts))}
+                            res = {
+                                header_parts[i]: parts[i]
+                                for i in range(min(len(header_parts), len(parts)))
+                            }
                             nodes.append(res)
                 backend_info["k3s.nodes"] = nodes
             except Exception as e:
