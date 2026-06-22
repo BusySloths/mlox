@@ -25,6 +25,7 @@ TELEMETRY_TAB_ID = "service-tui-tab"
 SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
 SERVICE_TEMPLATES_TAB_ID = "service-templates-tab"
 OVERVIEW_TAB_ID = "overview-tab"
+LOGS_TAB_ID = "logs-tab"
 SIDEBAR_DEFAULT_WIDTH = 32
 SIDEBAR_MIN_WIDTH = 24
 SIDEBAR_MAX_WIDTH = 72
@@ -60,7 +61,7 @@ class DashboardScreen(Screen):
                                     yield OverviewPanel(id="selection-overview")
                                     yield StatsPanel(id="selection-stats")
                                     yield ServerActions(id="selection-server-actions")
-                            with TabPane("History & Logs", id="logs-tab"):
+                            with TabPane("History & Logs", id=LOGS_TAB_ID):
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")
                             with TabPane("Server Templates", id=SERVER_TEMPLATES_TAB_ID):
@@ -156,6 +157,10 @@ class DashboardScreen(Screen):
         self._set_tab_visible(
             SERVICE_TEMPLATES_TAB_ID,
             selection.type == "bundle" if selection else False,
+        )
+        self._set_tab_visible(
+            LOGS_TAB_ID,
+            selection.type in {"server", "service"} if selection else False,
         )
 
     def _update_tui_panel(self, selection: SelectionInfo | None) -> None:

@@ -16,6 +16,7 @@ from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.screen import (
     DashboardScreen,
+    LOGS_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
     SIDEBAR_STEP,
     SERVER_TEMPLATES_TAB_ID,
@@ -43,7 +44,7 @@ class DashboardTestApp(App):
         yield DashboardScreen()
 
 
-async def _visible_template_tabs_for(selection: SelectionInfo) -> tuple[str, str]:
+async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -53,16 +54,22 @@ async def _visible_template_tabs_for(selection: SelectionInfo) -> tuple[str, str
         tabs = screen.query_one("#main-tabs", TabbedContent)
         server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
         service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
-        return server_tab.styles.display, service_tab.styles.display
+        logs_tab = tabs.get_tab(LOGS_TAB_ID)
+        return (
+            server_tab.styles.display,
+            service_tab.styles.display,
+            logs_tab.styles.display,
+        )
 
 
 def test_root_selection_shows_only_server_templates_tab() -> None:
-    server_display, service_display = asyncio.run(
-        _visible_template_tabs_for(SelectionInfo(type="root"))
+    server_display, service_display, logs_display = asyncio.run(
+        _visible_tabs_for(SelectionInfo(type="root"))
     )
 
     assert server_display == "block"
     assert service_display == "none"
+    assert logs_display == "none"
 
 
 async def _root_label() -> str:
@@ -107,21 +114,33 @@ def test_server_and_service_tree_entries_are_leaf_nodes() -> None:
 
 
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
-    server_display, service_display = asyncio.run(
-        _visible_template_tabs_for(SelectionInfo(type="bundle"))
+    server_display, service_display, logs_display = asyncio.run(
+        _visible_tabs_for(SelectionInfo(type="bundle"))
     )
 
     assert server_display == "none"
     assert service_display == "block"
+    assert logs_display == "none"
 
 
 def test_server_selection_hides_template_tabs() -> None:
-    server_display, service_display = asyncio.run(
-        _visible_template_tabs_for(SelectionInfo(type="server"))
+    server_display, service_display, logs_display = asyncio.run(
+        _visible_tabs_for(SelectionInfo(type="server"))
     )
 
     assert server_display == "none"
     assert service_display == "none"
+    assert logs_display == "block"
+
+
+def test_service_selection_shows_history_and_logs_tab() -> None:
+    server_display, service_display, logs_display = asyncio.run(
+        _visible_tabs_for(SelectionInfo(type="service"))
+    )
+
+    assert server_display == "none"
+    assert service_display == "none"
+    assert logs_display == "block"
 
 
 async def _toggle_app_log_drawer() -> tuple[str, str]:
