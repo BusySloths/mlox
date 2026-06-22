@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from mlox.application.result import OperationResult
-from mlox.config import get_stacks_path
+from mlox.config import get_stacks_path, load_all_service_configs
 from mlox.project.state import WorkspaceState
 from mlox.service import AbstractService
 from mlox.utils import auto_map_ports, generate_pw, generate_username
@@ -209,3 +209,63 @@ def list_service_configs(list_configs) -> OperationResult:
     payload = [{"id": cfg.id, "path": cfg.path} for cfg in list_configs()]
     message = "No service configs found." if not payload else "Service configs retrieved."
     return OperationResult(True, 0, message, {"configs": payload})
+
+
+def browse_service_templates(
+    *,
+    backends: set[str] | None = None,
+    list_configs=None,
+) -> OperationResult:
+    """Return service template config objects for UI browsing."""
+
+    list_configs = list_configs or load_all_service_configs
+    configs = list(list_configs())
+    if backends:
+        configs = [
+            config
+            for config in configs
+            if backends & config.backend_capabilities()
+        ]
+    message = "No service templates found." if not configs else "Service templates loaded."
+    return OperationResult(True, 0, message, {"configs": configs})
+
+
+def build_service_ui_widget(
+    infra,
+    bundle,
+    service,
+    *,
+    ui: str = "tui",
+    handler: str = "settings",
+) -> OperationResult:
+    """Resolve and invoke a service UI handler through the infrastructure config."""
+
+    if not infra or not bundle:
+        return OperationResult(
+            False,
+            16,
+            "Service UI is unavailable because the infrastructure is not loaded.",
+        )
+
+    config = infra.get_service_config(service)
+    if not config:
+        return OperationResult(
+            False,
+            17,
+            "Unable to resolve a configuration for the selected service.",
+        )
+
+    callable_settings = config.get_ui_handler(ui, handler)
+    if not callable_settings:
+        return OperationResult(
+            False,
+            18,
+            "Selected service does not provide a TUI view.",
+        )
+
+    try:
+        widget = callable_settings(infra, bundle, service)
+    except Exception as exc:
+        return OperationResult(False, 19, f"Failed to load service UI: {exc}")
+
+    return OperationResult(True, 0, "Loaded service UI.", {"widget": widget})

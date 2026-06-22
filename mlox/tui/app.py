@@ -5,13 +5,7 @@ from typing import Optional
 
 from textual.app import App
 
-from mlox.project import (
-    InvalidProjectPasswordError,
-    ProjectAlreadyExistsError,
-    ProjectNotFoundError,
-    ProjectStorageError,
-    ProjectWorkspace,
-)
+from mlox.application.use_cases.project import open_project_workspace
 from mlox.tui.screens.login import LoginScreen
 from mlox.tui.screens.dashboard import DashboardScreen
 
@@ -30,7 +24,7 @@ class MLOXTextualApp(App):
 
     def __init__(self) -> None:
         super().__init__()
-        self.workspace: Optional[ProjectWorkspace] = None
+        self.workspace: Optional[object] = None
         self.login_error: Optional[str] = None
 
     def on_mount(self) -> None:
@@ -42,26 +36,16 @@ class MLOXTextualApp(App):
 
         self.login_error = None
         try:
-            workspace = (
-                ProjectWorkspace.create(project, password)
-                if create
-                else ProjectWorkspace.open(project, password)
-            )
-        except ProjectNotFoundError:
-            self.login_error = "Project not found"
-        except ProjectAlreadyExistsError:
-            self.login_error = "Project already exists; use Open"
-        except InvalidProjectPasswordError:
-            self.login_error = "Invalid project password"
-        except (ProjectStorageError, ValueError) as exc:
-            self.login_error = str(exc)
+            result = open_project_workspace(project, password, create=create)
         except Exception:
             logger.exception("Could not open MLOX project %s", project)
             self.login_error = "Could not load project"
-        else:
-            self.workspace = workspace
-            return True
-        return False
+            return False
+        if not result.success:
+            self.login_error = result.message
+            return False
+        self.workspace = result.data["workspace"]
+        return True
 
 
 app = MLOXTextualApp()

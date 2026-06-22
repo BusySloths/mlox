@@ -54,8 +54,8 @@ async def _mounted_panel_detail_title(monkeypatch) -> tuple[int, str | None, str
         _fake_config("template-two", "Template Two"),
     ]
     monkeypatch.setattr(
-        "mlox.tui.screens.dashboard.template_panel.load_all_server_configs",
-        lambda: configs,
+        "mlox.application.use_cases.servers.load_all_server_configs",
+        lambda include_plugins=True: configs,
     )
 
     app = TemplatePanelTestApp("server")
@@ -93,8 +93,8 @@ async def _service_template_ids_for_bundle(monkeypatch) -> tuple[int, set[str]]:
         ),
     ]
     monkeypatch.setattr(
-        "mlox.tui.screens.dashboard.template_panel.load_all_service_configs",
-        lambda: configs,
+        "mlox.application.use_cases.services.load_all_service_configs",
+        lambda include_plugins=True: configs,
     )
 
     app = TemplatePanelTestApp("service")
@@ -127,8 +127,8 @@ async def _service_template_ids_for_agent_bundle(
         ),
     ]
     monkeypatch.setattr(
-        "mlox.tui.screens.dashboard.template_panel.load_all_service_configs",
-        lambda: configs,
+        "mlox.application.use_cases.services.load_all_service_configs",
+        lambda include_plugins=True: configs,
     )
 
     app = TemplatePanelTestApp("service")

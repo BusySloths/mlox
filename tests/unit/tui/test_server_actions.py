@@ -54,7 +54,7 @@ def test_actions_are_hidden_for_non_server_selections() -> None:
 async def _click_open_terminal(monkeypatch) -> list[object]:
     launched: list[object] = []
     monkeypatch.setattr(
-        "mlox.tui.screens.dashboard.server_actions.launch_external_ssh_terminal",
+        "mlox.application.use_cases.servers.launch_external_ssh_terminal",
         launched.append,
     )
     server = SimpleNamespace(ip="10.0.0.5")
@@ -79,7 +79,7 @@ def test_open_terminal_button_launches_selected_server(monkeypatch) -> None:
 async def _open_terminal_with_binding(monkeypatch, selection) -> list[object]:
     launched: list[object] = []
     monkeypatch.setattr(
-        "mlox.tui.screens.dashboard.server_actions.launch_external_ssh_terminal",
+        "mlox.application.use_cases.servers.launch_external_ssh_terminal",
         launched.append,
     )
 

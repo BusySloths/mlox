@@ -7,8 +7,6 @@ from typing import Any, Dict, Optional
 
 from textual.message import Message
 
-from mlox.project import ProjectWorkspace
-
 WELCOME_TEXT = """\
 Accelerate your ML journey—deploy production-ready MLOps in minutes, not months.
 
@@ -49,7 +47,7 @@ def get_server_backends(server: Any | None) -> list[str]:
 
 
 def summarize_infrastructure(
-    workspace: Optional[ProjectWorkspace],
+    workspace: Optional[Any],
 ) -> Dict[str, Any]:
     """Return aggregate statistics and listings for the active workspace."""
 

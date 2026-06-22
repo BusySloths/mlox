@@ -10,7 +10,7 @@ from textual.containers import Container, Horizontal
 from textual.reactive import reactive
 from textual.widgets import Button, Static
 
-from mlox.terminal import TerminalLaunchError, launch_external_ssh_terminal
+from mlox.application.use_cases.servers import open_server_terminal
 
 from .model import SelectionInfo
 
@@ -105,13 +105,12 @@ class ServerActions(Container):
         if not server:
             return False
 
-        try:
-            launch_external_ssh_terminal(server)
-        except TerminalLaunchError as exc:
-            self.notify(str(exc), severity="error")
+        result = open_server_terminal(server)
+        if not result.success:
+            self.notify(result.message, severity="error")
             return False
 
-        self.notify(f"Opened SSH terminal for {getattr(server, 'ip', 'server')}.")
+        self.notify(result.message)
         return True
 
     @on(Button.Pressed, "#toggle-server-credentials")

@@ -18,7 +18,8 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 from textual.widgets._data_table import RowKey
 
-from mlox.config import load_all_server_configs, load_all_service_configs
+from mlox.application.use_cases.servers import browse_server_templates
+from mlox.application.use_cases.services import browse_service_templates
 
 from .model import SelectionInfo, get_server_backends
 
@@ -124,20 +125,18 @@ class TemplatePanel(Container):
         self._show_config_details(row_key)
 
     def _show_server_templates(self) -> None:
-        configs = load_all_server_configs()
+        result = browse_server_templates()
+        configs = result.data["configs"] if result.success and result.data else []
         self._show_template_table(configs, "Server Templates")
 
     def _show_service_templates(self) -> None:
-        configs = load_all_service_configs()
         selection = self.selection
+        backends = None
         if selection and selection.type == "bundle":
             server = selection.server or getattr(selection.bundle, "server", None)
             backends = set(get_server_backends(server))
-            configs = [
-                config
-                for config in configs
-                if backends & config.backend_capabilities()
-            ]
+        result = browse_service_templates(backends=backends)
+        configs = result.data["configs"] if result.success and result.data else []
         self._show_template_table(
             configs,
             "Service Templates",

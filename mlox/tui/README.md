@@ -11,12 +11,14 @@ This package implements the terminal dashboard using Textual.
 
 ## Workflow
 
-Login stores one `ProjectWorkspace` on the app. Dashboard widgets render its
-infrastructure and invoke workspace operations. Reloading refreshes both the
-workspace and visible tree state.
+Login opens or creates a workspace through `mlox.application` use cases and
+stores the returned workspace on the app. Dashboard widgets render the existing
+workspace/domain objects, but side-effecting workflows such as reload, template
+listing, terminal launch, and service TUI handler resolution go through
+`mlox.application`.
 
 ## System Role
 
-The TUI is a stateful frontend adapter. Keep deployment logic and persistence
-outside widgets and screens.
-
+The TUI is a stateful frontend adapter. Keep deployment logic, persistence,
+configuration loading, and external process launches outside widgets and
+screens; expose those operations through `mlox.application` use cases.

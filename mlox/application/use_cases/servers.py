@@ -5,8 +5,10 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from mlox.application.result import OperationResult
+from mlox.config import load_all_server_configs
 from mlox.infra import Bundle
 from mlox.project.state import WorkspaceState
+from mlox.terminal import TerminalLaunchError, launch_external_ssh_terminal
 from mlox.utils import dataclass_to_dict
 
 logger = logging.getLogger(__name__)
@@ -107,3 +109,36 @@ def list_server_configs(list_configs) -> OperationResult:
     payload = [{"id": cfg.id, "path": cfg.path} for cfg in list_configs()]
     message = "No server configs found." if not payload else "Server configs retrieved."
     return OperationResult(True, 0, message, {"configs": payload})
+
+
+def browse_server_templates(
+    list_configs=None,
+) -> OperationResult:
+    """Return server template config objects for UI browsing."""
+
+    list_configs = list_configs or load_all_server_configs
+    configs = list(list_configs())
+    message = "No server templates found." if not configs else "Server templates loaded."
+    return OperationResult(True, 0, message, {"configs": configs})
+
+
+def open_server_terminal(
+    server,
+    launcher=None,
+) -> OperationResult:
+    """Open an external terminal for a server selection."""
+
+    if not server:
+        return OperationResult(False, 12, "No server selected.")
+    launcher = launcher or launch_external_ssh_terminal
+    try:
+        launched = launcher(server)
+    except TerminalLaunchError as exc:
+        return OperationResult(False, 13, str(exc))
+
+    return OperationResult(
+        True,
+        0,
+        f"Opened SSH terminal for {getattr(server, 'ip', 'server')}.",
+        {"launch": launched},
+    )

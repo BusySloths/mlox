@@ -27,6 +27,35 @@ def test_project_create_project_returns_project_payload():
     assert result.data == {"project": current}
 
 
+def test_project_open_workspace_uses_project_workspace():
+    workspace = SimpleNamespace(name="demo", path="demo.mlox")
+    calls = []
+
+    class Workspace:
+        @staticmethod
+        def open(path, password):
+            calls.append(("open", path, password))
+            return workspace
+
+    result = project.open_project_workspace("demo.mlox", "pw", workspace_cls=Workspace)
+
+    assert result.success
+    assert result.data == {"workspace": workspace}
+    assert calls == [("open", "demo.mlox", "pw")]
+
+
+def test_project_reload_workspace_reports_failures():
+    workspace = SimpleNamespace(
+        path="demo.mlox",
+        reload=lambda: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+
+    result = project.reload_project_workspace(workspace)
+
+    assert not result.success
+    assert result.message == "Failed to reload infrastructure: offline"
+
+
 def test_servers_setup_server_invokes_server_without_persisting():
     calls = []
     server = SimpleNamespace(setup=lambda: calls.append("setup"))
@@ -79,6 +108,26 @@ def test_servers_save_server_key_serializes_bundle_server(monkeypatch):
     )
 
 
+def test_servers_browse_server_templates_returns_config_objects():
+    configs = [SimpleNamespace(id="server-template")]
+
+    result = servers.browse_server_templates(list_configs=lambda: configs)
+
+    assert result.success
+    assert result.data == {"configs": configs}
+
+
+def test_servers_open_server_terminal_uses_launcher():
+    launched = []
+    server = SimpleNamespace(ip="1.2.3.4")
+
+    result = servers.open_server_terminal(server, launcher=launched.append)
+
+    assert result.success
+    assert launched == [server]
+    assert result.message == "Opened SSH terminal for 1.2.3.4."
+
+
 def test_services_setup_service_runs_runtime_steps():
     calls = []
     service = SimpleNamespace(
@@ -100,6 +149,53 @@ def test_services_setup_service_runs_runtime_steps():
 
     assert result.success
     assert calls == ["setup", "spin_up"]
+
+
+def test_services_browse_service_templates_filters_by_backend():
+    docker = SimpleNamespace(
+        id="docker",
+        backend_capabilities=lambda: {"docker"},
+    )
+    k8s = SimpleNamespace(
+        id="k8s",
+        backend_capabilities=lambda: {"kubernetes"},
+    )
+
+    result = services.browse_service_templates(
+        backends={"docker"},
+        list_configs=lambda: [docker, k8s],
+    )
+
+    assert result.success
+    assert result.data == {"configs": [docker]}
+
+
+def test_services_build_service_ui_widget_resolves_config_handler():
+    service = SimpleNamespace(name="svc")
+    bundle = SimpleNamespace()
+    widget = object()
+    config = SimpleNamespace(
+        get_ui_handler=lambda ui, handler: (
+            lambda infra, bundle_arg, service_arg: widget
+        )
+    )
+    infra = SimpleNamespace(get_service_config=lambda current: config)
+
+    result = services.build_service_ui_widget(infra, bundle, service)
+
+    assert result.success
+    assert result.data == {"widget": widget}
+
+
+def test_services_build_service_ui_widget_reports_missing_handler():
+    service = SimpleNamespace(name="svc")
+    config = SimpleNamespace(get_ui_handler=lambda ui, handler: None)
+    infra = SimpleNamespace(get_service_config=lambda current: config)
+
+    result = services.build_service_ui_widget(infra, SimpleNamespace(), service)
+
+    assert not result.success
+    assert result.message == "Selected service does not provide a TUI view."
 
 
 def test_models_list_models_fails_for_unknown_registry():

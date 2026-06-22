@@ -17,8 +17,8 @@ from .server_actions import ServerActions
 from .stats_panel import StatsPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
-from mlox.project import ProjectWorkspace
-from mlox.services.otel.docker import OtelDockerService
+from mlox.application.use_cases.project import reload_project_workspace
+from mlox.application.use_cases.services import build_service_ui_widget
 
 
 TELEMETRY_TAB_ID = "service-tui-tab"
@@ -120,12 +120,11 @@ class DashboardScreen(Screen):
         self.notify(f"Reloading project infrastructure for {project}...")
 
         def reload_workspace() -> None:
-            try:
-                workspace.reload()
-            except Exception as exc:
+            result = reload_project_workspace(workspace)
+            if not result.success:
                 self.app.call_from_thread(
                     self._show_reload_error,
-                    f"Failed to reload infrastructure: {exc}",
+                    result.message,
                 )
                 return
             self.app.call_from_thread(
@@ -172,14 +171,7 @@ class DashboardScreen(Screen):
             )
             return
 
-        if not self._is_otel_service(selection.service):
-            self._mount_placeholder(
-                container,
-                "Telemetry is only available for the OpenTelemetry collector service.",
-            )
-            return
-
-        workspace: ProjectWorkspace | None = getattr(self.app, "workspace", None)
+        workspace = getattr(self.app, "workspace", None)
         infra = workspace.infrastructure if workspace else None
         if not infra or not selection.bundle:
             self._mount_placeholder(
@@ -188,31 +180,12 @@ class DashboardScreen(Screen):
             )
             return
 
-        config = infra.get_service_config(selection.service)
-        if not config:
-            self._mount_placeholder(
-                container,
-                "Unable to resolve a configuration for the selected service.",
-            )
+        result = build_service_ui_widget(infra, selection.bundle, selection.service)
+        if not result.success:
+            self._mount_placeholder(container, result.message)
             return
 
-        callable_settings = config.get_ui_handler("tui", "settings")
-        if not callable_settings:
-            self._mount_placeholder(
-                container,
-                "Selected service does not provide a telemetry view.",
-            )
-            return
-
-        try:
-            widget = callable_settings(infra, selection.bundle, selection.service)
-        except Exception as exc:  # pragma: no cover - defensive for IO errors
-            self._mount_placeholder(
-                container,
-                f"Failed to load telemetry: {exc}",
-            )
-            return
-
+        widget = result.data["widget"] if result.data else None
         if not isinstance(widget, Widget):
             self._mount_placeholder(
                 container,
@@ -222,9 +195,6 @@ class DashboardScreen(Screen):
 
         container.mount(widget)
         self._set_telemetry_tab_visible(True)
-
-    def _is_otel_service(self, service: object | None) -> bool:
-        return isinstance(service, OtelDockerService)
 
     def _set_telemetry_tab_visible(self, visible: bool) -> None:
         self._set_tab_visible(TELEMETRY_TAB_ID, visible)
