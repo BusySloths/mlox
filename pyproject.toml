@@ -80,7 +80,7 @@ dev = [
     # developer extras (includes 'all')
     "streamlit==1.57.0",  # M
     "streamlit-vis-timeline==0.3.0",  # M
-    "textual==6.3.0",  # M
+    "textual==8.2.7",  # M
     "textual-dev==1.8.0",  # M
     "backports.tarfile>=1.0",
     "pandas>=2.2",
