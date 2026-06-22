@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.text import Text
 from textual.widgets import Tree
 
-from .model import SelectionChanged, SelectionInfo
+from .model import SelectionChanged, SelectionInfo, get_server_backends
 
 
 class InfraTree(Tree[SelectionInfo]):
@@ -43,12 +43,16 @@ class InfraTree(Tree[SelectionInfo]):
             return
 
         for bundle in infra.bundles:
+            server = getattr(bundle, "server", None)
+            backends = ", ".join(get_server_backends(server)) or "unknown"
+            bundle_label = Text(f"Bundle: {bundle.name}")
+            bundle_label.append("  Backend: ", style="dim")
+            bundle_label.append(backends, style="bold cyan")
             bundle_node = self.root.add(
-                f"Bundle: {bundle.name}",
-                data=SelectionInfo(type="bundle", bundle=bundle, server=bundle.server),
+                bundle_label,
+                data=SelectionInfo(type="bundle", bundle=bundle, server=server),
             )
             bundle_node.expand()
-            server = getattr(bundle, "server", None)
             server_label = (
                 f"Server: {getattr(server, 'ip', 'unknown')}"
                 if server

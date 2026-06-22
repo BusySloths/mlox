@@ -88,6 +88,23 @@ def test_root_highlights_active_secret_manager() -> None:
     )
 
 
+async def _bundle_label() -> str:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker", "k3s-agent"])
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test():
+        tree = app.query_one(InfraTree)
+        return tree.root.children[0].label.plain
+
+
+def test_bundle_tree_label_shows_backend_type() -> None:
+    assert asyncio.run(_bundle_label()) == (
+        "Bundle: dev  Backend: docker, k3s_agent"
+    )
+
+
 async def _leaf_flags_for_server_and_services() -> tuple[bool, bool, bool]:
     app = DashboardTestApp()
     server = SimpleNamespace(ip="10.0.0.5")
