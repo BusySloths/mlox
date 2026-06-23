@@ -1,6 +1,7 @@
 # Milestone Template
 
-Use this as the GitHub milestone description for release-sized work.
+Use this as the GitHub milestone description for release-sized work. Skip it for
+small releases where a short sentence and issue list are enough.
 
 ```markdown
 # v0.x.0 - Release Name
@@ -9,29 +10,24 @@ Use this as the GitHub milestone description for release-sized work.
 
 Short description of what this release should accomplish.
 
-## Included Work
+## Required Work
 
 - [ ] #123 Feature or fix
-- [ ] #124 Feature or fix
-- [ ] #125 Documentation or migration task
+- [ ] #124 Documentation or migration task
 
-## Acceptance Criteria
+## Before Release
 
-- [ ] User-visible behavior is documented
 - [ ] Unit tests pass
 - [ ] Integration tests run if infrastructure behavior changed
+- [ ] User-visible behavior is documented
 - [ ] Breaking changes have migration notes
 - [ ] Release notes are ready
 
+## Deferred
+
+- #125 Follow-up that does not block this release
+
 ## Risks / Blockers
 
-- Risk or blocker 1
-- Risk or blocker 2
-
-## Release Notes Draft
-
-- New:
-- Fixed:
-- Changed:
-- Known limitations:
+- Risk or blocker
 ```

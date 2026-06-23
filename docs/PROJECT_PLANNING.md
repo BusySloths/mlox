@@ -1,64 +1,73 @@
 # Project Planning
 
-MLOX planning should stay simple: issues track work, milestones group release goals, and pull requests implement changes.
+MLOX is still early-stage, so planning should optimize for clarity and momentum
+instead of portfolio management. Use issues as the backlog, pull requests as the
+review unit, and milestones only when preparing a release.
 
-## Planning Flow
+## Current Process
 
 ```text
 idea / bug report
-    -> issue
-    -> milestone when release-relevant
+    -> issue with clear outcome
     -> pull request
-    -> release notes when user-visible
+    -> release note when user-visible
 ```
+
+Add a milestone only when work is intended to ship together in the next release.
+Do not require GitHub Projects for routine planning.
 
 ## Issue Triage
 
 For each new issue:
 
-1. Confirm the problem or goal is understandable.
-2. Add a `type:*` label.
-3. Add relevant `component:*` labels.
-4. Add `priority:*` after triage.
-5. Add `status:needs-triage`, `status:blocked`, or `status:in-progress` as appropriate.
-6. Ask for missing reproduction details or acceptance criteria when needed.
+1. Make the title and first comment understandable without extra labels.
+2. Add one `type:*` label when the type is clear.
+3. Ask for reproduction steps, logs, or acceptance criteria when needed.
+4. Mark only exceptional state with `priority:urgent`, `status:blocked`, or
+   `status:needs-info`.
 
 Good issues include:
 
-- expected behavior
-- actual behavior or requested outcome
+- the problem or desired outcome
 - reproduction steps for bugs
-- affected interface or service
-- acceptance criteria for features
+- the command, service, or interface involved
+- the smallest useful acceptance criteria
+
+Avoid component labels for now. The repository is small enough that text search,
+linked files, and issue descriptions are more useful than maintaining a component
+taxonomy.
 
 ## Milestones
 
-Use milestones for work that should ship together. Avoid turning milestones into full project plans; they should answer:
+Use milestones for near-term releases, not as a standing planning board. A useful
+milestone answers:
 
-- What are we trying to release?
-- Which issues are included?
-- What must be tested?
-- What is blocked?
+- What should this release accomplish?
+- Which issues must be done before release?
+- Which tests or docs matter for the release?
+- What is explicitly deferred?
 
-Use `docs/MILESTONE_TEMPLATE.md` for larger releases.
+Use `docs/MILESTONE_TEMPLATE.md` only for larger releases. Small releases can use
+a short paragraph and an issue list.
 
 ## Pull Request Review
 
 Review for:
 
 - correctness and regressions
-- config/session/infra persistence impact
-- executor boundary violations
-- CLI/TUI/Streamlit behavior drift
-- tests and docs for user-visible behavior
+- CLI/TUI/user-visible behavior drift
+- persistence, secrets, service, and infrastructure impact
+- tests for changed behavior
+- docs/examples when behavior changes
 
-Prefer small PRs. If a PR mixes architecture, UI, docs, and unrelated cleanup, ask for a narrower scope.
+Prefer small PRs. If a PR mixes architecture, UI, docs, and unrelated cleanup,
+ask for a narrower scope.
 
 ## Release Checklist
 
 Before a release:
 
-- milestone issues are resolved or explicitly deferred
+- release-blocking issues are resolved or explicitly deferred
 - unit tests pass
 - integration tests are run when infrastructure behavior changed
 - docs/examples reflect user-visible changes

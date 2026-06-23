@@ -1,82 +1,46 @@
 # Labels
 
-Use labels to make issues and pull requests searchable. Keep the set small and predictable.
+Use labels only when they make the issue list easier to scan or change what a
+maintainer does next. At this stage, the issue title and body should carry most
+of the context.
 
-## Type
-
-Every issue should have one type label.
+## Default Set
 
 | Label | Use |
 | --- | --- |
 | `type:bug` | Broken behavior |
-| `type:feature` | New functionality |
-| `type:enhancement` | Improvement to existing behavior |
-| `type:documentation` | Docs or examples |
-| `type:maintenance` | Refactoring, dependencies, cleanup |
-| `type:question` | Usage or design question |
+| `type:feature` | New capability or larger user-visible change |
+| `type:documentation` | Docs, examples, or website content |
+| `type:maintenance` | Refactoring, dependencies, tests, CI, cleanup |
+| `type:question` | Open usage, design, or product question |
+| `priority:urgent` | Security, data loss, broken release, or maintainer-blocking issue |
+| `status:blocked` | Waiting on an external dependency or decision |
+| `status:needs-info` | Waiting on reporter details before work can start |
+| `good first issue` | Small, well-scoped task for a new contributor |
+| `help wanted` | External contribution is welcome |
 
-## Priority
+## What We Are Not Tracking Yet
 
-| Label | Use |
-| --- | --- |
-| `priority:critical` | Security, data loss, or release blocker |
-| `priority:high` | Important and time-sensitive |
-| `priority:medium` | Normal priority |
-| `priority:low` | Nice to have |
+Do not use component labels for now. The codebase is still moving quickly, and
+areas such as CLI, TUI, services, configuration, and infrastructure can be found
+well enough through issue text and linked files.
 
-## Component
+Do not use effort labels for routine planning. If an issue is too large to
+understand, split it or add acceptance criteria instead of estimating it.
 
-| Label | Use |
-| --- | --- |
-| `component:cli` | CLI commands and output |
-| `component:tui` | Textual terminal UI |
-| `component:ui` | Streamlit web UI |
-| `component:infrastructure` | Session, infra, servers, executors |
-| `component:services` | Built-in service integrations |
-| `component:config` | YAML config loading and plugins |
-| `component:security` | Secrets, credentials, auth |
-| `component:docs` | Documentation |
-| `component:testing` | Tests and fixtures |
-| `component:ci-cd` | GitHub Actions and release workflows |
+Do not use routine status labels such as `needs-triage`, `in-progress`, or
+`ready-for-review`. Open issues are the backlog, assignees show active work, and
+pull request state shows review readiness.
 
-## Status
+Do not use special-case labels such as `breaking-change`, `security`, or
+`dependencies` for now. Put that context directly in the issue or pull request
+body so readers see the details without relying on label taxonomy.
 
-| Label | Use |
-| --- | --- |
-| `status:needs-triage` | Not reviewed yet |
-| `status:blocked` | Waiting on a dependency or decision |
-| `status:in-progress` | Someone is actively working on it |
-| `status:ready-for-review` | Ready for review |
-| `status:waiting-for-feedback` | Waiting on reporter or contributor |
+## Triage Rules
 
-## Effort
-
-Use effort labels only when they help planning.
-
-| Label | Use |
-| --- | --- |
-| `effort:small` | About 1-2 days |
-| `effort:medium` | About 3-5 days |
-| `effort:large` | About 1-2 weeks |
-| `effort:xl` | Larger than 2 weeks; consider splitting |
-
-## Special
-
-| Label | Use |
-| --- | --- |
-| `good-first-issue` | Good for new contributors |
-| `help-wanted` | External help welcome |
-| `breaking-change` | Changes public behavior or compatibility |
-| `dependencies` | Dependency update |
-| `security` | Security-sensitive issue |
-| `duplicate` | Duplicate issue |
-| `invalid` | Not actionable or out of scope |
-| `wontfix` | Intentionally not planned |
-
-## Guidelines
-
-- Add at least one type label to every issue.
-- Add component labels for affected areas.
-- Add priority only after triage.
-- Keep status labels current while work is active.
-- Split issues labeled `effort:xl` where possible.
+- Add exactly one `type:*` label when the type is clear.
+- Add `priority:urgent` only when the issue needs immediate maintainer attention.
+- Add `status:blocked` or `status:needs-info` only while that state is true.
+- Add `good first issue` or `help wanted` only when actively inviting outside
+  contribution.
+- Prefer editing the issue title/body over adding more labels.

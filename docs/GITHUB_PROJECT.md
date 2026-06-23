@@ -1,33 +1,38 @@
 # GitHub Workflow
 
-This is the lightweight workflow used for MLOX issues, pull requests, labels, and milestones.
+This is the early-stage workflow used for MLOX issues, pull requests, labels, and
+milestones.
 
 ## Work Items
 
-Use GitHub Issues for bugs, features, documentation work, and maintenance tasks. Prefer small issues with clear acceptance criteria.
+Use GitHub Issues for bugs, features, documentation work, and maintenance tasks.
+Prefer small issues with a clear outcome.
 
 Recommended issue title format:
 
 ```text
-[component] Short description
+[area] Short description
 ```
 
 Examples:
 
 - `[cli] Add service status output`
 - `[docs] Refresh installation guide`
-- `[services] Fix Redis secret output`
+- `[redis] Fix secret output`
+
+The area in brackets is plain title text, not a required label.
 
 ## Labels
 
-Every issue should have:
+Every issue may have:
 
-- one `type:*` label
-- one or more `component:*` labels when possible
-- a `priority:*` label when triaged
-- a `status:*` label while active
+- one `type:*` label when the type is clear
+- `priority:urgent` only for immediate maintainer attention
+- `status:blocked` or `status:needs-info` only while true
+- `good first issue` or `help wanted` when actively inviting outside contribution
 
-See `docs/LABELS.md` for the current label set.
+Do not require component, effort, or routine status labels. See `docs/LABELS.md`
+for the current label set.
 
 ## Pull Requests
 
@@ -43,14 +48,16 @@ Use the repository PR template in `.github/pull_request_template.md`.
 
 ## Milestones
 
-Use milestones for release-sized groups of work. Keep milestone descriptions short:
+Use milestones only for release-sized groups of work. Keep milestone descriptions
+short:
 
 - release goal
-- included issues
+- required issues
 - release risks or blockers
-- test/release checklist
+- tests and docs that matter for this release
+- deferred work
 
-Use `docs/MILESTONE_TEMPLATE.md` when a more structured milestone is useful.
+Use `docs/MILESTONE_TEMPLATE.md` when a structured milestone is useful.
 
 ## Branches And Commits
 

@@ -4,16 +4,17 @@
 
 1. Read `CONTRIBUTING.md`.
 2. Install locally with `docs/INSTALLATION.md`.
-3. Pick or create an issue.
-4. Keep the change focused.
-5. Open a PR and list the tests you ran.
+3. Pick or create a focused issue.
+4. Open a PR and list the tests you ran.
 
 ## For Maintainers
 
-1. Triage new issues with labels from `docs/LABELS.md`.
-2. Keep milestones small and release-focused.
-3. Review PRs for regressions, tests, and docs.
-4. Update release notes for user-visible changes.
+1. Keep the issue title/body clear enough to act on.
+2. Add one `type:*` label when useful.
+3. Use `priority:urgent`, `status:blocked`, or `status:needs-info` only for
+   exceptional cases.
+4. Use milestones only for release preparation.
+5. Review PRs for regressions, tests, and docs.
 
 ## Common Commands
 
@@ -36,9 +37,7 @@ task ui:textual:terminal
 - expected outcome
 - reproduction steps for bugs
 - acceptance criteria for features
-- `type:*` label
-- relevant `component:*` labels
-- priority/status after triage
+- one `type:*` label when the type is clear
 
 ## Pull Request Checklist
 

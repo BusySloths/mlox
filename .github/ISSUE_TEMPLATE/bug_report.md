@@ -1,52 +1,39 @@
 ---
 name: Bug Report
-about: Report a bug or issue with MLOX
-title: '[BUG] '
-labels: 'type:bug, status:needs-triage'
+about: Report broken behavior in MLOX
+title: '[bug] '
+labels: 'type:bug'
 assignees: ''
 
 ---
 
-## Bug Description
-A clear and concise description of what the bug is.
+## Problem
+
+What broke?
+
+## Reproduce
+
+1.
+2.
+3.
+
+## Expected
+
+What should have happened?
+
+## Actual
+
+What happened instead?
 
 ## Environment
-- MLOX Version: 
-- Operating System: 
-- Python Version: 
-- Backend (Docker/Kubernetes/Native): 
-- Deployment method: 
 
-## Steps to Reproduce
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Run command '....'
-4. See error
+- MLOX version:
+- OS:
+- Python version:
+- Backend, if relevant:
 
-## Expected Behavior
-A clear and concise description of what you expected to happen.
+## Logs
 
-## Actual Behavior
-A clear and concise description of what actually happened.
-
-## Error Messages/Logs
-If applicable, add error messages or log output to help explain your problem.
-
+```text
+Paste relevant logs or errors here.
 ```
-Paste error messages or logs here
-```
-
-## Screenshots
-If applicable, add screenshots to help explain your problem.
-
-## Additional Context
-Add any other context about the problem here.
-
-## Impact Assessment
-- How critical is this bug? (low/medium/high/critical)
-- How many users are affected? 
-- Is there a workaround available?
-
-## Possible Solution
-If you have an idea of what might be causing the issue or how to fix it, please share.

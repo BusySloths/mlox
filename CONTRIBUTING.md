@@ -20,16 +20,18 @@ Keep in mind that MLOX is still in a very early stage and we welcome any idea or
 
 ### Understanding Our Workflow
 
-We use a structured approach to manage development:
-- **GitHub Projects**: High-level functional areas and epics
-- **Milestones**: Release planning and goal setting  
-- **Issues**: Specific features, bugs, and tasks
-- **Labels**: Categorization and prioritization
+MLOX is still early-stage, so we keep planning lightweight:
 
-For detailed information about our project organization and workflow, see:
-- [GitHub Project Guide](docs/GITHUB_PROJECT.md) - How we organize work and manage projects
-- [Project Planning Guide](docs/PROJECT_PLANNING.md) - Detailed steps for creating and managing projects, milestones, and issues
-- [Labels Guide](docs/LABELS.md) - Our labeling system for categorizing issues
+- **Issues**: bugs, feature ideas, documentation work, and maintenance tasks
+- **Pull requests**: focused implementation and review units
+- **Milestones**: release preparation only, not a standing planning board
+- **Labels**: a small set for type, urgent/blocking state, and contributor routing
+
+For detailed workflow information, see:
+
+- [GitHub Workflow Guide](docs/GITHUB_PROJECT.md) - Issue, PR, milestone, and release workflow
+- [Project Planning Guide](docs/PROJECT_PLANNING.md) - Early-stage planning rules
+- [Labels Guide](docs/LABELS.md) - Current minimal label set
 
 ## Getting Help 🙋
 

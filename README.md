@@ -199,7 +199,7 @@ task tests:integration:k8s      # Kubernetes integration tests (requires Multipa
 - [New service implementations](docs/ARCHITECTURE_HUMANS.md)
 - [Examples and tutorials](examples/)
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and [docs/WORKFLOW_QUICK_REFERENCE.md](docs/WORKFLOW_QUICK_REFERENCE.md) for how we use GitHub Projects, Milestones, and Issues.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and [docs/WORKFLOW_QUICK_REFERENCE.md](docs/WORKFLOW_QUICK_REFERENCE.md) for the lightweight issue, milestone, and PR workflow.
 
 ---
 
@@ -211,7 +211,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and [docs/WORKFLOW_QUI
 | [Architecture (humans)](docs/ARCHITECTURE_HUMANS.md) | Codebase walkthrough |
 | [Architecture (agents)](docs/ARCHITECTURE_AGENTS.md) | High-risk areas and invariants |
 | [Contributing Guide](CONTRIBUTING.md) | How to contribute |
-| [Workflow Quick Reference](docs/WORKFLOW_QUICK_REFERENCE.md) | Labels, milestones, PRs |
+| [Workflow Quick Reference](docs/WORKFLOW_QUICK_REFERENCE.md) | Issues, labels, milestones, PRs |
 | [Plugin Guide](docs/PLUGIN_CONFIGS.md) | External service and server config plugins |
 | [API Docs](https://busysloths.github.io/mlox/mlox.html) | Generated Python API reference |
 
