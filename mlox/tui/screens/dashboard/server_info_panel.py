@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
+from rich.console import Group
+from rich.table import Table
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
@@ -22,7 +24,7 @@ class ServerInfoPanel(Container):
 
     def __init__(self, *children, **kwargs) -> None:
         super().__init__(*children, **kwargs)
-        self._cache: dict[tuple[str, int], str] = {}
+        self._cache: dict[tuple[str, int], Any] = {}
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="server-info-controls"):
@@ -160,11 +162,100 @@ class ServerInfoPanel(Container):
         sections: list[str] = []
         if selection and selection.type == "bundle":
             sections.append("Backend")
-            sections.extend(self._format_mapping(data.get("backend_info") or {}))
+            backend_info = data.get("backend_info") or {}
+            docker_table = self._format_docker_backend(backend_info)
+            if docker_table is not None:
+                return docker_table
+            sections.extend(self._format_mapping(backend_info))
         else:
             sections.append("Server")
             sections.extend(self._format_mapping(data.get("server_info") or {}))
         return "\n".join(sections)
+
+    def _format_docker_backend(self, backend_info: object) -> Group | None:
+        if not isinstance(backend_info, dict):
+            return None
+        if not any(str(key).startswith("docker.") for key in backend_info):
+            return None
+
+        summary = Table(title="Docker Backend", show_header=True, header_style="bold")
+        summary.add_column("Metric", style="cyan", no_wrap=True)
+        summary.add_column("Value")
+        summary.add_row(
+            "Backend Running",
+            self._format_bool(backend_info.get("backend.is_running")),
+        )
+        summary.add_row(
+            "Docker Running",
+            self._format_bool(backend_info.get("docker.is_running")),
+        )
+        summary.add_row(
+            "Docker Enabled",
+            self._format_bool(backend_info.get("docker.is_enabled")),
+        )
+        summary.add_row(
+            "Client Version",
+            self._docker_version(backend_info.get("docker.version"), "Client"),
+        )
+        summary.add_row(
+            "Server Version",
+            self._docker_version(backend_info.get("docker.version"), "Server"),
+        )
+
+        containers = backend_info.get("docker.containers")
+        if not isinstance(containers, list):
+            summary.add_row("Containers", str(containers or "-"))
+            return Group(summary)
+
+        summary.add_row("Containers", str(len(containers)))
+        container_table = Table(
+            title="Containers",
+            show_header=True,
+            header_style="bold",
+            expand=True,
+        )
+        container_table.add_column("Name", style="cyan", no_wrap=True)
+        container_table.add_column("Image", no_wrap=True, overflow="ellipsis")
+        container_table.add_column("State", no_wrap=True)
+        container_table.add_column("Status", no_wrap=True, overflow="ellipsis")
+        container_table.add_column("Ports", no_wrap=True, overflow="ellipsis")
+
+        if containers:
+            for container in containers:
+                if not isinstance(container, dict):
+                    continue
+                container_table.add_row(
+                    self._short_value(container.get("Names")),
+                    self._short_value(container.get("Image")),
+                    self._short_value(container.get("State")),
+                    self._short_value(container.get("Status")),
+                    self._short_value(container.get("Ports")),
+                )
+        else:
+            container_table.add_row("-", "-", "-", "-", "-")
+
+        return Group(summary, container_table)
+
+    def _format_bool(self, value: object) -> str:
+        if isinstance(value, bool):
+            return "yes" if value else "no"
+        return str(value) if value is not None else "-"
+
+    def _docker_version(self, version: object, section: str) -> str:
+        if not isinstance(version, dict):
+            return str(version) if version else "-"
+        section_data = version.get(section)
+        if isinstance(section_data, dict):
+            return str(
+                section_data.get("Version") or section_data.get("ApiVersion") or "-"
+            )
+        return "-"
+
+    def _short_value(self, value: object, *, limit: int = 80) -> str:
+        text = str(value) if value not in (None, "") else "-"
+        if len(text) <= limit:
+            return text
+        return text[: limit - 1] + "…"
 
     def _empty_message(self, selection: Optional[SelectionInfo]) -> str:
         if selection and selection.type == "bundle":

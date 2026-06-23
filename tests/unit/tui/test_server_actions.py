@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import threading
 from types import SimpleNamespace
 
+from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.widgets import Button, Static
 
@@ -36,6 +38,14 @@ class DashboardServerInfoTestApp(App):
 
     def compose(self) -> ComposeResult:
         yield DashboardScreen()
+
+
+def _render_text(renderable: object) -> str:
+    if isinstance(renderable, str):
+        return renderable
+    console = Console(file=io.StringIO(), record=True, width=140)
+    console.print(renderable)
+    return console.export_text()
 
 
 async def _visibility_for(selection: SelectionInfo) -> bool:
@@ -264,7 +274,22 @@ async def _click_bundle_backend_info() -> str:
         get_server_info=lambda no_cache=True: {"host": "demo-host"},
         get_backend_status=lambda: {
             "backend.is_running": True,
-            "k3s.is_running": True,
+            "docker.is_running": True,
+            "docker.is_enabled": True,
+            "docker.version": {
+                "Client": {"Version": "29.0.0"},
+                "Server": {"Version": "29.0.0"},
+            },
+            "docker.containers": [
+                {
+                    "Names": "mlflow",
+                    "Image": "ghcr.io/mlflow/mlflow:v3",
+                    "State": "running",
+                    "Status": "Up 2 hours",
+                    "Ports": "0.0.0.0:5000->5000/tcp",
+                    "Labels": "too,noisy,to,render",
+                }
+            ],
         },
     )
     bundle = SimpleNamespace(name="dev", server=server)
@@ -279,27 +304,33 @@ async def _click_bundle_backend_info() -> str:
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
-            rendered = str(
+            output = (
                 app.query_one(ServerInfoPanel)
                 .query_one("#server-runtime-info", Static)
-                .render()
             )
-            if "backend.is_running" in rendered:
-                return rendered
-        return str(
+            rendered_text = _render_text(
+                output.content
+            )
+            if "Docker Backend" in rendered_text:
+                return rendered_text
+        output = (
             app.query_one(ServerInfoPanel)
             .query_one("#server-runtime-info", Static)
-            .render()
         )
+        return _render_text(output.content)
 
 
 def test_bundle_info_panel_renders_backend_information() -> None:
     rendered = asyncio.run(_click_bundle_backend_info())
 
-    assert "Backend" in rendered
-    assert "backend.is_running: True" in rendered
-    assert "k3s.is_running: True" in rendered
-    assert "Server" not in rendered
+    assert "Docker Backend" in rendered
+    assert "Backend Running" in rendered
+    assert "yes" in rendered
+    assert "Containers" in rendered
+    assert "mlflow" in rendered
+    assert "ghcr.io/mlflow/mlflow" in rendered
+    assert "5000->5000" in rendered
+    assert "too,noisy,to,render" not in rendered
     assert "host: demo-host" not in rendered
 
 
