@@ -442,6 +442,113 @@ def test_bundle_info_panel_renders_backend_information() -> None:
     assert "host: demo-host" not in rendered
 
 
+async def _click_kubernetes_backend_info(backend_info: dict) -> str:
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        get_server_info=lambda no_cache=True: {"host": "demo-host"},
+        get_backend_status=lambda: backend_info,
+    )
+    bundle = SimpleNamespace(name="dev", server=server)
+
+    app = DashboardServerInfoTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
+        for _ in range(20):
+            await pilot.pause()
+            output = (
+                app.query_one(ServerInfoPanel)
+                .query_one("#server-runtime-info", Static)
+            )
+            summary = str(
+                app.query_one(ServerInfoPanel)
+                .query_one("#server-info-summary", Static)
+                .render()
+            )
+            rendered_text = _render_text(output.content)
+            if "k3s:" in summary:
+                return f"{summary}\n{rendered_text}"
+        output = (
+            app.query_one(ServerInfoPanel)
+            .query_one("#server-runtime-info", Static)
+        )
+        summary = str(
+            app.query_one(ServerInfoPanel)
+            .query_one("#server-info-summary", Static)
+            .render()
+        )
+        return f"{summary}\n{_render_text(output.content)}"
+
+
+def test_kubernetes_backend_info_renders_node_table() -> None:
+    rendered = asyncio.run(
+        _click_kubernetes_backend_info(
+            {
+                "backend.is_running": True,
+                "k3s-agent.is_running": False,
+                "k3s.is_running": True,
+                "k3s.nodes": [
+                    {
+                        "NAME": "vmd167437",
+                        "STATUS": "Ready",
+                        "ROLES": "control-plane,master",
+                        "AGE": "272d",
+                        "VERSION": "v1.33.4+k3s1",
+                        "INTERNAL-IP": "167.86.78.67",
+                        "EXTERNAL-IP": "<none>",
+                        "OS-IMAGE": "Ubuntu 24.04.3 LTS",
+                        "KERNEL-VERSION": "6.8.0-71-generic",
+                        "CONTAINER-RUNTIME": "containerd://2.0.5-k3s2",
+                    },
+                    {
+                        "NAME": "vmd168621",
+                        "STATUS": "Ready",
+                        "ROLES": "<none>",
+                        "VERSION": "v1.33.5+k3s1",
+                        "INTERNAL-IP": "161.97.91.15",
+                        "OS-IMAGE": "Ubuntu 24.04.3 LTS",
+                        "CONTAINER-RUNTIME": "containerd://2.1.4-k3s1",
+                    },
+                ],
+            }
+        )
+    )
+
+    assert "Backend: yes" in rendered
+    assert "k3s: yes" in rendered
+    assert "agent: no" in rendered
+    assert "nodes: 2" in rendered
+    assert "Kubernetes Nodes" in rendered
+    assert "vmd167437" in rendered
+    assert "vmd168621" in rendered
+    assert "control-plane,master" in rendered
+    assert "containerd://2.0.5-k3s2" in rendered
+    assert "k3s.nodes:" not in rendered
+
+
+def test_kubernetes_agent_backend_info_renders_compact_status_without_nodes() -> None:
+    rendered = asyncio.run(
+        _click_kubernetes_backend_info(
+            {
+                "backend.is_running": True,
+                "k3s-agent.is_running": True,
+                "k3s.is_running": False,
+            }
+        )
+    )
+
+    assert "Backend: yes" in rendered
+    assert "k3s: no" in rendered
+    assert "agent: yes" in rendered
+    assert "nodes: -" in rendered
+    assert "k3s-agent.is_running:" not in rendered
+    assert "k3s.is_running:" not in rendered
+
+
 async def _click_server_info_with_blocked_worker() -> tuple[str, str]:
     release = threading.Event()
 

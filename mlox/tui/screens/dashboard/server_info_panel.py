@@ -190,6 +190,9 @@ class ServerInfoPanel(Container):
             docker_table = self._format_docker_backend(backend_info)
             if docker_table is not None:
                 return docker_table
+            kubernetes_table = self._format_kubernetes_backend(backend_info)
+            if kubernetes_table is not None:
+                return kubernetes_table
             sections.extend(self._format_mapping(backend_info))
         else:
             return self._format_server_info(data.get("server_info") or {})
@@ -251,6 +254,59 @@ class ServerInfoPanel(Container):
             container_table.add_row("-", "-", "-", "-", "-")
 
         return RuntimeInfoDisplay(summary=summary, content=container_table)
+
+    def _format_kubernetes_backend(
+        self, backend_info: object
+    ) -> RuntimeInfoDisplay | None:
+        if not isinstance(backend_info, dict):
+            return None
+        if not any(str(key).startswith("k3s") for key in backend_info):
+            return None
+
+        nodes = backend_info.get("k3s.nodes")
+        node_count = str(len(nodes)) if isinstance(nodes, list) else "-"
+        summary = " | ".join(
+            [
+                f"Backend: {self._format_bool(backend_info.get('backend.is_running'))}",
+                f"k3s: {self._format_bool(backend_info.get('k3s.is_running'))}",
+                f"agent: {self._format_bool(backend_info.get('k3s-agent.is_running'))}",
+                f"nodes: {node_count}",
+            ]
+        )
+        if not isinstance(nodes, list):
+            return RuntimeInfoDisplay(summary=summary, content="-")
+
+        nodes_table = Table(
+            title="Kubernetes Nodes",
+            show_header=True,
+            header_style="bold",
+            expand=True,
+        )
+        nodes_table.add_column("Name", style="cyan", no_wrap=True)
+        nodes_table.add_column("Status", no_wrap=True)
+        nodes_table.add_column("Roles", no_wrap=True, overflow="ellipsis")
+        nodes_table.add_column("Version", no_wrap=True)
+        nodes_table.add_column("Internal IP", no_wrap=True)
+        nodes_table.add_column("OS", overflow="ellipsis")
+        nodes_table.add_column("Runtime", overflow="ellipsis")
+
+        if nodes:
+            for node in nodes:
+                if not isinstance(node, dict):
+                    continue
+                nodes_table.add_row(
+                    self._short_value(node.get("NAME")),
+                    self._short_value(node.get("STATUS")),
+                    self._short_value(node.get("ROLES")),
+                    self._short_value(node.get("VERSION")),
+                    self._short_value(node.get("INTERNAL-IP")),
+                    self._short_value(node.get("OS-IMAGE")),
+                    self._short_value(node.get("CONTAINER-RUNTIME")),
+                )
+        else:
+            nodes_table.add_row("-", "-", "-", "-", "-", "-", "-")
+
+        return RuntimeInfoDisplay(summary=summary, content=nodes_table)
 
     def _format_server_info(self, server_info: object) -> object:
         if not isinstance(server_info, dict) or not server_info:
