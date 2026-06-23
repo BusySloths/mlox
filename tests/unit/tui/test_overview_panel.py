@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from types import SimpleNamespace
 
 from rich.console import Console
@@ -11,7 +12,7 @@ from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 
 
 def _render_panel(renderable) -> str:
-    console = Console(record=True, width=120)
+    console = Console(file=io.StringIO(), record=True, width=120)
     console.print(renderable)
     return console.export_text()
 
