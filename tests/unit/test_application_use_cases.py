@@ -156,6 +156,30 @@ def test_servers_get_runtime_info_prefers_get_backend_info():
     assert result.data["backend_info"] == {"backend.kind": "custom"}
 
 
+def test_servers_get_server_info_only_collects_server_info():
+    server = SimpleNamespace(
+        get_server_info=lambda no_cache=True: {"host": "demo"},
+        get_backend_status=lambda: {"backend.is_running": True},
+    )
+
+    result = servers.get_server_info(server)
+
+    assert result.success
+    assert result.data == {"server_info": {"host": "demo"}}
+
+
+def test_servers_get_backend_info_only_collects_backend_info():
+    server = SimpleNamespace(
+        get_server_info=lambda no_cache=True: {"host": "demo"},
+        get_backend_status=lambda: {"backend.is_running": True},
+    )
+
+    result = servers.get_backend_info(server)
+
+    assert result.success
+    assert result.data == {"backend_info": {"backend.is_running": True}}
+
+
 def test_services_setup_service_runs_runtime_steps():
     calls = []
     service = SimpleNamespace(

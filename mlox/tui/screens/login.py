@@ -3,9 +3,22 @@
 import os
 
 from textual.app import ComposeResult
-from textual.containers import CenterMiddle, Horizontal
+from textual.containers import CenterMiddle, Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Static
+
+
+MLOX_LOGO = r"""
+,---.    ,---.  .---.       ,-----.     _____     __
+|    \  /    |  | ,_|     .'  .-,  '.   \   _\   /  /
+|  ,  \/  ,  |,-./  )    / ,-.|  \ _ \  .-./ ). /  '
+|  |\_   /|  |\  '_ '`) ;  \  '_ /  | : \ '_ .') .'
+|  _( )_/ |  | > (_)  ) |  _`,/ \ _/  |(_ (_) _) '
+| (_ o _) |  |(  .  .-' : (  '\_/ \   ;  /    \   \
+|  (_,_)  |  | `-'`-'|___\ `"/  \  ) /   `-'`-'    \
+|  |      |  |  |        \'. \_/``".'   /  /   \    \
+'--'      '--'  `--------`  '-----'    '--'     '----'
+"""
 
 
 class LoginScreen(Screen):
@@ -13,23 +26,25 @@ class LoginScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, classes="app-header")
-        with CenterMiddle(id="login-form"):
-            yield Static("MLOX Login", id="login-title")
-            yield Input(
-                value=os.environ.get("MLOX_PROJECT_PATH") or os.environ.get("MLOX_PROJECT_NAME", "mlox.mlox"),
-                placeholder="Project file",
-                id="project",
-            )
-            yield Input(
-                value=os.environ.get("MLOX_PROJECT_PASSWORD", ""),
-                placeholder="Password",
-                password=True,
-                id="password",
-            )
-            with Horizontal(id="login-actions"):
-                yield Button("Open", id="login-btn", variant="primary")
-                yield Button("Create", id="create-btn")
-            yield Static("", id="message")
+        with CenterMiddle(id="login-shell"):
+            with Container(id="login-form"):
+                yield Static(MLOX_LOGO, id="login-logo")
+                yield Static("Local MLOps workspace", id="login-subtitle")
+                yield Input(
+                    value=os.environ.get("MLOX_PROJECT_PATH") or os.environ.get("MLOX_PROJECT_NAME", "mlox.mlox"),
+                    placeholder="Project file",
+                    id="project",
+                )
+                yield Input(
+                    value=os.environ.get("MLOX_PROJECT_PASSWORD", ""),
+                    placeholder="Password",
+                    password=True,
+                    id="password",
+                )
+                with Horizontal(id="login-actions"):
+                    yield Button("Open", id="login-btn", variant="primary")
+                    yield Button("Create", id="create-btn")
+                yield Static("", id="message")
         yield Footer(classes="app-footer")
 
     def on_button_pressed(

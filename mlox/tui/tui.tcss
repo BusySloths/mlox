@@ -1,7 +1,13 @@
 LoginScreen {
-  background: #021c1dff;
+  background: #061412ff;
   color: #e6edf7;
-  margin: 4 4;
+  margin: 0;
+}
+
+#login-shell {
+  height: 1fr;
+  width: 1fr;
+  align: center middle;
 }
 
 .app-header {
@@ -11,21 +17,28 @@ LoginScreen {
 }
 
 #login-form {
-  width: auto;
+  width: 76;
   height: auto;
-  margin: 10;
-  padding: 1 2;
-  background: #291488ff;
-  border: round #c420bbff;
+  margin: 0 0 1 0;
+  padding: 0 3 1 3;
+  background: #0d2a24ff;
+  border: round #74d17aff;
   color: #ffffff;
   layer: 1;
 }
 
-#login-title {
+#login-logo {
   content-align: center middle;
+  height: auto;
+  color: #8fe388ff;
   text-style: bold;
-  height: 3;
-  color: #e6edf7;
+}
+
+#login-subtitle {
+  content-align: center middle;
+  height: auto;
+  margin-bottom: 0;
+  color: #a6c9bdff;
 }
 
 Input {
@@ -35,28 +48,28 @@ Input {
 }
 
 #project {
-  width: 32;
+  width: 68;
   min-height: 3;
   height: 3;
-  padding: 0 0;
+  padding: 0 1;
   margin: 0 0 0 0;
   color: #e6edf7;
 }
 
 #password {
-  width: 32;
+  width: 68;
   min-height: 3;
   height: 3;
   padding: 0 1;
-  margin: 0 0 1 0;
+  margin: 0;
   color: #e6edf7;
 }
 
 #login-actions {
   layout: horizontal;
-  width: 32;
+  width: 68;
   height: 3;
-  margin-top: 1;
+  margin-top: 0;
 }
 
 Button {
@@ -67,17 +80,25 @@ Button {
 }
 
 #login-btn {
-  width: 16;
+  width: 33;
   min-height: 3;
   height: 3;
   content-align: center middle;
 }
 
 #create-btn {
-  width: 16;
+  width: 33;
   min-height: 3;
   height: 3;
   content-align: center middle;
+  margin-left: 1;
+  background: #24406fff;
+  border: round #69b7ffff;
+  color: #ffffff;
+}
+
+#create-btn:hover {
+  background: #305aa0ff;
 }
 
 #message {
@@ -179,19 +200,24 @@ Button {
 #selection-overview,
 #selection-server-actions,
 #selection-server-info,
-#selection-stats,
 #selection-logs,
 #selection-history {
   margin: 0;
 }
 
-#selection-overview,
-#selection-stats {
+#selection-overview {
   width: 1fr;
   min-width: 0;
 }
 
 #selection-server-actions {
+  height: auto;
+  margin-top: 1;
+  padding: 1;
+  border: round #2fa527ff;
+}
+
+#selection-server-info {
   height: auto;
   margin-top: 1;
   padding: 1;
@@ -240,10 +266,6 @@ Button {
   margin-top: 1;
 }
 
-#selection-stats {
-  margin-top: 0;
-}
-
 #activity-tabs {
   height: 1fr;
   min-height: 50%;
@@ -262,7 +284,6 @@ Button {
 }
 
 #selection-logs,
-#selection-server-info,
 #selection-history {
   layout: vertical;
   height: 1fr;

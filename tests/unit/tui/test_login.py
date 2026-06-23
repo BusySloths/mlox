@@ -4,6 +4,7 @@ import asyncio
 from types import SimpleNamespace
 from textual.app import App
 from textual.containers import Horizontal
+from textual.widgets import Static
 from mlox.application.result import OperationResult
 from mlox.tui.app import MLOXTextualApp
 from mlox.tui.screens.login import LoginScreen
@@ -48,6 +49,57 @@ async def _inspect_login_actions():
 
 def test_open_and_create_buttons_share_horizontal_action_row():
     assert asyncio.run(_inspect_login_actions()) == ["login-btn", "create-btn"]
+
+
+async def _login_control_widths():
+    app = MLOXTextualApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        project = screen.query_one("#project")
+        password = screen.query_one("#password")
+        actions = screen.query_one("#login-actions")
+        login = screen.query_one("#login-btn")
+        create = screen.query_one("#create-btn")
+        return (
+            project.region.width,
+            password.region.width,
+            actions.region.width,
+            login.region.width,
+            create.region.width,
+            create.styles.background.hex,
+        )
+
+
+def test_login_controls_match_form_inner_width():
+    project, password, actions, login, create, create_bg = asyncio.run(
+        _login_control_widths()
+    )
+
+    assert project == 68
+    assert password == 68
+    assert actions == 68
+    assert login == 33
+    assert create == 33
+    assert create_bg == "#24406F"
+
+
+async def _login_header_text():
+    app = LoginTestApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        logo = app.screen.query_one("#login-logo", Static)
+        subtitle = app.screen.query_one("#login-subtitle", Static)
+        return str(logo.render()), str(subtitle.render())
+
+
+def test_login_screen_has_branded_ascii_logo():
+    logo, subtitle = asyncio.run(_login_header_text())
+
+    assert ",---.    ,---." in logo
+    assert "`--------`" in logo
+    assert "'-----'" in logo
+    assert subtitle == "Local MLOps workspace"
 
 
 async def _press_open_with_whitespace():

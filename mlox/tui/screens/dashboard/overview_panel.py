@@ -136,6 +136,7 @@ class OverviewPanel(Static):
         server = selection.server or getattr(bundle, "server", None)
         services = getattr(bundle, "services", []) or []
         service_names = ", ".join(getattr(svc, "name", "-") for svc in services) or "-"
+        service_states = self._format_service_states(services)
         tags = ", ".join(getattr(bundle, "tags", []) or ["-"])
         table = Table.grid(expand=True)
         table.add_column(justify="right", style="cyan", ratio=1)
@@ -146,6 +147,7 @@ class OverviewPanel(Static):
         table.add_row("Server State", str(getattr(server, "state", "unknown")))
         table.add_row("Backend", ", ".join(get_server_backends(server)) or "unknown")
         table.add_row("Services", str(len(services)))
+        table.add_row("Service States", service_states)
         table.add_row("Service Names", service_names)
         self.update(
             Panel(
@@ -170,6 +172,8 @@ class OverviewPanel(Static):
         table.add_row("Port", str(port))
         service_config = getattr(server, "service_config_id", "-")
         table.add_row("Template", str(service_config))
+        for label, value in self._server_resource_rows(server):
+            table.add_row(label, value)
         self.update(
             Panel(
                 table,
@@ -187,11 +191,14 @@ class OverviewPanel(Static):
         table.add_row("Bundle", str(getattr(bundle, "name", "-")))
         table.add_row("Service", getattr(service, "name", "-"))
         table.add_row("State", getattr(service, "state", "unknown"))
+        table.add_row("Version", str(getattr(service, "version", "-")))
         server_ip = getattr(getattr(bundle, "server", None), "ip", "unknown")
         table.add_row("Server", server_ip)
         table.add_row("Target Path", getattr(service, "target_path", "-"))
         template_id = getattr(service, "service_config_id", "-")
         table.add_row("Template", template_id)
+        table.add_row("UUID", str(getattr(service, "uuid", "-")))
+        table.add_row("Ports", self._format_ports(getattr(service, "service_ports", None)))
         compose_labels = ", ".join(
             getattr(service, "compose_service_names", {}).keys()
         ) or "-"
@@ -209,3 +216,41 @@ class OverviewPanel(Static):
                 border_style="green",
             )
         )
+
+    def _server_resource_rows(self, server: object) -> list[tuple[str, str]]:
+        get_info = getattr(server, "get_server_info", None)
+        if not callable(get_info):
+            return []
+
+        try:
+            info = get_info()
+        except Exception as exc:  # pragma: no cover - defensive UI code
+            return [("Resource Info", f"Failed to load: {exc}")]
+        if not isinstance(info, dict):
+            return []
+
+        rows = []
+        for key in ["cpu_count", "ram_gb", "storage_gb", "os", "kernel_version"]:
+            value = info.get(key)
+            if value is not None:
+                rows.append((key.replace("_", " ").title(), str(value)))
+        uptime = info.get("uptime")
+        if uptime:
+            rows.append(("Uptime", str(uptime)))
+        return rows
+
+    def _format_service_states(self, services: list[object]) -> str:
+        if not services:
+            return "-"
+        state_counts: dict[str, int] = {}
+        for service in services:
+            state = str(getattr(service, "state", "unknown"))
+            state_counts[state] = state_counts.get(state, 0) + 1
+        return ", ".join(
+            f"{state}: {count}" for state, count in sorted(state_counts.items())
+        )
+
+    def _format_ports(self, ports: object) -> str:
+        if isinstance(ports, dict) and ports:
+            return ", ".join(f"{key}:{value}" for key, value in ports.items())
+        return "-"

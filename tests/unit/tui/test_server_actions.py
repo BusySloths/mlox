@@ -174,6 +174,29 @@ def test_server_actions_keep_terminal_and_credentials_together() -> None:
     ]
 
 
+async def _action_titles_for_bundle_and_server() -> tuple[str, str]:
+    server = SimpleNamespace(ip="10.0.0.5")
+    bundle = SimpleNamespace(server=server)
+    app = ServerActionsTestApp()
+    async with app.run_test() as pilot:
+        actions = app.query_one(ServerActions)
+        actions.selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
+        await pilot.pause()
+        bundle_title = str(actions.query_one("#server-actions-title", Static).render())
+
+        actions.selection = SelectionInfo(type="server", server=server)
+        await pilot.pause()
+        server_title = str(actions.query_one("#server-actions-title", Static).render())
+        return bundle_title, server_title
+
+
+def test_actions_title_matches_bundle_or_server_selection() -> None:
+    bundle_title, server_title = asyncio.run(_action_titles_for_bundle_and_server())
+
+    assert bundle_title == "Bundle Actions"
+    assert server_title == "Server Actions"
+
+
 async def _server_info_refresh_button_presentation() -> tuple[str, str]:
     app = DashboardServerInfoTestApp()
     async with app.run_test() as pilot:
@@ -208,7 +231,7 @@ async def _click_server_info() -> str:
         screen = app.query_one(DashboardScreen)
         screen._apply_selection(SelectionInfo(type="server", server=server))
         await pilot.pause()
-        app.query_one(ServerInfoPanel).load_selected_server_info(refresh=True)
+        app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
             rendered = str(
@@ -225,14 +248,59 @@ async def _click_server_info() -> str:
         )
 
 
-def test_server_info_button_renders_server_and_backend_information() -> None:
+def test_server_info_panel_renders_server_information() -> None:
     rendered = asyncio.run(_click_server_info())
 
     assert "Server" in rendered
     assert "cpu_count: 4" in rendered
     assert "host: demo-host" in rendered
+    assert "Backend" not in rendered
+    assert "backend.is_running: True" not in rendered
+
+
+async def _click_bundle_backend_info() -> str:
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        get_server_info=lambda no_cache=True: {"host": "demo-host"},
+        get_backend_status=lambda: {
+            "backend.is_running": True,
+            "k3s.is_running": True,
+        },
+    )
+    bundle = SimpleNamespace(name="dev", server=server)
+
+    app = DashboardServerInfoTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
+        for _ in range(20):
+            await pilot.pause()
+            rendered = str(
+                app.query_one(ServerInfoPanel)
+                .query_one("#server-runtime-info", Static)
+                .render()
+            )
+            if "backend.is_running" in rendered:
+                return rendered
+        return str(
+            app.query_one(ServerInfoPanel)
+            .query_one("#server-runtime-info", Static)
+            .render()
+        )
+
+
+def test_bundle_info_panel_renders_backend_information() -> None:
+    rendered = asyncio.run(_click_bundle_backend_info())
+
     assert "Backend" in rendered
     assert "backend.is_running: True" in rendered
+    assert "k3s.is_running: True" in rendered
+    assert "Server" not in rendered
+    assert "host: demo-host" not in rendered
 
 
 async def _click_server_info_with_blocked_worker() -> tuple[str, str]:
@@ -253,7 +321,7 @@ async def _click_server_info_with_blocked_worker() -> tuple[str, str]:
         screen = app.query_one(DashboardScreen)
         screen._apply_selection(SelectionInfo(type="server", server=server))
         await pilot.pause()
-        app.query_one(ServerInfoPanel).load_selected_server_info(refresh=True)
+        app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         await pilot.pause()
         loading = str(
             app.query_one(ServerInfoPanel)
@@ -301,7 +369,7 @@ async def _click_server_info_with_markup_like_output() -> str:
         screen = app.query_one(DashboardScreen)
         screen._apply_selection(SelectionInfo(type="server", server=server))
         await pilot.pause()
-        app.query_one(ServerInfoPanel).load_selected_server_info(refresh=True)
+        app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
             rendered = str(
@@ -342,7 +410,7 @@ async def _server_info_uses_session_cache() -> tuple[str, str, int]:
         screen = app.query_one(DashboardScreen)
         screen._apply_selection(SelectionInfo(type="server", server=server))
         await pilot.pause()
-        app.query_one(ServerInfoPanel).load_selected_server_info()
+        app.query_one(ServerInfoPanel).load_selected_info()
         for _ in range(20):
             await pilot.pause()
             first = str(
@@ -353,7 +421,7 @@ async def _server_info_uses_session_cache() -> tuple[str, str, int]:
             if "cached" in first:
                 break
 
-        app.query_one(ServerInfoPanel).load_selected_server_info()
+        app.query_one(ServerInfoPanel).load_selected_info()
         await pilot.pause()
         second = str(
             app.query_one(ServerInfoPanel)
@@ -385,7 +453,7 @@ async def _server_info_resets_on_selection_change() -> str:
         screen = app.query_one(DashboardScreen)
         screen._apply_selection(SelectionInfo(type="server", server=first_server))
         await pilot.pause()
-        app.query_one(ServerInfoPanel).load_selected_server_info(refresh=True)
+        app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         await pilot.pause()
 
         screen._apply_selection(SelectionInfo(type="server", server=second_server))

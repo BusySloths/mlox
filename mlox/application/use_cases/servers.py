@@ -153,22 +153,17 @@ def get_server_runtime_info(server, *, no_cache: bool = True) -> OperationResult
     data: Dict[str, Any] = {}
     errors: list[str] = []
 
-    try:
-        data["server_info"] = server.get_server_info(no_cache=no_cache)
-    except Exception as exc:
-        errors.append(f"server info: {exc}")
-
-    backend_info = getattr(server, "get_backend_info", None)
-    if not callable(backend_info):
-        backend_info = getattr(server, "get_backend_status", None)
-
-    if callable(backend_info):
-        try:
-            data["backend_info"] = backend_info()
-        except Exception as exc:
-            errors.append(f"backend info: {exc}")
+    server_info = get_server_info(server, no_cache=no_cache)
+    if server_info.success:
+        data.update(server_info.data or {})
     else:
-        data["backend_info"] = {}
+        errors.append(server_info.message)
+
+    backend_info = get_backend_info(server)
+    if backend_info.success:
+        data.update(backend_info.data or {})
+    else:
+        errors.append(backend_info.message)
 
     if errors and "server_info" not in data and "backend_info" not in data:
         return OperationResult(
@@ -181,3 +176,44 @@ def get_server_runtime_info(server, *, no_cache: bool = True) -> OperationResult
     if errors:
         data["errors"] = errors
     return OperationResult(True, 0, "Loaded server information.", data)
+
+
+def get_server_info(server, *, no_cache: bool = True) -> OperationResult:
+    """Collect host/server information for UI adapters."""
+
+    if not server:
+        return OperationResult(False, 14, "No server selected.")
+
+    try:
+        return OperationResult(
+            True,
+            0,
+            "Loaded server information.",
+            {"server_info": server.get_server_info(no_cache=no_cache)},
+        )
+    except Exception as exc:
+        return OperationResult(False, 15, f"Failed to load server info: {exc}")
+
+
+def get_backend_info(server) -> OperationResult:
+    """Collect backend status information for UI adapters."""
+
+    if not server:
+        return OperationResult(False, 14, "No server selected.")
+
+    backend_info = getattr(server, "get_backend_info", None)
+    if not callable(backend_info):
+        backend_info = getattr(server, "get_backend_status", None)
+
+    if callable(backend_info):
+        try:
+            return OperationResult(
+                True,
+                0,
+                "Loaded backend information.",
+                {"backend_info": backend_info()},
+            )
+        except Exception as exc:
+            return OperationResult(False, 15, f"Failed to load backend info: {exc}")
+
+    return OperationResult(True, 0, "No backend information available.", {"backend_info": {}})

@@ -25,7 +25,7 @@ class ServerActions(Container):
         self._credentials_visible = False
 
     def compose(self) -> ComposeResult:
-        yield Static("Server Actions", classes="section-title")
+        yield Static("Server Actions", id="server-actions-title", classes="section-title")
         with Horizontal(id="server-action-buttons"):
             yield Button("Open Terminal", id="open-server-terminal")
             yield Button("Show Credentials", id="toggle-server-credentials")
@@ -36,11 +36,13 @@ class ServerActions(Container):
 
     def on_mount(self) -> None:
         self._update_visibility(self.selection)
+        self._render_title(self.selection)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         self._credentials_visible = False
         self._update_visibility(selection)
         if self.is_mounted:
+            self._render_title(selection)
             self._render_credentials()
 
     def _update_visibility(self, selection: Optional[SelectionInfo]) -> None:
@@ -49,6 +51,13 @@ class ServerActions(Container):
             and selection.type in {"bundle", "server"}
             and (selection.server or getattr(selection.bundle, "server", None))
         )
+
+    def _render_title(self, selection: Optional[SelectionInfo]) -> None:
+        title = self.query_one("#server-actions-title", Static)
+        if selection and selection.type == "bundle":
+            title.update("Bundle Actions")
+            return
+        title.update("Server Actions")
 
     def _selected_server(self) -> object | None:
         selection = self.selection
