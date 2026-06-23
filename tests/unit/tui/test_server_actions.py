@@ -192,11 +192,11 @@ async def _action_titles_for_bundle_and_server() -> tuple[str, str]:
         actions = app.query_one(ServerActions)
         actions.selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
         await pilot.pause()
-        bundle_title = str(actions.query_one("#server-actions-title", Static).render())
+        bundle_title = str(actions.border_title)
 
         actions.selection = SelectionInfo(type="server", server=server)
         await pilot.pause()
-        server_title = str(actions.query_one("#server-actions-title", Static).render())
+        server_title = str(actions.border_title)
         return bundle_title, server_title
 
 
@@ -207,7 +207,7 @@ def test_actions_title_matches_bundle_or_server_selection() -> None:
     assert server_title == "Server Actions"
 
 
-async def _server_info_refresh_button_presentation() -> tuple[str, str]:
+async def _server_info_refresh_button_presentation() -> tuple[str, str, str]:
     app = DashboardServerInfoTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -216,14 +216,42 @@ async def _server_info_refresh_button_presentation() -> tuple[str, str]:
         )
         await pilot.pause()
         button = app.query_one("#refresh-server-info", Button)
-        return str(button.label), button.variant
+        panel = app.query_one(ServerInfoPanel)
+        return str(button.label), button.variant, str(panel.border_title)
 
 
 def test_server_info_tab_has_refresh_button() -> None:
-    label, variant = asyncio.run(_server_info_refresh_button_presentation())
+    label, variant, title = asyncio.run(_server_info_refresh_button_presentation())
 
     assert label == "Refresh"
     assert variant == "primary"
+    assert title == "Server Info"
+
+
+async def _server_info_titles_for_bundle_and_server() -> tuple[str, str]:
+    server = SimpleNamespace(ip="10.0.0.5")
+    bundle = SimpleNamespace(server=server)
+    app = DashboardServerInfoTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        panel = app.query_one(ServerInfoPanel)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        bundle_title = str(panel.border_title)
+
+        screen._apply_selection(SelectionInfo(type="server", server=server))
+        await pilot.pause()
+        server_title = str(panel.border_title)
+        return bundle_title, server_title
+
+
+def test_server_info_panel_title_matches_selection() -> None:
+    bundle_title, server_title = asyncio.run(_server_info_titles_for_bundle_and_server())
+
+    assert bundle_title == "Backend"
+    assert server_title == "Server Info"
 
 
 async def _click_server_info() -> str:
@@ -244,28 +272,95 @@ async def _click_server_info() -> str:
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
-            rendered = str(
+            output = (
                 app.query_one(ServerInfoPanel)
                 .query_one("#server-runtime-info", Static)
-                .render()
             )
+            rendered = _render_text(output.content)
             if "demo-host" in rendered:
                 return rendered
-        return str(
+        output = (
             app.query_one(ServerInfoPanel)
             .query_one("#server-runtime-info", Static)
-            .render()
         )
+        return _render_text(output.content)
 
 
 def test_server_info_panel_renders_server_information() -> None:
     rendered = asyncio.run(_click_server_info())
 
-    assert "Server" in rendered
-    assert "cpu_count: 4" in rendered
-    assert "host: demo-host" in rendered
+    assert "System" in rendered
+    assert "CPU Cores" in rendered
+    assert "4" in rendered
+    assert "Host" in rendered
+    assert "demo-host" in rendered
+    assert "cpu_count:" not in rendered
+    assert "host:" not in rendered
     assert "Backend" not in rendered
     assert "backend.is_running: True" not in rendered
+
+
+async def _click_vps_server_info() -> str:
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        get_server_info=lambda no_cache=True: {
+            "bug_report_url": "https://bugs.launchpad.net/ubuntu/",
+            "cpu_count": 6.0,
+            "home_url": "https://www.ubuntu.com/",
+            "host": "vmd167437.contaboserver.net",
+            "id": "ubuntu",
+            "id_like": "debian",
+            "logo": "ubuntu-logo",
+            "name": "Ubuntu",
+            "pretty_name": "Ubuntu 24.04.3 LTS",
+            "privacy_policy_url": "https://www.ubuntu.com/legal/terms",
+            "ram_gb": 12.0,
+            "storage_gb": 145.0,
+            "support_url": "https://help.ubuntu.com/",
+            "ubuntu_codename": "noble",
+            "version": "24.04",
+            "version_codename": "noble",
+            "version_id": "24.04",
+        },
+        get_backend_status=lambda: {"backend.is_running": True},
+    )
+
+    app = DashboardServerInfoTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="server", server=server))
+        await pilot.pause()
+        app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
+        for _ in range(20):
+            await pilot.pause()
+            output = (
+                app.query_one(ServerInfoPanel)
+                .query_one("#server-runtime-info", Static)
+            )
+            rendered = _render_text(output.content)
+            if "vmd167437" in rendered:
+                return rendered
+        output = (
+            app.query_one(ServerInfoPanel)
+            .query_one("#server-runtime-info", Static)
+        )
+        return _render_text(output.content)
+
+
+def test_vps_server_info_is_compact_and_filters_noisy_os_metadata() -> None:
+    rendered = asyncio.run(_click_vps_server_info())
+
+    assert "System" in rendered
+    assert "Host" in rendered
+    assert "vmd167437.contaboserver.net" in rendered
+    assert "OS" in rendered
+    assert "Ubuntu 24.04.3 LTS" in rendered
+    assert "CPU Cores" in rendered
+    assert "RAM (GiB)" in rendered
+    assert "Storage (GiB)" in rendered
+    assert "https://bugs.launchpad.net/ubuntu/" not in rendered
+    assert "https://www.ubuntu.com/" not in rendered
+    assert "ubuntu-logo" not in rendered
 
 
 async def _click_bundle_backend_info() -> str:
@@ -308,23 +403,36 @@ async def _click_bundle_backend_info() -> str:
                 app.query_one(ServerInfoPanel)
                 .query_one("#server-runtime-info", Static)
             )
-            rendered_text = _render_text(
-                output.content
+            summary = str(
+                app.query_one(ServerInfoPanel)
+                .query_one("#server-info-summary", Static)
+                .render()
             )
-            if "Docker Backend" in rendered_text:
-                return rendered_text
+            rendered_text = _render_text(output.content)
+            if "Containers" in rendered_text and "Client: 29.0.0" in summary:
+                return f"{summary}\n{rendered_text}"
         output = (
             app.query_one(ServerInfoPanel)
             .query_one("#server-runtime-info", Static)
         )
-        return _render_text(output.content)
+        summary = str(
+            app.query_one(ServerInfoPanel)
+            .query_one("#server-info-summary", Static)
+            .render()
+        )
+        return f"{summary}\n{_render_text(output.content)}"
 
 
 def test_bundle_info_panel_renders_backend_information() -> None:
     rendered = asyncio.run(_click_bundle_backend_info())
 
-    assert "Docker Backend" in rendered
-    assert "Backend Running" in rendered
+    assert "Docker Backend" not in rendered
+    assert "Backend Running" not in rendered
+    assert "Docker: yes" in rendered
+    assert "Enabled: yes" in rendered
+    assert "Client: 29.0.0" in rendered
+    assert "Server: 29.0.0" in rendered
+    assert "Containers: 1" in rendered
     assert "yes" in rendered
     assert "Containers" in rendered
     assert "mlflow" in rendered
@@ -362,19 +470,19 @@ async def _click_server_info_with_blocked_worker() -> tuple[str, str]:
         release.set()
         for _ in range(20):
             await pilot.pause()
-            rendered = str(
+            output = (
                 app.query_one(ServerInfoPanel)
                 .query_one("#server-runtime-info", Static)
-                .render()
             )
+            rendered = _render_text(output.content)
             if "demo-host" in rendered:
                 return loading, rendered
         return (
             loading,
-            str(
+            _render_text(
                 app.query_one(ServerInfoPanel)
                 .query_one("#server-runtime-info", Static)
-                .render()
+                .content
             ),
         )
 
@@ -383,7 +491,8 @@ def test_server_info_button_loads_information_without_blocking_ui() -> None:
     loading, rendered = asyncio.run(_click_server_info_with_blocked_worker())
 
     assert "Loading server information..." in loading
-    assert "host: demo-host" in rendered
+    assert "Host" in rendered
+    assert "demo-host" in rendered
 
 
 async def _click_server_info_with_markup_like_output() -> str:
@@ -403,18 +512,18 @@ async def _click_server_info_with_markup_like_output() -> str:
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
-            rendered = str(
+            output = (
                 app.query_one(ServerInfoPanel)
                 .query_one("#server-runtime-info", Static)
-                .render()
             )
+            rendered = _render_text(output.content)
             if "not-a-rich-tag" in rendered:
                 return rendered
-        return str(
+        output = (
             app.query_one(ServerInfoPanel)
             .query_one("#server-runtime-info", Static)
-            .render()
         )
+        return _render_text(output.content)
 
 
 def test_server_info_renders_markup_like_output_as_literal_text() -> None:
@@ -444,29 +553,29 @@ async def _server_info_uses_session_cache() -> tuple[str, str, int]:
         app.query_one(ServerInfoPanel).load_selected_info()
         for _ in range(20):
             await pilot.pause()
-            first = str(
+            output = (
                 app.query_one(ServerInfoPanel)
                 .query_one("#server-runtime-info", Static)
-                .render()
             )
+            first = _render_text(output.content)
             if "cached" in first:
                 break
 
         app.query_one(ServerInfoPanel).load_selected_info()
         await pilot.pause()
-        second = str(
+        output = (
             app.query_one(ServerInfoPanel)
             .query_one("#server-runtime-info", Static)
-            .render()
         )
+        second = _render_text(output.content)
         return first, second, calls
 
 
 def test_server_info_is_cached_for_current_tui_session() -> None:
     first, second, calls = asyncio.run(_server_info_uses_session_cache())
 
-    assert "host: cached" in first
-    assert "host: cached" in second
+    assert "cached" in first
+    assert "cached" in second
     assert calls == 1
 
 

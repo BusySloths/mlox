@@ -215,6 +215,9 @@ Button {
   margin-top: 1;
   padding: 1;
   border: round #2fa527ff;
+  border-title-align: center;
+  border-title-color: #e6edf7;
+  border-title-style: bold;
 }
 
 #selection-server-info {
@@ -222,6 +225,9 @@ Button {
   margin-top: 1;
   padding: 1;
   border: round #2fa527ff;
+  border-title-align: center;
+  border-title-color: #e6edf7;
+  border-title-style: bold;
 }
 
 #server-action-buttons,
@@ -254,6 +260,14 @@ Button {
 #server-info-controls {
   height: auto;
   margin-bottom: 1;
+  align-vertical: middle;
+}
+
+#server-info-summary {
+  width: 1fr;
+  height: auto;
+  margin-left: 1;
+  color: #a6c9bdff;
 }
 
 #server-credentials {

@@ -81,11 +81,8 @@ class DashboardScreen(Screen):
         tree = self.query_one(InfraTree)
         tree.populate_tree()
         self._set_telemetry_tab_visible(False)
-        self._update_template_tabs(tree.root.data)
-        container = self.query_one("#service-tui-container", Container)
-        self._mount_placeholder(
-            container, "Select a service to inspect telemetry metrics."
-        )
+        tree.select_node(tree.root)
+        self._apply_selection(tree.root.data)
         self._set_app_log_drawer_visible(False)
         self._apply_sidebar_width()
 

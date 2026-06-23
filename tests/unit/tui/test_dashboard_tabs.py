@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 import time
 from types import SimpleNamespace
 
+from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import TabbedContent
 
+from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.tree import InfraTree
 from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
 from mlox.tui.screens.dashboard.model import SelectionInfo
@@ -44,6 +47,12 @@ class DashboardTestApp(App):
         yield DashboardScreen()
 
 
+def _render_text(renderable: object) -> str:
+    console = Console(file=io.StringIO(), record=True, width=120)
+    console.print(renderable)
+    return console.export_text()
+
+
 async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
@@ -70,6 +79,32 @@ def test_root_selection_shows_only_server_templates_tab() -> None:
     assert server_display == "block"
     assert service_display == "none"
     assert logs_display == "none"
+
+
+async def _initial_dashboard_overview() -> tuple[str, str, str]:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.query_one(DashboardScreen)
+        tabs = screen.query_one("#main-tabs", TabbedContent)
+        overview = screen.query_one(OverviewPanel)
+        server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
+        return (
+            tabs.active,
+            server_tab.styles.display,
+            _render_text(overview.content),
+        )
+
+
+def test_dashboard_initially_shows_project_root_overview() -> None:
+    active_tab, server_tab_display, overview = asyncio.run(
+        _initial_dashboard_overview()
+    )
+
+    assert active_tab == "overview-tab"
+    assert server_tab_display == "block"
+    assert "Infrastructure Overview" in overview
+    assert "No infrastructure available." in overview
 
 
 async def _root_label() -> str:
