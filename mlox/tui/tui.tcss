@@ -72,6 +72,25 @@ Input {
   margin-top: 0;
 }
 
+#login-loading-row {
+  width: 68;
+  height: auto;
+  margin-top: 1;
+  align-vertical: middle;
+}
+
+#login-loading-indicator {
+  width: 4;
+  height: 1;
+}
+
+#login-loading-label {
+  width: 1fr;
+  height: auto;
+  margin-left: 1;
+  color: #a6c9bdff;
+}
+
 Button {
   background: #cc19aeff;
   color: #e6edf7;
@@ -134,6 +153,24 @@ Button {
   height: 1fr;
   min-height: 50%;
   padding: 1;
+}
+
+#project-reload-loading {
+  height: auto;
+  margin-bottom: 1;
+  align-vertical: middle;
+}
+
+#project-reload-indicator {
+  width: 4;
+  height: 1;
+}
+
+#project-reload-label {
+  width: 1fr;
+  height: auto;
+  margin-left: 1;
+  color: #a6c9bdff;
 }
 
 #summary-pane {
@@ -246,27 +283,22 @@ Button {
   margin-left: 1;
 }
 
-#refresh-server-info {
+#refresh-runtime-info {
   width: auto;
+  margin-left: 2;
   background: #0e9455ff;
   border: round #8fe388ff;
   color: #ffffff;
 }
 
-#refresh-server-info:hover {
+#refresh-runtime-info:hover {
   background: #12b86aff;
-}
-
-#server-info-controls {
-  height: auto;
-  margin-bottom: 1;
-  align-vertical: middle;
 }
 
 #server-info-summary {
   width: 1fr;
   height: auto;
-  margin-left: 1;
+  margin-bottom: 1;
   color: #a6c9bdff;
 }
 

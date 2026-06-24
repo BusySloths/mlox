@@ -181,6 +181,7 @@ def test_server_actions_keep_terminal_and_credentials_together() -> None:
     assert button_ids == [
         "open-server-terminal",
         "toggle-server-credentials",
+        "refresh-runtime-info",
     ]
 
 
@@ -207,7 +208,7 @@ def test_actions_title_matches_bundle_or_server_selection() -> None:
     assert server_title == "Server Actions"
 
 
-async def _server_info_refresh_button_presentation() -> tuple[str, str, str]:
+async def _server_info_refresh_button_presentation() -> tuple[str, str]:
     app = DashboardServerInfoTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -215,17 +216,35 @@ async def _server_info_refresh_button_presentation() -> tuple[str, str, str]:
             SelectionInfo(type="server", server=SimpleNamespace())
         )
         await pilot.pause()
-        button = app.query_one("#refresh-server-info", Button)
+        button = app.query_one("#refresh-runtime-info", Button)
         panel = app.query_one(ServerInfoPanel)
-        return str(button.label), button.variant, str(panel.border_title)
+        return str(button.label), str(panel.border_title)
 
 
-def test_server_info_tab_has_refresh_button() -> None:
-    label, variant, title = asyncio.run(_server_info_refresh_button_presentation())
+def test_server_actions_has_server_info_refresh_button() -> None:
+    label, title = asyncio.run(_server_info_refresh_button_presentation())
 
-    assert label == "Refresh"
-    assert variant == "primary"
+    assert label == "Refresh Server Info"
     assert title == "Server Info"
+
+
+async def _bundle_runtime_refresh_button_label() -> str:
+    server = SimpleNamespace(ip="10.0.0.5")
+    bundle = SimpleNamespace(server=server)
+    app = DashboardServerInfoTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        return str(app.query_one("#refresh-runtime-info", Button).label)
+
+
+def test_bundle_actions_has_backend_refresh_button() -> None:
+    assert asyncio.run(_bundle_runtime_refresh_button_label()) == (
+        "Refresh Backend Info"
+    )
 
 
 async def _server_info_titles_for_bundle_and_server() -> tuple[str, str]:
@@ -549,7 +568,7 @@ def test_kubernetes_agent_backend_info_renders_compact_status_without_nodes() ->
     assert "k3s.is_running:" not in rendered
 
 
-async def _click_server_info_with_blocked_worker() -> tuple[str, str]:
+async def _click_server_info_with_blocked_worker() -> tuple[bool, str]:
     release = threading.Event()
 
     def get_server_info(no_cache: bool = False) -> dict[str, str]:
@@ -569,11 +588,7 @@ async def _click_server_info_with_blocked_worker() -> tuple[str, str]:
         await pilot.pause()
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         await pilot.pause()
-        loading = str(
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-runtime-info", Static)
-            .render()
-        )
+        hidden_while_loading = app.query_one(ServerInfoPanel).display is False
         release.set()
         for _ in range(20):
             await pilot.pause()
@@ -583,9 +598,9 @@ async def _click_server_info_with_blocked_worker() -> tuple[str, str]:
             )
             rendered = _render_text(output.content)
             if "demo-host" in rendered:
-                return loading, rendered
+                return hidden_while_loading, rendered
         return (
-            loading,
+            hidden_while_loading,
             _render_text(
                 app.query_one(ServerInfoPanel)
                 .query_one("#server-runtime-info", Static)
@@ -595,9 +610,9 @@ async def _click_server_info_with_blocked_worker() -> tuple[str, str]:
 
 
 def test_server_info_button_loads_information_without_blocking_ui() -> None:
-    loading, rendered = asyncio.run(_click_server_info_with_blocked_worker())
+    hidden_while_loading, rendered = asyncio.run(_click_server_info_with_blocked_worker())
 
-    assert "Loading server information..." in loading
+    assert hidden_while_loading is True
     assert "Host" in rendered
     assert "demo-host" in rendered
 

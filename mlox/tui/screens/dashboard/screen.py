@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Footer, Header, Static, TabPane, TabbedContent, Tabs
+from textual.widgets import (
+    Button,
+    Footer,
+    Header,
+    LoadingIndicator,
+    Static,
+    TabPane,
+    TabbedContent,
+    Tabs,
+)
 
 from .app_log_panel import AppLogPanel
 from .history_panel import HistoryPanel
@@ -54,6 +64,9 @@ class DashboardScreen(Screen):
                 yield InfraTree()
             with Container(id="detail-panel"):
                 with Container(id="upper-pane"):
+                    with Horizontal(id="project-reload-loading"):
+                        yield LoadingIndicator(id="project-reload-indicator")
+                        yield Static("Reloading project...", id="project-reload-label")
                     with Horizontal(id="summary-pane"):
                         with TabbedContent(id="main-tabs"):
                             with TabPane("Overview", id=OVERVIEW_TAB_ID):
@@ -83,11 +96,33 @@ class DashboardScreen(Screen):
         self._set_telemetry_tab_visible(False)
         tree.select_node(tree.root)
         self._apply_selection(tree.root.data)
+        self._set_project_reload_loading(False)
         self._set_app_log_drawer_visible(False)
         self._apply_sidebar_width()
 
     def on_selection_changed(self, message: SelectionChanged) -> None:
         self._apply_selection(message.selection)
+
+    @on(Button.Pressed, "#refresh-runtime-info")
+    def handle_runtime_info_requested(self, _: Button.Pressed) -> None:
+        server_info = self.query_one(ServerInfoPanel)
+        if not server_info.load_selected_info(refresh=True):
+            self.notify(
+                "Select a bundle or server to refresh runtime information.",
+                severity="warning",
+            )
+
+    @on(ServerInfoPanel.RuntimeInfoLoadStarted)
+    def handle_runtime_info_load_started(
+        self, _: ServerInfoPanel.RuntimeInfoLoadStarted
+    ) -> None:
+        self.query_one(ServerActions).set_runtime_info_loading(True)
+
+    @on(ServerInfoPanel.RuntimeInfoLoadFinished)
+    def handle_runtime_info_load_finished(
+        self, _: ServerInfoPanel.RuntimeInfoLoadFinished
+    ) -> None:
+        self.query_one(ServerActions).set_runtime_info_loading(False)
 
     def _apply_selection(self, selection: SelectionInfo | None) -> None:
         overview = self.query_one(OverviewPanel)
@@ -116,6 +151,7 @@ class DashboardScreen(Screen):
         project = str(workspace.path)
 
         self.notify(f"Reloading project infrastructure for {project}...")
+        self._set_project_reload_loading(True)
 
         def reload_workspace() -> None:
             result = reload_project_workspace(workspace)
@@ -138,12 +174,15 @@ class DashboardScreen(Screen):
         )
 
     def _show_reload_error(self, message: str) -> None:
+        self._set_project_reload_loading(False)
         self.notify(message, severity="error")
 
     def _apply_reloaded_workspace(self, project: str) -> None:
         tree = self.query_one(InfraTree)
         tree.populate_tree()
+        tree.select_node(tree.root)
         self._apply_selection(tree.root.data)
+        self._set_project_reload_loading(False)
         self.notify(f"Reloaded project infrastructure for {project}.")
 
     def _update_template_tabs(self, selection: SelectionInfo | None) -> None:
@@ -230,6 +269,10 @@ class DashboardScreen(Screen):
     def _set_app_log_drawer_visible(self, visible: bool) -> None:
         drawer = self.query_one("#app-log-drawer", AppLogPanel)
         drawer.styles.display = "block" if visible else "none"
+
+    def _set_project_reload_loading(self, visible: bool) -> None:
+        loading = self.query_one("#project-reload-loading", Horizontal)
+        loading.display = visible
 
     def action_narrow_sidebar(self) -> None:
         self._resize_sidebar(-SIDEBAR_STEP)

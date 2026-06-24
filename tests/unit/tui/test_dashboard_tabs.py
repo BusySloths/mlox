@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import threading
 import time
 from types import SimpleNamespace
 
@@ -13,6 +14,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import TabbedContent
 
+from mlox.application.result import OperationResult
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.tree import InfraTree
 from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
@@ -295,3 +297,41 @@ def test_reload_binding_reloads_project_infrastructure(monkeypatch) -> None:
 
     assert project_name == "test-project-reloaded"
     assert root_selection.type == "root"
+
+
+async def _reload_loading_state(monkeypatch) -> tuple[bool, bool]:
+    app = DashboardTestApp()
+    release = threading.Event()
+
+    def reload_workspace(workspace):
+        release.wait(timeout=2)
+        workspace.name = "test-project-reloaded"
+        workspace.infrastructure = SimpleNamespace(bundles=[])
+        return OperationResult(True, 0, "reloaded")
+
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.screen.reload_project_workspace",
+        reload_workspace,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("R")
+        await pilot.pause()
+        screen = app.query_one(DashboardScreen)
+        loading = screen.query_one("#project-reload-loading")
+        loading_visible = loading.display
+        release.set()
+        for _ in range(20):
+            await pilot.pause(0.05)
+            if not loading.display:
+                break
+        return loading_visible, loading.display
+
+
+def test_reload_binding_shows_loading_indicator(monkeypatch) -> None:
+    loading_visible, loading_after_reload = asyncio.run(
+        _reload_loading_state(monkeypatch)
+    )
+
+    assert loading_visible is True
+    assert loading_after_reload is False

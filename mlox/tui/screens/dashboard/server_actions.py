@@ -28,6 +28,7 @@ class ServerActions(Container):
         with Horizontal(id="server-action-buttons"):
             yield Button("Open Terminal", id="open-server-terminal")
             yield Button("Show Credentials", id="toggle-server-credentials")
+            yield Button("Refresh Server Info", id="refresh-runtime-info")
         yield Static(id="server-credentials")
         with Horizontal(id="credential-copy-buttons"):
             yield Button("Copy Password", id="copy-server-password")
@@ -36,12 +37,15 @@ class ServerActions(Container):
     def on_mount(self) -> None:
         self._update_visibility(self.selection)
         self._render_title(self.selection)
+        self._render_runtime_info_action(self.selection)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         self._credentials_visible = False
         self._update_visibility(selection)
         if self.is_mounted:
             self._render_title(selection)
+            self._render_runtime_info_action(selection)
+            self.set_runtime_info_loading(False)
             self._render_credentials()
 
     def _update_visibility(self, selection: Optional[SelectionInfo]) -> None:
@@ -56,6 +60,13 @@ class ServerActions(Container):
             self.border_title = "Bundle Actions"
             return
         self.border_title = "Server Actions"
+
+    def _render_runtime_info_action(self, selection: Optional[SelectionInfo]) -> None:
+        button = self.query_one("#refresh-runtime-info", Button)
+        if selection and selection.type == "bundle":
+            button.label = "Refresh Backend Info"
+            return
+        button.label = "Refresh Server Info"
 
     def _selected_server(self) -> object | None:
         selection = self.selection
@@ -100,6 +111,10 @@ class ServerActions(Container):
             passphrase
         )
         toggle.label = "Hide Credentials"
+
+    def set_runtime_info_loading(self, loading: bool) -> None:
+        button = self.query_one("#refresh-runtime-info", Button)
+        button.disabled = loading
 
     @on(Button.Pressed, "#open-server-terminal")
     def handle_open_terminal(self, _: Button.Pressed) -> None:

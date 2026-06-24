@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal
+from textual.containers import Container
+from textual.message import Message
 from textual.reactive import reactive
-from textual.widgets import Button, Static
+from textual.widgets import Static
 
 from mlox.application.use_cases.servers import get_backend_info, get_server_info
 
@@ -21,19 +21,19 @@ class ServerInfoPanel(Container):
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
+    class RuntimeInfoLoadFinished(Message):
+        """Runtime information loading has completed."""
+
+    class RuntimeInfoLoadStarted(Message):
+        """Runtime information loading has started."""
+
     def __init__(self, *children, **kwargs) -> None:
         super().__init__(*children, **kwargs)
         self._cache: dict[tuple[str, int], Any] = {}
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="server-info-controls"):
-            yield Button("Refresh", id="refresh-server-info", variant="primary")
-            yield Static("", id="server-info-summary", markup=False)
-        yield Static(
-            "Select a server or bundle to load runtime information.",
-            id="server-runtime-info",
-            markup=False,
-        )
+        yield Static("", id="server-info-summary", markup=False)
+        yield Static("", id="server-runtime-info", markup=False)
 
     def on_mount(self) -> None:
         self.watch_selection(self.selection)
@@ -42,34 +42,22 @@ class ServerInfoPanel(Container):
         if not self.is_mounted:
             return
 
-        self.display = selection is not None and selection.type in {"bundle", "server"}
         self._render_title(selection)
-        if not self.display:
+        if not selection or selection.type not in {"bundle", "server"}:
+            self._hide_runtime_info()
             return
 
-        title = self.query_one("#refresh-server-info", Button)
         server = self._selected_server(selection)
-        output = self.query_one("#server-runtime-info", Static)
         if not server:
-            output.update(
-                "Select a server or bundle to load runtime information."
-            )
-            self.query_one("#server-info-summary", Static).update("")
-            title.disabled = True
+            self._hide_runtime_info()
             return
 
-        title.disabled = False
         cached = self._cache.get(self._cache_key(selection, server))
         if cached is not None:
             self._show_runtime_display(cached)
             return
 
-        self.query_one("#server-info-summary", Static).update("")
-        output.update(self._empty_message(selection))
-
-    @on(Button.Pressed, "#refresh-server-info")
-    def handle_refresh(self, _: Button.Pressed) -> None:
-        self.load_selected_info(refresh=True)
+        self._hide_runtime_info()
 
     def load_selected_info(self, *, refresh: bool = False) -> bool:
         """Show cached information or load it in the background."""
@@ -81,14 +69,11 @@ class ServerInfoPanel(Container):
 
         cache_key = self._cache_key(selection, server)
         cached = self._cache.get(cache_key)
-        output = self.query_one("#server-runtime-info", Static)
         if cached is not None and not refresh:
             self._show_runtime_display(cached)
             return True
 
-        self.query_one("#refresh-server-info", Button).disabled = True
-        self.query_one("#server-info-summary", Static).update("")
-        output.update(self._loading_message(selection))
+        self.post_message(self.RuntimeInfoLoadStarted())
 
         def load_info() -> None:
             try:
@@ -129,11 +114,10 @@ class ServerInfoPanel(Container):
         ):
             return
 
-        self.query_one("#refresh-server-info", Button).disabled = False
         if not result.success:
             self.notify(result.message, severity="error")
-            self.query_one("#server-info-summary", Static).update("")
-            self.query_one("#server-runtime-info", Static).update("")
+            self._hide_runtime_info()
+            self.post_message(self.RuntimeInfoLoadFinished())
             return
 
         rendered = format_runtime_info(
@@ -142,6 +126,7 @@ class ServerInfoPanel(Container):
         )
         self._cache[self._cache_key(selection, server)] = rendered
         self._show_runtime_display(rendered)
+        self.post_message(self.RuntimeInfoLoadFinished())
 
     def _show_server_info_error(
         self, selection: Optional[SelectionInfo], server: object, message: str
@@ -151,12 +136,17 @@ class ServerInfoPanel(Container):
         ):
             return
 
-        self.query_one("#refresh-server-info", Button).disabled = False
-        self.query_one("#server-info-summary", Static).update("")
-        self.query_one("#server-runtime-info", Static).update(message)
+        self._hide_runtime_info()
         self.notify(message, severity="error")
+        self.post_message(self.RuntimeInfoLoadFinished())
+
+    def _hide_runtime_info(self) -> None:
+        self.query_one("#server-info-summary", Static).update("")
+        self.query_one("#server-runtime-info", Static).update("")
+        self.display = False
 
     def _show_runtime_display(self, rendered: object) -> None:
+        self.display = True
         if isinstance(rendered, RuntimeInfoDisplay):
             self.query_one("#server-info-summary", Static).update(rendered.summary)
             self.query_one("#server-runtime-info", Static).update(rendered.content)
@@ -190,13 +180,3 @@ class ServerInfoPanel(Container):
             self.border_title = "Server Info"
             return
         self.border_title = "Runtime Info"
-
-    def _empty_message(self, selection: Optional[SelectionInfo]) -> str:
-        if selection and selection.type == "bundle":
-            return "Press Refresh to load backend information."
-        return "Press Refresh to load server information."
-
-    def _loading_message(self, selection: Optional[SelectionInfo]) -> str:
-        if selection and selection.type == "bundle":
-            return "Loading backend information..."
-        return "Loading server information..."

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from types import SimpleNamespace
 from textual.app import App
 from textual.containers import Horizontal
@@ -116,6 +117,46 @@ async def _press_open_with_whitespace():
 
 def test_open_normalizes_project_name():
     assert asyncio.run(_press_open_with_whitespace()) == [("demo", "pw", False)]
+
+
+async def _loading_state_during_login() -> tuple[bool, bool, str, bool]:
+    release = threading.Event()
+
+    class SlowLoginTestApp(LoginTestApp):
+        def login(self, project, password, *, create=False):
+            self.calls.append((project, password, create))
+            release.wait(timeout=2)
+            return False
+
+    app = SlowLoginTestApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen.query_one("#project").value = "demo"
+        screen.query_one("#password").value = "pw"
+        await pilot.click("#login-btn")
+        await pilot.pause()
+        loading_display = screen.query_one("#login-loading-row").display
+        project_disabled = screen.query_one("#project").disabled
+        button_disabled = screen.query_one("#login-btn").disabled
+        loading_label = str(screen.query_one("#login-loading-label", Static).render())
+        release.set()
+        for _ in range(20):
+            await pilot.pause()
+            if not screen.query_one("#project").disabled:
+                break
+        return loading_display, project_disabled, loading_label, button_disabled
+
+
+def test_login_shows_loading_indicator_while_opening_project():
+    loading_display, project_disabled, loading_label, button_disabled = asyncio.run(
+        _loading_state_during_login()
+    )
+
+    assert loading_display is True
+    assert project_disabled is True
+    assert button_disabled is True
+    assert loading_label == "Loading project..."
 
 
 def test_textual_app_login_uses_project_application_use_case(monkeypatch) -> None:
