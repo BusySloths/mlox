@@ -167,6 +167,27 @@ def test_server_and_service_tree_entries_are_leaf_nodes() -> None:
     assert service_allows_expand is False
 
 
+async def _expanded_tree_flags_after_mount() -> tuple[bool, list[bool]]:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5")
+    services = [SimpleNamespace(name="MLflow"), SimpleNamespace(name="Postgres")]
+    bundle = SimpleNamespace(name="dev", server=server, services=services)
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test():
+        tree = app.query_one(InfraTree)
+        return tree.root.is_expanded, [
+            child.is_expanded for child in tree.root.children if child.allow_expand
+        ]
+
+
+def test_project_tree_is_fully_expanded_after_mount() -> None:
+    root_expanded, child_expanded = asyncio.run(_expanded_tree_flags_after_mount())
+
+    assert root_expanded is True
+    assert child_expanded == [True]
+
+
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
     server_display, service_display, logs_display = asyncio.run(
         _visible_tabs_for(SelectionInfo(type="bundle"))

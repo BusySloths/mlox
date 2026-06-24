@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from textual.app import ComposeResult
-from textual.containers import Container
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Static
@@ -13,10 +11,10 @@ from textual.widgets import Static
 from mlox.application.use_cases.servers import get_backend_info, get_server_info
 
 from .model import SelectionInfo
-from .runtime_formatters import RuntimeInfoDisplay, format_runtime_info
+from .runtime_formatters import format_runtime_info
 
 
-class ServerInfoPanel(Container):
+class ServerInfoPanel(Static):
     """Display and cache runtime server/backend information."""
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
@@ -27,13 +25,10 @@ class ServerInfoPanel(Container):
     class RuntimeInfoLoadStarted(Message):
         """Runtime information loading has started."""
 
-    def __init__(self, *children, **kwargs) -> None:
-        super().__init__(*children, **kwargs)
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs.setdefault("markup", False)
+        super().__init__("", *args, **kwargs)
         self._cache: dict[tuple[str, int], Any] = {}
-
-    def compose(self) -> ComposeResult:
-        yield Static("", id="server-info-summary", markup=False)
-        yield Static("", id="server-runtime-info", markup=False)
 
     def on_mount(self) -> None:
         self.watch_selection(self.selection)
@@ -141,19 +136,12 @@ class ServerInfoPanel(Container):
         self.post_message(self.RuntimeInfoLoadFinished())
 
     def _hide_runtime_info(self) -> None:
-        self.query_one("#server-info-summary", Static).update("")
-        self.query_one("#server-runtime-info", Static).update("")
+        self.update("")
         self.display = False
 
     def _show_runtime_display(self, rendered: object) -> None:
         self.display = True
-        if isinstance(rendered, RuntimeInfoDisplay):
-            self.query_one("#server-info-summary", Static).update(rendered.summary)
-            self.query_one("#server-runtime-info", Static).update(rendered.content)
-            return
-
-        self.query_one("#server-info-summary", Static).update("")
-        self.query_one("#server-runtime-info", Static).update(rendered)
+        self.update(rendered)
 
     def _selected_server(self, selection: Optional[SelectionInfo]) -> object | None:
         server = selection.server if selection else None

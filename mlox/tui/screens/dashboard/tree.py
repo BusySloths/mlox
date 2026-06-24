@@ -39,7 +39,7 @@ class InfraTree(Tree[SelectionInfo]):
             self.root.add_leaf(
                 "No infrastructure available", data=SelectionInfo(type="empty")
             )
-            self.root.expand()
+            self.expand_all()
             return
 
         for bundle in infra.bundles:
@@ -52,7 +52,6 @@ class InfraTree(Tree[SelectionInfo]):
                 bundle_label,
                 data=SelectionInfo(type="bundle", bundle=bundle, server=server),
             )
-            bundle_node.expand()
             server_label = (
                 f"Server: {getattr(server, 'ip', 'unknown')}"
                 if server
@@ -72,7 +71,12 @@ class InfraTree(Tree[SelectionInfo]):
                         type="service", bundle=bundle, server=server, service=svc
                     ),
                 )
-        self.root.expand()
+        self.expand_all()
+
+    def expand_all(self) -> None:
+        """Expand every non-leaf node currently present in the tree."""
+
+        self.root.expand_all()
 
     def on_tree_node_selected(
         self, event: Tree.NodeSelected

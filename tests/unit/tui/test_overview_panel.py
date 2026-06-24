@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 from types import SimpleNamespace
 
 from rich.console import Console
+from textual.app import App, ComposeResult
 
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
@@ -15,6 +17,15 @@ def _render_panel(renderable) -> str:
     console = Console(file=io.StringIO(), record=True, width=120)
     console.print(renderable)
     return console.export_text()
+
+
+class OverviewTestApp(App):
+    def __init__(self, workspace) -> None:
+        super().__init__()
+        self.workspace = workspace
+
+    def compose(self) -> ComposeResult:
+        yield OverviewPanel()
 
 
 def test_bundle_overview_shows_backend() -> None:
@@ -43,6 +54,46 @@ def test_bundle_overview_shows_backend() -> None:
 
     assert "Backend" in overview
     assert "docker, native" in overview
+
+
+async def _project_overview_text() -> str:
+    server = SimpleNamespace(
+        ip="10.0.0.1",
+        state="running",
+        backend=["docker"],
+        get_server_info=lambda: {"cpu_count": 8, "ram_gb": 16},
+    )
+    service = SimpleNamespace(
+        name="MLflow",
+        service_config_id="mlflow",
+        state="running",
+    )
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(
+            bundles=[SimpleNamespace(name="demo", server=server, services=[service])]
+        )
+    )
+    app = OverviewTestApp(workspace)
+    async with app.run_test() as pilot:
+        panel = app.query_one(OverviewPanel)
+        panel.show_infrastructure_overview()
+        await pilot.pause()
+        return _render_panel(panel.content)
+
+
+def test_project_overview_shows_backend_column_without_server_metric() -> None:
+    overview = asyncio.run(_project_overview_text())
+
+    assert "Bundles" in overview
+    assert "Services" in overview
+    assert "CPU Cores" in overview
+    assert "RAM (GiB)" in overview
+    assert "Servers" in overview
+    assert "Backend" in overview
+    assert "docker" in overview
+    assert "10.0.0.1" in overview
+    assert "running" in overview
+    assert overview.count("Servers") == 1
 
 
 def test_bundle_overview_shows_service_state_counts() -> None:

@@ -70,7 +70,6 @@ class OverviewPanel(Static):
         totals = summary["totals"]
         metrics: list[tuple[str, str]] = [
             ("Bundles", str(totals["bundles"])),
-            ("Servers", str(totals["servers"])),
             ("Services", str(totals["services"])),
             (
                 "CPU Cores",
@@ -97,13 +96,14 @@ class OverviewPanel(Static):
             title="Servers", show_header=True, header_style="bold", expand=True
         )
         servers_table.add_column("IP", style="cyan")
+        servers_table.add_column("Backend")
         servers_table.add_column("State")
         servers_table.add_column("# Services", justify="right")
         if summary["server_rows"]:
             for row in summary["server_rows"]:
-                servers_table.add_row(row[0], row[1], str(row[2]))
+                servers_table.add_row(row[0], row[1], row[2], str(row[3]))
         else:
-            servers_table.add_row("-", "-", "-")
+            servers_table.add_row("-", "-", "-", "-")
 
         services_table = Table(
             title="Services", show_header=True, header_style="bold", expand=True

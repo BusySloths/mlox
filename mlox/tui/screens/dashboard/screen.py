@@ -36,7 +36,7 @@ SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
 SERVICE_TEMPLATES_TAB_ID = "service-templates-tab"
 OVERVIEW_TAB_ID = "overview-tab"
 LOGS_TAB_ID = "logs-tab"
-SIDEBAR_DEFAULT_WIDTH = 32
+SIDEBAR_DEFAULT_WIDTH = 44
 SIDEBAR_MIN_WIDTH = 24
 SIDEBAR_MAX_WIDTH = 72
 SIDEBAR_STEP = 4
@@ -94,7 +94,8 @@ class DashboardScreen(Screen):
         tree = self.query_one(InfraTree)
         tree.populate_tree()
         self._set_telemetry_tab_visible(False)
-        tree.select_node(tree.root)
+        tree.expand_all()
+        tree.move_cursor(tree.root)
         self._apply_selection(tree.root.data)
         self._set_project_reload_loading(False)
         self._set_app_log_drawer_visible(False)
@@ -180,7 +181,8 @@ class DashboardScreen(Screen):
     def _apply_reloaded_workspace(self, project: str) -> None:
         tree = self.query_one(InfraTree)
         tree.populate_tree()
-        tree.select_node(tree.root)
+        tree.expand_all()
+        tree.move_cursor(tree.root)
         self._apply_selection(tree.root.data)
         self._set_project_reload_loading(False)
         self.notify(f"Reloaded project infrastructure for {project}.")

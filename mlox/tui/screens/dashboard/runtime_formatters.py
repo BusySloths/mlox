@@ -2,19 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
+from rich.console import Group
 from rich.table import Table
 from rich.text import Text
-
-
-@dataclass(frozen=True)
-class RuntimeInfoDisplay:
-    """Rendered runtime information split between controls and content."""
-
-    summary: str
-    content: object
 
 
 def format_runtime_info(selection_type: str | None, data: dict[str, Any]) -> object:
@@ -30,7 +22,7 @@ def format_runtime_info(selection_type: str | None, data: dict[str, Any]) -> obj
     return format_server_info(data.get("server_info") or {})
 
 
-def format_docker_backend(backend_info: object) -> RuntimeInfoDisplay | None:
+def format_docker_backend(backend_info: object) -> object | None:
     """Render Docker backend status as a compact summary and containers table."""
 
     if not isinstance(backend_info, dict):
@@ -50,7 +42,7 @@ def format_docker_backend(backend_info: object) -> RuntimeInfoDisplay | None:
         ]
     )
     if not isinstance(containers, list):
-        return RuntimeInfoDisplay(summary=summary, content=str(containers or "-"))
+        return runtime_group(summary, str(containers or "-"))
 
     container_table = Table(
         title="Containers",
@@ -78,10 +70,10 @@ def format_docker_backend(backend_info: object) -> RuntimeInfoDisplay | None:
     else:
         container_table.add_row("-", "-", "-", "-", "-")
 
-    return RuntimeInfoDisplay(summary=summary, content=container_table)
+    return runtime_group(summary, container_table)
 
 
-def format_kubernetes_backend(backend_info: object) -> RuntimeInfoDisplay | None:
+def format_kubernetes_backend(backend_info: object) -> object | None:
     """Render k3s backend status as a compact summary and nodes table."""
 
     if not isinstance(backend_info, dict):
@@ -100,7 +92,7 @@ def format_kubernetes_backend(backend_info: object) -> RuntimeInfoDisplay | None
         ]
     )
     if not isinstance(nodes, list):
-        return RuntimeInfoDisplay(summary=summary, content="-")
+        return runtime_group(summary, "-")
 
     nodes_table = Table(
         title="Kubernetes Nodes",
@@ -132,7 +124,7 @@ def format_kubernetes_backend(backend_info: object) -> RuntimeInfoDisplay | None
     else:
         nodes_table.add_row("-", "-", "-", "-", "-", "-", "-")
 
-    return RuntimeInfoDisplay(summary=summary, content=nodes_table)
+    return runtime_group(summary, nodes_table)
 
 
 def format_server_info(server_info: object) -> object:
@@ -193,6 +185,12 @@ def format_bool(value: object) -> str:
     if isinstance(value, bool):
         return "yes" if value else "no"
     return str(value) if value is not None else "-"
+
+
+def runtime_group(summary: str, content: object) -> Group:
+    """Combine compact runtime summary text with the detail renderable."""
+
+    return Group(Text(summary), content)
 
 
 def docker_version(version: object, section: str) -> str:

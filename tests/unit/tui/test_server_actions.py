@@ -48,6 +48,10 @@ def _render_text(renderable: object) -> str:
     return console.export_text()
 
 
+def _render_server_info_panel(app: App) -> str:
+    return _render_text(app.query_one(ServerInfoPanel).content)
+
+
 async def _visibility_for(selection: SelectionInfo) -> bool:
     app = ServerActionsTestApp()
     async with app.run_test() as pilot:
@@ -291,18 +295,10 @@ async def _click_server_info() -> str:
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
-            output = (
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-runtime-info", Static)
-            )
-            rendered = _render_text(output.content)
+            rendered = _render_server_info_panel(app)
             if "demo-host" in rendered:
                 return rendered
-        output = (
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-runtime-info", Static)
-        )
-        return _render_text(output.content)
+        return _render_server_info_panel(app)
 
 
 def test_server_info_panel_renders_server_information() -> None:
@@ -352,18 +348,10 @@ async def _click_vps_server_info() -> str:
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
-            output = (
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-runtime-info", Static)
-            )
-            rendered = _render_text(output.content)
+            rendered = _render_server_info_panel(app)
             if "vmd167437" in rendered:
                 return rendered
-        output = (
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-runtime-info", Static)
-        )
-        return _render_text(output.content)
+        return _render_server_info_panel(app)
 
 
 def test_vps_server_info_is_compact_and_filters_noisy_os_metadata() -> None:
@@ -418,28 +406,10 @@ async def _click_bundle_backend_info() -> str:
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
-            output = (
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-runtime-info", Static)
-            )
-            summary = str(
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-info-summary", Static)
-                .render()
-            )
-            rendered_text = _render_text(output.content)
-            if "Containers" in rendered_text and "Client: 29.0.0" in summary:
-                return f"{summary}\n{rendered_text}"
-        output = (
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-runtime-info", Static)
-        )
-        summary = str(
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-info-summary", Static)
-            .render()
-        )
-        return f"{summary}\n{_render_text(output.content)}"
+            rendered = _render_server_info_panel(app)
+            if "Containers" in rendered and "Client: 29.0.0" in rendered:
+                return rendered
+        return _render_server_info_panel(app)
 
 
 def test_bundle_info_panel_renders_backend_information() -> None:
@@ -479,28 +449,10 @@ async def _click_kubernetes_backend_info(backend_info: dict) -> str:
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
-            output = (
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-runtime-info", Static)
-            )
-            summary = str(
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-info-summary", Static)
-                .render()
-            )
-            rendered_text = _render_text(output.content)
-            if "k3s:" in summary:
-                return f"{summary}\n{rendered_text}"
-        output = (
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-runtime-info", Static)
-        )
-        summary = str(
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-info-summary", Static)
-            .render()
-        )
-        return f"{summary}\n{_render_text(output.content)}"
+            rendered = _render_server_info_panel(app)
+            if "k3s:" in rendered:
+                return rendered
+        return _render_server_info_panel(app)
 
 
 def test_kubernetes_backend_info_renders_node_table() -> None:
@@ -592,21 +544,10 @@ async def _click_server_info_with_blocked_worker() -> tuple[bool, str]:
         release.set()
         for _ in range(20):
             await pilot.pause()
-            output = (
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-runtime-info", Static)
-            )
-            rendered = _render_text(output.content)
+            rendered = _render_server_info_panel(app)
             if "demo-host" in rendered:
                 return hidden_while_loading, rendered
-        return (
-            hidden_while_loading,
-            _render_text(
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-runtime-info", Static)
-                .content
-            ),
-        )
+        return hidden_while_loading, _render_server_info_panel(app)
 
 
 def test_server_info_button_loads_information_without_blocking_ui() -> None:
@@ -634,18 +575,10 @@ async def _click_server_info_with_markup_like_output() -> str:
         app.query_one(ServerInfoPanel).load_selected_info(refresh=True)
         for _ in range(20):
             await pilot.pause()
-            output = (
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-runtime-info", Static)
-            )
-            rendered = _render_text(output.content)
+            rendered = _render_server_info_panel(app)
             if "not-a-rich-tag" in rendered:
                 return rendered
-        output = (
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-runtime-info", Static)
-        )
-        return _render_text(output.content)
+        return _render_server_info_panel(app)
 
 
 def test_server_info_renders_markup_like_output_as_literal_text() -> None:
@@ -675,21 +608,13 @@ async def _server_info_uses_session_cache() -> tuple[str, str, int]:
         app.query_one(ServerInfoPanel).load_selected_info()
         for _ in range(20):
             await pilot.pause()
-            output = (
-                app.query_one(ServerInfoPanel)
-                .query_one("#server-runtime-info", Static)
-            )
-            first = _render_text(output.content)
+            first = _render_server_info_panel(app)
             if "cached" in first:
                 break
 
         app.query_one(ServerInfoPanel).load_selected_info()
         await pilot.pause()
-        output = (
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-runtime-info", Static)
-        )
-        second = _render_text(output.content)
+        second = _render_server_info_panel(app)
         return first, second, calls
 
 
@@ -720,11 +645,7 @@ async def _server_info_resets_on_selection_change() -> str:
 
         screen._apply_selection(SelectionInfo(type="server", server=second_server))
         await pilot.pause()
-        return str(
-            app.query_one(ServerInfoPanel)
-            .query_one("#server-runtime-info", Static)
-            .render()
-        )
+        return _render_server_info_panel(app)
 
 
 def test_server_info_is_cleared_after_selection_changes() -> None:

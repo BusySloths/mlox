@@ -77,6 +77,7 @@ def summarize_infrastructure(
             summary["server_rows"].append(
                 (
                     getattr(server, "ip", "unknown"),
+                    ", ".join(get_server_backends(server)) or "unknown",
                     getattr(server, "state", "unknown"),
                     service_count,
                 )

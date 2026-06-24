@@ -295,13 +295,6 @@ Button {
   background: #12b86aff;
 }
 
-#server-info-summary {
-  width: 1fr;
-  height: auto;
-  margin-bottom: 1;
-  color: #a6c9bdff;
-}
-
 #server-credentials {
   height: auto;
   margin-top: 1;
