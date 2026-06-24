@@ -144,7 +144,6 @@ class OverviewPanel(Static):
 
         layout = Table.grid(expand=True, padding=(0, 1))
         layout.add_row(details)
-        # layout.add_row(Text("Tags", style="bold cyan"))
         layout.add_row(self._tag_badges(getattr(bundle, "tags", []) or []))
         self.update(
             Panel(

@@ -239,7 +239,6 @@ def test_bundle_edit_tags_action_updates_tags_and_overview() -> None:
 
     assert tags == ["prod", "shared", "gpu"]
     assert commits == ["test-project"]
-    assert "Tags" in overview
     assert "prod" in overview
     assert "shared" in overview
     assert "gpu" in overview

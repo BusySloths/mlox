@@ -122,7 +122,6 @@ def test_bundle_overview_shows_tags_without_repeating_services() -> None:
 
     overview = _render_panel(rendered[0])
 
-    assert "Tags" in overview
     assert "prod" in overview
     assert "gpu" in overview
     assert "critical" in overview
