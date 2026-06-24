@@ -56,6 +56,73 @@ def test_project_reload_workspace_reports_failures():
     assert result.message == "Failed to reload infrastructure: offline"
 
 
+def test_project_rename_workspace_sets_name_and_commits():
+    commits = []
+    workspace = SimpleNamespace(name="demo")
+    workspace.commit = lambda: commits.append(workspace.name)
+
+    result = project.rename_project_workspace(workspace, " renamed demo ")
+
+    assert result.success
+    assert workspace.name == "renamed demo"
+    assert commits == ["renamed demo"]
+    assert result.data == {"workspace": workspace}
+
+
+def test_project_rename_workspace_rejects_empty_names():
+    workspace = SimpleNamespace(name="demo")
+
+    result = project.rename_project_workspace(workspace, "   ")
+
+    assert not result.success
+    assert workspace.name == "demo"
+
+
+def test_project_rename_workspace_restores_name_when_commit_fails():
+    workspace = SimpleNamespace(name="demo")
+    workspace.commit = lambda: (_ for _ in ()).throw(RuntimeError("disk full"))
+
+    result = project.rename_project_workspace(workspace, "renamed")
+
+    assert not result.success
+    assert workspace.name == "demo"
+    assert result.message == "Failed to rename project: disk full"
+
+
+def test_project_update_bundle_tags_normalizes_and_commits():
+    commits = []
+    bundle = SimpleNamespace(name="demo", tags=["old"])
+    workspace = SimpleNamespace()
+    workspace.commit = lambda: commits.append(list(bundle.tags))
+
+    result = project.update_bundle_tags(
+        workspace,
+        bundle,
+        [" prod ", "gpu", "PROD", "", "critical"],
+    )
+
+    assert result.success
+    assert bundle.tags == ["prod", "gpu", "critical"]
+    assert commits == [["prod", "gpu", "critical"]]
+    assert result.data == {
+        "workspace": workspace,
+        "bundle": bundle,
+        "tags": ["prod", "gpu", "critical"],
+    }
+
+
+def test_project_update_bundle_tags_restores_tags_when_commit_fails():
+    bundle = SimpleNamespace(name="demo", tags=["old"])
+    workspace = SimpleNamespace()
+    workspace.commit = lambda: (_ for _ in ()).throw(RuntimeError("disk full"))
+
+    result = project.update_bundle_tags(workspace, bundle, ["new"])
+
+    assert not result.success
+    assert bundle.tags == ["old"]
+    assert result.message == "Failed to update bundle tags: disk full"
+
+
 def test_servers_setup_server_invokes_server_without_persisting():
     calls = []
     server = SimpleNamespace(setup=lambda: calls.append("setup"))

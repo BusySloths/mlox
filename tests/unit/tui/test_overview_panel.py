@@ -96,7 +96,7 @@ def test_project_overview_shows_backend_column_without_server_metric() -> None:
     assert overview.count("Servers") == 1
 
 
-def test_bundle_overview_shows_service_state_counts() -> None:
+def test_bundle_overview_shows_tags_without_repeating_services() -> None:
     rendered = []
     panel = OverviewPanel()
     panel.update = rendered.append
@@ -112,7 +112,7 @@ def test_bundle_overview_shows_service_state_counts() -> None:
             type="bundle",
             bundle=SimpleNamespace(
                 name="demo",
-                tags=[],
+                tags=["prod", "gpu", "critical"],
                 services=services,
                 server=server,
             ),
@@ -122,8 +122,13 @@ def test_bundle_overview_shows_service_state_counts() -> None:
 
     overview = _render_panel(rendered[0])
 
-    assert "Service States" in overview
-    assert "running: 2, stopped: 1" in overview
+    assert "Tags" in overview
+    assert "prod" in overview
+    assert "gpu" in overview
+    assert "critical" in overview
+    assert "Service States" not in overview
+    assert "Service Names" not in overview
+    assert "running: 2, stopped: 1" not in overview
 
 
 def test_server_overview_shows_resource_info() -> None:

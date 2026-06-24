@@ -7,6 +7,7 @@ from typing import Optional
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Button, Static
 
@@ -17,6 +18,9 @@ from .model import SelectionInfo
 
 class ServerActions(Container):
     """Selection-aware controls for bundle and server nodes."""
+
+    class EditTagsRequested(Message):
+        """Request that the dashboard opens the bundle tag editor."""
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
@@ -29,6 +33,7 @@ class ServerActions(Container):
             yield Button("Open Terminal", id="open-server-terminal")
             yield Button("Show Credentials", id="toggle-server-credentials")
             yield Button("Refresh Server Info", id="refresh-runtime-info")
+            yield Button("Edit Tags", id="edit-bundle-tags", variant="success")
         yield Static(id="server-credentials")
         with Horizontal(id="credential-copy-buttons"):
             yield Button("Copy Password", id="copy-server-password")
@@ -38,6 +43,7 @@ class ServerActions(Container):
         self._update_visibility(self.selection)
         self._render_title(self.selection)
         self._render_runtime_info_action(self.selection)
+        self._render_bundle_tag_action(self.selection)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         self._credentials_visible = False
@@ -45,6 +51,7 @@ class ServerActions(Container):
         if self.is_mounted:
             self._render_title(selection)
             self._render_runtime_info_action(selection)
+            self._render_bundle_tag_action(selection)
             self.set_runtime_info_loading(False)
             self._render_credentials()
 
@@ -67,6 +74,10 @@ class ServerActions(Container):
             button.label = "Refresh Backend Info"
             return
         button.label = "Refresh Server Info"
+
+    def _render_bundle_tag_action(self, selection: Optional[SelectionInfo]) -> None:
+        button = self.query_one("#edit-bundle-tags", Button)
+        button.display = bool(selection and selection.type == "bundle")
 
     def _selected_server(self) -> object | None:
         selection = self.selection
@@ -139,6 +150,10 @@ class ServerActions(Container):
     def handle_toggle_credentials(self, _: Button.Pressed) -> None:
         self._credentials_visible = not self._credentials_visible
         self._render_credentials()
+
+    @on(Button.Pressed, "#edit-bundle-tags")
+    def handle_edit_bundle_tags(self, _: Button.Pressed) -> None:
+        self.post_message(self.EditTagsRequested())
 
     @on(Button.Pressed, "#copy-server-password")
     def handle_copy_password(self, _: Button.Pressed) -> None:

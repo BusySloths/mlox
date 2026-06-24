@@ -176,7 +176,11 @@ async def _server_action_button_presentation() -> list[str | None]:
         actions.selection = SelectionInfo(type="server", server=SimpleNamespace())
         await pilot.pause()
         row = actions.query_one("#server-action-buttons")
-        return [child.id for child in row.children]
+        return [
+            child.id
+            for child in row.children
+            if getattr(child, "display", True)
+        ]
 
 
 def test_server_actions_keep_terminal_and_credentials_together() -> None:
@@ -187,6 +191,31 @@ def test_server_actions_keep_terminal_and_credentials_together() -> None:
         "toggle-server-credentials",
         "refresh-runtime-info",
     ]
+
+
+async def _edit_tags_button_visibility() -> tuple[bool, bool]:
+    server = SimpleNamespace(ip="10.0.0.5")
+    bundle = SimpleNamespace(server=server)
+    app = ServerActionsTestApp()
+    async with app.run_test() as pilot:
+        actions = app.query_one(ServerActions)
+        button = actions.query_one("#edit-bundle-tags", Button)
+
+        actions.selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
+        await pilot.pause()
+        bundle_display = button.display
+
+        actions.selection = SelectionInfo(type="server", server=server)
+        await pilot.pause()
+        server_display = button.display
+        return bundle_display, server_display
+
+
+def test_edit_tags_button_is_only_visible_for_bundle_selection() -> None:
+    bundle_display, server_display = asyncio.run(_edit_tags_button_visibility())
+
+    assert bundle_display is True
+    assert server_display is False
 
 
 async def _action_titles_for_bundle_and_server() -> tuple[str, str]:

@@ -12,10 +12,12 @@ from types import SimpleNamespace
 from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.containers import Container
-from textual.widgets import TabbedContent
+from textual.widgets import Input, SelectionList, TabbedContent
 
 from mlox.application.result import OperationResult
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
+from mlox.tui.screens.dashboard.project_actions import ProjectActions
+from mlox.tui.screens.dashboard.server_actions import ServerActions
 from mlox.tui.screens.dashboard.tree import InfraTree
 from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
 from mlox.tui.screens.dashboard.model import SelectionInfo
@@ -34,15 +36,21 @@ class DashboardTestApp(App):
 
     def __init__(self) -> None:
         super().__init__()
+        self.commits = []
         project = SimpleNamespace(
             name="test-project",
             infrastructure=SimpleNamespace(bundles=[]),
         )
+
+        def commit() -> None:
+            self.commits.append(self.workspace.name)
+
         self.workspace = SimpleNamespace(
             name=project.name,
             infrastructure=project.infrastructure,
             path="test-project",
             active_secret_manager_name="Embedded Project Storage",
+            commit=commit,
         )
 
     def compose(self) -> ComposeResult:
@@ -109,6 +117,56 @@ def test_dashboard_initially_shows_project_root_overview() -> None:
     assert "No infrastructure available." in overview
 
 
+async def _project_actions_display_for(selection: SelectionInfo) -> bool:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(selection)
+        await pilot.pause()
+        return app.query_one(ProjectActions).display
+
+
+def test_project_actions_show_only_for_project_root() -> None:
+    assert asyncio.run(_project_actions_display_for(SelectionInfo(type="root"))) is True
+    assert asyncio.run(_project_actions_display_for(SelectionInfo(type="bundle"))) is False
+
+
+async def _rename_project_from_action_modal() -> tuple[str, list[str], str, str]:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        await screen.handle_project_rename_requested(ProjectActions.RenameRequested())
+        await pilot.pause()
+
+        app.screen.query_one("#rename-project-name", Input).value = "renamed-project"
+        await pilot.click("#confirm-project-rename")
+
+        deadline = time.monotonic() + 2
+        while app.workspace.name != "renamed-project":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for project rename.")
+            await pilot.pause(0.05)
+
+        overview = screen.query_one(OverviewPanel)
+        return (
+            app.workspace.name,
+            app.commits,
+            screen.query_one("#infra-tree", InfraTree).root.label.plain,
+            _render_text(overview.content),
+        )
+
+
+def test_project_rename_action_updates_workspace_and_root_label() -> None:
+    project_name, commits, root_label, overview = asyncio.run(
+        _rename_project_from_action_modal()
+    )
+
+    assert project_name == "renamed-project"
+    assert commits == ["renamed-project"]
+    assert root_label == "renamed-project  Secrets: Embedded Project Storage"
+    assert "Infrastructure Overview" in overview
+
+
 async def _root_label() -> str:
     app = DashboardTestApp()
     async with app.run_test():
@@ -136,6 +194,55 @@ def test_bundle_tree_label_shows_backend_type() -> None:
     assert asyncio.run(_bundle_label()) == (
         "Bundle: dev  Backend: docker, k3s_agent"
     )
+
+
+async def _edit_bundle_tags_from_action_modal() -> tuple[list[str], list[str], str]:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", state="running", backend=["docker"])
+    bundle = SimpleNamespace(
+        name="dev",
+        server=server,
+        services=[],
+        tags=["prod"],
+    )
+    other_bundle = SimpleNamespace(
+        name="shared",
+        server=SimpleNamespace(ip="10.0.0.6", backend=["docker"]),
+        services=[],
+        tags=["shared"],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle, other_bundle])
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
+        screen._apply_selection(selection)
+        await screen.handle_bundle_tags_requested(ServerActions.EditTagsRequested())
+        await pilot.pause()
+
+        app.screen.query_one("#bundle-tag-selection", SelectionList).select("shared")
+        app.screen.query_one("#new-bundle-tags", Input).value = "gpu, prod"
+        await pilot.click("#confirm-bundle-tags")
+
+        deadline = time.monotonic() + 2
+        while bundle.tags != ["prod", "shared", "gpu"]:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for bundle tags update.")
+            await pilot.pause(0.05)
+
+        overview = screen.query_one(OverviewPanel)
+        return bundle.tags, app.commits, _render_text(overview.content)
+
+
+def test_bundle_edit_tags_action_updates_tags_and_overview() -> None:
+    tags, commits, overview = asyncio.run(_edit_bundle_tags_from_action_modal())
+
+    assert tags == ["prod", "shared", "gpu"]
+    assert commits == ["test-project"]
+    assert "Tags" in overview
+    assert "prod" in overview
+    assert "shared" in overview
+    assert "gpu" in overview
 
 
 async def _leaf_flags_for_server_and_services() -> tuple[bool, bool, bool]:

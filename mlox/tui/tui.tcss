@@ -235,6 +235,7 @@ Button {
 }
 
 #selection-overview,
+#selection-project-actions,
 #selection-server-actions,
 #selection-server-info,
 #selection-logs,
@@ -245,6 +246,16 @@ Button {
 #selection-overview {
   width: 1fr;
   min-width: 0;
+}
+
+#selection-project-actions {
+  height: auto;
+  margin-top: 1;
+  padding: 1;
+  border: round #1bd6f3ff;
+  border-title-align: center;
+  border-title-color: #e6edf7;
+  border-title-style: bold;
 }
 
 #selection-server-actions {
@@ -292,6 +303,143 @@ Button {
 }
 
 #refresh-runtime-info:hover {
+  background: #12b86aff;
+}
+
+#edit-bundle-tags {
+  width: auto;
+  margin-left: 1;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#edit-bundle-tags:hover {
+  background: #12b86aff;
+}
+
+#edit-bundle-tags-dialog {
+  width: 64;
+  height: auto;
+  max-height: 32;
+  margin: 2 4;
+  padding: 1 2;
+  background: #0d2a24ff;
+  border: round #74d17aff;
+}
+
+EditBundleTagsDialog {
+  align: center middle;
+}
+
+#edit-bundle-tags-title {
+  height: auto;
+  content-align: center middle;
+  text-style: bold;
+  color: #e6edf7;
+  margin-bottom: 1;
+}
+
+#edit-bundle-tags-help {
+  height: auto;
+  color: #a6c9bdff;
+  margin-bottom: 1;
+}
+
+#bundle-tag-selection {
+  height: auto;
+  max-height: 12;
+  margin-bottom: 1;
+  border: round #1bd6f3ff;
+}
+
+#new-bundle-tags {
+  width: 1fr;
+  height: 3;
+  margin-bottom: 1;
+}
+
+#edit-bundle-tags-actions {
+  height: auto;
+  align-horizontal: right;
+}
+
+#cancel-bundle-tags {
+  width: auto;
+}
+
+#confirm-bundle-tags {
+  width: auto;
+  margin-left: 1;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#confirm-bundle-tags:hover {
+  background: #12b86aff;
+}
+
+#project-action-content {
+  height: auto;
+}
+
+#rename-project {
+  width: auto;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#rename-project:hover {
+  background: #12b86aff;
+}
+
+RenameProjectDialog {
+  align: center middle;
+}
+
+#rename-project-dialog {
+  width: 56;
+  height: auto;
+  margin: 2 4;
+  padding: 1 2;
+  background: #0d2a24ff;
+  border: round #74d17aff;
+}
+
+#rename-project-title {
+  height: auto;
+  content-align: center middle;
+  text-style: bold;
+  color: #e6edf7;
+  margin-bottom: 1;
+}
+
+#rename-project-name {
+  width: 1fr;
+  height: 3;
+  margin-bottom: 1;
+}
+
+#rename-project-actions {
+  height: auto;
+  align-horizontal: right;
+}
+
+#cancel-project-rename {
+  width: auto;
+}
+
+#confirm-project-rename {
+  width: auto;
+  margin-left: 1;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#confirm-project-rename:hover {
   background: #12b86aff;
 }
 

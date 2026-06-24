@@ -19,15 +19,21 @@ from textual.widgets import (
 )
 
 from .app_log_panel import AppLogPanel
+from .bundle_tags import EditBundleTagsDialog
 from .history_panel import HistoryPanel
 from .log_panel import LogPanel
 from .model import SelectionChanged, SelectionInfo
 from .overview_panel import OverviewPanel
+from .project_actions import ProjectActions, RenameProjectDialog
 from .server_actions import ServerActions
 from .server_info_panel import ServerInfoPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
-from mlox.application.use_cases.project import reload_project_workspace
+from mlox.application.use_cases.project import (
+    reload_project_workspace,
+    rename_project_workspace,
+    update_bundle_tags,
+)
 from mlox.application.use_cases.services import build_service_ui_widget
 
 
@@ -72,6 +78,7 @@ class DashboardScreen(Screen):
                             with TabPane("Overview", id=OVERVIEW_TAB_ID):
                                 with VerticalScroll(id="overview-scroll"):
                                     yield OverviewPanel(id="selection-overview")
+                                    yield ProjectActions(id="selection-project-actions")
                                     yield ServerInfoPanel(id="selection-server-info")
                                     yield ServerActions(id="selection-server-actions")
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
@@ -130,6 +137,8 @@ class DashboardScreen(Screen):
         overview.selection = selection
         server_actions = self.query_one(ServerActions)
         server_actions.selection = selection
+        project_actions = self.query_one(ProjectActions)
+        project_actions.selection = selection
         server_info = self.query_one(ServerInfoPanel)
         server_info.selection = selection
         logs = self.query_one(LogPanel)
@@ -140,6 +149,108 @@ class DashboardScreen(Screen):
             templates.selection = selection
         self._update_template_tabs(selection)
         self._update_tui_panel(selection)
+
+    @on(ProjectActions.RenameRequested)
+    async def handle_project_rename_requested(
+        self, _: ProjectActions.RenameRequested
+    ) -> None:
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot rename project because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+        current_name = str(getattr(workspace, "name", ""))
+        await self.app.push_screen(
+            RenameProjectDialog(current_name),
+            self._rename_project_from_dialog,
+        )
+
+    def _rename_project_from_dialog(self, name: str | None) -> None:
+        if name is None:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot rename project because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        result = rename_project_workspace(workspace, name)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+
+        tree = self.query_one(InfraTree)
+        tree.populate_tree()
+        tree.expand_all()
+        tree.move_cursor(tree.root)
+        self._apply_selection(tree.root.data)
+        self.notify(result.message)
+
+    @on(ServerActions.EditTagsRequested)
+    async def handle_bundle_tags_requested(
+        self, _: ServerActions.EditTagsRequested
+    ) -> None:
+        selection = self.query_one(ServerActions).selection
+        if not selection or selection.type != "bundle" or not selection.bundle:
+            self.notify("Select a bundle to edit tags.", severity="warning")
+            return
+
+        current_tags = self._clean_tags(getattr(selection.bundle, "tags", []) or [])
+        await self.app.push_screen(
+            EditBundleTagsDialog(
+                bundle_name=str(getattr(selection.bundle, "name", "-")),
+                current_tags=current_tags,
+                available_tags=self._project_tags(current_tags),
+            ),
+            lambda tags: self._update_bundle_tags_from_dialog(selection, tags),
+        )
+
+    def _project_tags(self, preferred_tags: list[str]) -> list[str]:
+        workspace = getattr(self.app, "workspace", None)
+        bundles = getattr(getattr(workspace, "infrastructure", None), "bundles", [])
+        tags = list(preferred_tags)
+        for bundle in bundles or []:
+            tags.extend(getattr(bundle, "tags", []) or [])
+        return self._clean_tags(tags)
+
+    def _clean_tags(self, tags: list[object]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for tag in tags:
+            value = str(tag).strip()
+            key = value.casefold()
+            if value and key not in seen:
+                seen.add(key)
+                cleaned.append(value)
+        return cleaned
+
+    def _update_bundle_tags_from_dialog(
+        self,
+        selection: SelectionInfo,
+        tags: list[str] | None,
+    ) -> None:
+        if tags is None:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot update bundle tags because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        result = update_bundle_tags(workspace, selection.bundle, tags)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+
+        self._apply_selection(selection)
+        self.query_one(OverviewPanel).show_bundle(selection)
+        self.notify(result.message)
 
     def action_reload_infrastructure(self) -> None:
         workspace = getattr(self.app, "workspace", None)

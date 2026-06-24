@@ -134,24 +134,21 @@ class OverviewPanel(Static):
     def show_bundle(self, selection: SelectionInfo) -> None:
         bundle = selection.bundle
         server = selection.server or getattr(bundle, "server", None)
-        services = getattr(bundle, "services", []) or []
-        service_names = ", ".join(getattr(svc, "name", "-") for svc in services) or "-"
-        service_states = self._format_service_states(services)
-        tags = ", ".join(getattr(bundle, "tags", []) or ["-"])
-        table = Table.grid(expand=True)
-        table.add_column(justify="right", style="cyan", ratio=1)
-        table.add_column(justify="left", ratio=3)
-        table.add_row("Bundle", str(getattr(bundle, "name", "-")))
-        table.add_row("Tags", tags)
-        table.add_row("Server IP", str(getattr(server, "ip", "unknown")))
-        table.add_row("Server State", str(getattr(server, "state", "unknown")))
-        table.add_row("Backend", ", ".join(get_server_backends(server)) or "unknown")
-        table.add_row("Services", str(len(services)))
-        table.add_row("Service States", service_states)
-        table.add_row("Service Names", service_names)
+        details = Table.grid(expand=True)
+        details.add_column(justify="right", style="cyan", ratio=1)
+        details.add_column(justify="left", ratio=3)
+        details.add_row("Bundle", str(getattr(bundle, "name", "-")))
+        details.add_row("Server IP", str(getattr(server, "ip", "unknown")))
+        details.add_row("Server State", str(getattr(server, "state", "unknown")))
+        details.add_row("Backend", ", ".join(get_server_backends(server)) or "unknown")
+
+        layout = Table.grid(expand=True, padding=(0, 1))
+        layout.add_row(details)
+        # layout.add_row(Text("Tags", style="bold cyan"))
+        layout.add_row(self._tag_badges(getattr(bundle, "tags", []) or []))
         self.update(
             Panel(
-                table,
+                layout,
                 title=f"Bundle: {getattr(bundle, 'name', '-')}",
                 border_style="green",
             )
@@ -198,10 +195,12 @@ class OverviewPanel(Static):
         template_id = getattr(service, "service_config_id", "-")
         table.add_row("Template", template_id)
         table.add_row("UUID", str(getattr(service, "uuid", "-")))
-        table.add_row("Ports", self._format_ports(getattr(service, "service_ports", None)))
-        compose_labels = ", ".join(
-            getattr(service, "compose_service_names", {}).keys()
-        ) or "-"
+        table.add_row(
+            "Ports", self._format_ports(getattr(service, "service_ports", None))
+        )
+        compose_labels = (
+            ", ".join(getattr(service, "compose_service_names", {}).keys()) or "-"
+        )
         table.add_row("Compose Labels", compose_labels)
         urls = getattr(service, "service_urls", None) or {}
         if urls:
@@ -239,16 +238,28 @@ class OverviewPanel(Static):
             rows.append(("Uptime", str(uptime)))
         return rows
 
-    def _format_service_states(self, services: list[object]) -> str:
-        if not services:
-            return "-"
-        state_counts: dict[str, int] = {}
-        for service in services:
-            state = str(getattr(service, "state", "unknown"))
-            state_counts[state] = state_counts.get(state, 0) + 1
-        return ", ".join(
-            f"{state}: {count}" for state, count in sorted(state_counts.items())
-        )
+    def _tag_badges(self, tags: list[object]) -> Columns | Text:
+        if not tags:
+            return Text("No tags", style="dim")
+
+        palette = [
+            ("green", "bold white on dark_green"),
+            ("blue", "bold white on dark_blue"),
+            ("yellow", "bold black on bright_yellow"),
+            ("magenta", "bold white on dark_magenta"),
+            ("cyan", "bold white on dark_cyan"),
+        ]
+        badges = []
+        for index, tag in enumerate(tags):
+            border_style, text_style = palette[index % len(palette)]
+            badges.append(
+                Panel(
+                    Text(str(tag), justify="center", style=text_style),
+                    border_style=border_style,
+                    padding=(0, 1),
+                )
+            )
+        return Columns(badges, expand=False, equal=False)
 
     def _format_ports(self, ports: object) -> str:
         if isinstance(ports, dict) and ports:
