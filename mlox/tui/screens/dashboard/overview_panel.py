@@ -135,21 +135,19 @@ class OverviewPanel(Static):
         bundle = selection.bundle
         server = selection.server or getattr(bundle, "server", None)
         details = Table.grid(expand=True)
-        details.add_column(justify="right", style="cyan", ratio=1)
+        details.add_column(justify="right", style="cyan", no_wrap=True)
         details.add_column(justify="left", ratio=3)
-        details.add_row("Bundle", str(getattr(bundle, "name", "-")))
-        details.add_row("Server IP", str(getattr(server, "ip", "unknown")))
-        details.add_row("Server State", str(getattr(server, "state", "unknown")))
+        details.add_row("Tags", self._tag_badges(getattr(bundle, "tags", []) or []))
+        details.add_row("Server", str(getattr(server, "ip", "unknown")))
+        details.add_row("State", str(getattr(server, "state", "unknown")))
         details.add_row("Backend", ", ".join(get_server_backends(server)) or "unknown")
 
-        layout = Table.grid(expand=True, padding=(0, 1))
-        layout.add_row(details)
-        layout.add_row(self._tag_badges(getattr(bundle, "tags", []) or []))
         self.update(
             Panel(
-                layout,
+                details,
                 title=f"Bundle: {getattr(bundle, 'name', '-')}",
                 border_style="green",
+                padding=(1, 2),
             )
         )
 
@@ -237,28 +235,23 @@ class OverviewPanel(Static):
             rows.append(("Uptime", str(uptime)))
         return rows
 
-    def _tag_badges(self, tags: list[object]) -> Columns | Text:
+    def _tag_badges(self, tags: list[object]) -> Text:
         if not tags:
             return Text("No tags", style="dim")
 
         palette = [
-            ("green", "bold white on dark_green"),
-            ("blue", "bold white on dark_blue"),
-            ("yellow", "bold black on bright_yellow"),
-            ("magenta", "bold white on dark_magenta"),
-            ("cyan", "bold white on dark_cyan"),
+            "bold white on dark_green",
+            "bold white on dark_blue",
+            "bold black on bright_yellow",
+            "bold white on dark_cyan",
+            "bold black on bright_white",
         ]
-        badges = []
+        badges = Text()
         for index, tag in enumerate(tags):
-            border_style, text_style = palette[index % len(palette)]
-            badges.append(
-                Panel(
-                    Text(str(tag), justify="center", style=text_style),
-                    border_style=border_style,
-                    padding=(0, 1),
-                )
-            )
-        return Columns(badges, expand=False, equal=False)
+            if index:
+                badges.append("  ")
+            badges.append(f" {str(tag)} ", style=palette[index % len(palette)])
+        return badges
 
     def _format_ports(self, ports: object) -> str:
         if isinstance(ports, dict) and ports:
