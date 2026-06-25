@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import SimpleNamespace
 
+from mlox.server import ServerCapability
 from mlox.application.use_cases import models, project, servers, services
 
 
@@ -186,13 +187,32 @@ def test_servers_browse_server_templates_returns_config_objects():
 
 def test_servers_open_server_terminal_uses_launcher():
     launched = []
-    server = SimpleNamespace(ip="1.2.3.4")
+    server = SimpleNamespace(
+        ip="1.2.3.4",
+        capabilities={ServerCapability.TERMINAL},
+        get_server_connection=lambda: SimpleNamespace(
+            credentials={"host": "1.2.3.4", "port": 22, "user": "mlox"}
+        ),
+    )
 
     result = servers.open_server_terminal(server, launcher=launched.append)
 
     assert result.success
     assert launched == [server]
     assert result.message == "Opened SSH terminal for 1.2.3.4."
+
+
+def test_servers_terminal_capability_rejects_connector_servers():
+    server = SimpleNamespace(
+        ip="connector",
+        capabilities={"connector"},
+        get_server_connection=lambda: SimpleNamespace(credentials={}),
+    )
+
+    result = servers.can_open_server_terminal(server)
+
+    assert not result.success
+    assert result.message == "The selected server does not support terminal login."
 
 
 def test_servers_get_runtime_info_collects_server_and_backend_info():

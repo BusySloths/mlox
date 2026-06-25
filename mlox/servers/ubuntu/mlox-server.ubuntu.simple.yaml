@@ -20,6 +20,8 @@ groups:
   backend:
     native: null
 capabilities:
+  server:
+  - terminal
   backend:
   - native
 build:

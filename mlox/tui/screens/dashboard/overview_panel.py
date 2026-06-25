@@ -20,6 +20,9 @@ from .model import (
     summarize_infrastructure,
 )
 
+PROJECT_SERVER_ROW_LIMIT = 40
+PROJECT_SERVICE_ROW_LIMIT = 80
+
 
 class OverviewPanel(Static):
     """Overview of the currently selected node."""
@@ -95,15 +98,23 @@ class OverviewPanel(Static):
         servers_table = Table(
             title="Servers", show_header=True, header_style="bold", expand=True
         )
-        servers_table.add_column("IP", style="cyan")
+        servers_table.add_column("Host", style="cyan")
         servers_table.add_column("Backend")
+        servers_table.add_column("Capabilities")
         servers_table.add_column("State")
         servers_table.add_column("# Services", justify="right")
         if summary["server_rows"]:
-            for row in summary["server_rows"]:
-                servers_table.add_row(row[0], row[1], row[2], str(row[3]))
+            server_rows = summary["server_rows"]
+            for row in server_rows[:PROJECT_SERVER_ROW_LIMIT]:
+                servers_table.add_row(row[0], row[1], row[2], row[3], str(row[4]))
+            self._add_more_row(
+                servers_table,
+                total=len(server_rows),
+                shown=min(len(server_rows), PROJECT_SERVER_ROW_LIMIT),
+                columns=5,
+            )
         else:
-            servers_table.add_row("-", "-", "-", "-")
+            servers_table.add_row("-", "-", "-", "-", "-")
 
         services_table = Table(
             title="Services", show_header=True, header_style="bold", expand=True
@@ -113,8 +124,15 @@ class OverviewPanel(Static):
         services_table.add_column("Server")
         services_table.add_column("State")
         if summary["service_rows"]:
-            for row in summary["service_rows"]:
+            service_rows = summary["service_rows"]
+            for row in service_rows[:PROJECT_SERVICE_ROW_LIMIT]:
                 services_table.add_row(row[0], row[1], row[2], row[3])
+            self._add_more_row(
+                services_table,
+                total=len(service_rows),
+                shown=min(len(service_rows), PROJECT_SERVICE_ROW_LIMIT),
+                columns=4,
+            )
         else:
             services_table.add_row("-", "-", "-", "-")
 
@@ -130,6 +148,21 @@ class OverviewPanel(Static):
                 border_style="green",
             )
         )
+
+    def _add_more_row(
+        self,
+        table: Table,
+        *,
+        total: int,
+        shown: int,
+        columns: int,
+    ) -> None:
+        remaining = total - shown
+        if remaining <= 0:
+            return
+        cells = [f"... {remaining} more not shown"]
+        cells.extend([""] * (columns - 1))
+        table.add_row(*cells, style="dim")
 
     def show_bundle(self, selection: SelectionInfo) -> None:
         bundle = selection.bundle
@@ -160,6 +193,10 @@ class OverviewPanel(Static):
         table.add_row("State", str(getattr(server, "state", "unknown")))
         backend = ", ".join(get_server_backends(server)) or "unknown"
         table.add_row("Backend", backend)
+        table.add_row(
+            "Capabilities",
+            self._capability_badges(getattr(server, "capabilities", set()) or []),
+        )
         discovered = getattr(server, "discovered", None)
         table.add_row("Discovered", str(discovered) if discovered else "-")
         port = getattr(server, "port", "-")
@@ -251,6 +288,31 @@ class OverviewPanel(Static):
             if index:
                 badges.append("  ")
             badges.append(f" {str(tag)} ", style=palette[index % len(palette)])
+        return badges
+
+    def _capability_badges(self, capabilities: object) -> Text:
+        names = set()
+        for capability in capabilities:
+            value = capability.value if hasattr(capability, "value") else capability
+            name = str(value).strip().replace("-", "_")
+            if name:
+                names.add(name)
+        if not names:
+            return Text("None", style="dim")
+
+        palette = [
+            "bold white on dark_blue",
+            "bold white on dark_green",
+            "bold black on bright_yellow",
+            "bold white on dark_cyan",
+            "bold black on bright_white",
+        ]
+        badges = Text()
+        for index, name in enumerate(sorted(names)):
+            if index:
+                badges.append("  ")
+            label = name.replace("_", " ")
+            badges.append(f" {label} ", style=palette[index % len(palette)])
         return badges
 
     def _format_ports(self, ports: object) -> str:

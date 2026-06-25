@@ -11,6 +11,7 @@ from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.widgets import Button, Static
 
+from mlox.server import ServerCapability
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.screen import DashboardScreen
 from mlox.tui.screens.dashboard.server_actions import ServerActions
@@ -52,6 +53,16 @@ def _render_server_info_panel(app: App) -> str:
     return _render_text(app.query_one(ServerInfoPanel).content)
 
 
+def _terminal_server(ip: str = "10.0.0.5") -> SimpleNamespace:
+    return SimpleNamespace(
+        ip=ip,
+        capabilities={ServerCapability.TERMINAL},
+        get_server_connection=lambda: SimpleNamespace(
+            credentials={"host": ip, "port": 22, "user": "mlox"}
+        ),
+    )
+
+
 async def _visibility_for(selection: SelectionInfo) -> bool:
     app = ServerActionsTestApp()
     async with app.run_test() as pilot:
@@ -62,7 +73,7 @@ async def _visibility_for(selection: SelectionInfo) -> bool:
 
 
 def test_actions_are_visible_for_bundle_and_server_selections() -> None:
-    server = SimpleNamespace(ip="10.0.0.5")
+    server = _terminal_server()
 
     assert asyncio.run(
         _visibility_for(
@@ -92,7 +103,7 @@ async def _click_open_terminal(monkeypatch) -> list[object]:
         "mlox.application.use_cases.servers.launch_external_ssh_terminal",
         launched.append,
     )
-    server = SimpleNamespace(ip="10.0.0.5")
+    server = _terminal_server()
 
     app = ServerActionsTestApp()
     async with app.run_test() as pilot:
@@ -146,7 +157,7 @@ async def _open_terminal_with_binding(monkeypatch, selection) -> list[object]:
 
 
 def test_open_terminal_binding_launches_for_server_selection(monkeypatch) -> None:
-    server = SimpleNamespace(ip="10.0.0.5")
+    server = _terminal_server()
 
     launched = asyncio.run(
         _open_terminal_with_binding(
@@ -169,11 +180,87 @@ def test_open_terminal_binding_does_nothing_for_root_selection(monkeypatch) -> N
     assert launched == []
 
 
+def test_open_terminal_binding_does_nothing_for_bundle_selection(monkeypatch) -> None:
+    server = _terminal_server()
+    bundle = SimpleNamespace(server=server)
+
+    launched = asyncio.run(
+        _open_terminal_with_binding(
+            monkeypatch,
+            SelectionInfo(type="bundle", bundle=bundle, server=server),
+        )
+    )
+
+    assert launched == []
+
+
+def test_open_terminal_binding_does_nothing_for_connector_server(monkeypatch) -> None:
+    server = SimpleNamespace(
+        ip="connector",
+        capabilities={"connector"},
+        get_server_connection=lambda: SimpleNamespace(credentials={}),
+    )
+
+    launched = asyncio.run(
+        _open_terminal_with_binding(
+            monkeypatch,
+            SelectionInfo(type="server", server=server),
+        )
+    )
+
+    assert launched == []
+
+
+async def _open_terminal_binding_available(selection) -> bool:
+    class DashboardBindingTestApp(App):
+        def __init__(self) -> None:
+            super().__init__()
+            self.workspace = SimpleNamespace(
+                name="test-project",
+                infrastructure=SimpleNamespace(bundles=[]),
+            )
+
+        def compose(self) -> ComposeResult:
+            yield DashboardScreen()
+
+    app = DashboardBindingTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(selection)
+        await pilot.pause()
+        return bool(screen.check_action("open_terminal", ()))
+
+
+def test_open_terminal_binding_is_available_only_for_terminal_capable_servers() -> None:
+    terminal_server = _terminal_server()
+    connector_server = SimpleNamespace(
+        ip="connector",
+        capabilities={"connector"},
+        get_server_connection=lambda: SimpleNamespace(credentials={}),
+    )
+
+    assert asyncio.run(
+        _open_terminal_binding_available(
+            SelectionInfo(type="server", server=terminal_server)
+        )
+    )
+    assert not asyncio.run(
+        _open_terminal_binding_available(
+            SelectionInfo(type="bundle", bundle=SimpleNamespace(server=terminal_server))
+        )
+    )
+    assert not asyncio.run(
+        _open_terminal_binding_available(
+            SelectionInfo(type="server", server=connector_server)
+        )
+    )
+
+
 async def _server_action_button_presentation() -> list[str | None]:
     app = ServerActionsTestApp()
     async with app.run_test() as pilot:
         actions = app.query_one(ServerActions)
-        actions.selection = SelectionInfo(type="server", server=SimpleNamespace())
+        actions.selection = SelectionInfo(type="server", server=_terminal_server())
         await pilot.pause()
         row = actions.query_one("#server-action-buttons")
         return [
@@ -194,7 +281,7 @@ def test_server_actions_keep_terminal_and_credentials_together() -> None:
 
 
 async def _edit_tags_button_visibility() -> tuple[bool, bool]:
-    server = SimpleNamespace(ip="10.0.0.5")
+    server = _terminal_server()
     bundle = SimpleNamespace(server=server)
     app = ServerActionsTestApp()
     async with app.run_test() as pilot:
@@ -216,6 +303,74 @@ def test_edit_tags_button_is_only_visible_for_bundle_selection() -> None:
 
     assert bundle_display is True
     assert server_display is False
+
+
+async def _open_terminal_button_visibility(selection: SelectionInfo) -> bool:
+    app = ServerActionsTestApp()
+    async with app.run_test() as pilot:
+        actions = app.query_one(ServerActions)
+        actions.selection = selection
+        await pilot.pause()
+        return actions.query_one("#open-server-terminal", Button).display
+
+
+def test_open_terminal_button_requires_terminal_capable_server_selection() -> None:
+    terminal_server = _terminal_server()
+    connector_server = SimpleNamespace(
+        ip="connector",
+        capabilities={"connector"},
+        get_server_connection=lambda: SimpleNamespace(credentials={}),
+    )
+
+    assert asyncio.run(
+        _open_terminal_button_visibility(
+            SelectionInfo(type="server", server=terminal_server)
+        )
+    )
+    assert not asyncio.run(
+        _open_terminal_button_visibility(
+            SelectionInfo(type="bundle", bundle=SimpleNamespace(server=terminal_server))
+        )
+    )
+    assert not asyncio.run(
+        _open_terminal_button_visibility(
+            SelectionInfo(type="server", server=connector_server)
+        )
+    )
+
+
+async def _credentials_button_visibility(selection: SelectionInfo) -> bool:
+    app = ServerActionsTestApp()
+    async with app.run_test() as pilot:
+        actions = app.query_one(ServerActions)
+        actions.selection = selection
+        await pilot.pause()
+        return actions.query_one("#toggle-server-credentials", Button).display
+
+
+def test_credentials_button_requires_terminal_capable_server_selection() -> None:
+    terminal_server = _terminal_server()
+    connector_server = SimpleNamespace(
+        ip="connector",
+        capabilities={"connector"},
+        get_server_connection=lambda: SimpleNamespace(credentials={}),
+    )
+
+    assert asyncio.run(
+        _credentials_button_visibility(
+            SelectionInfo(type="server", server=terminal_server)
+        )
+    )
+    assert not asyncio.run(
+        _credentials_button_visibility(
+            SelectionInfo(type="bundle", bundle=SimpleNamespace(server=terminal_server))
+        )
+    )
+    assert not asyncio.run(
+        _credentials_button_visibility(
+            SelectionInfo(type="server", server=connector_server)
+        )
+    )
 
 
 async def _action_titles_for_bundle_and_server() -> tuple[str, str]:
@@ -684,11 +839,9 @@ def test_server_info_is_cleared_after_selection_changes() -> None:
 
 
 async def _reveal_credentials() -> tuple[str, str, str, str]:
-    server = SimpleNamespace(
-        ip="10.0.0.5",
-        mlox_user=SimpleNamespace(name="mlox-user", pw="mlox-password"),
-        remote_user=SimpleNamespace(ssh_passphrase="key-passphrase"),
-    )
+    server = _terminal_server()
+    server.mlox_user = SimpleNamespace(name="mlox-user", pw="mlox-password")
+    server.remote_user = SimpleNamespace(ssh_passphrase="key-passphrase")
     app = ServerActionsTestApp()
     async with app.run_test() as pilot:
         actions = app.query_one(ServerActions)
@@ -722,14 +875,12 @@ def test_credentials_are_hidden_then_revealed_and_copyable() -> None:
 
 
 async def _credentials_reset_on_selection_change() -> str:
-    first_server = SimpleNamespace(
-        mlox_user=SimpleNamespace(name="first", pw="first-password"),
-        remote_user=SimpleNamespace(ssh_passphrase="first-passphrase"),
-    )
-    second_server = SimpleNamespace(
-        mlox_user=SimpleNamespace(name="second", pw="second-password"),
-        remote_user=SimpleNamespace(ssh_passphrase="second-passphrase"),
-    )
+    first_server = _terminal_server("10.0.0.5")
+    first_server.mlox_user = SimpleNamespace(name="first", pw="first-password")
+    first_server.remote_user = SimpleNamespace(ssh_passphrase="first-passphrase")
+    second_server = _terminal_server("10.0.0.6")
+    second_server.mlox_user = SimpleNamespace(name="second", pw="second-password")
+    second_server.remote_user = SimpleNamespace(ssh_passphrase="second-passphrase")
     app = ServerActionsTestApp()
     async with app.run_test() as pilot:
         actions = app.query_one(ServerActions)

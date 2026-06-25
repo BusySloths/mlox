@@ -21,6 +21,7 @@ capabilities:
   - git
   - firewall
   - initial_auth_password
+  - terminal
   backend:
   - native
 build:

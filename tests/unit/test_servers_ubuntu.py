@@ -118,21 +118,27 @@ def test_ubuntu_server_capabilities():
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.TERMINAL,
         ServerCapability.NATIVE,
     }
     assert UbuntuDockerServer.capabilities == {
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.TERMINAL,
         ServerCapability.DOCKER,
     }
     assert UbuntuK3sServer.capabilities == {
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.TERMINAL,
         ServerCapability.KUBERNETES,
     }
-    assert UbuntuSimpleServer.capabilities == {ServerCapability.NATIVE}
+    assert UbuntuSimpleServer.capabilities == {
+        ServerCapability.NATIVE,
+        ServerCapability.TERMINAL,
+    }
 
 
 def test_ubuntu_native_setup_users_and_auth_toggles(monkeypatch):

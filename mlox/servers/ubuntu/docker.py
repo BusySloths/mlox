@@ -21,6 +21,7 @@ class UbuntuDockerServer(UbuntuNativeServer, AbstractDockerServer):
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.TERMINAL,
         ServerCapability.DOCKER,
     }
 

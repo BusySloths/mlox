@@ -17,7 +17,10 @@ class UbuntuSimpleServer(UbuntuNativeServer):
     The server can optionally connect using an existing SSH private key.
     """
 
-    capabilities: ClassVar[set[ServerCapability]] = {ServerCapability.NATIVE}
+    capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.NATIVE,
+        ServerCapability.TERMINAL,
+    }
 
     root_private_key: str | None = None
     root_passphrase: str | None = None

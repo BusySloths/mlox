@@ -9,8 +9,12 @@ from types import SimpleNamespace
 from rich.console import Console
 from textual.app import App, ComposeResult
 
+from mlox.server import ServerCapability
 from mlox.tui.screens.dashboard.model import SelectionInfo
-from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
+from mlox.tui.screens.dashboard.overview_panel import (
+    OverviewPanel,
+    PROJECT_SERVICE_ROW_LIMIT,
+)
 
 
 def _render_panel(renderable) -> str:
@@ -61,6 +65,7 @@ async def _project_overview_text() -> str:
         ip="10.0.0.1",
         state="running",
         backend=["docker"],
+        capabilities={ServerCapability.DOCKER, ServerCapability.TERMINAL},
         get_server_info=lambda: {"cpu_count": 8, "ram_gb": 16},
     )
     service = SimpleNamespace(
@@ -89,11 +94,51 @@ def test_project_overview_shows_backend_column_without_server_metric() -> None:
     assert "CPU Cores" in overview
     assert "RAM (GiB)" in overview
     assert "Servers" in overview
+    assert "Host" in overview
     assert "Backend" in overview
+    assert "Capabilities" in overview
     assert "docker" in overview
+    assert "terminal" in overview
     assert "10.0.0.1" in overview
     assert "running" in overview
     assert overview.count("Servers") == 1
+
+
+async def _large_project_overview_text() -> str:
+    server = SimpleNamespace(
+        ip="10.0.0.1",
+        state="running",
+        backend=["docker"],
+        capabilities={ServerCapability.DOCKER, ServerCapability.TERMINAL},
+        get_server_info=lambda: {"cpu_count": 8, "ram_gb": 16},
+    )
+    services = [
+        SimpleNamespace(
+            name=f"service-{index}",
+            service_config_id="template",
+            state="running",
+        )
+        for index in range(PROJECT_SERVICE_ROW_LIMIT + 3)
+    ]
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(
+            bundles=[SimpleNamespace(name="demo", server=server, services=services)]
+        )
+    )
+    app = OverviewTestApp(workspace)
+    async with app.run_test() as pilot:
+        panel = app.query_one(OverviewPanel)
+        panel.show_infrastructure_overview()
+        await pilot.pause()
+        return _render_panel(panel.content)
+
+
+def test_project_overview_limits_service_rows_for_scroll_performance() -> None:
+    overview = asyncio.run(_large_project_overview_text())
+
+    assert f"service-{PROJECT_SERVICE_ROW_LIMIT - 1}" in overview
+    assert f"service-{PROJECT_SERVICE_ROW_LIMIT}" not in overview
+    assert "... 3 more not shown" in overview
 
 
 def test_bundle_overview_shows_tags_without_repeating_services() -> None:
@@ -138,6 +183,11 @@ def test_server_overview_shows_resource_info() -> None:
         ip="10.0.0.1",
         state="running",
         backend=["docker"],
+        capabilities={
+            ServerCapability.DOCKER,
+            ServerCapability.TERMINAL,
+            ServerCapability.FIREWALL,
+        },
         get_server_info=lambda: {
             "cpu_count": 8,
             "ram_gb": 16,
@@ -158,6 +208,10 @@ def test_server_overview_shows_resource_info() -> None:
     assert "16" in overview
     assert "Uptime" in overview
     assert "2 days" in overview
+    assert "Capabilities" in overview
+    assert "docker" in overview
+    assert "terminal" in overview
+    assert "firewall" in overview
 
 
 def test_service_overview_shows_version_ports_and_uuid() -> None:

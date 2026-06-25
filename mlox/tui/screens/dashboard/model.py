@@ -46,6 +46,19 @@ def get_server_backends(server: Any | None) -> list[str]:
     ]
 
 
+def get_server_capabilities(server: Any | None) -> list[str]:
+    """Return normalized server capability names."""
+
+    raw_capabilities = getattr(server, "capabilities", set()) if server else set()
+    capabilities = set()
+    for capability in raw_capabilities or []:
+        value = capability.value if hasattr(capability, "value") else capability
+        name = str(value).strip().replace("-", "_")
+        if name:
+            capabilities.add(name)
+    return sorted(capabilities)
+
+
 def summarize_infrastructure(
     workspace: Optional[Any],
 ) -> Dict[str, Any]:
@@ -78,6 +91,7 @@ def summarize_infrastructure(
                 (
                     getattr(server, "ip", "unknown"),
                     ", ".join(get_server_backends(server)) or "unknown",
+                    ", ".join(get_server_capabilities(server)) or "-",
                     getattr(server, "state", "unknown"),
                     service_count,
                 )

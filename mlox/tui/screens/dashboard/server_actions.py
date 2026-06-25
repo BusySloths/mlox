@@ -11,7 +11,10 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Button, Static
 
-from mlox.application.use_cases.servers import open_server_terminal
+from mlox.application.use_cases.servers import (
+    can_open_server_terminal,
+    open_server_terminal,
+)
 
 from .model import SelectionInfo
 
@@ -42,6 +45,8 @@ class ServerActions(Container):
     def on_mount(self) -> None:
         self._update_visibility(self.selection)
         self._render_title(self.selection)
+        self._render_terminal_action(self.selection)
+        self._render_credentials_action(self.selection)
         self._render_runtime_info_action(self.selection)
         self._render_bundle_tag_action(self.selection)
 
@@ -50,6 +55,8 @@ class ServerActions(Container):
         self._update_visibility(selection)
         if self.is_mounted:
             self._render_title(selection)
+            self._render_terminal_action(selection)
+            self._render_credentials_action(selection)
             self._render_runtime_info_action(selection)
             self._render_bundle_tag_action(selection)
             self.set_runtime_info_loading(False)
@@ -67,6 +74,22 @@ class ServerActions(Container):
             self.border_title = "Bundle Actions"
             return
         self.border_title = "Server Actions"
+
+    def _render_terminal_action(self, selection: Optional[SelectionInfo]) -> None:
+        button = self.query_one("#open-server-terminal", Button)
+        button.display = self.can_open_terminal(selection)
+
+    def can_open_terminal(self, selection: Optional[SelectionInfo] = None) -> bool:
+        selection = self.selection if selection is None else selection
+        return bool(
+            selection
+            and selection.type == "server"
+            and can_open_server_terminal(selection.server).success
+        )
+
+    def _render_credentials_action(self, selection: Optional[SelectionInfo]) -> None:
+        button = self.query_one("#toggle-server-credentials", Button)
+        button.display = self.can_open_terminal(selection)
 
     def _render_runtime_info_action(self, selection: Optional[SelectionInfo]) -> None:
         button = self.query_one("#refresh-runtime-info", Button)
@@ -100,6 +123,13 @@ class ServerActions(Container):
         credentials = self.query_one("#server-credentials", Static)
         copy_buttons = self.query_one("#credential-copy-buttons", Horizontal)
         toggle = self.query_one("#toggle-server-credentials", Button)
+        if not self.can_open_terminal():
+            credentials.display = False
+            copy_buttons.display = False
+            toggle.label = "Show Credentials"
+            return
+
+        credentials.display = True
         if not self._credentials_visible:
             credentials.update("Credentials are hidden.")
             copy_buttons.display = False
@@ -135,7 +165,7 @@ class ServerActions(Container):
         """Open a terminal for the current selection when available."""
 
         server = self._selected_server()
-        if not server:
+        if not server or not self.can_open_terminal():
             return False
 
         result = open_server_terminal(server)

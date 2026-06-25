@@ -113,6 +113,7 @@ class ServerCapability(StrEnum):
     GIT = "git"
     FIREWALL = "firewall"
     INITIAL_AUTH_PASSWORD = "initial_auth_password"
+    TERMINAL = "terminal"
     NATIVE = "native"
     DOCKER = "docker"
     KUBERNETES = "kubernetes"

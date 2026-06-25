@@ -8,7 +8,12 @@ from mlox.application.result import OperationResult
 from mlox.config import load_all_server_configs
 from mlox.infra import Bundle
 from mlox.project.state import WorkspaceState
-from mlox.terminal import TerminalLaunchError, launch_external_ssh_terminal
+from mlox.server import ServerCapability
+from mlox.terminal import (
+    TerminalLaunchError,
+    launch_external_ssh_terminal,
+    resolve_ssh_launch_spec,
+)
 from mlox.utils import dataclass_to_dict
 
 logger = logging.getLogger(__name__)
@@ -130,6 +135,9 @@ def open_server_terminal(
 
     if not server:
         return OperationResult(False, 12, "No server selected.")
+    terminal_capability = can_open_server_terminal(server)
+    if not terminal_capability.success:
+        return terminal_capability
     launcher = launcher or launch_external_ssh_terminal
     try:
         launched = launcher(server)
@@ -142,6 +150,37 @@ def open_server_terminal(
         f"Opened SSH terminal for {getattr(server, 'ip', 'server')}.",
         {"launch": launched},
     )
+
+
+def can_open_server_terminal(server) -> OperationResult:
+    """Return whether the selected server can open an interactive SSH terminal."""
+
+    if not server:
+        return OperationResult(False, 12, "No server selected.")
+    if ServerCapability.TERMINAL.value not in _server_capability_names(server):
+        return OperationResult(
+            False,
+            13,
+            "The selected server does not support terminal login.",
+        )
+    try:
+        resolve_ssh_launch_spec(server)
+    except TerminalLaunchError as exc:
+        return OperationResult(False, 13, str(exc))
+
+    return OperationResult(
+        True,
+        0,
+        f"SSH terminal is available for {getattr(server, 'ip', 'server')}.",
+        {"server": server},
+    )
+
+
+def _server_capability_names(server) -> set[str]:
+    return {
+        capability.value if hasattr(capability, "value") else str(capability)
+        for capability in getattr(server, "capabilities", set())
+    }
 
 
 def get_server_runtime_info(server, *, no_cache: bool = True) -> OperationResult:

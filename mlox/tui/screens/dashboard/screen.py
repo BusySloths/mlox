@@ -149,6 +149,7 @@ class DashboardScreen(Screen):
             templates.selection = selection
         self._update_template_tabs(selection)
         self._update_tui_panel(selection)
+        self.refresh_bindings()
 
     @on(ProjectActions.RenameRequested)
     async def handle_project_rename_requested(
@@ -371,13 +372,21 @@ class DashboardScreen(Screen):
 
     def action_open_terminal(self) -> None:
         server_actions = self.query_one(ServerActions)
-        if not server_actions.display:
+        if not server_actions.can_open_terminal():
             self.notify(
-                "Select a bundle or server to open an SSH terminal.",
+                "Select a terminal-capable server to open an SSH terminal.",
                 severity="warning",
             )
             return
         server_actions.open_terminal()
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "open_terminal":
+            try:
+                return self.query_one(ServerActions).can_open_terminal()
+            except Exception:
+                return False
+        return super().check_action(action, parameters)
 
     def _set_app_log_drawer_visible(self, visible: bool) -> None:
         drawer = self.query_one("#app-log-drawer", AppLogPanel)

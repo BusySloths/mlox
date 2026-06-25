@@ -24,6 +24,7 @@ class UbuntuK3sServer(
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.TERMINAL,
         ServerCapability.KUBERNETES,
     }
 

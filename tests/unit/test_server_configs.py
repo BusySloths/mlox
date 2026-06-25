@@ -318,29 +318,29 @@ def test_builtin_server_config_capabilities_match_classes():
     expected = {
         "local-server": ({"git"}, {"local"}),
         "connector-server": (set(), {"connector"}),
-        "ubuntu-simple-24.04-server": (set(), {"native"}),
+        "ubuntu-simple-24.04-server": ({"terminal"}, {"native"}),
         "ubuntu-native-24.04-server": (
-            {"git", "firewall", "initial_auth_password"},
+            {"git", "firewall", "initial_auth_password", "terminal"},
             {"native"},
         ),
         "ubuntu-docker-24.04-server": (
-            {"git", "firewall", "initial_auth_password"},
+            {"git", "firewall", "initial_auth_password", "terminal"},
             {"docker"},
         ),
         "ubuntu-k3s-24.04-server": (
-            {"git", "firewall", "initial_auth_password"},
+            {"git", "firewall", "initial_auth_password", "terminal"},
             {"kubernetes"},
         ),
         "ubuntu-multipass-native-24.04-server": (
-            {"git", "firewall", "initial_auth_password"},
+            {"git", "firewall", "initial_auth_password", "terminal"},
             {"native"},
         ),
         "ubuntu-multipass-docker-24.04-server": (
-            {"git", "firewall", "initial_auth_password"},
+            {"git", "firewall", "initial_auth_password", "terminal"},
             {"docker"},
         ),
         "ubuntu-multipass-k3s-24.04-server": (
-            {"git", "firewall", "initial_auth_password"},
+            {"git", "firewall", "initial_auth_password", "terminal"},
             {"kubernetes"},
         ),
     }

@@ -32,6 +32,7 @@ class UbuntuNativeServer(
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
+        ServerCapability.TERMINAL,
         ServerCapability.NATIVE,
     }
     DEFAULT_SERVER_INFO: ClassVar[Dict[str, str | int | float]] = {
