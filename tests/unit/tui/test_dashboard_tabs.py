@@ -133,6 +133,35 @@ def test_project_actions_show_only_for_project_root() -> None:
     assert asyncio.run(_project_actions_display_for(SelectionInfo(type="bundle"))) is False
 
 
+async def _add_bundle_project_action_opens_server_templates() -> str:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        app.query_one("#add-bundle-from-server-template", Button).press()
+        await pilot.pause(0.1)
+        return app.query_one("#main-tabs", TabbedContent).active
+
+
+def test_project_add_bundle_action_opens_server_templates_tab() -> None:
+    assert (
+        asyncio.run(_add_bundle_project_action_opens_server_templates())
+        == SERVER_TEMPLATES_TAB_ID
+    )
+
+
+async def _project_action_button_row() -> list[str | None]:
+    app = DashboardTestApp()
+    async with app.run_test():
+        row = app.query_one("#project-action-content")
+        return [child.id for child in row.children if isinstance(child, Button)]
+
+
+def test_project_actions_put_add_bundle_and_rename_next_to_each_other() -> None:
+    assert asyncio.run(_project_action_button_row()) == [
+        "rename-project",
+        "add-bundle-from-server-template",
+    ]
+
+
 async def _rename_project_from_action_modal() -> tuple[str, list[str], str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:

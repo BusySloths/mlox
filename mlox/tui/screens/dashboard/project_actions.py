@@ -6,7 +6,7 @@ from typing import Optional
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
@@ -67,15 +67,21 @@ class ProjectActions(Container):
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="project-action-content"):
+        with Horizontal(id="project-action-content"):
             yield Button(
                 "Rename Project",
                 id="rename-project",
                 variant="success",
             )
+            yield Button(
+                "Add Bundle from Server Template",
+                id="add-bundle-from-server-template",
+                variant="success",
+            )
 
     def on_mount(self) -> None:
         self.border_title = "Project Actions"
+        self.query_one("#add-bundle-from-server-template", Button).can_focus = False
         self._update_visibility(self.selection)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:

@@ -141,6 +141,42 @@ def test_project_overview_limits_service_rows_for_scroll_performance() -> None:
     assert "... 3 more not shown" in overview
 
 
+async def _project_overview_with_runtime_info_lookup() -> tuple[str, int]:
+    calls = 0
+
+    def count_if_called() -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return {"cpu_count": 8, "ram_gb": 16}
+
+    server = SimpleNamespace(
+        ip="10.0.0.1",
+        state="running",
+        backend=["docker"],
+        capabilities={ServerCapability.DOCKER},
+        get_server_info=count_if_called,
+    )
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(
+            bundles=[SimpleNamespace(name="demo", server=server, services=[])]
+        )
+    )
+    app = OverviewTestApp(workspace)
+    async with app.run_test() as pilot:
+        panel = app.query_one(OverviewPanel)
+        panel.show_infrastructure_overview()
+        await pilot.pause()
+        return _render_panel(panel.content), calls
+
+
+def test_project_overview_calls_server_info_for_resource_totals() -> None:
+    overview, calls = asyncio.run(_project_overview_with_runtime_info_lookup())
+
+    assert "10.0.0.1" in overview
+    assert "CPU Cores" in overview
+    assert calls == 1
+
+
 def test_bundle_overview_shows_tags_without_repeating_services() -> None:
     rendered = []
     panel = OverviewPanel()

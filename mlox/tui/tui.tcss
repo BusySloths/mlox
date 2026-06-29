@@ -446,6 +446,19 @@ EditBundleTagsDialog {
 
 #project-action-content {
   height: auto;
+  width: 1fr;
+}
+
+#add-bundle-from-server-template {
+  width: auto;
+  margin-left: 1;
+  background: #24406fff;
+  border: round #69b7ffff;
+  color: #ffffff;
+}
+
+#add-bundle-from-server-template:hover {
+  background: #305aa0ff;
 }
 
 #rename-project {

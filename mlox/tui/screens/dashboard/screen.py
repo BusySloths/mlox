@@ -246,6 +246,22 @@ class DashboardScreen(Screen):
             lambda tags: self._update_bundle_tags_from_dialog(selection, tags),
         )
 
+    @on(Button.Pressed, "#add-bundle-from-server-template")
+    def handle_project_add_bundle_requested(
+        self, event: Button.Pressed
+    ) -> None:
+        event.stop()
+        self._set_tab_visible(SERVER_TEMPLATES_TAB_ID, True)
+        self._activate_server_templates_tab()
+        self.notify("Choose a server template to create a new bundle.")
+
+    def _activate_server_templates_tab(self) -> None:
+        tabs = self.query_one("#main-tabs", TabbedContent)
+        try:
+            tabs.active = SERVER_TEMPLATES_TAB_ID
+        except Tabs.TabError:
+            pass
+
     def _project_tags(self, preferred_tags: list[str]) -> list[str]:
         workspace = getattr(self.app, "workspace", None)
         bundles = getattr(getattr(workspace, "infrastructure", None), "bundles", [])
