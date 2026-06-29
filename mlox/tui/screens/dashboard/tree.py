@@ -5,7 +5,12 @@ from __future__ import annotations
 from rich.text import Text
 from textual.widgets import Tree
 
-from .model import SelectionChanged, SelectionInfo, get_server_backends
+from .model import (
+    SelectionChanged,
+    SelectionInfo,
+    get_server_backends,
+    is_bundle_initialized,
+)
 
 
 class InfraTree(Tree[SelectionInfo]):
@@ -48,6 +53,14 @@ class InfraTree(Tree[SelectionInfo]):
             bundle_label = Text(f"Bundle: {bundle.name}")
             bundle_label.append("  Backend: ", style="dim")
             bundle_label.append(backends, style="bold cyan")
+            if not is_bundle_initialized(bundle):
+                bundle_label.append("  State: ", style="dim")
+                bundle_label.append("pending", style="bold yellow")
+                self.root.add_leaf(
+                    bundle_label,
+                    data=SelectionInfo(type="bundle", bundle=bundle, server=server),
+                )
+                continue
             bundle_node = self.root.add(
                 bundle_label,
                 data=SelectionInfo(type="bundle", bundle=bundle, server=server),

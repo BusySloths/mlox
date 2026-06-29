@@ -55,6 +55,7 @@ def _ensure_bootstrapped() -> None:
         ("mlox.view.servers.ubuntu", "register_builtin_streamlit_servers"),
         ("mlox.view.servers.connector", "register_builtin_streamlit_servers"),
         ("mlox.tui.services", "register_builtin_tui_services"),
+        ("mlox.tui.servers", "register_builtin_tui_servers"),
     ):
         try:
             module = importlib.import_module(module_path)

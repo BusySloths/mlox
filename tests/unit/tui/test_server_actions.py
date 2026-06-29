@@ -256,28 +256,38 @@ def test_open_terminal_binding_is_available_only_for_terminal_capable_servers() 
     )
 
 
-async def _server_action_button_presentation() -> list[str | None]:
+async def _server_action_button_presentation() -> tuple[
+    list[str | None], list[str | None]
+]:
     app = ServerActionsTestApp()
     async with app.run_test() as pilot:
         actions = app.query_one(ServerActions)
         actions.selection = SelectionInfo(type="server", server=_terminal_server())
         await pilot.pause()
-        row = actions.query_one("#server-action-buttons")
-        return [
+        primary = actions.query_one("#server-primary-action-buttons")
+        destructive = actions.query_one("#server-destructive-action-buttons")
+        primary_ids = [
             child.id
-            for child in row.children
+            for child in primary.children
             if getattr(child, "display", True)
         ]
+        destructive_ids = [
+            child.id
+            for child in destructive.children
+            if getattr(child, "display", True)
+        ]
+        return primary_ids, destructive_ids
 
 
 def test_server_actions_keep_terminal_and_credentials_together() -> None:
-    button_ids = asyncio.run(_server_action_button_presentation())
+    primary_ids, destructive_ids = asyncio.run(_server_action_button_presentation())
 
-    assert button_ids == [
+    assert primary_ids == [
         "open-server-terminal",
         "toggle-server-credentials",
         "refresh-runtime-info",
     ]
+    assert destructive_ids == []
 
 
 async def _edit_tags_button_visibility() -> tuple[bool, bool]:
@@ -433,6 +443,60 @@ def test_bundle_actions_has_backend_refresh_button() -> None:
     assert asyncio.run(_bundle_runtime_refresh_button_label()) == (
         "Refresh Backend Info"
     )
+
+
+async def _uninitialized_bundle_action_visibility() -> dict[str, bool]:
+    server = SimpleNamespace(ip="10.0.0.5", state="un-initialized")
+    bundle = SimpleNamespace(server=server)
+    app = ServerActionsTestApp()
+    async with app.run_test() as pilot:
+        actions = app.query_one(ServerActions)
+        actions.selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
+        await pilot.pause()
+        return {
+            "refresh": actions.query_one("#refresh-runtime-info", Button).display,
+            "setup": actions.query_one("#setup-bundle", Button).display,
+            "remove": actions.query_one("#remove-bundle", Button).display,
+            "tags": actions.query_one("#edit-bundle-tags", Button).display,
+        }
+
+
+def test_uninitialized_bundle_actions_are_restricted() -> None:
+    visibility = asyncio.run(_uninitialized_bundle_action_visibility())
+
+    assert visibility == {
+        "refresh": False,
+        "setup": True,
+        "remove": True,
+        "tags": True,
+    }
+
+
+async def _initialized_bundle_action_visibility() -> dict[str, bool]:
+    server = SimpleNamespace(ip="10.0.0.5", state="running")
+    bundle = SimpleNamespace(server=server)
+    app = ServerActionsTestApp()
+    async with app.run_test() as pilot:
+        actions = app.query_one(ServerActions)
+        actions.selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
+        await pilot.pause()
+        return {
+            "refresh": actions.query_one("#refresh-runtime-info", Button).display,
+            "setup": actions.query_one("#setup-bundle", Button).display,
+            "remove": actions.query_one("#remove-bundle", Button).display,
+            "tags": actions.query_one("#edit-bundle-tags", Button).display,
+        }
+
+
+def test_initialized_bundle_actions_hide_setup() -> None:
+    visibility = asyncio.run(_initialized_bundle_action_visibility())
+
+    assert visibility == {
+        "refresh": True,
+        "setup": False,
+        "remove": True,
+        "tags": True,
+    }
 
 
 async def _server_info_titles_for_bundle_and_server() -> tuple[str, str]:

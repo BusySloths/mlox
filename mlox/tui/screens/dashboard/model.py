@@ -59,6 +59,13 @@ def get_server_capabilities(server: Any | None) -> list[str]:
     return sorted(capabilities)
 
 
+def is_bundle_initialized(bundle: Any | None) -> bool:
+    """Return whether a bundle's server has been initialized."""
+
+    server = getattr(bundle, "server", None)
+    return getattr(server, "state", "unknown") != "un-initialized"
+
+
 def summarize_infrastructure(
     workspace: Optional[Any],
 ) -> Dict[str, Any]:

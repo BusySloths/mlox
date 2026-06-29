@@ -17,7 +17,7 @@ from mlox.server import (
     ServerCapability,
 )
 from mlox.infra import Infrastructure
-from mlox.ui.registry import clear_handlers, register
+from mlox.ui.registry import clear_handlers, get_handler, register
 
 
 # Dummy Server Implementation for testing
@@ -363,3 +363,30 @@ def test_builtin_server_config_capabilities_match_classes():
             config.server_capabilities() | config.backend_capabilities()
             == class_capabilities
         )
+
+
+def test_builtin_tui_server_setup_handlers_are_registered():
+    clear_handlers()
+    try:
+        expected_config_ids = {
+            "local-server",
+            "connector-server",
+            "ubuntu-simple-24.04-server",
+            "ubuntu-native-24.04-server",
+            "ubuntu-docker-24.04-server",
+            "ubuntu-k3s-24.04-server",
+            "ubuntu-multipass-native-24.04-server",
+            "ubuntu-multipass-docker-24.04-server",
+            "ubuntu-multipass-k3s-24.04-server",
+        }
+
+        for config_id in expected_config_ids:
+            assert callable(
+                get_handler(
+                    config_id=config_id,
+                    frontend="tui",
+                    function_name="setup",
+                )
+            )
+    finally:
+        clear_handlers()

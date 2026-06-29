@@ -185,6 +185,67 @@ def test_servers_browse_server_templates_returns_config_objects():
     assert result.data == {"configs": configs}
 
 
+def test_servers_resolve_server_template_setup_uses_tui_handler():
+    setup = object()
+    config = SimpleNamespace(get_ui_handler=lambda ui, handler: lambda infra, cfg: setup)
+
+    result = servers.resolve_server_template_setup(SimpleNamespace(), config)
+
+    assert result.success
+    assert result.data == {"setup": setup}
+
+
+def test_servers_resolve_server_template_setup_reports_missing_handler():
+    config = SimpleNamespace(get_ui_handler=lambda ui, handler: None)
+
+    result = servers.resolve_server_template_setup(SimpleNamespace(), config)
+
+    assert not result.success
+    assert result.message == "Selected server template does not provide a TUI setup form."
+
+
+def test_servers_add_server_from_template_delegates_to_workspace():
+    calls = []
+    result = SimpleNamespace(success=True, message="ok")
+    workspace = SimpleNamespace(
+        add_server_from_config=lambda config, params: (
+            calls.append((config, params)) or result
+        )
+    )
+    config = SimpleNamespace(id="server-template")
+    params = {"${MLOX_IP}": "127.0.0.1"}
+
+    actual = servers.add_server_from_template(workspace, config, params)
+
+    assert actual is result
+    assert calls == [(config, params)]
+
+
+def test_servers_setup_bundle_delegates_to_workspace_and_returns_bundle():
+    calls = []
+    result = SimpleNamespace(success=True, message="setup", data={})
+    workspace = SimpleNamespace(setup_server=lambda ip: calls.append(ip) or result)
+    bundle = SimpleNamespace(server=SimpleNamespace(ip="1.2.3.4"))
+
+    actual = servers.setup_bundle(workspace, bundle)
+
+    assert actual is result
+    assert calls == ["1.2.3.4"]
+    assert result.data == {"bundle": bundle}
+
+
+def test_servers_remove_bundle_delegates_to_workspace():
+    calls = []
+    result = SimpleNamespace(success=True, message="removed", data={})
+    workspace = SimpleNamespace(teardown_server=lambda ip: calls.append(ip) or result)
+    bundle = SimpleNamespace(server=SimpleNamespace(ip="1.2.3.4"))
+
+    actual = servers.remove_bundle(workspace, bundle)
+
+    assert actual is result
+    assert calls == ["1.2.3.4"]
+
+
 def test_servers_open_server_terminal_uses_launcher():
     launched = []
     server = SimpleNamespace(

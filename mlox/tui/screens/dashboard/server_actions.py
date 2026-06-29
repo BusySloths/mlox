@@ -16,7 +16,7 @@ from mlox.application.use_cases.servers import (
     open_server_terminal,
 )
 
-from .model import SelectionInfo
+from .model import SelectionInfo, is_bundle_initialized
 
 
 class ServerActions(Container):
@@ -24,6 +24,12 @@ class ServerActions(Container):
 
     class EditTagsRequested(Message):
         """Request that the dashboard opens the bundle tag editor."""
+
+    class SetupBundleRequested(Message):
+        """Request that the dashboard initializes the selected bundle."""
+
+    class RemoveBundleRequested(Message):
+        """Request that the dashboard removes the selected bundle."""
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
@@ -33,10 +39,14 @@ class ServerActions(Container):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="server-action-buttons"):
-            yield Button("Open Terminal", id="open-server-terminal")
-            yield Button("Show Credentials", id="toggle-server-credentials")
-            yield Button("Refresh Server Info", id="refresh-runtime-info")
-            yield Button("Edit Tags", id="edit-bundle-tags", variant="success")
+            with Horizontal(id="server-primary-action-buttons"):
+                yield Button("Open Terminal", id="open-server-terminal")
+                yield Button("Show Credentials", id="toggle-server-credentials")
+                yield Button("Refresh Server Info", id="refresh-runtime-info")
+                yield Button("Setup Bundle", id="setup-bundle", variant="warning")
+                yield Button("Edit Tags", id="edit-bundle-tags", variant="success")
+            with Horizontal(id="server-destructive-action-buttons"):
+                yield Button("Remove Bundle", id="remove-bundle", variant="error")
         yield Static(id="server-credentials")
         with Horizontal(id="credential-copy-buttons"):
             yield Button("Copy Password", id="copy-server-password")
@@ -48,6 +58,7 @@ class ServerActions(Container):
         self._render_terminal_action(self.selection)
         self._render_credentials_action(self.selection)
         self._render_runtime_info_action(self.selection)
+        self._render_bundle_lifecycle_actions(self.selection)
         self._render_bundle_tag_action(self.selection)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
@@ -58,6 +69,7 @@ class ServerActions(Container):
             self._render_terminal_action(selection)
             self._render_credentials_action(selection)
             self._render_runtime_info_action(selection)
+            self._render_bundle_lifecycle_actions(selection)
             self._render_bundle_tag_action(selection)
             self.set_runtime_info_loading(False)
             self._render_credentials()
@@ -94,9 +106,20 @@ class ServerActions(Container):
     def _render_runtime_info_action(self, selection: Optional[SelectionInfo]) -> None:
         button = self.query_one("#refresh-runtime-info", Button)
         if selection and selection.type == "bundle":
+            button.display = is_bundle_initialized(selection.bundle)
             button.label = "Refresh Backend Info"
             return
+        button.display = bool(selection and selection.type == "server")
         button.label = "Refresh Server Info"
+
+    def _render_bundle_lifecycle_actions(
+        self, selection: Optional[SelectionInfo]
+    ) -> None:
+        setup = self.query_one("#setup-bundle", Button)
+        remove = self.query_one("#remove-bundle", Button)
+        is_bundle = bool(selection and selection.type == "bundle" and selection.bundle)
+        setup.display = is_bundle and not is_bundle_initialized(selection.bundle)
+        remove.display = is_bundle
 
     def _render_bundle_tag_action(self, selection: Optional[SelectionInfo]) -> None:
         button = self.query_one("#edit-bundle-tags", Button)
@@ -157,6 +180,10 @@ class ServerActions(Container):
         button = self.query_one("#refresh-runtime-info", Button)
         button.disabled = loading
 
+    def set_bundle_lifecycle_loading(self, loading: bool) -> None:
+        self.query_one("#setup-bundle", Button).disabled = loading
+        self.query_one("#remove-bundle", Button).disabled = loading
+
     @on(Button.Pressed, "#open-server-terminal")
     def handle_open_terminal(self, _: Button.Pressed) -> None:
         self.open_terminal()
@@ -184,6 +211,14 @@ class ServerActions(Container):
     @on(Button.Pressed, "#edit-bundle-tags")
     def handle_edit_bundle_tags(self, _: Button.Pressed) -> None:
         self.post_message(self.EditTagsRequested())
+
+    @on(Button.Pressed, "#setup-bundle")
+    def handle_setup_bundle(self, _: Button.Pressed) -> None:
+        self.post_message(self.SetupBundleRequested())
+
+    @on(Button.Pressed, "#remove-bundle")
+    def handle_remove_bundle(self, _: Button.Pressed) -> None:
+        self.post_message(self.RemoveBundleRequested())
 
     @on(Button.Pressed, "#copy-server-password")
     def handle_copy_password(self, _: Button.Pressed) -> None:

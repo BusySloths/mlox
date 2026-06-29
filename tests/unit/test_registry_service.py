@@ -67,6 +67,9 @@ def test_ui_registry_retries_after_failed_bootstrap(monkeypatch):
         def register_builtin_tui_services(self):
             calls.append(self.name)
 
+        def register_builtin_tui_servers(self):
+            calls.append(self.name)
+
     def fake_import_module(name):
         if name == "mlox.view.servers.ubuntu" and len(calls) < 2:
             raise RuntimeError("temporary import failure")

@@ -12,12 +12,13 @@ from types import SimpleNamespace
 from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.containers import Container
-from textual.widgets import Input, SelectionList, TabbedContent
+from textual.widgets import Button, Input, SelectionList, TabbedContent
 
 from mlox.application.result import OperationResult
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.project_actions import ProjectActions
 from mlox.tui.screens.dashboard.server_actions import ServerActions
+from mlox.tui.screens.dashboard.template_panel import TemplatePanel
 from mlox.tui.screens.dashboard.tree import InfraTree
 from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
 from mlox.tui.screens.dashboard.model import SelectionInfo
@@ -29,6 +30,7 @@ from mlox.tui.screens.dashboard.screen import (
     SERVER_TEMPLATES_TAB_ID,
     SERVICE_TEMPLATES_TAB_ID,
 )
+from mlox.tui.template_forms import TemplateFieldSpec, TemplateFormSpec
 
 
 class DashboardTestApp(App):
@@ -244,6 +246,149 @@ def test_bundle_edit_tags_action_updates_tags_and_overview() -> None:
     assert "gpu" in overview
 
 
+async def _add_server_from_template_modal() -> tuple[list[tuple[object, dict]], str, str]:
+    app = DashboardTestApp()
+    calls = []
+    bundle = SimpleNamespace(
+        name="127.0.0.1",
+        server=SimpleNamespace(ip="127.0.0.1", backend=["connector"]),
+        services=[],
+    )
+
+    def add_server_from_config(config, params):
+        calls.append((config, params))
+        app.workspace.infrastructure.bundles.append(bundle)
+        return OperationResult(True, 0, "Added server 127.0.0.1.", {"bundle": bundle})
+
+    app.workspace.add_server_from_config = add_server_from_config
+    spec = TemplateFormSpec(
+        title="Add Test Server",
+        fields=[TemplateFieldSpec("host", "Host")],
+        materialize=lambda values, infra: {"${MLOX_IP}": values["host"]},
+    )
+    config = SimpleNamespace(
+        id="test-server",
+        name="Test Server",
+        get_ui_handler=lambda ui, handler: lambda infra, cfg: spec,
+    )
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        await screen.handle_server_template_configure_requested(
+            TemplatePanel.ConfigureTemplateRequested(config)
+        )
+        await pilot.pause()
+        app.screen.query_one("#template-field-host", Input).value = "127.0.0.1"
+        await pilot.click("#confirm-template-setup")
+
+        deadline = time.monotonic() + 2
+        while not calls or tree_label(app.query_one(InfraTree)) != (
+            "Bundle: 127.0.0.1  Backend: connector"
+        ):
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for server add.")
+            await pilot.pause(0.05)
+
+        tree = screen.query_one(InfraTree)
+        return calls, tree.root.children[0].label.plain, tree.cursor_node.label.plain
+
+
+def test_server_template_modal_adds_server_and_refreshes_tree() -> None:
+    calls, bundle_label, selected_label = asyncio.run(_add_server_from_template_modal())
+
+    assert calls[0][1] == {"${MLOX_IP}": "127.0.0.1"}
+    assert bundle_label == "Bundle: 127.0.0.1  Backend: connector"
+    assert selected_label == bundle_label
+
+
+async def _setup_uninitialized_bundle_from_action() -> tuple[str, str, list[str]]:
+    app = DashboardTestApp()
+    calls: list[str] = []
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        backend=["kubernetes"],
+        state="un-initialized",
+    )
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    def setup_server(ip: str):
+        calls.append(ip)
+        server.state = "running"
+        return OperationResult(True, 0, "Server 10.0.0.5 set up.", {})
+
+    app.workspace.setup_server = setup_server
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        app.query_one("#setup-bundle", Button).press()
+
+        deadline = time.monotonic() + 2
+        while server.state != "running":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for bundle setup.")
+            await pilot.pause(0.05)
+
+        tree = screen.query_one(InfraTree)
+        return server.state, tree.root.children[0].label.plain, calls
+
+
+def test_setup_bundle_action_initializes_bundle_and_refreshes_tree() -> None:
+    state, label, calls = asyncio.run(_setup_uninitialized_bundle_from_action())
+
+    assert state == "running"
+    assert label == "Bundle: dev  Backend: kubernetes"
+    assert calls == ["10.0.0.5"]
+
+
+async def _remove_bundle_from_action() -> tuple[int, list[str]]:
+    app = DashboardTestApp()
+    calls: list[str] = []
+    server = SimpleNamespace(ip="10.0.0.5", backend=["kubernetes"], state="running")
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    def teardown_server(ip: str):
+        calls.append(ip)
+        app.workspace.infrastructure.bundles.remove(bundle)
+        return OperationResult(True, 0, "Server 10.0.0.5 removed.", {})
+
+    app.workspace.teardown_server = teardown_server
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        app.query_one("#remove-bundle", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#confirm-remove-bundle", Button).press()
+
+        deadline = time.monotonic() + 2
+        while app.workspace.infrastructure.bundles:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for bundle removal.")
+            await pilot.pause(0.05)
+
+        return len(screen.query_one(InfraTree).root.children), calls
+
+
+def test_remove_bundle_action_confirms_and_removes_bundle() -> None:
+    root_child_count, calls = asyncio.run(_remove_bundle_from_action())
+
+    assert root_child_count == 1
+    assert calls == ["10.0.0.5"]
+
+
+def tree_label(tree: InfraTree) -> str:
+    return tree.cursor_node.label.plain
+
+
 async def _leaf_flags_for_server_and_services() -> tuple[bool, bool, bool]:
     app = DashboardTestApp()
     server = SimpleNamespace(ip="10.0.0.5")
@@ -294,6 +439,29 @@ def test_project_tree_is_fully_expanded_after_mount() -> None:
     assert child_expanded == [True]
 
 
+async def _uninitialized_bundle_tree_entry() -> tuple[bool, str]:
+    app = DashboardTestApp()
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        backend=["kubernetes"],
+        state="un-initialized",
+    )
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test():
+        tree = app.query_one(InfraTree)
+        node = tree.root.children[0]
+        return node.allow_expand, node.label.plain
+
+
+def test_uninitialized_bundle_tree_entry_is_leaf() -> None:
+    allow_expand, label = asyncio.run(_uninitialized_bundle_tree_entry())
+
+    assert allow_expand is False
+    assert label == "Bundle: dev  Backend: kubernetes  State: pending"
+
+
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
     server_display, service_display, logs_display = asyncio.run(
         _visible_tabs_for(SelectionInfo(type="bundle"))
@@ -302,6 +470,25 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
     assert server_display == "none"
     assert service_display == "block"
     assert logs_display == "none"
+
+
+async def _service_tab_display_for_uninitialized_bundle() -> str:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", state="un-initialized")
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        tabs = screen.query_one("#main-tabs", TabbedContent)
+        return tabs.get_tab(SERVICE_TEMPLATES_TAB_ID).styles.display
+
+
+def test_uninitialized_bundle_selection_hides_service_templates_tab() -> None:
+    assert asyncio.run(_service_tab_display_for_uninitialized_bundle()) == "none"
 
 
 def test_server_selection_hides_template_tabs() -> None:

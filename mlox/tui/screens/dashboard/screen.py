@@ -5,12 +5,13 @@ from __future__ import annotations
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
-from textual.screen import Screen
+from textual.screen import ModalScreen, Screen
 from textual.widget import Widget
 from textual.widgets import (
     Button,
     Footer,
     Header,
+    Label,
     LoadingIndicator,
     Static,
     TabPane,
@@ -22,19 +23,27 @@ from .app_log_panel import AppLogPanel
 from .bundle_tags import EditBundleTagsDialog
 from .history_panel import HistoryPanel
 from .log_panel import LogPanel
-from .model import SelectionChanged, SelectionInfo
+from .model import SelectionChanged, SelectionInfo, is_bundle_initialized
 from .overview_panel import OverviewPanel
 from .project_actions import ProjectActions, RenameProjectDialog
 from .server_actions import ServerActions
 from .server_info_panel import ServerInfoPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
+from mlox.application.use_cases.servers import (
+    add_server_from_template,
+    materialize_server_template_params,
+    remove_bundle,
+    resolve_server_template_setup,
+    setup_bundle,
+)
 from mlox.application.use_cases.project import (
     reload_project_workspace,
     rename_project_workspace,
     update_bundle_tags,
 )
 from mlox.application.use_cases.services import build_service_ui_widget
+from mlox.tui.template_forms import TemplateFormSpec, TemplateSetupDialog
 
 
 TELEMETRY_TAB_ID = "service-tui-tab"
@@ -46,6 +55,33 @@ SIDEBAR_DEFAULT_WIDTH = 44
 SIDEBAR_MIN_WIDTH = 24
 SIDEBAR_MAX_WIDTH = 72
 SIDEBAR_STEP = 4
+
+
+class RemoveBundleDialog(ModalScreen[bool]):
+    """Confirmation prompt before removing a bundle."""
+
+    def __init__(self, bundle_name: str) -> None:
+        super().__init__()
+        self.bundle_name = bundle_name
+
+    def compose(self) -> ComposeResult:
+        with Container(id="remove-bundle-dialog"):
+            yield Label("Remove Bundle", id="remove-bundle-title")
+            yield Static(
+                f"Do you really want to remove bundle '{self.bundle_name}'?",
+                id="remove-bundle-message",
+            )
+            with Horizontal(id="remove-bundle-actions"):
+                yield Button("Cancel", id="cancel-remove-bundle")
+                yield Button("Remove Bundle", id="confirm-remove-bundle", variant="error")
+
+    @on(Button.Pressed, "#cancel-remove-bundle")
+    def handle_cancel(self, _: Button.Pressed) -> None:
+        self.dismiss(False)
+
+    @on(Button.Pressed, "#confirm-remove-bundle")
+    def handle_confirm(self, _: Button.Pressed) -> None:
+        self.dismiss(True)
 
 
 class DashboardScreen(Screen):
@@ -253,6 +289,214 @@ class DashboardScreen(Screen):
         self.query_one(OverviewPanel).show_bundle(selection)
         self.notify(result.message)
 
+    @on(ServerActions.SetupBundleRequested)
+    def handle_setup_bundle_requested(
+        self, _: ServerActions.SetupBundleRequested
+    ) -> None:
+        selection = self.query_one(ServerActions).selection
+        if not selection or selection.type != "bundle" or not selection.bundle:
+            self.notify("Select a bundle to set up.", severity="warning")
+            return
+        self._run_bundle_lifecycle(
+            selection.bundle,
+            setup=True,
+            success_message="Bundle setup completed.",
+        )
+
+    @on(ServerActions.RemoveBundleRequested)
+    async def handle_remove_bundle_requested(
+        self, _: ServerActions.RemoveBundleRequested
+    ) -> None:
+        selection = self.query_one(ServerActions).selection
+        if not selection or selection.type != "bundle" or not selection.bundle:
+            self.notify("Select a bundle to remove.", severity="warning")
+            return
+
+        bundle_name = str(getattr(selection.bundle, "name", "-"))
+        await self.app.push_screen(
+            RemoveBundleDialog(bundle_name),
+            lambda confirmed: self._remove_bundle_after_confirm(
+                selection.bundle, confirmed
+            ),
+        )
+
+    def _remove_bundle_after_confirm(
+        self,
+        bundle: object,
+        confirmed: bool,
+    ) -> None:
+        if not confirmed:
+            return
+        self._run_bundle_lifecycle(
+            bundle,
+            setup=False,
+            success_message="Bundle removed.",
+        )
+
+    def _run_bundle_lifecycle(
+        self,
+        bundle: object,
+        *,
+        setup: bool,
+        success_message: str,
+    ) -> None:
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot update bundle because the project workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        actions = self.query_one(ServerActions)
+        actions.set_bundle_lifecycle_loading(True)
+
+        def run_operation() -> None:
+            result = (
+                setup_bundle(workspace, bundle)
+                if setup
+                else remove_bundle(workspace, bundle)
+            )
+            self.app.call_from_thread(
+                self._finish_bundle_lifecycle,
+                result,
+                bundle if setup else None,
+                success_message,
+            )
+
+        self.app.run_worker(
+            run_operation,
+            thread=True,
+            exclusive=True,
+            group="bundle-lifecycle",
+        )
+
+    def _finish_bundle_lifecycle(
+        self,
+        result,
+        bundle: object | None,
+        success_message: str,
+    ) -> None:
+        self.query_one(ServerActions).set_bundle_lifecycle_loading(False)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+
+        self._refresh_tree_after_server_add(bundle)
+        self.notify(result.message or success_message)
+
+    @on(TemplatePanel.ConfigureTemplateRequested)
+    async def handle_server_template_configure_requested(
+        self, message: TemplatePanel.ConfigureTemplateRequested
+    ) -> None:
+        workspace = getattr(self.app, "workspace", None)
+        infra = getattr(workspace, "infrastructure", None)
+        if not workspace or not infra:
+            self.notify(
+                "Cannot add a server because the project workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        result = resolve_server_template_setup(infra, message.config)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+
+        setup = result.data["setup"] if result.data else None
+        if not isinstance(setup, TemplateFormSpec):
+            self.notify(
+                "Selected server template returned an unexpected setup form.",
+                severity="error",
+            )
+            return
+
+        await self.app.push_screen(
+            TemplateSetupDialog(setup),
+            lambda values: self._add_server_from_template_values(
+                message.config, setup, values
+            ),
+        )
+
+    def _add_server_from_template_values(
+        self,
+        config: object,
+        setup: TemplateFormSpec,
+        values: dict[str, str] | None,
+    ) -> None:
+        if values is None:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot add a server because the project workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        panel = self.query_one("#server-template-panel", TemplatePanel)
+        panel.set_adding(True)
+
+        def add_server() -> None:
+            infra = getattr(workspace, "infrastructure", None)
+            params_result = materialize_server_template_params(setup, values, infra)
+            if not params_result.success:
+                self.app.call_from_thread(
+                    self._finish_server_template_add_error,
+                    params_result.message,
+                )
+                return
+
+            params = params_result.data["params"] if params_result.data else {}
+            add_result = add_server_from_template(workspace, config, params)
+            if not add_result.success:
+                self.app.call_from_thread(
+                    self._finish_server_template_add_error,
+                    add_result.message,
+                )
+                return
+            self.app.call_from_thread(self._finish_server_template_add, add_result)
+
+        self.app.run_worker(
+            add_server,
+            thread=True,
+            exclusive=True,
+            group="server-template-add",
+        )
+
+    def _finish_server_template_add_error(self, message: str) -> None:
+        self.query_one("#server-template-panel", TemplatePanel).set_adding(False)
+        self.notify(message, severity="error")
+
+    def _finish_server_template_add(self, result) -> None:
+        panel = self.query_one("#server-template-panel", TemplatePanel)
+        panel.set_adding(False)
+        bundle = result.data.get("bundle") if result.data else None
+        self._refresh_tree_after_server_add(bundle)
+        self.notify(result.message)
+
+    def _refresh_tree_after_server_add(self, bundle: object | None) -> None:
+        tree = self.query_one(InfraTree)
+        tree.populate_tree()
+        tree.expand_all()
+        self.call_after_refresh(self._select_added_tree_node, bundle)
+
+    def _select_added_tree_node(self, bundle: object | None) -> None:
+        tree = self.query_one(InfraTree)
+        tree.expand_all()
+        if bundle is not None:
+            for node in tree.root.children:
+                selection = node.data
+                if (
+                    isinstance(selection, SelectionInfo)
+                    and selection.bundle is bundle
+                ):
+                    tree.move_cursor(node)
+                    self._apply_selection(selection)
+                    return
+        tree.move_cursor(tree.root)
+        self._apply_selection(tree.root.data)
+
     def action_reload_infrastructure(self) -> None:
         workspace = getattr(self.app, "workspace", None)
         if not workspace:
@@ -306,7 +550,9 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             SERVICE_TEMPLATES_TAB_ID,
-            selection.type == "bundle" if selection else False,
+            selection.type == "bundle" and is_bundle_initialized(selection.bundle)
+            if selection
+            else False,
         )
         self._set_tab_visible(
             LOGS_TAB_ID,

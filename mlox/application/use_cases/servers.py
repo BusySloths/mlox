@@ -127,6 +127,116 @@ def browse_server_templates(
     return OperationResult(True, 0, message, {"configs": configs})
 
 
+def resolve_server_template_setup(
+    infra,
+    config,
+    *,
+    ui: str = "tui",
+    handler: str = "setup",
+) -> OperationResult:
+    """Resolve a server-template setup handler for UI adapters."""
+
+    if not config:
+        return OperationResult(False, 20, "No server template selected.")
+
+    callable_setup = config.get_ui_handler(ui, handler)
+    if not callable(callable_setup):
+        return OperationResult(
+            False,
+            21,
+            "Selected server template does not provide a TUI setup form.",
+        )
+
+    try:
+        setup = callable_setup(infra, config)
+    except Exception as exc:
+        return OperationResult(False, 22, f"Failed to load server setup form: {exc}")
+
+    if setup is None:
+        return OperationResult(
+            False,
+            23,
+            "Selected server template did not return setup fields.",
+        )
+    return OperationResult(True, 0, "Loaded server setup form.", {"setup": setup})
+
+
+def materialize_server_template_params(setup, values, infra) -> OperationResult:
+    """Convert setup form values to template placeholder parameters."""
+
+    if not setup:
+        return OperationResult(False, 24, "No server setup form is available.")
+    try:
+        params = setup.params(values, infra)
+    except Exception as exc:
+        return OperationResult(False, 25, f"Failed to prepare server parameters: {exc}")
+    return OperationResult(
+        True,
+        0,
+        "Prepared server parameters.",
+        {"params": params},
+    )
+
+
+def add_server_from_template(workspace, config, params: Dict[str, str]) -> OperationResult:
+    """Add a server template to an open workspace through the workspace adapter."""
+
+    if not workspace:
+        return OperationResult(False, 26, "Project workspace is unavailable.")
+    add_from_config = getattr(workspace, "add_server_from_config", None)
+    if not callable(add_from_config):
+        return OperationResult(
+            False,
+            27,
+            "Project workspace cannot add server templates.",
+        )
+    try:
+        return add_from_config(config, params or {})
+    except Exception as exc:
+        return OperationResult(False, 28, f"Failed to add server: {exc}")
+
+
+def setup_bundle(workspace, bundle) -> OperationResult:
+    """Initialize a bundle's server through an open workspace."""
+
+    if not workspace:
+        return OperationResult(False, 29, "Project workspace is unavailable.")
+    server = getattr(bundle, "server", None)
+    ip = getattr(server, "ip", "")
+    if not bundle or not server or not ip:
+        return OperationResult(False, 30, "No bundle server selected.")
+    setup = getattr(workspace, "setup_server", None)
+    if not callable(setup):
+        return OperationResult(False, 31, "Project workspace cannot set up bundles.")
+    try:
+        result = setup(ip=ip)
+    except Exception as exc:
+        return OperationResult(False, 32, f"Failed to set up bundle: {exc}")
+    if result.success:
+        data = dict(result.data or {})
+        data["bundle"] = bundle
+        result.data = data
+    return result
+
+
+def remove_bundle(workspace, bundle) -> OperationResult:
+    """Remove a bundle's server through an open workspace."""
+
+    if not workspace:
+        return OperationResult(False, 33, "Project workspace is unavailable.")
+    server = getattr(bundle, "server", None)
+    ip = getattr(server, "ip", "")
+    if not bundle or not server or not ip:
+        return OperationResult(False, 34, "No bundle server selected.")
+    teardown = getattr(workspace, "teardown_server", None)
+    if not callable(teardown):
+        return OperationResult(False, 35, "Project workspace cannot remove bundles.")
+    try:
+        return teardown(ip=ip)
+    except Exception as exc:
+        return OperationResult(False, 36, f"Failed to remove bundle: {exc}")
+
+
 def open_server_terminal(
     server,
     launcher=None,

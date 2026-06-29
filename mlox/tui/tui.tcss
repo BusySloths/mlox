@@ -230,6 +230,37 @@ Button {
   margin-top: 1;
 }
 
+#template-action-row {
+  height: auto;
+  margin-top: 1;
+}
+
+#configure-add-server {
+  width: auto;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#configure-add-server:hover {
+  background: #12b86aff;
+}
+
+#template-add-indicator {
+  display: none;
+  width: 4;
+  height: 1;
+  margin-left: 1;
+}
+
+#template-add-status {
+  display: none;
+  width: 1fr;
+  height: auto;
+  margin-left: 1;
+  color: #a6c9bdff;
+}
+
 #selection-overview {
   margin-right: 1;
 }
@@ -279,8 +310,18 @@ Button {
 }
 
 #server-action-buttons,
+#server-primary-action-buttons,
+#server-destructive-action-buttons,
 #credential-copy-buttons {
   height: auto;
+}
+
+#server-primary-action-buttons {
+  width: 1fr;
+}
+
+#server-destructive-action-buttons {
+  width: auto;
 }
 
 #open-server-terminal {
@@ -316,6 +357,29 @@ Button {
 
 #edit-bundle-tags:hover {
   background: #12b86aff;
+}
+
+#setup-bundle {
+  width: auto;
+  margin-left: 1;
+  background: #a66a00;
+  border: round #f4c95d;
+  color: #ffffff;
+}
+
+#setup-bundle:hover {
+  background: #c98300;
+}
+
+#remove-bundle {
+  width: auto;
+  background: #9d2222;
+  border: round #ff8a8a;
+  color: #ffffff;
+}
+
+#remove-bundle:hover {
+  background: #bd2f2f;
 }
 
 #edit-bundle-tags-dialog {
@@ -440,6 +504,125 @@ RenameProjectDialog {
 }
 
 #confirm-project-rename:hover {
+  background: #12b86aff;
+}
+
+RemoveBundleDialog {
+  align: center middle;
+}
+
+#remove-bundle-dialog {
+  width: 60;
+  height: auto;
+  margin: 2 4;
+  padding: 1 2;
+  background: #0d2a24ff;
+  border: round #ff8a8a;
+}
+
+#remove-bundle-title {
+  height: auto;
+  content-align: center middle;
+  text-style: bold;
+  color: #ffd7d7;
+  margin-bottom: 1;
+}
+
+#remove-bundle-message {
+  height: auto;
+  color: #e6edf7;
+  margin-bottom: 1;
+}
+
+#remove-bundle-actions {
+  height: auto;
+  align-horizontal: right;
+}
+
+#cancel-remove-bundle {
+  width: auto;
+}
+
+#confirm-remove-bundle {
+  width: auto;
+  margin-left: 1;
+  background: #9d2222;
+  border: round #ff8a8a;
+  color: #ffffff;
+}
+
+#confirm-remove-bundle:hover {
+  background: #bd2f2f;
+}
+
+TemplateSetupDialog {
+  align: center middle;
+}
+
+#template-setup-dialog {
+  width: 72;
+  height: auto;
+  max-height: 40;
+  margin: 2 4;
+  padding: 1 2;
+  background: #0d2a24ff;
+  border: round #74d17aff;
+}
+
+#template-setup-title {
+  height: auto;
+  content-align: center middle;
+  text-style: bold;
+  color: #e6edf7;
+  margin-bottom: 1;
+}
+
+#template-setup-description,
+.template-field-help {
+  height: auto;
+  color: #a6c9bdff;
+}
+
+#template-setup-error {
+  height: auto;
+  color: #ff8585;
+  margin: 1 0;
+}
+
+#template-setup-fields {
+  height: auto;
+  max-height: 26;
+}
+
+.template-field-label {
+  height: auto;
+  margin-top: 1;
+  color: #e6edf7;
+}
+
+.template-field-multiline {
+  height: 7;
+}
+
+#template-setup-actions {
+  height: auto;
+  margin-top: 1;
+  align-horizontal: right;
+}
+
+#cancel-template-setup {
+  width: auto;
+}
+
+#confirm-template-setup {
+  width: auto;
+  margin-left: 1;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#confirm-template-setup:hover {
   background: #12b86aff;
 }
 

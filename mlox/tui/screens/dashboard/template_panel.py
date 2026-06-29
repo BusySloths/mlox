@@ -12,10 +12,11 @@ from rich.text import Text
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, VerticalScroll
+from textual.containers import Container, Horizontal, VerticalScroll
 from textual.coordinate import Coordinate
+from textual.message import Message
 from textual.reactive import reactive
-from textual.widgets import DataTable, Static
+from textual.widgets import Button, DataTable, LoadingIndicator, Static
 from textual.widgets._data_table import RowKey
 
 from mlox.application.use_cases.servers import browse_server_templates
@@ -36,6 +37,13 @@ class TemplateDataTable(DataTable):
 class TemplatePanel(Container):
     """Template browser for one template category."""
 
+    class ConfigureTemplateRequested(Message):
+        """Request setup for the currently selected template."""
+
+        def __init__(self, config: Any) -> None:
+            super().__init__()
+            self.config = config
+
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
     def __init__(
@@ -48,6 +56,7 @@ class TemplatePanel(Container):
         self.template_type = template_type
         self._configs_by_key: dict[str, Any] = {}
         self.selected_config_id: str | None = None
+        self._adding = False
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(classes="template-scroll-wrapper"):
@@ -56,6 +65,14 @@ class TemplatePanel(Container):
             table.add_columns("Name", "Version", "Maintainer", "Path")
             yield table
             yield Static(classes="template-details")
+            with Horizontal(id="template-action-row"):
+                yield Button(
+                    "Configure & Add Server",
+                    id="configure-add-server",
+                    variant="success",
+                )
+                yield LoadingIndicator(id="template-add-indicator")
+                yield Static("Adding server...", id="template-add-status")
 
     @property
     def table(self) -> DataTable:
@@ -67,6 +84,7 @@ class TemplatePanel(Container):
 
     def on_mount(self) -> None:
         self._show_templates()
+        self.set_adding(False)
 
     def watch_selection(self, _selection: Optional[SelectionInfo]) -> None:
         self._show_templates()
@@ -78,6 +96,7 @@ class TemplatePanel(Container):
             self._show_service_templates()
         else:
             self._show_default()
+        self._update_action_visibility()
 
     def _show_default(self) -> None:
         message = Text.from_markup(
@@ -87,6 +106,7 @@ class TemplatePanel(Container):
         self._configs_by_key = {}
         self.selected_config_id = None
         self.details.update(Panel(message, title="Templates", border_style="green"))
+        self._update_action_visibility()
 
     def _show_template_table(
         self, configs: list[Any], title: str, empty_message: str = "No templates found."
@@ -113,6 +133,7 @@ class TemplatePanel(Container):
             self.details.update(
                 Panel(Text(empty_message), title=title, border_style="yellow")
             )
+        self._update_action_visibility()
 
     def show_current_row_details(self) -> None:
         table = self.table
@@ -154,6 +175,7 @@ class TemplatePanel(Container):
         if not config:
             return
         self.selected_config_id = key
+        self._update_action_visibility()
 
         detail_table = Table.grid(padding=(0, 1))
         detail_table.add_column("Field", style="cyan", justify="right")
@@ -214,6 +236,32 @@ class TemplatePanel(Container):
             text = text[:497] + "..."
         return escape(text)
 
+    def selected_config(self) -> Any | None:
+        if not self.selected_config_id:
+            return None
+        return self._configs_by_key.get(self.selected_config_id)
+
+    def set_adding(self, adding: bool) -> None:
+        self._adding = adding
+        if not self.is_mounted:
+            return
+        button = self.query_one("#configure-add-server", Button)
+        indicator = self.query_one("#template-add-indicator", LoadingIndicator)
+        status = self.query_one("#template-add-status", Static)
+        button.disabled = adding or not bool(self.selected_config())
+        indicator.display = adding
+        status.display = adding
+
+    def _update_action_visibility(self) -> None:
+        if not self.is_mounted:
+            return
+        action_row = self.query_one("#template-action-row", Horizontal)
+        button = self.query_one("#configure-add-server", Button)
+        action_row.display = self.template_type == "server"
+        button.disabled = self._adding or not bool(self.selected_config())
+        self.query_one("#template-add-indicator", LoadingIndicator).display = self._adding
+        self.query_one("#template-add-status", Static).display = self._adding
+
     @on(DataTable.RowHighlighted)
     def handle_row_highlighted(
         self, event: DataTable.RowHighlighted
@@ -225,3 +273,9 @@ class TemplatePanel(Container):
         self, event: DataTable.RowSelected
     ) -> None:  # pragma: no cover - UI callback
         self._show_config_details(event.row_key)
+
+    @on(Button.Pressed, "#configure-add-server")
+    def handle_configure_server_template(self, _: Button.Pressed) -> None:
+        config = self.selected_config()
+        if config:
+            self.post_message(self.ConfigureTemplateRequested(config))
