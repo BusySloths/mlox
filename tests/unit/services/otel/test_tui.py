@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 
 import pytest
+from textual.app import App, ComposeResult
 
 from mlox.tui.services.otel import (
     MetricGroup,
@@ -27,6 +29,15 @@ class DummyService:
     def get_telemetry_data(self, bundle):  # pragma: no cover - simple passthrough
         self.calls += 1
         return self.telemetry
+
+
+class OtelPanelTestApp(App):
+    def __init__(self, panel: OtelTelemetryPanel) -> None:
+        super().__init__()
+        self.panel = panel
+
+    def compose(self) -> ComposeResult:
+        yield self.panel
 
 
 def _jsonl(*records: dict) -> str:
@@ -149,6 +160,46 @@ def test_tui_settings_returns_panel() -> None:
 
     assert isinstance(panel, OtelTelemetryPanel)
     assert service.calls == 0
+
+
+async def _mounted_otel_panel_snapshot() -> tuple[int, int | None]:
+    telemetry = _jsonl({"resourceMetrics": []})
+    service = DummyService(telemetry=telemetry)
+    panel = OtelTelemetryPanel(
+        infra=None,  # type: ignore[arg-type]
+        bundle=DummyBundle(),  # type: ignore[arg-type]
+        service=service,  # type: ignore[arg-type]
+        refresh_seconds=999,
+    )
+    app = OtelPanelTestApp(panel)
+
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+
+    metric_points = (
+        panel.snapshot.summary["metric_points"] if panel.snapshot is not None else None
+    )
+    return service.calls, metric_points
+
+
+def test_otel_panel_refresh_worker_applies_snapshot() -> None:
+    calls, metric_points = asyncio.run(_mounted_otel_panel_snapshot())
+
+    assert calls == 1
+    assert metric_points == 0
+
+
+def test_otel_panel_ignores_snapshot_when_not_composed() -> None:
+    panel = OtelTelemetryPanel(
+        infra=None,  # type: ignore[arg-type]
+        bundle=DummyBundle(),  # type: ignore[arg-type]
+        service=DummyService(telemetry=""),  # type: ignore[arg-type]
+    )
+    snapshot = _build_resource_snapshot("")
+
+    panel._apply_snapshot(snapshot)
+
+    assert panel.snapshot is snapshot
 
 
 def test_build_snapshot_handles_empty_payload() -> None:

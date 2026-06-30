@@ -13,6 +13,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Static
 
@@ -933,6 +934,8 @@ class OtelTelemetryPanel(VerticalScroll):
         self.set_interval(self.refresh_seconds, self.refresh_snapshot)
 
     def refresh_snapshot(self) -> None:
+        app = self.app
+
         def fetch_snapshot() -> None:
             try:
                 telemetry_raw = (
@@ -951,9 +954,9 @@ class OtelTelemetryPanel(VerticalScroll):
                     latest_timestamp=None,
                     messages=[f"Failed to load OTEL telemetry: {exc}"],
                 )
-            self.app.call_from_thread(self._apply_snapshot, snapshot)
+            app.call_from_thread(self._apply_snapshot, snapshot)
 
-        self.app.run_worker(
+        app.run_worker(
             fetch_snapshot,
             thread=True,
             exclusive=True,
@@ -962,7 +965,10 @@ class OtelTelemetryPanel(VerticalScroll):
 
     def _apply_snapshot(self, snapshot: ResourceTelemetrySnapshot) -> None:
         self.snapshot = snapshot
-        self._render_snapshot(snapshot)
+        try:
+            self._render_snapshot(snapshot)
+        except NoMatches:
+            return
 
     def _render_placeholder(self) -> None:
         pending = Panel(Text("Loading..."), title="OpenTelemetry", border_style="cyan")
