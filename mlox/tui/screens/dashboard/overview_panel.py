@@ -13,12 +13,13 @@ from textual.reactive import reactive
 from textual.widgets import Static
 from textual.renderables.digits import Digits as DigitsRenderable
 
+from mlox.application.use_cases.project import summarize_infrastructure
+
 from .model import (
     SelectionInfo,
     WELCOME_TEXT,
     get_server_backends,
     is_bundle_initialized,
-    summarize_infrastructure,
 )
 
 PROJECT_SERVER_ROW_LIMIT = 40
@@ -60,7 +61,8 @@ class OverviewPanel(Static):
 
     def show_infrastructure_overview(self) -> None:
         workspace = getattr(self.app, "workspace", None)
-        summary = summarize_infrastructure(workspace)
+        result = summarize_infrastructure(workspace)
+        summary = result.data["summary"] if result.success and result.data else {}
         if not summary["has_data"]:
             self.update(
                 Panel(

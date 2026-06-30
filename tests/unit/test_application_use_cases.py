@@ -124,6 +124,45 @@ def test_project_update_bundle_tags_restores_tags_when_commit_fails():
     assert result.message == "Failed to update bundle tags: disk full"
 
 
+def test_project_summarize_infrastructure_builds_rows_and_resource_totals():
+    server = SimpleNamespace(
+        ip="10.0.0.1",
+        state="running",
+        backend=["docker"],
+        capabilities={ServerCapability.DOCKER, ServerCapability.TERMINAL},
+        get_server_info=lambda: {"cpu_count": 8, "ram_gb": 16},
+    )
+    service = SimpleNamespace(
+        name="MLflow",
+        service_config_id="mlflow",
+        state="running",
+    )
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(
+            bundles=[SimpleNamespace(name="demo", server=server, services=[service])]
+        )
+    )
+
+    result = project.summarize_infrastructure(workspace)
+
+    assert result.success
+    summary = result.data["summary"]
+    assert summary["has_data"] is True
+    assert summary["totals"] == {
+        "bundles": 1,
+        "servers": 1,
+        "services": 1,
+        "cpu": 8.0,
+        "ram": 16.0,
+    }
+    assert summary["server_rows"] == [
+        ("10.0.0.1", "docker", "docker, terminal", "running", 1)
+    ]
+    assert summary["service_rows"] == [
+        ("MLflow", "mlflow", "10.0.0.1", "running")
+    ]
+
+
 def test_servers_setup_server_invokes_server_without_persisting():
     calls = []
     server = SimpleNamespace(setup=lambda: calls.append("setup"))
