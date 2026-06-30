@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import SimpleNamespace
 
+from mlox.application.result import OperationResult
 from mlox.server import ServerCapability
 from mlox.application.use_cases import models, project, secrets, servers, services
 
@@ -137,9 +138,35 @@ def test_project_summarize_infrastructure_builds_rows_and_resource_totals():
         service_config_id="mlflow",
         state="running",
     )
+    failed_service = SimpleNamespace(
+        name="Registry",
+        service_config_id="registry",
+        state="failed",
+    )
+    uninitialized_service = SimpleNamespace(
+        name="Jobs",
+        service_config_id="jobs",
+        state="un-initialized",
+    )
+    pending_service = SimpleNamespace(
+        name="Airflow",
+        service_config_id="airflow",
+        state="pending",
+    )
     workspace = SimpleNamespace(
         infrastructure=SimpleNamespace(
-            bundles=[SimpleNamespace(name="demo", server=server, services=[service])]
+            bundles=[
+                SimpleNamespace(
+                    name="demo",
+                    server=server,
+                    services=[
+                        service,
+                        failed_service,
+                        uninitialized_service,
+                        pending_service,
+                    ],
+                )
+            ]
         )
     )
 
@@ -151,15 +178,24 @@ def test_project_summarize_infrastructure_builds_rows_and_resource_totals():
     assert summary["totals"] == {
         "bundles": 1,
         "servers": 1,
-        "services": 1,
+        "services": 4,
         "cpu": 8.0,
         "ram": 16.0,
     }
     assert summary["server_rows"] == [
-        ("10.0.0.1", "docker", "docker, terminal", "running", 1)
-    ]
-    assert summary["service_rows"] == [
-        ("MLflow", "mlflow", "10.0.0.1", "running")
+        {
+            "bundle": "demo",
+            "server": "10.0.0.1",
+            "backend": "docker",
+            "state": "running",
+            "services": 4,
+            "service_states": {
+                "running": 1,
+                "error": 1,
+                "un-initialized": 1,
+                "other": 1,
+            },
+        }
     ]
 
 
@@ -195,6 +231,11 @@ def test_secrets_describe_managers_does_not_list_secret_values():
             "name": "Embedded Project Storage",
             "kind": "embedded",
             "service_uuid": None,
+            "location": {
+                "bundle": "Project",
+                "backend": "embedded",
+                "service": "",
+            },
             "is_active": True,
             "is_available": True,
             "status": "available",
@@ -238,6 +279,37 @@ def test_secrets_list_secret_names_returns_redacted_inventory():
     assert "secret-value" not in str(result.data)
 
 
+def test_secrets_describe_managers_includes_service_location():
+    service = SimpleNamespace(uuid="service-1", name="Vault")
+    server = SimpleNamespace(backend=["docker"])
+    bundle = SimpleNamespace(name="prod", server=server, services=[service])
+    descriptor = SimpleNamespace(
+        id="service-1",
+        name="Vault",
+        kind="service",
+        service_uuid="service-1",
+        is_active=False,
+        is_available=None,
+        supports_keyfile_export=False,
+        manager=None,
+        service=service,
+    )
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(bundles=[bundle]),
+        list_secret_managers=lambda: [descriptor],
+    )
+
+    result = secrets.describe_secret_managers(workspace)
+
+    assert result.success
+    assert result.data["managers"][0]["location"] == {
+        "bundle": "prod",
+        "backend": "docker",
+        "service": "Vault",
+    }
+    assert result.data["managers"][0]["class"] == "SimpleNamespace"
+
+
 def test_secrets_reveal_secret_loads_selected_secret_value():
     class SecretManager:
         supports_keyfile_export = False
@@ -263,6 +335,50 @@ def test_secrets_reveal_secret_loads_selected_secret_value():
     assert result.success
     assert result.data["name"] == "api-token"
     assert result.data["value"] == {"token": "secret-value"}
+
+
+def test_secrets_save_secret_updates_selected_manager():
+    class SecretManager:
+        supports_keyfile_export = False
+
+        def __init__(self):
+            self.store = {}
+
+        def save_secret(self, name, value):
+            self.store[name] = value
+
+    manager = SecretManager()
+    descriptor = SimpleNamespace(
+        id="embedded",
+        name="Embedded Project Storage",
+        kind="embedded",
+        service_uuid=None,
+        is_active=True,
+        is_available=True,
+        supports_keyfile_export=False,
+        manager=manager,
+        service=None,
+    )
+    workspace = SimpleNamespace(probe_secret_manager=lambda manager_id: descriptor)
+
+    result = secrets.save_secret(workspace, "embedded", "api-token", {"token": "new"})
+
+    assert result.success
+    assert manager.store == {"api-token": {"token": "new"}}
+    assert result.data["value"] == {"token": "new"}
+
+
+def test_secrets_activate_secret_manager_delegates_to_workspace():
+    calls = []
+    workspace = SimpleNamespace(
+        set_secret_manager=lambda manager_id: calls.append(manager_id)
+        or OperationResult(True, 0, "updated"),
+    )
+
+    result = secrets.activate_secret_manager(workspace, "service-1")
+
+    assert result.success
+    assert calls == ["service-1"]
 
 
 def test_servers_setup_server_invokes_server_without_persisting():

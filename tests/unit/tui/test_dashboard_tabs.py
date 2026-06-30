@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.containers import Container
-from textual.widgets import Button, Input, SelectionList, TabbedContent
+from textual.widgets import Button, Input, SelectionList, TabbedContent, TextArea
 
 from mlox.application.result import OperationResult
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
@@ -63,9 +63,15 @@ class DashboardTestApp(App):
             def load_secret(self, name):
                 return self.store.get(name)
 
+            def save_secret(self, name, value):
+                self.store[name] = value
+
         embedded_manager = SecretManager(self.secret_store)
         service_manager = SecretManager(self.service_secret_store)
         service = SimpleNamespace(uuid="service-secret-manager", name="External Vault")
+        server = SimpleNamespace(backend=["docker"])
+        bundle = SimpleNamespace(name="vault-bundle", server=server, services=[service])
+        service.bundle = bundle
         descriptors = {
             "embedded": SimpleNamespace(
                 id="embedded",
@@ -113,6 +119,26 @@ class DashboardTestApp(App):
         def commit() -> None:
             self.commits.append(self.workspace.name)
 
+        def set_secret_manager(manager_id: str):
+            descriptors["embedded"].is_active = False
+            probed_descriptors["embedded"].is_active = False
+            descriptors[manager_id].is_active = True
+            descriptors[manager_id].is_available = True
+            probed_descriptors[manager_id].is_active = True
+            probed_descriptors[manager_id].is_available = True
+            self.workspace.active_secret_manager_name = descriptors[manager_id].name
+            self.workspace.secret_manager_kind = "service"
+            return OperationResult(True, 0, "Active secret manager updated.")
+
+        def use_embedded_secret_manager():
+            descriptors["embedded"].is_active = True
+            probed_descriptors["embedded"].is_active = True
+            descriptors[service.uuid].is_active = False
+            probed_descriptors[service.uuid].is_active = False
+            self.workspace.active_secret_manager_name = "Embedded Project Storage"
+            self.workspace.secret_manager_kind = "embedded"
+            return OperationResult(True, 0, "Active secret manager updated.")
+
         self.workspace = SimpleNamespace(
             name=project.name,
             infrastructure=project.infrastructure,
@@ -122,6 +148,8 @@ class DashboardTestApp(App):
             secrets=embedded_manager,
             list_secret_managers=lambda: list(descriptors.values()),
             probe_secret_manager=lambda manager_id: probed_descriptors[manager_id],
+            set_secret_manager=set_secret_manager,
+            use_embedded_secret_manager=use_embedded_secret_manager,
             commit=commit,
         )
 
@@ -133,6 +161,12 @@ def _render_text(renderable: object) -> str:
     console = Console(file=io.StringIO(), record=True, width=120)
     console.print(renderable)
     return console.export_text()
+
+
+def _secret_detail_text(panel: SecretManagerPanel) -> str:
+    if panel.detail_editor.display:
+        return f"{panel.detail_editor.border_title}\n{panel.detail_editor.text}"
+    return _render_text(panel.detail.content)
 
 
 async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str, str]:
@@ -205,6 +239,30 @@ def test_secret_manager_tab_renders_redacted_secret_inventory() -> None:
     assert "secret-value" not in rendered
 
 
+async def _secret_manager_rows() -> list[list[str]]:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        deadline = time.monotonic() + 2
+        while panel.manager_table.row_count < 2:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret managers.")
+            await pilot.pause(0.05)
+        return [
+            [str(cell) for cell in panel.manager_table.get_row_at(index)]
+            for index in range(panel.manager_table.row_count)
+        ]
+
+
+def test_secret_manager_table_stays_compact() -> None:
+    rows = asyncio.run(_secret_manager_rows())
+
+    assert all(len(row) == 1 for row in rows)
+    rendered = "\n".join(" ".join(row) for row in rows)
+    assert "vault-bundle" not in rendered
+    assert "docker" not in rendered
+
+
 async def _service_secret_manager_panel_text() -> str:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
@@ -227,7 +285,7 @@ async def _service_secret_manager_panel_text() -> str:
                 for index in range(panel.table.row_count)
             ]
             await pilot.pause(0.05)
-        return "\n".join(rows)
+        return "\n".join([_render_text(panel.summary.content), *rows])
 
 
 def test_secret_manager_tab_lists_service_manager_keys_on_selection() -> None:
@@ -236,6 +294,111 @@ def test_secret_manager_tab_lists_service_manager_keys_on_selection() -> None:
     assert "service-token" in rendered
     assert "api-token" not in rendered
     assert "service-secret-value" not in rendered
+    assert "vault-bundle" in rendered
+    assert "docker" in rendered
+
+
+async def _add_secret_via_dialog() -> tuple[dict, str]:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
+        deadline = time.monotonic() + 2
+        while panel.table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret-manager panel.")
+            await pilot.pause(0.05)
+        app.query_one("#add-secret", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#secret-edit-key", Input).value = "new-token"
+        app.screen.query_one("#secret-edit-value", TextArea).load_text(
+            '{"token": "created"}'
+        )
+        app.screen.query_one("#confirm-secret-edit", Button).press()
+        deadline = time.monotonic() + 2
+        while "created" not in _secret_detail_text(panel):
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for saved secret.")
+            await pilot.pause(0.05)
+        return app.secret_store, _secret_detail_text(panel)
+
+
+def test_secret_manager_add_secret_dialog_saves_json_value() -> None:
+    store, detail = asyncio.run(_add_secret_via_dialog())
+
+    assert store["new-token"] == {"token": "created"}
+    assert "new-token" in detail
+    assert "created" in detail
+
+
+async def _edit_secret_inline() -> tuple[dict, str]:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
+        deadline = time.monotonic() + 2
+        while panel.table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret-manager panel.")
+            await pilot.pause(0.05)
+        panel.table.cursor_coordinate = (0, 0)
+        app.query_one("#update-secret", Button).press()
+        deadline = time.monotonic() + 2
+        while not panel.detail_editor.display:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for editable secret.")
+            await pilot.pause(0.05)
+        panel.detail_editor.load_text('{"token": "updated"}')
+        app.query_one("#update-secret", Button).press()
+        deadline = time.monotonic() + 2
+        while app.secret_store["api-token"] != {"token": "updated"}:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for updated secret.")
+            await pilot.pause(0.05)
+        return app.secret_store, _secret_detail_text(panel)
+
+
+def test_secret_manager_edit_secret_inline_updates_value() -> None:
+    store, detail = asyncio.run(_edit_secret_inline())
+
+    assert store["api-token"] == {"token": "updated"}
+    assert "updated" in detail
+
+
+async def _activate_service_secret_manager() -> tuple[str, str]:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
+        deadline = time.monotonic() + 2
+        while panel.manager_table.row_count < 2:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret managers.")
+            await pilot.pause(0.05)
+        panel.manager_table.cursor_coordinate = (1, 0)
+        panel.manager_table.action_select_cursor()
+        deadline = time.monotonic() + 2
+        while not panel.can_activate_selected_manager():
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for activatable manager.")
+            await pilot.pause(0.05)
+        await pilot.press("ctrl+a")
+        deadline = time.monotonic() + 2
+        while "External Vault" not in app.query_one("#infra-tree").root.label.plain:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for active manager switch.")
+            await pilot.pause(0.05)
+        return (
+            app.workspace.active_secret_manager_name,
+            app.query_one("#infra-tree").root.label.plain,
+        )
+
+
+def test_secret_manager_ctrl_a_activates_selected_manager() -> None:
+    active_name, root_label = asyncio.run(_activate_service_secret_manager())
+
+    assert active_name == "External Vault"
+    assert root_label == "test-project  Secrets: External Vault"
 
 
 async def _secret_manager_revealed_text() -> str:
@@ -252,11 +415,11 @@ async def _secret_manager_revealed_text() -> str:
         panel.table.cursor_coordinate = (0, 0)
         await pilot.press("enter")
         deadline = time.monotonic() + 2
-        while "secret-value" not in _render_text(panel.detail.content):
+        while "secret-value" not in _secret_detail_text(panel):
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for revealed secret.")
             await pilot.pause(0.05)
-        return _render_text(panel.detail.content)
+        return _secret_detail_text(panel)
 
 
 def test_secret_manager_table_enter_reveals_selected_secret() -> None:

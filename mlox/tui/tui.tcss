@@ -230,6 +230,31 @@ Button {
   margin-bottom: 1;
 }
 
+#secret-manager-actions {
+  height: auto;
+  margin-bottom: 1;
+}
+
+#add-secret {
+  width: auto;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+}
+
+#update-secret {
+  width: auto;
+  margin-left: 1;
+  background: #24406fff;
+  border: round #69b7ffff;
+}
+
+#activate-secret-manager {
+  width: auto;
+  margin-left: 1;
+  background: #9d7a09ff;
+  border: round #f4e223ff;
+}
+
 #secret-manager-browser {
   height: 1fr;
   width: 1fr;
@@ -247,10 +272,79 @@ Button {
   border: round #1bd6f3ff;
 }
 
-#secret-manager-detail {
+#secret-manager-detail-pane {
   width: 4fr;
   height: 1fr;
   margin-left: 1;
+}
+
+#secret-manager-detail {
+  width: 1fr;
+  height: 1fr;
+}
+
+#secret-manager-detail-editor {
+  width: 1fr;
+  height: 1fr;
+  border: round #3ba55d;
+}
+
+SecretEditDialog {
+  align: center middle;
+}
+
+#secret-edit-dialog {
+  width: 76;
+  height: auto;
+  padding: 1 2;
+  background: #17214aff;
+  border: round #69b7ffff;
+}
+
+#secret-edit-title {
+  width: 1fr;
+  content-align: center middle;
+  text-style: bold;
+  color: #f4e223ff;
+}
+
+#secret-edit-help {
+  color: #c2d7ffff;
+  margin-bottom: 1;
+}
+
+#secret-edit-error {
+  color: #ff6b6b;
+  height: auto;
+}
+
+#secret-edit-key {
+  width: 1fr;
+  margin-bottom: 1;
+}
+
+#secret-edit-value {
+  width: 1fr;
+  height: 14;
+  border: round #8fe388ff;
+}
+
+#secret-edit-actions {
+  height: 3;
+  margin-top: 1;
+}
+
+#cancel-secret-edit {
+  width: 1fr;
+  background: #4a284fff;
+  border: round #cc19aeff;
+}
+
+#confirm-secret-edit {
+  width: 1fr;
+  margin-left: 2;
+  background: #0e9455ff;
+  border: round #8fe388ff;
 }
 
 .template-table {

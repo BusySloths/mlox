@@ -133,11 +133,16 @@ def summarize_infrastructure(workspace) -> OperationResult:
 
     summary: dict[str, Any] = {
         "has_data": False,
-        "totals": {"bundles": 0, "servers": 0, "services": 0, "cpu": 0.0, "ram": 0.0},
+        "totals": {
+            "bundles": 0,
+            "servers": 0,
+            "services": 0,
+            "cpu": 0.0,
+            "ram": 0.0,
+        },
         "cpu_available": False,
         "ram_available": False,
         "server_rows": [],
-        "service_rows": [],
     }
     if not workspace:
         return OperationResult(True, 0, "No workspace loaded.", {"summary": summary})
@@ -157,28 +162,21 @@ def summarize_infrastructure(workspace) -> OperationResult:
     for bundle in bundles:
         services = getattr(bundle, "services", []) or []
         server = getattr(bundle, "server", None)
+        service_states = _count_service_states(services)
         if server:
             summary["totals"]["servers"] += 1
             summary["server_rows"].append(
-                (
-                    getattr(server, "ip", "unknown"),
-                    ", ".join(_server_backends(server)) or "unknown",
-                    ", ".join(_server_capabilities(server)) or "-",
-                    getattr(server, "state", "unknown"),
-                    len(services),
-                )
+                {
+                    "bundle": getattr(bundle, "name", "-"),
+                    "server": getattr(server, "ip", "unknown"),
+                    "backend": ", ".join(_server_backends(server)) or "unknown",
+                    "state": getattr(server, "state", "unknown"),
+                    "services": len(services),
+                    "service_states": service_states,
+                }
             )
             _add_server_resource_totals(summary, server)
-        for svc in services:
-            summary["totals"]["services"] += 1
-            summary["service_rows"].append(
-                (
-                    getattr(svc, "name", "-"),
-                    getattr(svc, "service_config_id", "-"),
-                    getattr(server, "ip", "unknown") if server else "-",
-                    getattr(svc, "state", "unknown"),
-                )
-            )
+        summary["totals"]["services"] += len(services)
     return OperationResult(
         True,
         0,
@@ -202,6 +200,30 @@ def _normalize_tags(tags: list[str]) -> list[str]:
     return normalized
 
 
+def _normalize_service_state(state: object) -> str:
+    value = str(state or "unknown").strip().lower().replace("-", "_")
+    return value or "unknown"
+
+
+def _count_service_states(services: list[object]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for service in services:
+        state = _service_state_bucket(getattr(service, "state", "unknown"))
+        counts[state] = counts.get(state, 0) + 1
+    return counts
+
+
+def _service_state_bucket(state: object) -> str:
+    value = _normalize_service_state(state)
+    if value in {"un_initialized", "uninitialized", "not_initialized"}:
+        return "un-initialized"
+    if value in {"running", "healthy"}:
+        return "running"
+    if value in {"failed", "error", "unhealthy", "degraded", "unknown", "exited"}:
+        return "error"
+    return "other"
+
+
 def _server_backends(server) -> list[str]:
     raw_backends = getattr(server, "backend", []) if server else []
     if isinstance(raw_backends, str):
@@ -211,17 +233,6 @@ def _server_backends(server) -> list[str]:
         for backend in raw_backends or []
         if str(backend).strip()
     ]
-
-
-def _server_capabilities(server) -> list[str]:
-    raw_capabilities = getattr(server, "capabilities", set()) if server else set()
-    capabilities = set()
-    for capability in raw_capabilities or []:
-        value = capability.value if hasattr(capability, "value") else capability
-        name = str(value).strip().replace("-", "_")
-        if name:
-            capabilities.add(name)
-    return sorted(capabilities)
 
 
 def _add_server_resource_totals(summary: dict[str, Any], server) -> None:

@@ -95,6 +95,13 @@ class DashboardScreen(Screen):
         ("O", "open_terminal", "Open Terminal"),
         ("R", "reload_infrastructure", "Reload"),
         Binding("enter", "reveal_secret", "Reveal Secret", show=False, priority=True),
+        Binding(
+            "ctrl+a",
+            "activate_secret_manager",
+            "Use Secret Manager",
+            show=False,
+            priority=True,
+        ),
         ("[", "narrow_sidebar", "Narrow Sidebar"),
         ("]", "widen_sidebar", "Widen Sidebar"),
     ]
@@ -152,6 +159,16 @@ class DashboardScreen(Screen):
 
     def on_selection_changed(self, message: SelectionChanged) -> None:
         self._apply_selection(message.selection)
+
+    def on_secret_manager_panel_active_manager_changed(
+        self,
+        _: SecretManagerPanel.ActiveManagerChanged,
+    ) -> None:
+        tree = self.query_one(InfraTree)
+        tree.populate_tree()
+        tree.expand_all()
+        tree.move_cursor(tree.root)
+        self._apply_selection(tree.root.data)
 
     @on(Button.Pressed, "#refresh-runtime-info")
     def handle_runtime_info_requested(self, _: Button.Pressed) -> None:
@@ -657,6 +674,9 @@ class DashboardScreen(Screen):
     def action_reveal_secret(self) -> None:
         self.query_one(SecretManagerPanel).action_reveal_selected()
 
+    def action_activate_secret_manager(self) -> None:
+        self.query_one(SecretManagerPanel).action_activate_selected_manager()
+
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if action == "open_terminal":
             try:
@@ -670,6 +690,17 @@ class DashboardScreen(Screen):
             except Exception:
                 return False
             return tabs.active == SECRET_MANAGER_TAB_ID and panel.display
+        if action == "activate_secret_manager":
+            try:
+                tabs = self.query_one("#main-tabs", TabbedContent)
+                panel = self.query_one(SecretManagerPanel)
+            except Exception:
+                return False
+            return (
+                tabs.active == SECRET_MANAGER_TAB_ID
+                and panel.display
+                and panel.can_activate_selected_manager()
+            )
         return super().check_action(action, parameters)
 
     def _set_app_log_drawer_visible(self, visible: bool) -> None:

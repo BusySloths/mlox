@@ -14,15 +14,105 @@ from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
 from textual.reactive import reactive
-from textual.widgets import DataTable, Static
+from textual.screen import ModalScreen
+from textual.widgets import Button, DataTable, Input, Label, Static, TextArea
 
 from mlox.application.use_cases.secrets import (
+    activate_secret_manager,
     describe_secret_managers,
     list_secret_names,
     reveal_secret,
+    save_secret,
 )
 
 from .model import SelectionInfo
+
+
+class SecretEditDialog(ModalScreen[tuple[str, Any] | None]):
+    """Modal prompt for creating or updating one secret."""
+
+    def __init__(
+        self,
+        *,
+        title: str,
+        key: str = "",
+        value: Any = "",
+        key_editable: bool = True,
+    ) -> None:
+        super().__init__()
+        self.title_text = title
+        self.key = key
+        self.value = value
+        self.key_editable = key_editable
+
+    def compose(self) -> ComposeResult:
+        with Container(id="secret-edit-dialog"):
+            yield Label(self.title_text, id="secret-edit-title")
+            yield Static(
+                "Use JSON for objects and arrays. Non-JSON input is stored as text.",
+                id="secret-edit-help",
+            )
+            yield Static("", id="secret-edit-error")
+            yield Input(
+                value=self.key,
+                placeholder="secret-key",
+                id="secret-edit-key",
+            )
+            yield TextArea(
+                self._format_initial_value(),
+                id="secret-edit-value",
+            )
+            with Horizontal(id="secret-edit-actions"):
+                yield Button("Cancel", id="cancel-secret-edit")
+                yield Button(
+                    "Save Secret",
+                    id="confirm-secret-edit",
+                    variant="success",
+                )
+
+    def on_mount(self) -> None:
+        key_input = self.query_one("#secret-edit-key", Input)
+        key_input.disabled = not self.key_editable
+        if self.key_editable:
+            key_input.focus()
+            return
+        self.query_one("#secret-edit-value", TextArea).focus()
+
+    @on(Input.Submitted, "#secret-edit-key")
+    def handle_key_submitted(self, _: Input.Submitted) -> None:
+        self.query_one("#secret-edit-value", TextArea).focus()
+
+    @on(Button.Pressed, "#cancel-secret-edit")
+    def handle_cancel(self, _: Button.Pressed) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#confirm-secret-edit")
+    def handle_confirm(self, _: Button.Pressed) -> None:
+        self._dismiss_with_secret()
+
+    def _dismiss_with_secret(self) -> None:
+        key = self.query_one("#secret-edit-key", Input).value.strip()
+        if not key:
+            self.query_one("#secret-edit-error", Static).update(
+                "Secret key is required."
+            )
+            return
+        raw_value = self.query_one("#secret-edit-value", TextArea).text
+        self.dismiss((key, self._parse_value(raw_value)))
+
+    def _format_initial_value(self) -> str:
+        if isinstance(self.value, (dict, list)):
+            return json.dumps(self.value, indent=2, sort_keys=True, default=str)
+        return str(self.value)
+
+    def _parse_value(self, value: str) -> Any:
+        stripped = value.strip()
+        if not stripped:
+            return ""
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return value
 
 
 class SecretManagerPanel(Container):
@@ -38,6 +128,9 @@ class SecretManagerPanel(Container):
     class LoadStarted(Message):
         """Secret-manager metadata loading has started."""
 
+    class ActiveManagerChanged(Message):
+        """The active project secret manager changed."""
+
     def __init__(self, *children, **kwargs) -> None:
         super().__init__(*children, **kwargs)
         self._managers: list[dict[str, Any]] = []
@@ -45,14 +138,23 @@ class SecretManagerPanel(Container):
         self._selected_manager_id = ""
         self._secret_names: list[str] = []
         self._revealed: dict[tuple[str, str], Any] = {}
+        self._displayed_secret: tuple[str, str] | None = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="secret-manager-content"):
             yield Static(id="secret-manager-summary", markup=False)
+            with Horizontal(id="secret-manager-actions"):
+                yield Button("Add Secret", id="add-secret", variant="success")
+                yield Button("Update", id="update-secret")
+                yield Button(
+                    "Use Selected as Active",
+                    id="activate-secret-manager",
+                    variant="warning",
+                )
             with Horizontal(id="secret-manager-browser"):
                 manager_table = DataTable(id="secret-manager-manager-table")
                 manager_table.cursor_type = "row"
-                manager_table.add_columns("Manager", "Kind", "Status")
+                manager_table.add_columns("Manager")
                 yield manager_table
 
                 secret_table = DataTable(id="secret-manager-table")
@@ -60,7 +162,9 @@ class SecretManagerPanel(Container):
                 secret_table.add_columns("Secret Key", "Value")
                 yield secret_table
 
-                yield Static(id="secret-manager-detail", markup=False)
+                with Vertical(id="secret-manager-detail-pane"):
+                    yield Static(id="secret-manager-detail", markup=False)
+                    yield TextArea("", id="secret-manager-detail-editor")
 
     @property
     def manager_table(self) -> DataTable:
@@ -78,7 +182,12 @@ class SecretManagerPanel(Container):
     def detail(self) -> Static:
         return self.query_one("#secret-manager-detail", Static)
 
+    @property
+    def detail_editor(self) -> TextArea:
+        return self.query_one("#secret-manager-detail-editor", TextArea)
+
     def on_mount(self) -> None:
+        self.detail_editor.display = False
         self.watch_selection(self.selection)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
@@ -95,7 +204,7 @@ class SecretManagerPanel(Container):
 
         self._reset_state()
         self.summary.update(Panel(Text("Loading secret managers..."), title="Status"))
-        self.detail.update(self._help_panel())
+        self._show_detail_panel(self._help_panel())
         self.post_message(self.LoadStarted())
         workspace = getattr(self.app, "workspace", None)
 
@@ -116,6 +225,7 @@ class SecretManagerPanel(Container):
         self._selected_manager_id = ""
         self._secret_names = []
         self._revealed = {}
+        self._displayed_secret = None
         self.manager_table.clear(columns=False)
         self.table.clear(columns=False)
 
@@ -131,7 +241,7 @@ class SecretManagerPanel(Container):
                     border_style="red",
                 )
             )
-            self.detail.update(self._help_panel())
+            self._show_detail_panel(self._help_panel())
             self.post_message(self.LoadFinished())
             return
 
@@ -144,7 +254,7 @@ class SecretManagerPanel(Container):
         if active_manager_id:
             self._select_manager(active_manager_id)
         else:
-            self.detail.update(
+            self._show_detail_panel(
                 Panel(
                     Text("No secret managers are available.", style="dim"),
                     title="Secret Managers",
@@ -164,8 +274,6 @@ class SecretManagerPanel(Container):
             self._manager_ids.append(manager_id)
             table.add_row(
                 self._manager_name(manager),
-                str(manager.get("kind", "unknown")),
-                self._status_text(str(manager.get("status", ""))),
                 key=manager_id,
             )
 
@@ -175,7 +283,8 @@ class SecretManagerPanel(Container):
         self._selected_manager_id = manager_id
         self._secret_names = []
         self.table.clear(columns=False)
-        self.detail.update(
+        self._update_action_state()
+        self._show_detail_panel(
             Panel(
                 Text("Loading secret keys..."),
                 title="Secrets",
@@ -202,13 +311,15 @@ class SecretManagerPanel(Container):
         if not self.selection or self.selection.type != "root":
             return
         if not result.success:
-            self.detail.update(
+            self._show_detail_panel(
                 Panel(
                     Text(result.message, style="bold red"),
                     title=self._selected_manager_name(),
                     border_style="red",
                 )
             )
+            self.post_message(self.LoadFinished())
+            self._update_action_state()
             return
 
         payload = result.data or {}
@@ -216,9 +327,9 @@ class SecretManagerPanel(Container):
         self._secret_names = [str(secret.get("name", "")) for secret in secrets]
         self._populate_secret_table()
         if self._secret_names:
-            self.detail.update(self._help_panel())
+            self._show_detail_panel(self._help_panel())
         else:
-            self.detail.update(
+            self._show_detail_panel(
                 Panel(
                     Text(
                         "This secret manager does not contain any secrets.",
@@ -229,6 +340,7 @@ class SecretManagerPanel(Container):
                 )
             )
         self.post_message(self.LoadFinished())
+        self._update_action_state()
 
     def _populate_secret_table(self) -> None:
         table = self.table
@@ -237,6 +349,7 @@ class SecretManagerPanel(Container):
             table.add_row(name, Text("hidden", style="dim"), key=name)
         if self._secret_names:
             table.cursor_coordinate = (0, 0)
+        self._update_action_state()
 
     @on(DataTable.RowSelected, "#secret-manager-manager-table")
     def handle_manager_selected(self, event: DataTable.RowSelected) -> None:
@@ -254,6 +367,68 @@ class SecretManagerPanel(Container):
             return
         self._reveal_secret(self._secret_names[row_index])
 
+    def can_activate_selected_manager(self) -> bool:
+        manager = self._selected_manager()
+        if not manager:
+            return False
+        if manager.get("is_active"):
+            return False
+        if manager.get("is_available") is False:
+            return False
+        return bool(self._selected_manager_id)
+
+    def action_activate_selected_manager(self) -> None:
+        manager_id = self._selected_manager_id
+        if not manager_id:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        self._show_detail_panel(
+            Panel(
+                Text("Changing active secret manager..."),
+                title=self._selected_manager_name(),
+                border_style="yellow",
+            )
+        )
+
+        def activate() -> None:
+            result = activate_secret_manager(workspace, manager_id)
+            self.app.call_from_thread(self._show_activation_result, result)
+
+        self.app.run_worker(
+            activate,
+            thread=True,
+            exclusive=True,
+            group="secret-manager-activate",
+        )
+
+    @on(Button.Pressed, "#activate-secret-manager")
+    def handle_activate_pressed(self, _: Button.Pressed) -> None:
+        self.action_activate_selected_manager()
+
+    @on(Button.Pressed, "#add-secret")
+    def handle_add_pressed(self, _: Button.Pressed) -> None:
+        self._open_secret_dialog(
+            title="Add Secret",
+            key="",
+            value="",
+            key_editable=True,
+        )
+
+    @on(Button.Pressed, "#update-secret")
+    def handle_edit_pressed(self, _: Button.Pressed) -> None:
+        name = self._selected_secret_name()
+        if not name:
+            return
+        cache_key = (self._selected_manager_id, name)
+        if self._displayed_secret == cache_key and self.detail_editor.display:
+            self._save_secret(name, self._parse_secret_text(self.detail_editor.text))
+            return
+        if cache_key in self._revealed:
+            self._show_secret_value(name, self._revealed[cache_key])
+            self.detail_editor.focus()
+            return
+        self._load_secret_for_edit(name)
+
     def _reveal_secret(self, name: str) -> None:
         manager_id = self._selected_manager_id
         if not manager_id or not name:
@@ -263,7 +438,7 @@ class SecretManagerPanel(Container):
             self._show_secret_value(name, self._revealed[cache_key])
             return
 
-        self.detail.update(
+        self._show_detail_panel(
             Panel(Text(f"Loading '{name}'..."), title=name, border_style="yellow")
         )
         workspace = getattr(self.app, "workspace", None)
@@ -284,13 +459,42 @@ class SecretManagerPanel(Container):
             group="secret-manager-value",
         )
 
+    def _load_secret_for_edit(self, name: str) -> None:
+        manager_id = self._selected_manager_id
+        if not manager_id:
+            return
+        self._show_detail_panel(
+            Panel(
+                Text(f"Loading '{name}' for edit..."),
+                title=name,
+                border_style="yellow",
+            )
+        )
+        workspace = getattr(self.app, "workspace", None)
+
+        def load_value() -> None:
+            result = reveal_secret(workspace, manager_id, name)
+            self.app.call_from_thread(
+                self._open_edit_dialog_from_result,
+                manager_id,
+                name,
+                result,
+            )
+
+        self.app.run_worker(
+            load_value,
+            thread=True,
+            exclusive=True,
+            group="secret-manager-edit",
+        )
+
     def _show_secret_result(self, manager_id: str, name: str, result) -> None:
         if manager_id != self._selected_manager_id:
             return
         if not self.selection or self.selection.type != "root":
             return
         if not result.success:
-            self.detail.update(
+            self._show_detail_panel(
                 Panel(
                     Text(result.message, style="bold red"),
                     title=name,
@@ -302,15 +506,127 @@ class SecretManagerPanel(Container):
         self._revealed[(manager_id, name)] = value
         self._show_secret_value(name, value)
 
+    def _open_edit_dialog_from_result(self, manager_id: str, name: str, result) -> None:
+        if manager_id != self._selected_manager_id:
+            return
+        if not result.success:
+            self._show_secret_result(manager_id, name, result)
+            return
+        value = (result.data or {}).get("value")
+        self._revealed[(manager_id, name)] = value
+        self._show_secret_value(name, value)
+        self.detail_editor.focus()
+
+    def _open_secret_dialog(
+        self,
+        *,
+        title: str,
+        key: str,
+        value: Any,
+        key_editable: bool,
+    ) -> None:
+        if not self._selected_manager_id:
+            return
+
+        def save_from_dialog(secret: tuple[str, Any] | None) -> None:
+            if secret is None:
+                return
+            name, secret_value = secret
+            self._save_secret(name, secret_value)
+
+        self.app.push_screen(
+            SecretEditDialog(
+                title=title,
+                key=key,
+                value=value,
+                key_editable=key_editable,
+            ),
+            save_from_dialog,
+        )
+
+    def _save_secret(self, name: str, value: Any) -> None:
+        manager_id = self._selected_manager_id
+        if not manager_id:
+            return
+        self._show_detail_panel(
+            Panel(Text(f"Saving '{name}'..."), title=name, border_style="yellow")
+        )
+        workspace = getattr(self.app, "workspace", None)
+
+        def save_value() -> None:
+            result = save_secret(workspace, manager_id, name, value)
+            self.app.call_from_thread(
+                self._show_save_result,
+                manager_id,
+                name,
+                result,
+            )
+
+        self.app.run_worker(
+            save_value,
+            thread=True,
+            exclusive=True,
+            group="secret-manager-save",
+        )
+
+    def _show_save_result(self, manager_id: str, name: str, result) -> None:
+        if manager_id != self._selected_manager_id:
+            return
+        if not result.success:
+            self._show_detail_panel(
+                Panel(
+                    Text(result.message, style="bold red"),
+                    title=name,
+                    border_style="red",
+                )
+            )
+            return
+        value = (result.data or {}).get("value")
+        self._revealed[(manager_id, name)] = value
+        if name not in self._secret_names:
+            self._secret_names.append(name)
+            self._secret_names.sort()
+            self._populate_secret_table()
+        self._show_secret_value(name, value)
+
+    def _show_activation_result(self, result) -> None:
+        if not result.success:
+            self._show_detail_panel(
+                Panel(
+                    Text(result.message, style="bold red"),
+                    title="Active Secret Manager",
+                    border_style="red",
+                )
+            )
+            return
+        self.notify(result.message)
+        self.post_message(self.ActiveManagerChanged())
+        self.load()
+
     def _show_secret_value(self, name: str, value: Any) -> None:
         self._mark_revealed(name)
-        self.detail.update(
-            Panel(
-                self._format_secret_value(value),
-                title=f"{self._selected_manager_name()} / {name}",
-                border_style="green",
-            )
-        )
+        self._displayed_secret = (self._selected_manager_id, name)
+        self.detail.display = False
+        editor = self.detail_editor
+        editor.display = True
+        editor.border_title = f"{self._selected_manager_name()} / {name}"
+        editor.border_subtitle = "Edit text, then press Update to save"
+        editor.load_text(self._format_secret_value(value))
+
+    def _show_detail_panel(self, panel: Panel) -> None:
+        self._displayed_secret = None
+        self.detail_editor.display = False
+        self.detail.display = True
+        self.detail.update(panel)
+
+    def _parse_secret_text(self, value: str) -> Any:
+        stripped = value.strip()
+        if not stripped:
+            return ""
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return value
 
     def _summary_panel(self) -> Panel:
         table = Table.grid(expand=True, padding=(0, 1))
@@ -318,6 +634,10 @@ class SecretManagerPanel(Container):
         table.add_column("Value", justify="left")
         table.add_row("Managers", str(len(self._managers)))
         table.add_row("Active", self._selected_manager_name() or "-")
+        table.add_row("Bundle", self._selected_location_field("bundle"))
+        table.add_row("Backend", self._selected_location_field("backend"))
+        table.add_row("Service", self._selected_location_field("service"))
+        table.add_row("Adapter", self._selected_manager_field("class"))
         table.add_row("Available", str(self._count_available_managers()))
         table.add_row("Services", str(self._count_service_managers()))
         return Panel(table, title="Project Secret Managers", border_style="green")
@@ -354,11 +674,46 @@ class SecretManagerPanel(Container):
             text.append(" active", style="bold green")
         return text
 
+    def _location_field(self, manager: dict[str, Any], field: str) -> str:
+        location = manager.get("location", {})
+        if not isinstance(location, dict):
+            return "-"
+        return str(location.get(field, "-") or "-")
+
+    def _selected_location_field(self, field: str) -> str:
+        manager = self._selected_manager()
+        return self._location_field(manager, field) if manager else "-"
+
     def _selected_manager_name(self) -> str:
+        manager = self._selected_manager()
+        return str(manager.get("name", "Unknown")) if manager else ""
+
+    def _selected_manager_field(self, field: str) -> str:
+        manager = self._selected_manager()
+        return str(manager.get(field, "-") or "-") if manager else "-"
+
+    def _selected_manager(self) -> dict[str, Any] | None:
         for manager in self._managers:
             if manager.get("id") == self._selected_manager_id:
-                return str(manager.get("name", "Unknown"))
-        return ""
+                return manager
+        return None
+
+    def _selected_secret_name(self) -> str:
+        row_index = self.table.cursor_row
+        if row_index < 0 or row_index >= len(self._secret_names):
+            return ""
+        return self._secret_names[row_index]
+
+    def _update_action_state(self) -> None:
+        if not self.is_mounted:
+            return
+        has_manager = bool(self._selected_manager_id)
+        has_secret = bool(self._secret_names)
+        self.query_one("#add-secret", Button).disabled = not has_manager
+        self.query_one("#update-secret", Button).disabled = not has_secret
+        self.query_one("#activate-secret-manager", Button).disabled = (
+            not self.can_activate_selected_manager()
+        )
 
     def _count_available_managers(self) -> int:
         return sum(
@@ -368,12 +723,10 @@ class SecretManagerPanel(Container):
     def _count_service_managers(self) -> int:
         return sum(1 for manager in self._managers if manager.get("kind") == "service")
 
-    def _format_secret_value(self, value: Any) -> Text:
+    def _format_secret_value(self, value: Any) -> str:
         if isinstance(value, (dict, list)):
-            rendered = json.dumps(value, indent=2, sort_keys=True, default=str)
-        else:
-            rendered = str(value)
-        return Text(rendered)
+            return json.dumps(value, indent=2, sort_keys=True, default=str)
+        return str(value)
 
     def _status_text(self, status: str) -> Text:
         if status == "available":

@@ -23,7 +23,6 @@ from .model import (
 )
 
 PROJECT_SERVER_ROW_LIMIT = 40
-PROJECT_SERVICE_ROW_LIMIT = 80
 
 
 class OverviewPanel(Static):
@@ -73,6 +72,19 @@ class OverviewPanel(Static):
             )
             return
 
+        layout = Table.grid(expand=True, padding=(0, 1))
+        layout.add_row(self._project_metric_panels(summary))
+        layout.add_row(self._project_servers_table(summary["server_rows"]))
+
+        self.update(
+            Panel(
+                layout,
+                title="Infrastructure Overview",
+                border_style="green",
+            )
+        )
+
+    def _project_metric_panels(self, summary: dict) -> Columns:
         totals = summary["totals"]
         metrics: list[tuple[str, str]] = [
             ("Bundles", str(totals["bundles"])),
@@ -86,70 +98,63 @@ class OverviewPanel(Static):
                 f"{totals['ram']:.1f}" if summary["ram_available"] else "--",
             ),
         ]
-
-        metric_panels = [
-            Panel(
-                DigitsRenderable(value),
-                title=label,
-                border_style="green",
-                padding=(0, 1),
-            )
-            for label, value in metrics
-        ]
-        metrics_row = Columns(metric_panels, expand=True, equal=True)
-
-        servers_table = Table(
-            title="Servers", show_header=True, header_style="bold", expand=True
+        return Columns(
+            [
+                Panel(
+                    DigitsRenderable(value),
+                    title=label,
+                    border_style="green",
+                    padding=(0, 1),
+                )
+                for label, value in metrics
+            ],
+            expand=True,
+            equal=True,
         )
-        servers_table.add_column("Host", style="cyan")
-        servers_table.add_column("Backend")
-        servers_table.add_column("Capabilities")
-        servers_table.add_column("State")
-        servers_table.add_column("# Services", justify="right")
-        if summary["server_rows"]:
-            server_rows = summary["server_rows"]
-            for row in server_rows[:PROJECT_SERVER_ROW_LIMIT]:
-                servers_table.add_row(row[0], row[1], row[2], row[3], str(row[4]))
-            self._add_more_row(
-                servers_table,
-                total=len(server_rows),
-                shown=min(len(server_rows), PROJECT_SERVER_ROW_LIMIT),
-                columns=5,
-            )
-        else:
-            servers_table.add_row("-", "-", "-", "-", "-")
 
-        services_table = Table(
-            title="Services", show_header=True, header_style="bold", expand=True
+    def _project_servers_table(self, server_rows: list[dict]) -> Table:
+        table = Table(
+            title="Servers",
+            show_header=True,
+            header_style="bold",
+            expand=True,
         )
-        services_table.add_column("Name", style="cyan")
-        services_table.add_column("Template")
-        services_table.add_column("Server")
-        services_table.add_column("State")
-        if summary["service_rows"]:
-            service_rows = summary["service_rows"]
-            for row in service_rows[:PROJECT_SERVICE_ROW_LIMIT]:
-                services_table.add_row(row[0], row[1], row[2], row[3])
-            self._add_more_row(
-                services_table,
-                total=len(service_rows),
-                shown=min(len(service_rows), PROJECT_SERVICE_ROW_LIMIT),
-                columns=4,
-            )
-        else:
-            services_table.add_row("-", "-", "-", "-")
+        table.add_column("Bundle", style="cyan")
+        table.add_column("Server", style="cyan")
+        table.add_column("Backend")
+        table.add_column("State")
+        table.add_column("Services", justify="right")
+        table.add_column("Uninitialized", justify="right")
+        table.add_column("Running", justify="right")
+        table.add_column("Error", justify="right")
+        table.add_column("Other", justify="right")
 
-        layout = Table.grid(expand=True, padding=(0, 1))
-        layout.add_row(metrics_row)
-        layout.add_row(servers_table)
-        layout.add_row(services_table)
+        if not server_rows:
+            table.add_row("-", "-", "-", "-", "-", "-", "-", "-", "-")
+            return table
 
-        self.update(
-            Panel(
-                layout,
-                title="Infrastructure Overview",
-                border_style="green",
-            )
+        for row in server_rows[:PROJECT_SERVER_ROW_LIMIT]:
+            table.add_row(*self._project_server_cells(row))
+        self._add_more_row(
+            table,
+            total=len(server_rows),
+            shown=min(len(server_rows), PROJECT_SERVER_ROW_LIMIT),
+            columns=9,
+        )
+        return table
+
+    def _project_server_cells(self, row: dict) -> tuple:
+        counts = row["service_states"]
+        return (
+            row["bundle"],
+            row["server"],
+            row["backend"],
+            self._state_badge(str(row["state"])),
+            str(row["services"]),
+            self._service_count_badge(counts, "un-initialized"),
+            self._service_count_badge(counts, "running"),
+            self._service_count_badge(counts, "error"),
+            self._service_count_badge(counts, "other"),
         )
 
     def _add_more_row(
@@ -327,6 +332,34 @@ class OverviewPanel(Static):
             label = name.replace("_", " ")
             badges.append(f" {label} ", style=palette[index % len(palette)])
         return badges
+
+    def _state_badge(self, state: str) -> Text:
+        label = state.replace("_", " ")
+        style = {
+            "running": "bold white on dark_green",
+            "healthy": "bold white on dark_green",
+            "pending": "bold black on bright_yellow",
+            "starting": "bold black on bright_yellow",
+            "failed": "bold white on dark_red",
+            "error": "bold white on dark_red",
+            "unhealthy": "bold white on dark_red",
+            "degraded": "bold black on yellow",
+            "stopped": "bold white on grey23",
+            "unknown": "bold white on grey23",
+        }.get(state, "bold white on dark_blue")
+        return Text(f" {label} ", style=style)
+
+    def _service_count_badge(self, counts: dict[str, int], group: str) -> Text:
+        count = counts.get(group, 0)
+        if count == 0:
+            return Text("0", style="dim")
+        style = {
+            "un-initialized": "bold black on bright_yellow",
+            "running": "bold white on dark_green",
+            "error": "bold white on dark_red",
+            "other": "bold white on dark_blue",
+        }[group]
+        return Text(str(count), style=style)
 
     def _format_ports(self, ports: object) -> str:
         if isinstance(ports, dict) and ports:

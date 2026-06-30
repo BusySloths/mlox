@@ -11,10 +11,7 @@ from textual.app import App, ComposeResult
 
 from mlox.server import ServerCapability
 from mlox.tui.screens.dashboard.model import SelectionInfo
-from mlox.tui.screens.dashboard.overview_panel import (
-    OverviewPanel,
-    PROJECT_SERVICE_ROW_LIMIT,
-)
+from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 
 
 def _render_panel(renderable) -> str:
@@ -94,17 +91,18 @@ def test_project_overview_shows_backend_column_without_server_metric() -> None:
     assert "CPU Cores" in overview
     assert "RAM (GiB)" in overview
     assert "Servers" in overview
-    assert "Host" in overview
+    assert "Bundle" in overview
+    assert "Server" in overview
     assert "Backend" in overview
-    assert "Capabilities" in overview
     assert "docker" in overview
-    assert "terminal" in overview
+    assert "terminal" not in overview
+    assert "demo" in overview
     assert "10.0.0.1" in overview
     assert "running" in overview
     assert overview.count("Servers") == 1
 
 
-async def _large_project_overview_text() -> str:
+async def _project_overview_with_service_states() -> str:
     server = SimpleNamespace(
         ip="10.0.0.1",
         state="running",
@@ -113,12 +111,14 @@ async def _large_project_overview_text() -> str:
         get_server_info=lambda: {"cpu_count": 8, "ram_gb": 16},
     )
     services = [
+        SimpleNamespace(name="mlflow", service_config_id="template", state="running"),
         SimpleNamespace(
-            name=f"service-{index}",
+            name="airflow",
             service_config_id="template",
-            state="running",
-        )
-        for index in range(PROJECT_SERVICE_ROW_LIMIT + 3)
+            state="un-initialized",
+        ),
+        SimpleNamespace(name="registry", service_config_id="template", state="failed"),
+        SimpleNamespace(name="jobs", service_config_id="template", state="pending"),
     ]
     workspace = SimpleNamespace(
         infrastructure=SimpleNamespace(
@@ -133,12 +133,23 @@ async def _large_project_overview_text() -> str:
         return _render_panel(panel.content)
 
 
-def test_project_overview_limits_service_rows_for_scroll_performance() -> None:
-    overview = asyncio.run(_large_project_overview_text())
+def test_project_overview_shows_service_state_counts_per_server() -> None:
+    overview = asyncio.run(_project_overview_with_service_states())
 
-    assert f"service-{PROJECT_SERVICE_ROW_LIMIT - 1}" in overview
-    assert f"service-{PROJECT_SERVICE_ROW_LIMIT}" not in overview
-    assert "... 3 more not shown" in overview
+    assert "Service States" not in overview
+    assert "Uninitialized" in overview
+    assert "Running" in overview
+    assert "Error" in overview
+    assert "Other" in overview
+    assert "Failed" not in overview
+    assert "Pending" not in overview
+    assert "Healthy" not in overview
+    assert "Stopped" not in overview
+    assert "running" in overview
+    assert "4" in overview
+    assert "mlflow" not in overview
+    assert "airflow" not in overview
+    assert "registry" not in overview
 
 
 async def _project_overview_with_runtime_info_lookup() -> tuple[str, int]:
