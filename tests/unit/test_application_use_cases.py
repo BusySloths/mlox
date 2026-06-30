@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from mlox.server import ServerCapability
-from mlox.application.use_cases import models, project, servers, services
+from mlox.application.use_cases import models, project, secrets, servers, services
 
 
 class _Connection:
@@ -163,7 +163,48 @@ def test_project_summarize_infrastructure_builds_rows_and_resource_totals():
     ]
 
 
-def test_project_describe_secret_manager_returns_redacted_secret_inventory():
+def test_secrets_describe_managers_does_not_list_secret_values():
+    class SecretManager:
+        supports_keyfile_export = True
+
+        def is_working(self):
+            return True
+
+    descriptor = SimpleNamespace(
+        id="embedded",
+        name="Embedded Project Storage",
+        kind="embedded",
+        service_uuid=None,
+        is_active=True,
+        is_available=True,
+        supports_keyfile_export=True,
+        manager=SecretManager(),
+        service=None,
+    )
+    workspace = SimpleNamespace(
+        list_secret_managers=lambda: [descriptor],
+    )
+
+    result = secrets.describe_secret_managers(workspace)
+
+    assert result.success
+    assert result.data["active_manager_id"] == "embedded"
+    assert result.data["managers"] == [
+        {
+            "id": "embedded",
+            "name": "Embedded Project Storage",
+            "kind": "embedded",
+            "service_uuid": None,
+            "is_active": True,
+            "is_available": True,
+            "status": "available",
+            "class": "SecretManager",
+            "supports_keyfile_export": True,
+        }
+    ]
+
+
+def test_secrets_list_secret_names_returns_redacted_inventory():
     class SecretManager:
         supports_keyfile_export = True
 
@@ -174,22 +215,22 @@ def test_project_describe_secret_manager_returns_redacted_secret_inventory():
             assert keys_only is True
             return {"api-token": None, "db-password": None}
 
-    workspace = SimpleNamespace(
-        active_secret_manager_name="Embedded Project Storage",
-        secret_manager_kind="embedded",
-        secrets=SecretManager(),
+    descriptor = SimpleNamespace(
+        id="embedded",
+        name="Embedded Project Storage",
+        kind="embedded",
+        service_uuid=None,
+        is_active=True,
+        is_available=True,
+        supports_keyfile_export=True,
+        manager=SecretManager(),
+        service=None,
     )
+    workspace = SimpleNamespace(probe_secret_manager=lambda manager_id: descriptor)
 
-    result = project.describe_secret_manager(workspace)
+    result = secrets.list_secret_names(workspace, "embedded")
 
     assert result.success
-    assert result.data["manager"] == {
-        "name": "Embedded Project Storage",
-        "kind": "embedded",
-        "status": "available",
-        "class": "SecretManager",
-        "supports_keyfile_export": True,
-    }
     assert result.data["secrets"] == [
         {"name": "api-token", "value": "hidden"},
         {"name": "db-password", "value": "hidden"},
@@ -197,20 +238,31 @@ def test_project_describe_secret_manager_returns_redacted_secret_inventory():
     assert "secret-value" not in str(result.data)
 
 
-def test_project_reveal_secret_loads_selected_secret_value():
+def test_secrets_reveal_secret_loads_selected_secret_value():
     class SecretManager:
+        supports_keyfile_export = False
+
         def load_secret(self, name):
             return {"token": "secret-value"} if name == "api-token" else None
 
-    workspace = SimpleNamespace(secrets=SecretManager())
+    descriptor = SimpleNamespace(
+        id="embedded",
+        name="Embedded Project Storage",
+        kind="embedded",
+        service_uuid=None,
+        is_active=True,
+        is_available=True,
+        supports_keyfile_export=False,
+        manager=SecretManager(),
+        service=None,
+    )
+    workspace = SimpleNamespace(probe_secret_manager=lambda manager_id: descriptor)
 
-    result = project.reveal_secret(workspace, "api-token")
+    result = secrets.reveal_secret(workspace, "embedded", "api-token")
 
     assert result.success
-    assert result.data == {
-        "name": "api-token",
-        "value": {"token": "secret-value"},
-    }
+    assert result.data["name"] == "api-token"
+    assert result.data["value"] == {"token": "secret-value"}
 
 
 def test_servers_setup_server_invokes_server_without_persisting():

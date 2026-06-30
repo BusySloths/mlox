@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
 from mlox.application.result import OperationResult
@@ -188,98 +187,6 @@ def summarize_infrastructure(workspace) -> OperationResult:
     )
 
 
-def describe_secret_manager(workspace) -> OperationResult:
-    """Return redacted metadata for the active project secret manager."""
-
-    if not workspace:
-        return OperationResult(False, 9, "Project workspace is unavailable.")
-
-    manager = getattr(workspace, "secrets", None)
-    if manager is None:
-        return OperationResult(False, 10, "No active secret manager is configured.")
-
-    status = "unknown"
-    try:
-        status = "available" if manager.is_working() else "unavailable"
-    except Exception as exc:
-        return OperationResult(
-            True,
-            0,
-            "Secret manager is unavailable.",
-            {
-                "manager": _secret_manager_metadata(workspace, manager, "unavailable"),
-                "secrets": [],
-                "error": str(exc),
-            },
-        )
-
-    try:
-        listed = manager.list_secrets(keys_only=True)
-    except Exception as exc:
-        return OperationResult(
-            True,
-            0,
-            "Could not list secret keys.",
-            {
-                "manager": _secret_manager_metadata(workspace, manager, status),
-                "secrets": [],
-                "error": str(exc),
-            },
-        )
-
-    secret_names = sorted(str(name) for name in (listed or {}).keys())
-    secrets = [
-        {
-            "name": name,
-            "value": "hidden",
-        }
-        for name in secret_names
-    ]
-    return OperationResult(
-        True,
-        0,
-        "Secret manager metadata loaded.",
-        {
-            "manager": _secret_manager_metadata(workspace, manager, status),
-            "secrets": secrets,
-            "error": "",
-        },
-    )
-
-
-def reveal_secret(workspace, name: str) -> OperationResult:
-    """Load one secret value from the active project secret manager."""
-
-    secret_name = str(name).strip()
-    if not secret_name:
-        return OperationResult(False, 11, "No secret selected.")
-    if not workspace:
-        return OperationResult(False, 12, "Project workspace is unavailable.")
-
-    manager = getattr(workspace, "secrets", None)
-    if manager is None:
-        return OperationResult(False, 13, "No active secret manager is configured.")
-
-    try:
-        value = manager.load_secret(secret_name)
-    except Exception as exc:
-        return OperationResult(
-            False,
-            14,
-            f"Could not load secret '{secret_name}': {exc}",
-        )
-
-    if value is None:
-        return OperationResult(False, 15, f"Secret '{secret_name}' was not found.")
-
-    return OperationResult(
-        True,
-        0,
-        f"Loaded secret '{secret_name}'.",
-        {"name": secret_name, "value": deepcopy(value)},
-    )
-
-
 def _normalize_tags(tags: list[str]) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
@@ -293,18 +200,6 @@ def _normalize_tags(tags: list[str]) -> list[str]:
         seen.add(key)
         normalized.append(value)
     return normalized
-
-
-def _secret_manager_metadata(workspace, manager, status: str) -> dict[str, Any]:
-    return {
-        "name": str(getattr(workspace, "active_secret_manager_name", "Unknown")),
-        "kind": str(getattr(workspace, "secret_manager_kind", "unknown")),
-        "status": status,
-        "class": manager.__class__.__name__,
-        "supports_keyfile_export": bool(
-            getattr(manager, "supports_keyfile_export", False)
-        ),
-    }
 
 
 def _server_backends(server) -> list[str]:

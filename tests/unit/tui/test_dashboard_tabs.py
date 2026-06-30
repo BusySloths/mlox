@@ -45,6 +45,7 @@ class DashboardTestApp(App):
             "api-token": "secret-value",
             "db-password": {"password": "secret-value"},
         }
+        self.service_secret_store = {"service-token": "service-secret-value"}
 
         class SecretManager:
             supports_keyfile_export = False
@@ -62,6 +63,48 @@ class DashboardTestApp(App):
             def load_secret(self, name):
                 return self.store.get(name)
 
+        embedded_manager = SecretManager(self.secret_store)
+        service_manager = SecretManager(self.service_secret_store)
+        service = SimpleNamespace(uuid="service-secret-manager", name="External Vault")
+        descriptors = {
+            "embedded": SimpleNamespace(
+                id="embedded",
+                name="Embedded Project Storage",
+                kind="embedded",
+                service_uuid=None,
+                is_active=True,
+                is_available=True,
+                supports_keyfile_export=False,
+                manager=embedded_manager,
+                service=None,
+            ),
+            service.uuid: SimpleNamespace(
+                id=service.uuid,
+                name=service.name,
+                kind="service",
+                service_uuid=service.uuid,
+                is_active=False,
+                is_available=None,
+                supports_keyfile_export=False,
+                manager=None,
+                service=service,
+            ),
+        }
+        probed_descriptors = {
+            **descriptors,
+            service.uuid: SimpleNamespace(
+                id=service.uuid,
+                name=service.name,
+                kind="service",
+                service_uuid=service.uuid,
+                is_active=False,
+                is_available=True,
+                supports_keyfile_export=False,
+                manager=service_manager,
+                service=service,
+            ),
+        }
+
         project = SimpleNamespace(
             name="test-project",
             infrastructure=SimpleNamespace(bundles=[]),
@@ -76,7 +119,9 @@ class DashboardTestApp(App):
             path="test-project",
             active_secret_manager_name="Embedded Project Storage",
             secret_manager_kind="embedded",
-            secrets=SecretManager(self.secret_store),
+            secrets=embedded_manager,
+            list_secret_managers=lambda: list(descriptors.values()),
+            probe_secret_manager=lambda manager_id: probed_descriptors[manager_id],
             commit=commit,
         )
 
@@ -134,9 +179,14 @@ async def _secret_manager_panel_text() -> str:
             " ".join(str(cell) for cell in panel.table.get_row_at(index))
             for index in range(panel.table.row_count)
         ]
+        manager_rows = [
+            " ".join(str(cell) for cell in panel.manager_table.get_row_at(index))
+            for index in range(panel.manager_table.row_count)
+        ]
         return "\n".join(
             [
                 _render_text(panel.summary.content),
+                "\n".join(manager_rows),
                 "\n".join(rows),
                 _render_text(panel.detail.content),
             ]
@@ -147,10 +197,45 @@ def test_secret_manager_tab_renders_redacted_secret_inventory() -> None:
     rendered = asyncio.run(_secret_manager_panel_text())
 
     assert "Embedded Project Storage" in rendered
+    assert "External Vault" in rendered
     assert "api-token" in rendered
     assert "db-password" in rendered
+    assert "service-token" not in rendered
     assert "hidden" in rendered
     assert "secret-value" not in rendered
+
+
+async def _service_secret_manager_panel_text() -> str:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
+        deadline = time.monotonic() + 2
+        while panel.manager_table.row_count < 2:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret managers.")
+            await pilot.pause(0.05)
+        panel.manager_table.cursor_coordinate = (1, 0)
+        panel.manager_table.action_select_cursor()
+        deadline = time.monotonic() + 2
+        rows: list[str] = []
+        while "service-token" not in "\n".join(rows):
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for service secrets.")
+            rows = [
+                " ".join(str(cell) for cell in panel.table.get_row_at(index))
+                for index in range(panel.table.row_count)
+            ]
+            await pilot.pause(0.05)
+        return "\n".join(rows)
+
+
+def test_secret_manager_tab_lists_service_manager_keys_on_selection() -> None:
+    rendered = asyncio.run(_service_secret_manager_panel_text())
+
+    assert "service-token" in rendered
+    assert "api-token" not in rendered
+    assert "service-secret-value" not in rendered
 
 
 async def _secret_manager_revealed_text() -> str:
