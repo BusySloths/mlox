@@ -18,6 +18,7 @@ from mlox.application.result import OperationResult
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.project_actions import ProjectActions
 from mlox.tui.screens.dashboard.server_actions import ServerActions
+from mlox.tui.screens.dashboard.secret_manager_panel import SecretManagerPanel
 from mlox.tui.screens.dashboard.template_panel import TemplatePanel
 from mlox.tui.screens.dashboard.tree import InfraTree
 from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
@@ -25,6 +26,7 @@ from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.screen import (
     DashboardScreen,
     LOGS_TAB_ID,
+    SECRET_MANAGER_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
     SIDEBAR_STEP,
     SERVER_TEMPLATES_TAB_ID,
@@ -39,6 +41,27 @@ class DashboardTestApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.commits = []
+        self.secret_store = {
+            "api-token": "secret-value",
+            "db-password": {"password": "secret-value"},
+        }
+
+        class SecretManager:
+            supports_keyfile_export = False
+
+            def __init__(self, store):
+                self.store = store
+
+            def is_working(self):
+                return True
+
+            def list_secrets(self, keys_only=False):
+                assert keys_only is True
+                return {name: None for name in self.store}
+
+            def load_secret(self, name):
+                return self.store.get(name)
+
         project = SimpleNamespace(
             name="test-project",
             infrastructure=SimpleNamespace(bundles=[]),
@@ -52,6 +75,8 @@ class DashboardTestApp(App):
             infrastructure=project.infrastructure,
             path="test-project",
             active_secret_manager_name="Embedded Project Storage",
+            secret_manager_kind="embedded",
+            secrets=SecretManager(self.secret_store),
             commit=commit,
         )
 
@@ -65,7 +90,7 @@ def _render_text(renderable: object) -> str:
     return console.export_text()
 
 
-async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str]:
+async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -74,23 +99,87 @@ async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str]:
 
         tabs = screen.query_one("#main-tabs", TabbedContent)
         server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
+        secret_tab = tabs.get_tab(SECRET_MANAGER_TAB_ID)
         service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
         return (
             server_tab.styles.display,
+            secret_tab.styles.display,
             service_tab.styles.display,
             logs_tab.styles.display,
         )
 
 
-def test_root_selection_shows_only_server_templates_tab() -> None:
-    server_display, service_display, logs_display = asyncio.run(
+def test_root_selection_shows_project_tabs() -> None:
+    server_display, secret_display, service_display, logs_display = asyncio.run(
         _visible_tabs_for(SelectionInfo(type="root"))
     )
 
     assert server_display == "block"
+    assert secret_display == "block"
     assert service_display == "none"
     assert logs_display == "none"
+
+
+async def _secret_manager_panel_text() -> str:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        deadline = time.monotonic() + 2
+        while panel.table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret-manager panel.")
+            await pilot.pause(0.05)
+        rows = [
+            " ".join(str(cell) for cell in panel.table.get_row_at(index))
+            for index in range(panel.table.row_count)
+        ]
+        return "\n".join(
+            [
+                _render_text(panel.summary.content),
+                "\n".join(rows),
+                _render_text(panel.detail.content),
+            ]
+        )
+
+
+def test_secret_manager_tab_renders_redacted_secret_inventory() -> None:
+    rendered = asyncio.run(_secret_manager_panel_text())
+
+    assert "Embedded Project Storage" in rendered
+    assert "api-token" in rendered
+    assert "db-password" in rendered
+    assert "hidden" in rendered
+    assert "secret-value" not in rendered
+
+
+async def _secret_manager_revealed_text() -> str:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
+        deadline = time.monotonic() + 2
+        while panel.table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret-manager panel.")
+            await pilot.pause(0.05)
+        panel.table.focus()
+        panel.table.cursor_coordinate = (0, 0)
+        await pilot.press("enter")
+        deadline = time.monotonic() + 2
+        while "secret-value" not in _render_text(panel.detail.content):
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for revealed secret.")
+            await pilot.pause(0.05)
+        return _render_text(panel.detail.content)
+
+
+def test_secret_manager_table_enter_reveals_selected_secret() -> None:
+    rendered = asyncio.run(_secret_manager_revealed_text())
+
+    assert "api-token" in rendered
+    assert "secret-value" in rendered
+    assert '"password"' not in rendered
 
 
 async def _initial_dashboard_overview() -> tuple[str, str, str]:
@@ -514,11 +603,12 @@ def test_empty_bundle_tree_has_no_no_services_leaf() -> None:
 
 
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
-    server_display, service_display, logs_display = asyncio.run(
+    server_display, secret_display, service_display, logs_display = asyncio.run(
         _visible_tabs_for(SelectionInfo(type="bundle"))
     )
 
     assert server_display == "none"
+    assert secret_display == "none"
     assert service_display == "block"
     assert logs_display == "none"
 
@@ -543,21 +633,23 @@ def test_uninitialized_bundle_selection_hides_service_templates_tab() -> None:
 
 
 def test_server_selection_hides_template_tabs() -> None:
-    server_display, service_display, logs_display = asyncio.run(
+    server_display, secret_display, service_display, logs_display = asyncio.run(
         _visible_tabs_for(SelectionInfo(type="server"))
     )
 
     assert server_display == "none"
+    assert secret_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
 
 
 def test_service_selection_shows_history_and_logs_tab() -> None:
-    server_display, service_display, logs_display = asyncio.run(
+    server_display, secret_display, service_display, logs_display = asyncio.run(
         _visible_tabs_for(SelectionInfo(type="service"))
     )
 
     assert server_display == "none"
+    assert secret_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
 

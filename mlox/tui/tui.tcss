@@ -200,6 +200,7 @@ Button {
 
 #overview-tab,
 #server-templates-tab,
+#secret-manager-tab,
 #service-templates-tab {
   height: 1fr;
 }
@@ -212,10 +213,38 @@ Button {
 }
 
 #server-template-panel,
-#service-template-panel {
+#service-template-panel,
+#secret-manager-panel {
   height: 1fr;
   width: 1fr;
   layout: vertical;
+}
+
+#secret-manager-content {
+  height: 1fr;
+  width: 1fr;
+}
+
+#secret-manager-summary {
+  height: auto;
+  margin-bottom: 1;
+}
+
+#secret-manager-browser {
+  height: 1fr;
+  width: 1fr;
+}
+
+#secret-manager-table {
+  width: 2fr;
+  height: 1fr;
+  border: round #1bd6f3ff;
+}
+
+#secret-manager-detail {
+  width: 3fr;
+  height: 1fr;
+  margin-left: 1;
 }
 
 .template-table {

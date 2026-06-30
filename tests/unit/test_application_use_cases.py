@@ -163,6 +163,56 @@ def test_project_summarize_infrastructure_builds_rows_and_resource_totals():
     ]
 
 
+def test_project_describe_secret_manager_returns_redacted_secret_inventory():
+    class SecretManager:
+        supports_keyfile_export = True
+
+        def is_working(self):
+            return True
+
+        def list_secrets(self, keys_only=False):
+            assert keys_only is True
+            return {"api-token": None, "db-password": None}
+
+    workspace = SimpleNamespace(
+        active_secret_manager_name="Embedded Project Storage",
+        secret_manager_kind="embedded",
+        secrets=SecretManager(),
+    )
+
+    result = project.describe_secret_manager(workspace)
+
+    assert result.success
+    assert result.data["manager"] == {
+        "name": "Embedded Project Storage",
+        "kind": "embedded",
+        "status": "available",
+        "class": "SecretManager",
+        "supports_keyfile_export": True,
+    }
+    assert result.data["secrets"] == [
+        {"name": "api-token", "value": "hidden"},
+        {"name": "db-password", "value": "hidden"},
+    ]
+    assert "secret-value" not in str(result.data)
+
+
+def test_project_reveal_secret_loads_selected_secret_value():
+    class SecretManager:
+        def load_secret(self, name):
+            return {"token": "secret-value"} if name == "api-token" else None
+
+    workspace = SimpleNamespace(secrets=SecretManager())
+
+    result = project.reveal_secret(workspace, "api-token")
+
+    assert result.success
+    assert result.data == {
+        "name": "api-token",
+        "value": {"token": "secret-value"},
+    }
+
+
 def test_servers_setup_server_invokes_server_without_persisting():
     calls = []
     server = SimpleNamespace(setup=lambda: calls.append("setup"))

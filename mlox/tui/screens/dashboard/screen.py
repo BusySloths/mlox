@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from textual import on
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widget import Widget
@@ -28,6 +29,7 @@ from .overview_panel import OverviewPanel
 from .project_actions import ProjectActions, RenameProjectDialog
 from .server_actions import ServerActions
 from .server_info_panel import ServerInfoPanel
+from .secret_manager_panel import SecretManagerPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
 from mlox.application.use_cases.servers import (
@@ -47,6 +49,7 @@ from mlox.tui.template_forms import TemplateFormSpec, TemplateSetupDialog
 
 
 TELEMETRY_TAB_ID = "service-tui-tab"
+SECRET_MANAGER_TAB_ID = "secret-manager-tab"
 SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
 SERVICE_TEMPLATES_TAB_ID = "service-templates-tab"
 OVERVIEW_TAB_ID = "overview-tab"
@@ -91,6 +94,7 @@ class DashboardScreen(Screen):
         ("l", "toggle_app_logs", "Logs"),
         ("O", "open_terminal", "Open Terminal"),
         ("R", "reload_infrastructure", "Reload"),
+        Binding("enter", "reveal_secret", "Reveal Secret", show=False, priority=True),
         ("[", "narrow_sidebar", "Narrow Sidebar"),
         ("]", "widen_sidebar", "Widen Sidebar"),
     ]
@@ -124,6 +128,8 @@ class DashboardScreen(Screen):
                                 yield TemplatePanel(
                                     id="server-template-panel", template_type="server"
                                 )
+                            with TabPane("Secret Manager", id=SECRET_MANAGER_TAB_ID):
+                                yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Service Templates", id=SERVICE_TEMPLATES_TAB_ID):
                                 yield TemplatePanel(
                                     id="service-template-panel", template_type="service"
@@ -181,6 +187,8 @@ class DashboardScreen(Screen):
         logs.selection = selection
         history = self.query_one(HistoryPanel)
         history.selection = selection
+        secret_manager = self.query_one(SecretManagerPanel)
+        secret_manager.selection = selection
         for templates in self.query(TemplatePanel):
             templates.selection = selection
         self._update_template_tabs(selection)
@@ -565,6 +573,10 @@ class DashboardScreen(Screen):
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(
+            SECRET_MANAGER_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
             SERVICE_TEMPLATES_TAB_ID,
             selection.type == "bundle" and is_bundle_initialized(selection.bundle)
             if selection
@@ -642,12 +654,22 @@ class DashboardScreen(Screen):
             return
         server_actions.open_terminal()
 
+    def action_reveal_secret(self) -> None:
+        self.query_one(SecretManagerPanel).action_reveal_selected()
+
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if action == "open_terminal":
             try:
                 return self.query_one(ServerActions).can_open_terminal()
             except Exception:
                 return False
+        if action == "reveal_secret":
+            try:
+                tabs = self.query_one("#main-tabs", TabbedContent)
+                panel = self.query_one(SecretManagerPanel)
+            except Exception:
+                return False
+            return tabs.active == SECRET_MANAGER_TAB_ID and panel.display
         return super().check_action(action, parameters)
 
     def _set_app_log_drawer_visible(self, visible: bool) -> None:
