@@ -74,9 +74,6 @@ class InfraTree(Tree[SelectionInfo]):
                 server_label,
                 data=SelectionInfo(type="server", bundle=bundle, server=server),
             )
-            if not bundle.services:
-                bundle_node.add_leaf("No services", data=SelectionInfo(type="empty"))
-                continue
             for svc in bundle.services:
                 bundle_node.add_leaf(
                     f"Service: {svc.name}",

@@ -211,6 +211,32 @@ def test_bundle_overview_shows_tags_without_repeating_services() -> None:
     assert "running: 2, stopped: 1" not in overview
 
 
+def test_empty_bundle_overview_points_to_service_templates() -> None:
+    rendered = []
+    panel = OverviewPanel()
+    panel.update = rendered.append
+    server = SimpleNamespace(ip="10.0.0.1", state="running", backend=["docker"])
+
+    panel.show_bundle(
+        SelectionInfo(
+            type="bundle",
+            bundle=SimpleNamespace(
+                name="demo",
+                tags=[],
+                services=[],
+                server=server,
+            ),
+            server=server,
+        )
+    )
+
+    overview = _render_panel(rendered[0])
+
+    assert "No services installed yet" in overview
+    assert "backend-specific services" in overview
+    assert "Service Templates" in overview
+
+
 def test_server_overview_shows_resource_info() -> None:
     rendered = []
     panel = OverviewPanel()

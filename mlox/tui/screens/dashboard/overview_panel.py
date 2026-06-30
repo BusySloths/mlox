@@ -17,6 +17,7 @@ from .model import (
     SelectionInfo,
     WELCOME_TEXT,
     get_server_backends,
+    is_bundle_initialized,
     summarize_infrastructure,
 )
 
@@ -167,13 +168,23 @@ class OverviewPanel(Static):
     def show_bundle(self, selection: SelectionInfo) -> None:
         bundle = selection.bundle
         server = selection.server or getattr(bundle, "server", None)
+        services = getattr(bundle, "services", []) or []
+        backends = ", ".join(get_server_backends(server)) or "unknown"
         details = Table.grid(expand=True)
         details.add_column(justify="right", style="cyan", no_wrap=True)
         details.add_column(justify="left", ratio=3)
         details.add_row("Tags", self._tag_badges(getattr(bundle, "tags", []) or []))
         details.add_row("Server", str(getattr(server, "ip", "unknown")))
         details.add_row("State", str(getattr(server, "state", "unknown")))
-        details.add_row("Backend", ", ".join(get_server_backends(server)) or "unknown")
+        details.add_row("Backend", backends)
+        if is_bundle_initialized(bundle) and not services:
+            details.add_row(
+                "Services",
+                (
+                    "No services installed yet. Use the Service Templates tab "
+                    "to add backend-specific services."
+                ),
+            )
 
         self.update(
             Panel(

@@ -491,6 +491,28 @@ def test_uninitialized_bundle_tree_entry_is_leaf() -> None:
     assert label == "Bundle: dev  Backend: kubernetes  State: pending"
 
 
+async def _empty_bundle_tree_children() -> list[str]:
+    app = DashboardTestApp()
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        backend=["docker"],
+        state="running",
+    )
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test():
+        tree = app.query_one(InfraTree)
+        bundle_node = tree.root.children[0]
+        return [child.label.plain for child in bundle_node.children]
+
+
+def test_empty_bundle_tree_has_no_no_services_leaf() -> None:
+    children = asyncio.run(_empty_bundle_tree_children())
+
+    assert children == ["Server: 10.0.0.5"]
+
+
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
     server_display, service_display, logs_display = asyncio.run(
         _visible_tabs_for(SelectionInfo(type="bundle"))
