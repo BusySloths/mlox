@@ -6,7 +6,7 @@ import json
 import logging
 import ssl
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -26,6 +26,10 @@ class OpenBaoSecretManager(AbstractSecretManager):
     timeout: float = 10.0
     verify_tls: bool = False
     unseal_keys: list[str] = field(default_factory=list)
+    token_renewal_callback: Callable[[], str | Dict[str, Any] | None] | None = field(
+        default=None,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         if not self.address.startswith("http://") and not self.address.startswith(
@@ -49,6 +53,7 @@ class OpenBaoSecretManager(AbstractSecretManager):
         expected_status: tuple[int, ...] = (200, 204),
         token: str | None = None,
         include_token: bool = True,
+        retry_on_forbidden: bool = True,
     ) -> Dict[str, Any]:
         """Execute an HTTP request against the OpenBao API.
 
@@ -84,22 +89,31 @@ class OpenBaoSecretManager(AbstractSecretManager):
             open_kwargs["context"] = context
 
         try:
-            with urlopen(  # nosec B310 - controlled URL
-                request, **open_kwargs
-            ) as response:
-                status = response.status
-                body_bytes = response.read()
-                body = body_bytes.decode("utf-8") if body_bytes else ""
+            status, body = self._open(request, url, open_kwargs)
         except HTTPError as exc:
+            if (
+                exc.code == 403
+                and exc.code not in expected_status
+                and include_token
+                and token is None
+                and retry_on_forbidden
+                and self._renew_token_after_forbidden()
+            ):
+                return self._request(
+                    method,
+                    path,
+                    data=data,
+                    params=params,
+                    expected_status=expected_status,
+                    token=token,
+                    include_token=include_token,
+                    retry_on_forbidden=False,
+                )
             status = exc.code
             body_bytes = exc.read() if exc.fp else b""
             body = body_bytes.decode("utf-8") if body_bytes else ""
             if status not in expected_status:
                 raise
-        except URLError as exc:  # pragma: no cover - network failure path
-            raise ConnectionError(
-                f"Failed to reach OpenBao at {url}: {exc.reason}"
-            ) from exc
 
         if status not in expected_status:
             raise RuntimeError(f"Unexpected response {status} from OpenBao for {path}")
@@ -111,6 +125,43 @@ class OpenBaoSecretManager(AbstractSecretManager):
             return json.loads(body)
         except json.JSONDecodeError:
             return {"raw": body}
+
+    def _open(
+        self,
+        request: Request,
+        url: str,
+        open_kwargs: Dict[str, Any],
+    ) -> tuple[int, str]:
+        try:
+            with urlopen(  # nosec B310 - controlled URL
+                request, **open_kwargs
+            ) as response:
+                body_bytes = response.read()
+                body = body_bytes.decode("utf-8") if body_bytes else ""
+                return response.status, body
+        except HTTPError:
+            raise
+        except URLError as exc:  # pragma: no cover - network failure path
+            raise ConnectionError(
+                f"Failed to reach OpenBao at {url}: {exc.reason}"
+            ) from exc
+
+    def _renew_token_after_forbidden(self) -> bool:
+        if self.token_renewal_callback is None:
+            return False
+        try:
+            renewed = self.token_renewal_callback()
+        except Exception as exc:
+            logger.info("Could not renew OpenBao token after 403 response: %s", exc)
+            return False
+        if isinstance(renewed, dict):
+            token = renewed.get("client_token") or renewed.get("token")
+        else:
+            token = renewed
+        if not token:
+            return False
+        self.token = str(token)
+        return True
 
     @staticmethod
     def _stringify_duration(value: str | int | float | None) -> str | None:

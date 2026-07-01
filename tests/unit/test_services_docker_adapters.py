@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1153,3 +1154,82 @@ def test_openbao_secret_manager_core_paths(monkeypatch):
 
     monkeypatch.setattr(manager, "_request", _raise_404)
     assert manager.load_secret("missing") is None
+
+
+def test_openbao_secret_manager_retries_403_after_token_renewal(monkeypatch):
+    manager = OpenBaoSecretManager(
+        address="https://bao.local",
+        token="expired-token",
+        mount_path="kv",
+        token_renewal_callback=lambda: "renewed-token",
+    )
+    calls = []
+
+    class _Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"data":{"data":{"ok":true}}}'
+
+    def fake_urlopen(request, **kwargs):
+        token = dict(request.header_items()).get("X-vault-token")
+        calls.append((request.full_url, token))
+        if len(calls) == 1:
+            raise HTTPError(
+                request.full_url,
+                403,
+                "Forbidden",
+                {},
+                BytesIO(b'{"errors":["permission denied"]}'),
+            )
+        return _Response()
+
+    monkeypatch.setattr("mlox.services.openbao.client.urlopen", fake_urlopen)
+
+    assert manager.load_secret("demo") == {"ok": True}
+    assert manager.token == "renewed-token"
+    assert [token for _, token in calls] == ["expired-token", "renewed-token"]
+
+
+def test_openbao_service_rotates_client_token_when_renewal_fails(monkeypatch):
+    service = OpenBaoDockerService(
+        **BASE,
+        port="8200",
+        mount_path="kv",
+        root_token="root",
+        client_token="expired-token",
+        kv_policy_name="mlox-kv",
+    )
+
+    def fail_renew(self, increment=None):
+        raise HTTPError(
+            self.address,
+            403,
+            "Forbidden",
+            {},
+            BytesIO(b'{"errors":["expired token"]}'),
+        )
+
+    def create_token(self, *args, **kwargs):
+        return {
+            "client_token": "rotated-token",
+            "accessor": "rotated-accessor",
+            "lease_duration": 86400,
+            "renewable": True,
+        }
+
+    monkeypatch.setattr(OpenBaoSecretManager, "renew_self", fail_renew)
+    monkeypatch.setattr(OpenBaoSecretManager, "create_token", create_token)
+
+    auth = service._renew_or_rotate_client_token("https://bao.local:8200")
+
+    assert auth is not None
+    assert auth["client_token"] == "rotated-token"
+    assert service.client_token == "rotated-token"
+    assert service.client_token_accessor == "rotated-accessor"

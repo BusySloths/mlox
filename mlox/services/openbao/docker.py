@@ -213,6 +213,7 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
             address=address,
             token=self.client_token,
             mount_path=self.mount_path,
+            token_renewal_callback=lambda: self._renew_or_rotate_client_token(address),
         )
 
     def get_root_secret_manager(
@@ -254,6 +255,35 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
 
         manager = self.get_root_secret_manager(infra)
         auth = self._create_client_token(manager)
+        self._store_client_token_auth(auth)
+        return auth
+
+    def _renew_or_rotate_client_token(self, address: str) -> Dict[str, Any] | None:
+        """Recover the scoped mlox token after an OpenBao 403 response."""
+
+        if not self.client_token:
+            return None
+        manager = OpenBaoSecretManager(
+            address=address,
+            token=self.client_token,
+            mount_path=self.mount_path,
+        )
+        try:
+            auth = manager.renew_self(self.client_token_ttl)
+            self._store_client_token_auth(auth)
+            return auth
+        except Exception as exc:
+            logger.info("Could not renew OpenBao client token after 403: %s", exc)
+
+        if not self.root_token:
+            return None
+        root_manager = OpenBaoSecretManager(
+            address=address,
+            token=self.root_token,
+            mount_path=self.mount_path,
+            unseal_keys=list(self.unseal_keys),
+        )
+        auth = self._create_client_token(root_manager)
         self._store_client_token_auth(auth)
         return auth
 
