@@ -201,7 +201,8 @@ Button {
 #overview-tab,
 #server-templates-tab,
 #secret-manager-tab,
-#service-templates-tab {
+#service-templates-tab,
+#service-tui-tab {
   height: 1fr;
 }
 
@@ -212,12 +213,104 @@ Button {
   overflow-y: auto;
 }
 
+#service-tui-container {
+  height: 1fr;
+  width: 1fr;
+}
+
 #server-template-panel,
 #service-template-panel,
 #secret-manager-panel {
   height: 1fr;
   width: 1fr;
   layout: vertical;
+}
+
+#openbao-settings {
+  height: auto;
+  width: 1fr;
+  padding: 0 1 1 1;
+}
+
+.openbao-section-title {
+  height: 1;
+  margin: 1 0 0 0;
+  color: #8fe388ff;
+  text-style: bold;
+}
+
+#openbao-status,
+#openbao-help {
+  height: auto;
+  margin-bottom: 1;
+}
+
+#openbao-access-actions,
+#openbao-application-form,
+#openbao-application-actions,
+#openbao-recovery-actions {
+  height: 3;
+  margin-bottom: 1;
+  align-vertical: middle;
+}
+
+#openbao-access-actions Button,
+#openbao-application-form Button,
+#openbao-application-actions Button,
+#openbao-recovery-actions Button {
+  width: auto;
+  min-width: 18;
+  margin-right: 1;
+}
+
+#openbao-keyfile-action-spacer {
+  width: 2;
+}
+
+#openbao-application-name {
+  width: 2fr;
+  margin-right: 1;
+}
+
+#openbao-application-period {
+  width: 18;
+  margin-right: 1;
+}
+
+#openbao-copy-browser-password,
+#openbao-add-application,
+#openbao-renew-app {
+  background: #0e9455ff;
+  border: round #8fe388ff;
+}
+
+#openbao-copy-keyfile-password,
+#openbao-renew-keyfile-password,
+#openbao-download-keyfile {
+  background: #3b3f8fff;
+  border: round #9aa7ffff;
+}
+
+#openbao-refresh-apps {
+  background: #24406fff;
+  border: round #69b7ffff;
+}
+
+#openbao-rotate-client,
+#openbao-unseal {
+  background: #9d7a09ff;
+  border: round #f4e223ff;
+  color: #ffffff;
+}
+
+#openbao-revoke-app {
+  background: #8d1b1bff;
+  border: round #ff7676ff;
+}
+
+#openbao-application-table {
+  height: 16;
+  margin-bottom: 1;
 }
 
 #secret-manager-content {

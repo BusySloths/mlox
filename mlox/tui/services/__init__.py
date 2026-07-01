@@ -11,6 +11,10 @@ _TUI_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "config_ids": ("otel-0.127.0-docker", "otel-0.146.1-docker"),
         "function_names": ("settings",),
     },
+    "mlox.tui.services.openbao": {
+        "config_ids": ("openbao-docker",),
+        "function_names": ("settings",),
+    },
 }
 
 

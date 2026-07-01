@@ -4,6 +4,7 @@ import pytest
 
 from mlox.ui.registry import clear_handlers, get_handler
 from mlox.ui import registry as ui_registry
+from mlox.tui import services as tui_services
 from mlox.view import services as streamlit_services
 from mlox.view.services import registry as registry_view
 from mlox.services.registry.docker import RegistryDockerService
@@ -47,6 +48,22 @@ def test_registry_streamlit_settings_handler_is_registered(monkeypatch):
     )
     assert callable(secret_manager_handler)
     assert secret_manager_handler.is_secret_manager_settings
+
+    clear_handlers()
+
+
+def test_openbao_tui_settings_handler_is_registered(monkeypatch):
+    clear_handlers(bootstrapped=True)
+    monkeypatch.setattr(tui_services, "_REGISTERED", False)
+
+    tui_services.register_builtin_tui_services()
+
+    handler = get_handler(
+        config_id="openbao-docker",
+        frontend="tui",
+        function_name="settings",
+    )
+    assert callable(handler)
 
     clear_handlers()
 

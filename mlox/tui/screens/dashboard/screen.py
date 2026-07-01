@@ -48,7 +48,7 @@ from mlox.application.use_cases.services import build_service_ui_widget
 from mlox.tui.template_forms import TemplateFormSpec, TemplateSetupDialog
 
 
-TELEMETRY_TAB_ID = "service-tui-tab"
+SERVICE_TUI_TAB_ID = "service-tui-tab"
 SECRET_MANAGER_TAB_ID = "secret-manager-tab"
 SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
 SERVICE_TEMPLATES_TAB_ID = "service-templates-tab"
@@ -141,7 +141,7 @@ class DashboardScreen(Screen):
                                 yield TemplatePanel(
                                     id="service-template-panel", template_type="service"
                                 )
-                            with TabPane("Telemetry", id=TELEMETRY_TAB_ID):
+                            with TabPane("Service", id=SERVICE_TUI_TAB_ID):
                                 yield Container(id="service-tui-container")
         yield AppLogPanel(id="app-log-drawer")
         yield Footer(classes="app-footer")
@@ -149,7 +149,7 @@ class DashboardScreen(Screen):
     def on_mount(self) -> None:
         tree = self.query_one(InfraTree)
         tree.populate_tree()
-        self._set_telemetry_tab_visible(False)
+        self._set_service_tui_tab_visible(False)
         tree.expand_all()
         tree.move_cursor(tree.root)
         self._apply_selection(tree.root.data)
@@ -609,11 +609,11 @@ class DashboardScreen(Screen):
         for child in list(container.children):
             child.remove()
 
-        self._set_telemetry_tab_visible(False)
+        self._set_service_tui_tab_visible(False)
 
         if not selection or selection.type != "service" or not selection.service:
             self._mount_placeholder(
-                container, "Select a service to inspect telemetry metrics."
+                container, "Select a service to inspect service-specific settings."
             )
             return
 
@@ -622,7 +622,7 @@ class DashboardScreen(Screen):
         if not infra or not selection.bundle:
             self._mount_placeholder(
                 container,
-                "Telemetry is unavailable because the infrastructure is not loaded.",
+                "Service settings are unavailable because the infrastructure is not loaded.",
             )
             return
 
@@ -635,15 +635,15 @@ class DashboardScreen(Screen):
         if not isinstance(widget, Widget):
             self._mount_placeholder(
                 container,
-                "Telemetry provider returned an unexpected payload.",
+                "Service settings provider returned an unexpected payload.",
             )
             return
 
         container.mount(widget)
-        self._set_telemetry_tab_visible(True)
+        self._set_service_tui_tab_visible(True)
 
-    def _set_telemetry_tab_visible(self, visible: bool) -> None:
-        self._set_tab_visible(TELEMETRY_TAB_ID, visible)
+    def _set_service_tui_tab_visible(self, visible: bool) -> None:
+        self._set_tab_visible(SERVICE_TUI_TAB_ID, visible)
 
     def _set_tab_visible(self, tab_id: str, visible: bool) -> None:
         tabs = self.query_one("#main-tabs", TabbedContent)
