@@ -27,6 +27,7 @@ from mlox.tui.screens.dashboard.screen import (
     DashboardScreen,
     FIREWALL_TAB_ID,
     LOGS_TAB_ID,
+    MODELS_TAB_ID,
     SECRET_MANAGER_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
     SIDEBAR_STEP,
@@ -42,6 +43,7 @@ class DashboardTestApp(App):
     def __init__(self) -> None:
         super().__init__()
         self.commits = []
+        self.copied_text = ""
         self.secret_store = {
             "api-token": "secret-value",
             "db-password": {"password": "secret-value"},
@@ -157,6 +159,9 @@ class DashboardTestApp(App):
     def compose(self) -> ComposeResult:
         yield DashboardScreen()
 
+    def copy_to_clipboard(self, text: str) -> None:
+        self.copied_text = text
+
 
 def _render_text(renderable: object) -> str:
     console = Console(file=io.StringIO(), record=True, width=120)
@@ -170,7 +175,9 @@ def _secret_detail_text(panel: SecretManagerPanel) -> str:
     return _render_text(panel.detail.content)
 
 
-async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str, str, str]:
+async def _visible_tabs_for(
+    selection: SelectionInfo,
+) -> tuple[str, str, str, str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -181,12 +188,14 @@ async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str, st
         server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
         secret_tab = tabs.get_tab(SECRET_MANAGER_TAB_ID)
         firewall_tab = tabs.get_tab(FIREWALL_TAB_ID)
+        models_tab = tabs.get_tab(MODELS_TAB_ID)
         service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
         return (
             server_tab.styles.display,
             secret_tab.styles.display,
             firewall_tab.styles.display,
+            models_tab.styles.display,
             service_tab.styles.display,
             logs_tab.styles.display,
         )
@@ -197,6 +206,7 @@ def test_root_selection_shows_project_tabs() -> None:
         server_display,
         secret_display,
         firewall_display,
+        models_display,
         service_display,
         logs_display,
     ) = asyncio.run(
@@ -206,8 +216,92 @@ def test_root_selection_shows_project_tabs() -> None:
     assert server_display == "block"
     assert secret_display == "block"
     assert firewall_display == "block"
+    assert models_display == "block"
     assert service_display == "none"
     assert logs_display == "none"
+
+
+async def _copy_model_example_with_keybinding() -> str:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        tabs = app.query_one("#main-tabs", TabbedContent)
+        tabs.active = MODELS_TAB_ID
+        panel = app.query_one("#models-panel")
+        panel.example.text = "curl -k https://endpoint/invocations"
+        await pilot.press("c")
+        await pilot.pause()
+        return app.copied_text
+
+
+def test_models_tab_copy_keybinding_copies_current_curl_example() -> None:
+    clipboard = asyncio.run(_copy_model_example_with_keybinding())
+
+    assert clipboard == "curl -k https://endpoint/invocations"
+
+
+async def _model_selection_example_prompt() -> str:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(0.1)
+        panel = app.query_one("#models-panel")
+        panel._endpoints = [{"id": "endpoint-1", "registry_id": "registry-1"}]
+        panel._models_by_endpoint = {
+            "endpoint-1": [
+                {
+                    "name": "Demo",
+                    "version": "1",
+                    "type": "MLServer",
+                    "status": "running",
+                }
+            ]
+        }
+        panel._select_endpoint("endpoint-1")
+        return panel.example.text
+
+
+def test_models_tab_selection_prompts_before_loading_example() -> None:
+    text = asyncio.run(_model_selection_example_prompt())
+
+    assert "Press Load Curl Example" in text
+    assert not text.startswith("curl")
+
+
+async def _models_metric_text() -> str:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        await pilot.pause(0.1)
+        panel = app.query_one("#models-panel")
+        panel._registries = [{"id": "registry-1"}]
+        panel._endpoints = [{"id": "endpoint-1"}, {"id": "endpoint-2"}]
+        panel._models_by_endpoint = {
+            "endpoint-1": [
+                {"name": "Ready", "status": "READY"},
+                {"name": "Failed", "status": "error"},
+            ],
+            "endpoint-2": [{"name": "Running", "status": "running"}],
+        }
+        panel._update_metrics(panel._model_metrics())
+        return "\n".join(
+            _render_text(app.query_one(selector).content)
+            for selector in (
+                "#models-metric-registries",
+                "#models-metric-endpoints",
+                "#models-metric-total",
+                "#models-metric-available",
+            )
+        )
+
+
+def test_models_tab_shows_top_metric_cards() -> None:
+    text = asyncio.run(_models_metric_text())
+
+    assert "Registries" in text
+    assert "Endpoints" in text
+    assert "Models Total" in text
+    assert "Models Available" in text
+    assert "1" in text
+    assert "2" in text
+    assert "3" in text
 
 
 async def _secret_manager_panel_text() -> str:
@@ -865,6 +959,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
         server_display,
         secret_display,
         firewall_display,
+        models_display,
         service_display,
         logs_display,
     ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="bundle")))
@@ -872,6 +967,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
     assert server_display == "none"
     assert secret_display == "none"
     assert firewall_display == "none"
+    assert models_display == "none"
     assert service_display == "block"
     assert logs_display == "none"
 
@@ -900,6 +996,7 @@ def test_server_selection_hides_template_tabs() -> None:
         server_display,
         secret_display,
         firewall_display,
+        models_display,
         service_display,
         logs_display,
     ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="server")))
@@ -907,6 +1004,7 @@ def test_server_selection_hides_template_tabs() -> None:
     assert server_display == "none"
     assert secret_display == "none"
     assert firewall_display == "none"
+    assert models_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
 
@@ -916,6 +1014,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
         server_display,
         secret_display,
         firewall_display,
+        models_display,
         service_display,
         logs_display,
     ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="service")))
@@ -923,6 +1022,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
     assert server_display == "none"
     assert secret_display == "none"
     assert firewall_display == "none"
+    assert models_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
 

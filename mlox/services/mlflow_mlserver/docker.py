@@ -15,11 +15,12 @@ Related modules (plain-text links):
 - mlox.services.mlflow
 """
 
+import json
 import logging
 import os
 import shlex
 
-from typing import Dict, cast
+from typing import Any, Dict, List, cast
 from passlib.hash import apr_md5_crypt  # type: ignore
 from dataclasses import dataclass, field
 
@@ -206,3 +207,51 @@ class MLFlowMLServerDockerService(AbstractService, AbstractModelServerService):
             full_model_name = f"{model_name}/{version}"
             return full_model_name == self.model
         return name == self.model
+
+    def list_supported_models(self) -> List[Dict[str, Any]]:
+        model_name, _, version = self.model.partition("/")
+        return [
+            {
+                "name": model_name or self.model,
+                "version": version or "-",
+                "type": "MLServer",
+                "status": self.state,
+                "model_uri": self.model,
+            }
+        ]
+
+    def get_example(
+        self,
+        model: Dict[str, Any] | None = None,
+        input_example: Any | None = None,
+    ) -> str:
+        url = self.service_url.rstrip("/")
+        payload = _mlflow_scoring_payload(input_example)
+        return "\n".join(
+            [
+                f"curl -k -u '{self.user}:{self.pw}' \\",
+                f"  {url}/invocations \\",
+                "  -H 'Content-Type: application/json' \\",
+                f"  -d '{json.dumps(payload)}'",
+            ]
+        )
+
+
+def _mlflow_scoring_payload(input_example: Any | None) -> Dict[str, Any]:
+    if not isinstance(input_example, dict):
+        return {"instances": input_example or [[0.0, 1.0, 2.0, 3.0]]}
+    scoring_keys = {"dataframe_records", "instances", "dataframe_split", "inputs"}
+    if len(scoring_keys.intersection(input_example)) == 1:
+        return input_example
+    if isinstance(input_example.get("columns"), list) and isinstance(
+        input_example.get("data"),
+        list,
+    ):
+        payload = {
+            "columns": input_example["columns"],
+            "data": input_example["data"],
+        }
+        if "index" in input_example:
+            payload["index"] = input_example["index"]
+        return {"dataframe_split": payload}
+    return {"instances": input_example}

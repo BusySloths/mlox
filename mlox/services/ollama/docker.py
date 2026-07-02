@@ -1,10 +1,11 @@
 """Docker deployment adapter for standalone Ollama services."""
 
+import json
 import logging
 import shlex
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from passlib.hash import apr_md5_crypt  # type: ignore
 
@@ -123,6 +124,37 @@ class OllamaDockerService(AbstractService, AbstractModelServerService):
 
     def get_registry(self):
         return None
+
+    def list_supported_models(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "name": model,
+                "version": "-",
+                "type": "Ollama",
+                "status": self.state,
+                "model_uri": model,
+            }
+            for model in self.ollama_models
+        ]
+
+    def get_example(
+        self,
+        model: Dict[str, Any] | None = None,
+        input_example: Any | None = None,
+    ) -> str:
+        model_name = str(
+            (model or {}).get("name")
+            or (self.ollama_models[0] if self.ollama_models else "llama3.2:1b")
+        )
+        payload = {"model": model_name, "prompt": "Hello", "stream": False}
+        return "\n".join(
+            [
+                f"curl -k -u '{self.user}:{self.pw}' \\",
+                f"  {self.service_url.rstrip('/')}/api/generate \\",
+                "  -H 'Content-Type: application/json' \\",
+                f"  -d '{json.dumps(payload)}'",
+            ]
+        )
 
     def get_secrets(self) -> Dict[str, Dict]:
         return {

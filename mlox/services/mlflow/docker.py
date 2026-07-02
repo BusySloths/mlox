@@ -15,7 +15,6 @@ Related modules (plain-text links):
 - mlox.services.mlflow.mlops
 """
 
-import os
 import mlflow  # type: ignore
 import logging
 
@@ -24,6 +23,10 @@ from datetime import datetime
 from dataclasses import dataclass, field
 
 from mlox.service import AbstractModelRegistryService, AbstractService
+from mlox.services.mlflow.artifacts import (
+    configure_mlflow_client,
+    load_registered_model_json_artifact,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,10 +95,7 @@ class MLFlowDockerService(AbstractService, AbstractModelRegistryService):
         """
         # Primary approach: use the mlflow client API for a structured health check
         try:
-            mlflow.set_registry_uri(self.service_url)
-            os.environ["MLFLOW_TRACKING_USERNAME"] = self.ui_user
-            os.environ["MLFLOW_TRACKING_PASSWORD"] = self.ui_pw
-            os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
+            configure_mlflow_client(self.service_url, self.ui_user, self.ui_pw)
             client = mlflow.tracking.MlflowClient()
 
             models = client.search_registered_models(filter_string="", max_results=10)
@@ -131,10 +131,7 @@ class MLFlowDockerService(AbstractService, AbstractModelRegistryService):
         """List all registered model names from the MLflow server."""
         all_models = []
         try:
-            mlflow.set_registry_uri(self.service_url)
-            os.environ["MLFLOW_TRACKING_USERNAME"] = self.ui_user
-            os.environ["MLFLOW_TRACKING_PASSWORD"] = self.ui_pw
-            os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
+            configure_mlflow_client(self.service_url, self.ui_user, self.ui_pw)
 
             client = mlflow.tracking.MlflowClient()
             models = client.search_model_versions(
@@ -159,3 +156,22 @@ class MLFlowDockerService(AbstractService, AbstractModelRegistryService):
         except Exception as e:
             logger.error("Error listing models from MLflow: %s", e)
         return all_models
+
+    def load_artifact(
+        self,
+        model_name: str,
+        model_version: str,
+        artifact_path: str,
+    ) -> Any | None:
+        try:
+            return load_registered_model_json_artifact(
+                service_url=self.service_url,
+                username=self.ui_user,
+                password=self.ui_pw,
+                model_name=model_name,
+                model_version=model_version,
+                artifact_path=artifact_path,
+            )
+        except Exception as exc:
+            logger.debug("Could not load MLflow artifact %s: %s", artifact_path, exc)
+            return None

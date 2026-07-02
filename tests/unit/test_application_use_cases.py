@@ -668,3 +668,246 @@ def test_models_list_models_fails_for_unknown_registry():
 
     assert not result.success
     assert result.code == 13
+
+
+def test_models_describe_model_operations_links_registry_endpoints_and_models():
+    registry = SimpleNamespace(
+        uuid="registry-1",
+        name="MLflow",
+        service_config_id="mlflow",
+        state="running",
+        list_models=lambda filter=None: [
+            {"Model": "Demo", "Version": "1", "Status": "READY"}
+        ],
+    )
+    endpoint = SimpleNamespace(
+        uuid="endpoint-1",
+        name="Demo endpoint",
+        service_config_id="mlserver",
+        state="running",
+        service_url="https://endpoint",
+        get_registry=lambda: registry,
+        list_supported_models=lambda: [
+            {
+                "name": "Demo",
+                "version": "1",
+                "type": "MLServer",
+                "status": "running",
+            }
+        ],
+        get_example=lambda model=None, input_example=None: "curl https://endpoint",
+    )
+    registry_bundle = SimpleNamespace(
+        name="registry-bundle",
+        server=SimpleNamespace(ip="10.0.0.1"),
+        services=[registry],
+    )
+    endpoint_bundle = SimpleNamespace(
+        name="endpoint-bundle",
+        server=SimpleNamespace(ip="10.0.0.2"),
+        services=[endpoint],
+    )
+    infra = SimpleNamespace(
+        filter_by_group=lambda group: {
+            "model-registry": [registry],
+            "model-server": [endpoint],
+        }.get(group, []),
+        get_bundle_by_service=lambda service: registry_bundle
+        if service is registry
+        else endpoint_bundle,
+    )
+
+    result = models.describe_model_operations(infra)
+
+    assert result.success
+    assert result.data["registries"][0]["name"] == "MLflow"
+    assert result.data["endpoints"][0]["registry_id"] == "registry-1"
+    assert result.data["models_by_endpoint"]["endpoint-1"][0]["name"] == "Demo"
+    assert "examples_by_endpoint" not in result.data
+    assert "examples_by_model" not in result.data
+    example_result = models.build_model_example(
+        result.data["endpoints"][0],
+        result.data["models_by_endpoint"]["endpoint-1"][0],
+    )
+    assert example_result.success
+    assert example_result.data["example"] == "curl https://endpoint"
+
+
+def test_models_describe_model_operations_does_not_load_input_example_artifacts():
+    artifact_calls = []
+    registry = SimpleNamespace(
+        uuid="registry-1",
+        name="MLflow",
+        service_config_id="mlflow",
+        state="running",
+        list_models=lambda filter=None: [],
+        load_artifact=lambda *args: artifact_calls.append(args),
+    )
+    endpoint = SimpleNamespace(
+        uuid="endpoint-1",
+        name="Demo endpoint",
+        service_config_id="mlserver",
+        state="running",
+        service_url="https://endpoint",
+        get_registry=lambda: registry,
+        list_supported_models=lambda: [
+            {
+                "name": "Demo",
+                "version": "1",
+                "type": "MLServer",
+                "status": "running",
+            }
+        ],
+        get_example=lambda model=None, input_example=None: "curl https://endpoint",
+    )
+    bundle = SimpleNamespace(
+        name="bundle",
+        server=SimpleNamespace(ip="10.0.0.2"),
+        services=[registry, endpoint],
+    )
+    infra = SimpleNamespace(
+        filter_by_group=lambda group: {
+            "model-registry": [registry],
+            "model-server": [endpoint],
+        }.get(group, []),
+        get_bundle_by_service=lambda service: bundle,
+    )
+
+    result = models.describe_model_operations(infra)
+
+    assert result.success
+    assert artifact_calls == []
+
+
+def test_models_build_model_example_uses_registry_input_example_artifact():
+    input_example = {"columns": ["x"], "data": [[1.0]]}
+    artifact_calls = []
+
+    def load_artifact(model_name, model_version, artifact_path):
+        artifact_calls.append((model_name, model_version, artifact_path))
+        return input_example if artifact_path == "input_example.json" else None
+
+    registry = SimpleNamespace(
+        uuid="registry-1",
+        name="MLflow",
+        service_config_id="mlflow",
+        state="running",
+        list_models=lambda filter=None: [],
+        load_artifact=load_artifact,
+    )
+
+    def get_example(model=None, input_example=None):
+        return f"curl payload={input_example}"
+
+    endpoint = SimpleNamespace(
+        uuid="endpoint-1",
+        name="Demo endpoint",
+        service_config_id="mlserver",
+        state="running",
+        service_url="https://endpoint",
+        get_registry=lambda: registry,
+        list_supported_models=lambda: [
+            {
+                "name": "Demo",
+                "version": "1",
+                "type": "MLServer",
+                "status": "running",
+            }
+        ],
+        get_example=get_example,
+    )
+    bundle = SimpleNamespace(
+        name="bundle",
+        server=SimpleNamespace(ip="10.0.0.2"),
+        services=[registry, endpoint],
+    )
+    infra = SimpleNamespace(
+        filter_by_group=lambda group: {
+            "model-registry": [registry],
+            "model-server": [endpoint],
+        }.get(group, []),
+        get_bundle_by_service=lambda service: bundle,
+    )
+
+    describe_result = models.describe_model_operations(infra)
+    result = models.build_model_example(
+        describe_result.data["endpoints"][0],
+        describe_result.data["models_by_endpoint"]["endpoint-1"][0],
+    )
+
+    assert describe_result.success
+    assert result.success
+    assert artifact_calls == [("Demo", "1", "input_example.json")]
+    assert result.data["example"] == "curl payload={'columns': ['x'], 'data': [[1.0]]}"
+
+
+def test_models_call_model_example_posts_generated_curl(monkeypatch):
+    calls = []
+
+    class Response:
+        status_code = 200
+        text = '{"ok": true}'
+
+        def json(self):
+            return {"ok": True}
+
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setattr(models.requests, "post", post)
+    example = "\n".join(
+        [
+            "curl -k -u 'user:pw' \\",
+            "  https://endpoint.example/invocations \\",
+            "  -H 'Content-Type: application/json' \\",
+            """  -d '{"instances": [[1.0]]}'""",
+        ]
+    )
+
+    result = models.call_model_example(example)
+
+    assert result.success
+    assert result.data["body"] == '{\n  "ok": true\n}'
+    assert calls == [
+        (
+            "https://endpoint.example/invocations",
+            {
+                "headers": {"Content-Type": "application/json"},
+                "data": '{"instances": [[1.0]]}',
+                "auth": ("user", "pw"),
+                "verify": False,
+                "timeout": 60,
+            },
+        )
+    ]
+
+
+def test_models_describe_model_operations_adds_standalone_registry_group():
+    endpoint = SimpleNamespace(
+        uuid="endpoint-1",
+        name="Ollama",
+        service_config_id="ollama",
+        state="running",
+        service_urls={"API": "https://ollama"},
+        get_registry=lambda: None,
+        list_supported_models=lambda: [
+            {"name": "tinyllama", "version": "-", "type": "Ollama", "status": "running"}
+        ],
+        get_example=lambda model=None, input_example=None: "curl https://ollama",
+    )
+    bundle = SimpleNamespace(
+        name="llm",
+        server=SimpleNamespace(ip="10.0.0.3"),
+        services=[endpoint],
+    )
+    infra = SimpleNamespace(
+        filter_by_group=lambda group: [endpoint] if group == "model-server" else [],
+        get_bundle_by_service=lambda service: bundle,
+    )
+
+    result = models.describe_model_operations(infra)
+
+    assert result.success
+    assert result.data["registries"][0]["name"] == "Standalone Endpoints"
+    assert result.data["endpoints"][0]["registry_id"] == models.STANDALONE_REGISTRY_ID

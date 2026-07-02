@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
@@ -14,6 +15,7 @@ from mlox.services.kafka.docker import KafkaDockerService, _generate_cluster_id
 from mlox.services.litellm.docker import LiteLLMDockerService
 from mlox.services.milvus.docker import MilvusDockerService, _generate_htpasswd_sha1
 from mlox.services.minio.docker import MinioDockerService
+from mlox.services.mlflow import artifacts as mlflow_artifacts
 from mlox.services.mlflow.docker import MLFlowDockerService
 from mlox.services.mlflow_gateway.docker import MLFlowGatewayDockerService
 from mlox.services.mlflow_mlserver.docker import MLFlowMLServerDockerService
@@ -766,6 +768,89 @@ def test_mlflow_setup_check_and_list_models(conn, monkeypatch):
     assert models[0]["Model"] == "demo"
 
 
+def test_mlflow_load_artifact_downloads_registered_model_root_json(
+    monkeypatch,
+):
+    calls = []
+
+    class _Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"columns": ["x"], "data": [[1]]}
+
+    class _Client:
+        def get_model_version_download_uri(self, name, version):
+            calls.append(("download-uri", name, version))
+            return "https://mlflow.example/api/2.0/mlflow-artifacts/artifacts/model"
+
+    monkeypatch.setattr(
+        mlflow_artifacts.mlflow,
+        "set_tracking_uri",
+        lambda uri: calls.append(("tracking", uri)),
+    )
+    monkeypatch.setattr(
+        mlflow_artifacts.mlflow,
+        "set_registry_uri",
+        lambda uri: calls.append(("registry", uri)),
+    )
+    monkeypatch.setattr(
+        mlflow_artifacts.mlflow.tracking,
+        "MlflowClient",
+        _Client,
+    )
+    monkeypatch.setattr(
+        mlflow_artifacts,
+        "get_default_host_creds",
+        lambda root_uri: calls.append(("host-creds", root_uri)) or root_uri,
+    )
+    monkeypatch.setattr(
+        mlflow_artifacts,
+        "http_request",
+        lambda host_creds, endpoint, method, **kwargs: calls.append(
+            ("request", host_creds, endpoint, method, kwargs)
+        )
+        or _Response(),
+    )
+
+    service = MLFlowDockerService(
+        **BASE,
+        ui_user="user",
+        ui_pw="pw",
+        port=5000,
+    )
+    service.service_url = "https://mlflow.example"
+
+    result = service.load_artifact("Demo", "1", "input_example.json")
+
+    assert result == {"columns": ["x"], "data": [[1]]}
+    assert ("download-uri", "Demo", "1") in calls
+    request_calls = [call for call in calls if call[0] == "request"]
+    assert request_calls[0][1] == (
+        "https://mlflow.example/api/2.0/mlflow-artifacts/artifacts/model"
+    )
+    assert request_calls[0][2] == "/input_example.json"
+    assert request_calls[0][3] == "GET"
+    assert request_calls[0][4]["timeout"] == mlflow_artifacts.DEFAULT_TIMEOUT
+    assert request_calls[0][4]["max_retries"] == 0
+
+
+def test_mlflow_artifact_helper_resolves_mlflow_artifacts_uri():
+    resolved = mlflow_artifacts._join_artifact_uri(
+        "mlflow-artifacts:/1/run-1/artifacts/model",
+        "input_example.json",
+        "https://mlflow.example/mlflow",
+    )
+
+    assert resolved == (
+        "https://mlflow.example/mlflow/api/2.0/mlflow-artifacts/artifacts/"
+        "1/run-1/artifacts/model/input_example.json"
+    )
+
+
 def test_mlflow_mlserver_setup_check_and_is_model(conn):
     service = _set_exec(
         MLFlowMLServerDockerService(
@@ -800,6 +885,101 @@ def test_mlflow_mlserver_setup_check_and_is_model(conn):
     service.get_dependent_service_by_name = lambda name: object()
     assert service.is_model("registry:my-model:1") is True
     assert service.is_model("registry:my-model") is False
+
+
+def test_mlflow_mlserver_example_uses_dataframe_split_for_dataframe_artifacts():
+    service = MLFlowMLServerDockerService(
+        **BASE,
+        dockerfile="Dockerfile",
+        port="6433",
+        model="Demo/13",
+        tracking_uri="https://tracking.example",
+        tracking_user="u",
+        tracking_pw="p",
+        user="api",
+        pw="pw",
+    )
+    service.service_url = "https://mlserver.example"
+
+    example = service.get_example(
+        {"name": "Demo", "version": "13"},
+        {
+            "columns": ["interested_party_id", "event_id"],
+            "data": [["party-1", "event-1"]],
+        },
+    )
+    payload = json.loads(example.split("  -d '", 1)[1].rstrip("'"))
+
+    assert payload == {
+        "dataframe_split": {
+            "columns": ["interested_party_id", "event_id"],
+            "data": [["party-1", "event-1"]],
+        }
+    }
+
+
+def test_mlflow_gateway_example_uses_dataframe_split_for_dataframe_artifacts():
+    service = MLFlowGatewayDockerService(
+        **BASE,
+        dockerfile="Dockerfile",
+        serve_script="serve.py",
+        start_script="start_gateway.sh",
+        port="6436",
+        tracking_uri="https://tracking.example",
+        tracking_user="u",
+        tracking_pw="p",
+        requirements_txt="",
+        user="api",
+        pw="pw",
+        registry_uuid="registry-1",
+    )
+    service.service_url = "https://gateway.example"
+
+    example = service.get_example(
+        {"name": "Demo", "version": "13"},
+        {
+            "columns": ["interested_party_id", "event_id"],
+            "data": [["party-1", "event-1"]],
+        },
+    )
+    payload = json.loads(example.split("  -d '", 1)[1].rstrip("'"))
+
+    assert "input_data" not in payload
+    assert payload["dataframe_split"] == {
+        "columns": ["interested_party_id", "event_id"],
+        "data": [["party-1", "event-1"]],
+    }
+    assert payload["registry_model_name"] == "Demo"
+    assert payload["registry_model_version"] == "13"
+
+
+def test_mlflow_gateway_example_unwraps_data_only_artifacts_for_input_data():
+    service = MLFlowGatewayDockerService(
+        **BASE,
+        dockerfile="Dockerfile",
+        serve_script="serve.py",
+        start_script="start_gateway.sh",
+        port="6436",
+        tracking_uri="https://tracking.example",
+        tracking_user="u",
+        tracking_pw="p",
+        requirements_txt="",
+        user="api",
+        pw="pw",
+        registry_uuid="registry-1",
+    )
+    service.service_url = "https://gateway.example"
+
+    example = service.get_example(
+        {"name": "Demo", "version": "13"},
+        {"data": [["company-1"]]},
+    )
+    payload = json.loads(example.split("  -d '", 1)[1].rstrip("'"))
+
+    assert payload["input_data"] == [["company-1"]]
+    assert "dataframe_split" not in payload
+    assert payload["registry_model_name"] == "Demo"
+    assert payload["registry_model_version"] == "13"
 
 
 def test_mlflow_gateway_setup_check_and_is_model(conn):

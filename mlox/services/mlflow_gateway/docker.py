@@ -1,11 +1,12 @@
 """Docker deployment adapter for the lightweight MLflow registry gateway."""
 
+import json
 import logging
 import os
 import shlex
 
 from dataclasses import dataclass, field
-from typing import Dict, cast
+from typing import Any, Dict, List, cast
 
 from passlib.hash import apr_md5_crypt  # type: ignore
 
@@ -195,3 +196,61 @@ class MLFlowGatewayDockerService(AbstractService, AbstractModelServerService):
         if not registry_service:
             return False
         return bool(model_name and version)
+
+    def list_supported_models(self) -> List[Dict[str, Any]]:
+        registry = self.get_registry()
+        if not registry:
+            return []
+        return [
+            {
+                "name": str(model.get("Model", "-")),
+                "version": str(model.get("Version", "-")),
+                "type": "MLflow Gateway",
+                "status": str(model.get("Status", self.state)),
+                "model_uri": f"{model.get('Model', '-')}/{model.get('Version', '-')}",
+            }
+            for model in registry.list_models()
+        ]
+
+    def get_example(
+        self,
+        model: Dict[str, Any] | None = None,
+        input_example: Any | None = None,
+    ) -> str:
+        model_name = str((model or {}).get("name") or "ModelName")
+        model_version = str((model or {}).get("version") or "1")
+        payload_input = _prediction_payload_input(input_example)
+        payload = {
+            "params": {},
+            "registry_model_name": model_name,
+            "registry_model_version": model_version,
+            **payload_input,
+        }
+        return "\n".join(
+            [
+                f"curl -k -u '{self.user}:{self.pw}' \\",
+                f"  {self.service_url.rstrip('/')}/prod/predict \\",
+                "  -H 'Content-Type: application/json' \\",
+                f"  -d '{json.dumps(payload)}'",
+            ]
+        )
+
+
+def _prediction_payload_input(input_example: Any | None) -> Dict[str, Any]:
+    if (
+        isinstance(input_example, dict)
+        and isinstance(input_example.get("columns"), list)
+        and isinstance(input_example.get("data"), list)
+    ):
+        payload = {
+            "columns": input_example["columns"],
+            "data": input_example["data"],
+        }
+        if "index" in input_example:
+            payload["index"] = input_example["index"]
+        return {"dataframe_split": payload}
+    if isinstance(input_example, dict) and isinstance(input_example.get("data"), list):
+        return {"input_data": input_example["data"]}
+    if input_example is not None:
+        return {"input_data": input_example}
+    return {"input_data": [[0.0, 1.0, 2.0]]}

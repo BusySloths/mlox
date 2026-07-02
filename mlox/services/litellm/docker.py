@@ -15,6 +15,7 @@ Related modules (plain-text links):
 """
 
 import logging
+import json
 
 from dataclasses import dataclass, field
 from typing import Dict, Any, List
@@ -156,6 +157,40 @@ class LiteLLMDockerService(AbstractService, AbstractModelServerService):
 
     def get_registry(self):
         return None
+
+    def list_supported_models(self) -> List[Dict[str, Any]]:
+        return [
+            {
+                "name": model.split("/", 1)[-1] if "/" in model else model,
+                "version": "-",
+                "type": "LiteLLM",
+                "status": self.state,
+                "model_uri": model,
+            }
+            for model in self.ollama_models
+        ]
+
+    def get_example(
+        self,
+        model: Dict[str, Any] | None = None,
+        input_example: Any | None = None,
+    ) -> str:
+        model_name = str(
+            (model or {}).get("name")
+            or (self.ollama_models[0] if self.ollama_models else "tinyllama")
+        )
+        payload = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": "Hello"}],
+        }
+        return "\n".join(
+            [
+                f"curl -k -H 'Authorization: Bearer {self.api_key}' \\",
+                f"  {self.service_urls.get('Service', '').rstrip('/')}/chat/completions \\",
+                "  -H 'Content-Type: application/json' \\",
+                f"  -d '{json.dumps(payload)}'",
+            ]
+        )
 
     def get_secrets(self) -> Dict[str, Dict]:
         secrets: Dict[str, Dict] = {}

@@ -26,6 +26,7 @@ from .firewall_panel import FirewallPanel
 from .history_panel import HistoryPanel
 from .log_panel import LogPanel
 from .model import SelectionChanged, SelectionInfo, is_bundle_initialized
+from .models_panel import ModelsPanel
 from .overview_panel import OverviewPanel
 from .project_actions import ProjectActions, RenameProjectDialog
 from .server_actions import ServerActions
@@ -50,6 +51,7 @@ from mlox.tui.template_forms import TemplateFormSpec, TemplateSetupDialog
 
 
 FIREWALL_TAB_ID = "firewall-tab"
+MODELS_TAB_ID = "models-tab"
 SERVICE_TUI_TAB_ID = "service-tui-tab"
 SECRET_MANAGER_TAB_ID = "secret-manager-tab"
 SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
@@ -96,6 +98,7 @@ class DashboardScreen(Screen):
         ("l", "toggle_app_logs", "Logs"),
         ("O", "open_terminal", "Open Terminal"),
         ("R", "reload_infrastructure", "Reload"),
+        Binding("c", "copy_model_example", "Copy Curl", show=False),
         Binding("enter", "reveal_secret", "Reveal Secret", show=False, priority=True),
         Binding(
             "ctrl+a",
@@ -141,6 +144,8 @@ class DashboardScreen(Screen):
                                 yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Firewall", id=FIREWALL_TAB_ID):
                                 yield FirewallPanel(id="firewall-panel")
+                            with TabPane("Models", id=MODELS_TAB_ID):
+                                yield ModelsPanel(id="models-panel")
                             with TabPane("Service Templates", id=SERVICE_TEMPLATES_TAB_ID):
                                 yield TemplatePanel(
                                     id="service-template-panel", template_type="service"
@@ -212,11 +217,19 @@ class DashboardScreen(Screen):
         secret_manager.selection = selection
         firewall = self.query_one(FirewallPanel)
         firewall.selection = selection
+        models = self.query_one(ModelsPanel)
+        models.selection = selection
         for templates in self.query(TemplatePanel):
             templates.selection = selection
         self._update_template_tabs(selection)
         self._update_tui_panel(selection)
         self.refresh_bindings()
+
+    def action_copy_model_example(self) -> None:
+        tabs = self.query_one("#main-tabs", TabbedContent)
+        if tabs.active != MODELS_TAB_ID:
+            return
+        self.query_one(ModelsPanel).copy_current_example()
 
     @on(ProjectActions.RenameRequested)
     async def handle_project_rename_requested(
@@ -601,6 +614,10 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             FIREWALL_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
+            MODELS_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(
