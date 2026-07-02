@@ -18,6 +18,7 @@ from mlox.application.result import OperationResult
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.project_actions import ProjectActions
 from mlox.tui.screens.dashboard.server_actions import ServerActions
+from mlox.tui.screens.dashboard.service_actions import ServiceActions
 from mlox.tui.screens.dashboard.secret_manager_panel import SecretManagerPanel
 from mlox.tui.screens.dashboard.template_panel import TemplatePanel
 from mlox.tui.screens.dashboard.tree import InfraTree
@@ -666,6 +667,72 @@ def test_bundle_tree_label_shows_backend_type() -> None:
     assert asyncio.run(_bundle_label()) == (
         "Bundle: dev  Backend: docker, k3s_agent"
     )
+
+
+async def _service_actions_display_for(selection: SelectionInfo) -> bool:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(selection)
+        await pilot.pause()
+        return app.query_one(ServiceActions).display
+
+
+def test_service_actions_show_only_for_service_nodes() -> None:
+    assert (
+        asyncio.run(
+            _service_actions_display_for(
+                SelectionInfo(type="service", service=SimpleNamespace(name="svc"))
+            )
+        )
+        is True
+    )
+    assert (
+        asyncio.run(_service_actions_display_for(SelectionInfo(type="bundle")))
+        is False
+    )
+
+
+async def _rename_service_from_action_modal() -> tuple[str, str]:
+    app = DashboardTestApp()
+    service = SimpleNamespace(name="mlflow", state="running")
+    bundle = SimpleNamespace(
+        name="dev",
+        server=SimpleNamespace(ip="10.0.0.5", state="running", backend=["docker"]),
+        services=[service],
+    )
+    infra = SimpleNamespace(bundles=[bundle])
+    infra.get_service = lambda name: service if service.name == name else None
+    infra.list_service_names = lambda: [service.name]
+    infra.get_bundle_by_service = lambda value: bundle if value is service else None
+    app.workspace.infrastructure = infra
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        selection = SelectionInfo(type="service", bundle=bundle, service=service)
+        screen._apply_selection(selection)
+        await screen.handle_service_rename_requested(ServiceActions.RenameRequested())
+        await pilot.pause()
+
+        app.screen.query_one("#rename-service-name", Input).value = "tracking"
+        await pilot.click("#confirm-service-rename")
+
+        deadline = time.monotonic() + 2
+        while service.name != "tracking":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for service rename.")
+            await pilot.pause(0.05)
+
+        return service.name, screen.query_one("#infra-tree", InfraTree).root.children[
+            0
+        ].children[1].label.plain
+
+
+def test_service_rename_action_updates_service_and_tree_label() -> None:
+    service_name, tree_label = asyncio.run(_rename_service_from_action_modal())
+
+    assert service_name == "tracking"
+    assert tree_label == "Service: tracking"
 
 
 async def _edit_bundle_tags_from_action_modal() -> tuple[list[str], list[str], str]:

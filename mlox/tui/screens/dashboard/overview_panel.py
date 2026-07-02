@@ -19,6 +19,7 @@ from mlox.application.use_cases.project import summarize_infrastructure
 from .model import (
     SelectionInfo,
     WELCOME_TEXT,
+    get_service_capabilities,
     get_server_backends,
     is_bundle_initialized,
 )
@@ -247,6 +248,10 @@ class OverviewPanel(Static):
         table.add_row("Bundle", str(getattr(bundle, "name", "-")))
         table.add_row("Service", getattr(service, "name", "-"))
         table.add_row("State", getattr(service, "state", "unknown"))
+        table.add_row(
+            "Capabilities",
+            self._capability_badges(get_service_capabilities(service)),
+        )
         table.add_row("Version", str(getattr(service, "version", "-")))
         server_ip = getattr(getattr(bundle, "server", None), "ip", "unknown")
         table.add_row("Server", server_ip)

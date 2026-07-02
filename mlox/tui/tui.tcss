@@ -742,6 +742,7 @@ SecretEditDialog {
 #selection-overview,
 #selection-project-actions,
 #selection-server-actions,
+#selection-service-actions,
 #selection-server-info,
 #selection-logs,
 #selection-history {
@@ -783,18 +784,33 @@ SecretEditDialog {
   border-title-style: bold;
 }
 
+#selection-service-actions {
+  height: auto;
+  margin-top: 1;
+  padding: 1;
+  border: round #1bd6f3ff;
+  border-title-align: center;
+  border-title-color: #e6edf7;
+  border-title-style: bold;
+}
+
 #server-action-buttons,
 #server-primary-action-buttons,
 #server-destructive-action-buttons,
+#service-action-buttons,
+#service-primary-action-buttons,
+#service-destructive-action-buttons,
 #credential-copy-buttons {
   height: auto;
 }
 
-#server-primary-action-buttons {
+#server-primary-action-buttons,
+#service-primary-action-buttons {
   width: 1fr;
 }
 
-#server-destructive-action-buttons {
+#server-destructive-action-buttons,
+#service-destructive-action-buttons {
   width: auto;
 }
 
@@ -946,6 +962,24 @@ EditBundleTagsDialog {
   background: #12b86aff;
 }
 
+#rename-service {
+  width: auto;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#teardown-service {
+  width: auto;
+  background: #9d2222;
+  border: round #ff8a8a;
+  color: #ffffff;
+}
+
+#teardown-service:hover {
+  background: #bd2f2f;
+}
+
 RenameProjectDialog {
   align: center middle;
 }
@@ -996,6 +1030,86 @@ RenameProjectDialog {
 
 RemoveBundleDialog {
   align: center middle;
+}
+
+RenameServiceDialog,
+RemoveServiceDialog {
+  align: center middle;
+}
+
+#rename-service-dialog,
+#remove-service-dialog {
+  width: 60;
+  height: auto;
+  margin: 2 4;
+  padding: 1 2;
+  background: #0d2a24ff;
+}
+
+#rename-service-dialog {
+  border: round #74d17aff;
+}
+
+#remove-service-dialog {
+  border: round #ff8a8a;
+}
+
+#rename-service-title,
+#remove-service-title {
+  height: auto;
+  content-align: center middle;
+  text-style: bold;
+  margin-bottom: 1;
+}
+
+#rename-service-title {
+  color: #e6edf7;
+}
+
+#remove-service-title {
+  color: #ffd7d7;
+}
+
+#rename-service-name {
+  width: 1fr;
+  height: 3;
+  margin-bottom: 1;
+}
+
+#remove-service-message {
+  height: auto;
+  color: #e6edf7;
+  margin-bottom: 1;
+}
+
+#rename-service-actions,
+#remove-service-actions {
+  height: auto;
+  align-horizontal: right;
+}
+
+#cancel-service-rename,
+#cancel-remove-service,
+#confirm-service-rename,
+#confirm-remove-service {
+  width: auto;
+}
+
+#confirm-service-rename,
+#confirm-remove-service {
+  margin-left: 1;
+}
+
+#confirm-service-rename {
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#confirm-remove-service {
+  background: #9d2222;
+  border: round #ff8a8a;
+  color: #ffffff;
 }
 
 #remove-bundle-dialog {

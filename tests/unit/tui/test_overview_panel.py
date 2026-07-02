@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from rich.console import Console
 from textual.app import App, ComposeResult
 
+from mlox.service import ServiceCapability
 from mlox.server import ServerCapability
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
@@ -331,6 +332,7 @@ def test_service_overview_shows_version_ports_and_uuid() -> None:
         target_path="/opt/mlflow",
         service_config_id="mlflow",
         uuid="svc-123",
+        capabilities={ServiceCapability.MODEL_REGISTRY, "dashboard"},
         service_ports={"http": 5000},
         compose_service_names={"app": "mlflow"},
         service_urls={},
@@ -347,5 +349,8 @@ def test_service_overview_shows_version_ports_and_uuid() -> None:
     assert "3.0" in overview
     assert "UUID" in overview
     assert "svc-123" in overview
+    assert "Capabilities" in overview
+    assert "model registry" in overview
+    assert "dashboard" in overview
     assert "Ports" in overview
     assert "http:5000" in overview

@@ -167,7 +167,10 @@ def rename_service(project: WorkspaceState, *, name: str, new_name: str) -> Oper
     service = infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")
-    if new_name in infra.list_service_names():
+    new_name = new_name.strip()
+    if not new_name:
+        return OperationResult(False, 11, "Service name must not be empty.")
+    if new_name != name and new_name in infra.list_service_names():
         return OperationResult(False, 11, "Service name must be unique.")
     service.name = new_name
     return OperationResult(
@@ -247,7 +250,8 @@ def build_service_ui_widget(
             "Service UI is unavailable because the infrastructure is not loaded.",
         )
 
-    config = infra.get_service_config(service)
+    get_service_config = getattr(infra, "get_service_config", None)
+    config = get_service_config(service) if callable(get_service_config) else None
     if not config:
         return OperationResult(
             False,

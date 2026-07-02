@@ -49,7 +49,19 @@ def get_server_backends(server: Any | None) -> list[str]:
 def get_server_capabilities(server: Any | None) -> list[str]:
     """Return normalized server capability names."""
 
-    raw_capabilities = getattr(server, "capabilities", set()) if server else set()
+    return get_capability_names(server)
+
+
+def get_service_capabilities(service: Any | None) -> list[str]:
+    """Return normalized service capability names."""
+
+    return get_capability_names(service)
+
+
+def get_capability_names(item: Any | None) -> list[str]:
+    """Return normalized capability names advertised by an object."""
+
+    raw_capabilities = getattr(item, "capabilities", set()) if item else set()
     capabilities = set()
     for capability in raw_capabilities or []:
         value = capability.value if hasattr(capability, "value") else capability

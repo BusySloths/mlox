@@ -608,6 +608,52 @@ def test_services_setup_service_runs_runtime_steps():
     assert calls == ["setup", "spin_up"]
 
 
+def test_services_rename_service_validates_and_updates_name():
+    service = SimpleNamespace(name="svc")
+    infra = SimpleNamespace(
+        get_service=lambda name: service if service.name == name else None,
+        list_service_names=lambda: [service.name, "existing"],
+    )
+    current = _project(infra)
+
+    empty = services.rename_service(current, name="svc", new_name=" ")
+    duplicate = services.rename_service(current, name="svc", new_name="existing")
+    renamed = services.rename_service(current, name="svc", new_name="renamed")
+
+    assert not empty.success
+    assert empty.message == "Service name must not be empty."
+    assert not duplicate.success
+    assert duplicate.message == "Service name must be unique."
+    assert renamed.success
+    assert service.name == "renamed"
+
+
+def test_services_teardown_service_runs_runtime_steps_and_removes_service():
+    calls = []
+    service = SimpleNamespace(
+        name="svc",
+        spin_down=lambda conn: calls.append("spin_down"),
+        teardown=lambda conn: calls.append("teardown"),
+        clear_service_lookup=lambda: calls.append("clear_lookup"),
+    )
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: _Connection()),
+        services=[service],
+    )
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service if name == "svc" else None,
+            get_bundle_by_service=lambda value: bundle if value is service else None,
+        )
+    )
+
+    result = services.teardown_service(current, name="svc")
+
+    assert result.success
+    assert calls == ["spin_down", "teardown", "clear_lookup"]
+    assert bundle.services == []
+
+
 def test_services_browse_service_templates_filters_by_backend():
     docker = SimpleNamespace(
         id="docker",

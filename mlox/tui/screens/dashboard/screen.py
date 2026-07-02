@@ -31,6 +31,11 @@ from .overview_panel import OverviewPanel
 from .project_actions import ProjectActions, RenameProjectDialog
 from .server_actions import ServerActions
 from .server_info_panel import ServerInfoPanel
+from .service_actions import (
+    RemoveServiceDialog,
+    RenameServiceDialog,
+    ServiceActions,
+)
 from .secret_manager_panel import SecretManagerPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
@@ -46,7 +51,11 @@ from mlox.application.use_cases.project import (
     rename_project_workspace,
     update_bundle_tags,
 )
-from mlox.application.use_cases.services import build_service_ui_widget
+from mlox.application.use_cases.services import (
+    build_service_ui_widget,
+    rename_service,
+    teardown_service,
+)
 from mlox.tui.template_forms import TemplateFormSpec, TemplateSetupDialog
 
 
@@ -133,6 +142,7 @@ class DashboardScreen(Screen):
                                     yield ProjectActions(id="selection-project-actions")
                                     yield ServerInfoPanel(id="selection-server-info")
                                     yield ServerActions(id="selection-server-actions")
+                                    yield ServiceActions(id="selection-service-actions")
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")
@@ -205,6 +215,8 @@ class DashboardScreen(Screen):
         overview.selection = selection
         server_actions = self.query_one(ServerActions)
         server_actions.selection = selection
+        service_actions = self.query_one(ServiceActions)
+        service_actions.selection = selection
         project_actions = self.query_one(ProjectActions)
         project_actions.selection = selection
         server_info = self.query_one(ServerInfoPanel)
@@ -445,6 +457,104 @@ class DashboardScreen(Screen):
         self._refresh_tree_after_server_add(bundle)
         self.notify(result.message or success_message)
 
+    @on(ServiceActions.RenameRequested)
+    async def handle_service_rename_requested(
+        self, _: ServiceActions.RenameRequested
+    ) -> None:
+        selection = self.query_one(ServiceActions).selection
+        if not selection or selection.type != "service" or not selection.service:
+            self.notify("Select a service to rename.", severity="warning")
+            return
+
+        current_name = str(getattr(selection.service, "name", ""))
+        await self.app.push_screen(
+            RenameServiceDialog(current_name),
+            lambda name: self._rename_service_from_dialog(selection, name),
+        )
+
+    def _rename_service_from_dialog(
+        self,
+        selection: SelectionInfo,
+        name: str | None,
+    ) -> None:
+        if name is None:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot rename service because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        current_name = str(getattr(selection.service, "name", ""))
+        result = rename_service(workspace, name=current_name, new_name=name)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+
+        self._refresh_tree_after_service_change(selection.bundle, selection.service)
+        self.notify(result.message)
+
+    @on(ServiceActions.TeardownRequested)
+    async def handle_service_teardown_requested(
+        self, _: ServiceActions.TeardownRequested
+    ) -> None:
+        selection = self.query_one(ServiceActions).selection
+        if not selection or selection.type != "service" or not selection.service:
+            self.notify("Select a service to teardown.", severity="warning")
+            return
+
+        service_name = str(getattr(selection.service, "name", "-"))
+        await self.app.push_screen(
+            RemoveServiceDialog(service_name),
+            lambda confirmed: self._teardown_service_after_confirm(
+                selection,
+                confirmed,
+            ),
+        )
+
+    def _teardown_service_after_confirm(
+        self,
+        selection: SelectionInfo,
+        confirmed: bool,
+    ) -> None:
+        if not confirmed:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot teardown service because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        service_name = str(getattr(selection.service, "name", ""))
+        self.query_one(ServiceActions).set_loading(True)
+
+        def run_operation() -> None:
+            result = teardown_service(workspace, name=service_name)
+            self.app.call_from_thread(
+                self._finish_service_teardown,
+                result,
+                selection.bundle,
+            )
+
+        self.app.run_worker(
+            run_operation,
+            thread=True,
+            exclusive=True,
+            group="service-lifecycle",
+        )
+
+    def _finish_service_teardown(self, result, bundle: object | None) -> None:
+        self.query_one(ServiceActions).set_loading(False)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+        self._refresh_tree_after_service_change(bundle, None)
+        self.notify(result.message)
+
     @on(TemplatePanel.ConfigureTemplateRequested)
     async def handle_server_template_configure_requested(
         self, message: TemplatePanel.ConfigureTemplateRequested
@@ -550,6 +660,45 @@ class DashboardScreen(Screen):
                 if (
                     isinstance(selection, SelectionInfo)
                     and selection.bundle is bundle
+                ):
+                    tree.move_cursor(node)
+                    self._apply_selection(selection)
+                    return
+        tree.move_cursor(tree.root)
+        self._apply_selection(tree.root.data)
+
+    def _refresh_tree_after_service_change(
+        self,
+        bundle: object | None,
+        service: object | None,
+    ) -> None:
+        tree = self.query_one(InfraTree)
+        tree.populate_tree()
+        tree.expand_all()
+        self.call_after_refresh(self._select_service_tree_node, bundle, service)
+
+    def _select_service_tree_node(
+        self,
+        bundle: object | None,
+        service: object | None,
+    ) -> None:
+        tree = self.query_one(InfraTree)
+        tree.expand_all()
+        for bundle_node in tree.root.children:
+            bundle_selection = bundle_node.data
+            if not isinstance(bundle_selection, SelectionInfo):
+                continue
+            if bundle_selection.bundle is not bundle:
+                continue
+            if service is None:
+                tree.move_cursor(bundle_node)
+                self._apply_selection(bundle_selection)
+                return
+            for node in bundle_node.children:
+                selection = node.data
+                if (
+                    isinstance(selection, SelectionInfo)
+                    and selection.service is service
                 ):
                     tree.move_cursor(node)
                     self._apply_selection(selection)
