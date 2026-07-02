@@ -13,6 +13,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 from textual.renderables.digits import Digits as DigitsRenderable
 
+from mlox.application.use_cases.firewall import firewall_summary_for_bundle
 from mlox.application.use_cases.project import summarize_infrastructure
 
 from .model import (
@@ -184,6 +185,12 @@ class OverviewPanel(Static):
         details.add_row("Server", str(getattr(server, "ip", "unknown")))
         details.add_row("State", str(getattr(server, "state", "unknown")))
         details.add_row("Backend", backends)
+        firewall = firewall_summary_for_bundle(bundle)
+        if firewall["capable"]:
+            details.add_row(
+                "Firewall",
+                self._firewall_summary_text(firewall["recommended_ports"]),
+            )
         if is_bundle_initialized(bundle) and not services:
             details.add_row(
                 "Services",
@@ -365,3 +372,11 @@ class OverviewPanel(Static):
         if isinstance(ports, dict) and ports:
             return ", ".join(f"{key}:{value}" for key, value in ports.items())
         return "-"
+
+    def _firewall_summary_text(self, recommended_ports: list[int]) -> Text:
+        text = Text()
+        text.append("Supported", style="bold white on dark_green")
+        text.append("  Recommended ports: ")
+        text.append(", ".join(str(port) for port in recommended_ports) or "none")
+        text.append("  Open the project Firewall tab for live status.", style="dim")
+        return text

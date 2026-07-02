@@ -57,6 +57,39 @@ def test_bundle_overview_shows_backend() -> None:
     assert "docker, native" in overview
 
 
+def test_bundle_overview_shows_firewall_summary_without_live_status() -> None:
+    rendered = []
+    panel = OverviewPanel()
+    panel.update = rendered.append
+    server = SimpleNamespace(
+        ip="10.0.0.1",
+        port=2222,
+        state="running",
+        backend=["docker"],
+        capabilities={ServerCapability.FIREWALL},
+    )
+    service = SimpleNamespace(name="MLflow", service_ports={"http": 5000})
+
+    panel.show_bundle(
+        SelectionInfo(
+            type="bundle",
+            bundle=SimpleNamespace(
+                name="demo",
+                tags=[],
+                services=[service],
+                server=server,
+            ),
+            server=server,
+        )
+    )
+
+    overview = _render_panel(rendered[0])
+
+    assert "Firewall" in overview
+    assert "Supported" in overview
+    assert "2222, 5000" in overview
+
+
 async def _project_overview_text() -> str:
     server = SimpleNamespace(
         ip="10.0.0.1",

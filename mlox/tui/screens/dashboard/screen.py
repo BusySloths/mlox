@@ -22,6 +22,7 @@ from textual.widgets import (
 
 from .app_log_panel import AppLogPanel
 from .bundle_tags import EditBundleTagsDialog
+from .firewall_panel import FirewallPanel
 from .history_panel import HistoryPanel
 from .log_panel import LogPanel
 from .model import SelectionChanged, SelectionInfo, is_bundle_initialized
@@ -48,6 +49,7 @@ from mlox.application.use_cases.services import build_service_ui_widget
 from mlox.tui.template_forms import TemplateFormSpec, TemplateSetupDialog
 
 
+FIREWALL_TAB_ID = "firewall-tab"
 SERVICE_TUI_TAB_ID = "service-tui-tab"
 SECRET_MANAGER_TAB_ID = "secret-manager-tab"
 SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
@@ -137,6 +139,8 @@ class DashboardScreen(Screen):
                                 )
                             with TabPane("Secret Manager", id=SECRET_MANAGER_TAB_ID):
                                 yield SecretManagerPanel(id="secret-manager-panel")
+                            with TabPane("Firewall", id=FIREWALL_TAB_ID):
+                                yield FirewallPanel(id="firewall-panel")
                             with TabPane("Service Templates", id=SERVICE_TEMPLATES_TAB_ID):
                                 yield TemplatePanel(
                                     id="service-template-panel", template_type="service"
@@ -206,6 +210,8 @@ class DashboardScreen(Screen):
         history.selection = selection
         secret_manager = self.query_one(SecretManagerPanel)
         secret_manager.selection = selection
+        firewall = self.query_one(FirewallPanel)
+        firewall.selection = selection
         for templates in self.query(TemplatePanel):
             templates.selection = selection
         self._update_template_tabs(selection)
@@ -591,6 +597,10 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             SECRET_MANAGER_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
+            FIREWALL_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(

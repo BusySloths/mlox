@@ -25,6 +25,7 @@ from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.screen import (
     DashboardScreen,
+    FIREWALL_TAB_ID,
     LOGS_TAB_ID,
     SECRET_MANAGER_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
@@ -169,7 +170,7 @@ def _secret_detail_text(panel: SecretManagerPanel) -> str:
     return _render_text(panel.detail.content)
 
 
-async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str, str]:
+async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -179,23 +180,32 @@ async def _visible_tabs_for(selection: SelectionInfo) -> tuple[str, str, str, st
         tabs = screen.query_one("#main-tabs", TabbedContent)
         server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
         secret_tab = tabs.get_tab(SECRET_MANAGER_TAB_ID)
+        firewall_tab = tabs.get_tab(FIREWALL_TAB_ID)
         service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
         return (
             server_tab.styles.display,
             secret_tab.styles.display,
+            firewall_tab.styles.display,
             service_tab.styles.display,
             logs_tab.styles.display,
         )
 
 
 def test_root_selection_shows_project_tabs() -> None:
-    server_display, secret_display, service_display, logs_display = asyncio.run(
+    (
+        server_display,
+        secret_display,
+        firewall_display,
+        service_display,
+        logs_display,
+    ) = asyncio.run(
         _visible_tabs_for(SelectionInfo(type="root"))
     )
 
     assert server_display == "block"
     assert secret_display == "block"
+    assert firewall_display == "block"
     assert service_display == "none"
     assert logs_display == "none"
 
@@ -851,12 +861,17 @@ def test_empty_bundle_tree_has_no_no_services_leaf() -> None:
 
 
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
-    server_display, secret_display, service_display, logs_display = asyncio.run(
-        _visible_tabs_for(SelectionInfo(type="bundle"))
-    )
+    (
+        server_display,
+        secret_display,
+        firewall_display,
+        service_display,
+        logs_display,
+    ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="bundle")))
 
     assert server_display == "none"
     assert secret_display == "none"
+    assert firewall_display == "none"
     assert service_display == "block"
     assert logs_display == "none"
 
@@ -881,23 +896,33 @@ def test_uninitialized_bundle_selection_hides_service_templates_tab() -> None:
 
 
 def test_server_selection_hides_template_tabs() -> None:
-    server_display, secret_display, service_display, logs_display = asyncio.run(
-        _visible_tabs_for(SelectionInfo(type="server"))
-    )
+    (
+        server_display,
+        secret_display,
+        firewall_display,
+        service_display,
+        logs_display,
+    ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="server")))
 
     assert server_display == "none"
     assert secret_display == "none"
+    assert firewall_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
 
 
 def test_service_selection_shows_history_and_logs_tab() -> None:
-    server_display, secret_display, service_display, logs_display = asyncio.run(
-        _visible_tabs_for(SelectionInfo(type="service"))
-    )
+    (
+        server_display,
+        secret_display,
+        firewall_display,
+        service_display,
+        logs_display,
+    ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="service")))
 
     assert server_display == "none"
     assert secret_display == "none"
+    assert firewall_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
 
