@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.containers import Container
-from textual.widgets import Button, Input, SelectionList, TabbedContent, TextArea
+from textual.widgets import Button, Input, SelectionList, Static, TabbedContent, TextArea
 
 from mlox.application.result import OperationResult
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
@@ -356,6 +356,56 @@ def test_monitor_tab_shows_project_monitor_table() -> None:
     assert "42.0%" in text
     assert "73.0%" in text
     assert "2.0 KB/s" in text
+
+
+async def _monitor_detail_text() -> str:
+    app = DashboardTestApp()
+    monitor_service = SimpleNamespace(
+        name="otel",
+        state="running",
+        capabilities={"monitor"},
+        get_monitor_snapshot=lambda bundle: {
+            "cpu_used_ratio": 0.42,
+            "ram_free_ratio": 0.73,
+            "disk_free_ratio": 0.81,
+            "metric_points": 9,
+        },
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[monitor_service],
+    )
+    config = SimpleNamespace(
+        get_ui_handler=lambda ui, handler: (
+            lambda infra, bundle_arg, service_arg: Static("Detailed monitor settings")
+        )
+    )
+    app.workspace.infrastructure = SimpleNamespace(
+        bundles=[bundle],
+        get_service_config=lambda service: config,
+    )
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="root"))
+        screen.query_one("#main-tabs", TabbedContent).active = MONITOR_TAB_ID
+        detail = app.query_one("#monitor-service-detail")
+        deadline = time.monotonic() + 2
+        text = ""
+        while "Detailed monitor settings" not in text:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for monitor detail.")
+            await pilot.pause(0.05)
+            if detail.children:
+                text = _render_text(detail.children[0].content)
+        return text
+
+
+def test_monitor_tab_shows_selected_service_settings_below_table() -> None:
+    text = asyncio.run(_monitor_detail_text())
+
+    assert "Detailed monitor settings" in text
 
 
 async def _secret_manager_panel_text() -> str:

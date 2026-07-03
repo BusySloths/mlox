@@ -91,7 +91,9 @@ class RemoveBundleDialog(ModalScreen[bool]):
             )
             with Horizontal(id="remove-bundle-actions"):
                 yield Button("Cancel", id="cancel-remove-bundle")
-                yield Button("Remove Bundle", id="confirm-remove-bundle", variant="error")
+                yield Button(
+                    "Remove Bundle", id="confirm-remove-bundle", variant="error"
+                )
 
     @on(Button.Pressed, "#cancel-remove-bundle")
     def handle_cancel(self, _: Button.Pressed) -> None:
@@ -148,19 +150,23 @@ class DashboardScreen(Screen):
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")
-                            with TabPane("Server Templates", id=SERVER_TEMPLATES_TAB_ID):
+                            with TabPane(
+                                "Server Templates", id=SERVER_TEMPLATES_TAB_ID
+                            ):
                                 yield TemplatePanel(
                                     id="server-template-panel", template_type="server"
                                 )
-                            with TabPane("Secret Manager", id=SECRET_MANAGER_TAB_ID):
-                                yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Firewall", id=FIREWALL_TAB_ID):
                                 yield FirewallPanel(id="firewall-panel")
+                            with TabPane("Secret Manager", id=SECRET_MANAGER_TAB_ID):
+                                yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Monitor", id=MONITOR_TAB_ID):
                                 yield MonitorPanel(id="monitor-panel")
                             with TabPane("Models", id=MODELS_TAB_ID):
                                 yield ModelsPanel(id="models-panel")
-                            with TabPane("Service Templates", id=SERVICE_TEMPLATES_TAB_ID):
+                            with TabPane(
+                                "Service Templates", id=SERVICE_TEMPLATES_TAB_ID
+                            ):
                                 yield TemplatePanel(
                                     id="service-template-panel", template_type="service"
                                 )
@@ -309,9 +315,7 @@ class DashboardScreen(Screen):
         )
 
     @on(Button.Pressed, "#add-bundle-from-server-template")
-    def handle_project_add_bundle_requested(
-        self, event: Button.Pressed
-    ) -> None:
+    def handle_project_add_bundle_requested(self, event: Button.Pressed) -> None:
         event.stop()
         self._set_tab_visible(SERVER_TEMPLATES_TAB_ID, True)
         self._activate_server_templates_tab()
@@ -663,10 +667,7 @@ class DashboardScreen(Screen):
         if bundle is not None:
             for node in tree.root.children:
                 selection = node.data
-                if (
-                    isinstance(selection, SelectionInfo)
-                    and selection.bundle is bundle
-                ):
+                if isinstance(selection, SelectionInfo) and selection.bundle is bundle:
                     tree.move_cursor(node)
                     self._apply_selection(selection)
                     return

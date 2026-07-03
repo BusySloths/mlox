@@ -29,6 +29,8 @@ def _monitor_row(bundle, service) -> dict[str, Any]:
         "bundle": str(getattr(bundle, "name", "-")),
         "server": str(getattr(getattr(bundle, "server", None), "ip", "-")),
         "service": str(getattr(service, "name", "-")),
+        "bundle_ref": bundle,
+        "service_ref": service,
         "state": str(getattr(service, "state", "unknown")),
         "cpu_used_ratio": None,
         "ram_free_ratio": None,

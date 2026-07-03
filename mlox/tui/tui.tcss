@@ -466,9 +466,16 @@ ModelCallResultDialog {
 }
 
 #monitor-table {
-  height: 1fr;
+  height: 2fr;
   width: 1fr;
   border: round #1bd6f3ff;
+}
+
+#monitor-service-detail {
+  height: 2fr;
+  width: 1fr;
+  margin-top: 1;
+  border: round #35635bff;
 }
 
 EnableFirewallDialog {

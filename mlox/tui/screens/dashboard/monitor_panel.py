@@ -8,11 +8,13 @@ from typing import Any, Optional
 from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
+from textual.widget import Widget
 from textual.widgets import Button, DataTable, Static
 
 from mlox.application.use_cases.monitor import describe_monitoring
+from mlox.application.use_cases.services import build_service_ui_widget
 
 from .model import SelectionInfo
 
@@ -25,6 +27,7 @@ class MonitorPanel(Static):
     def __init__(self, *children, **kwargs) -> None:
         super().__init__(*children, **kwargs)
         self._rows: list[dict[str, Any]] = []
+        self._row_keys: list[str] = []
 
     def compose(self) -> ComposeResult:
         with Vertical(id="monitor-content"):
@@ -51,6 +54,7 @@ class MonitorPanel(Static):
                 "Message",
             )
             yield table
+            yield Container(id="monitor-service-detail")
 
     @property
     def table(self) -> DataTable:
@@ -71,6 +75,10 @@ class MonitorPanel(Static):
     @on(Button.Pressed, "#refresh-monitor")
     def handle_refresh(self, _: Button.Pressed) -> None:
         self.load(refresh=True)
+
+    @on(DataTable.RowSelected, "#monitor-table")
+    def handle_monitor_selected(self, event: DataTable.RowSelected) -> None:
+        self._show_service_detail(self._row_key(event))
 
     def load(self, refresh: bool = False) -> None:
         workspace = getattr(self.app, "workspace", None)
@@ -98,21 +106,26 @@ class MonitorPanel(Static):
             self._rows = []
             self._update_metrics()
             self.table.add_row("-", "-", "-", "-", "-", "-", "-", "-", "-", "-", result.message)
+            self._mount_detail_message("Select a monitor service to inspect details.")
             return
         self._rows = list((result.data or {}).get("rows", []))
         self._populate_table()
         self._update_metrics()
+        self._show_service_detail(self._row_keys[0] if self._row_keys else "")
 
     def _set_loading(self, refresh: bool) -> None:
         button = self.query_one("#refresh-monitor", Button)
         button.disabled = True
         button.label = "Refreshing..." if refresh else "Loading..."
         self._rows = []
+        self._row_keys = []
         self._update_metrics()
+        self._mount_detail_message("Loading monitor services...")
 
     def _populate_table(self) -> None:
         table = self.table
         table.clear(columns=False)
+        self._row_keys = []
         if not self._rows:
             table.add_row(
                 "-",
@@ -129,7 +142,9 @@ class MonitorPanel(Static):
             )
             return
 
-        for row in self._rows:
+        for index, row in enumerate(self._rows):
+            row_key = str(index)
+            self._row_keys.append(row_key)
             table.add_row(
                 str(row.get("bundle", "-")),
                 str(row.get("server", "-")),
@@ -142,7 +157,51 @@ class MonitorPanel(Static):
                 self._rate(row.get("network_out_rate"), row.get("network_unit")),
                 self._timestamp(row.get("latest_timestamp")),
                 str(row.get("message") or ""),
+                key=row_key,
             )
+        table.cursor_coordinate = (0, 0)
+
+    def _show_service_detail(self, row_key: str) -> None:
+        row = self._row_by_key(row_key)
+        bundle = row.get("bundle_ref") if row else None
+        service = row.get("service_ref") if row else None
+        workspace = getattr(self.app, "workspace", None)
+        infra = getattr(workspace, "infrastructure", None)
+        if not row or not bundle or not service or not infra:
+            self._mount_detail_message("Select a monitor service to inspect details.")
+            return
+
+        result = build_service_ui_widget(infra, bundle, service)
+        if not result.success:
+            self._mount_detail_message(result.message)
+            return
+
+        widget = result.data.get("widget") if result.data else None
+        if not isinstance(widget, Widget):
+            self._mount_detail_message(
+                "Selected monitor service returned an unexpected detail view."
+            )
+            return
+
+        self._clear_detail()
+        self.query_one("#monitor-service-detail", Container).mount(widget)
+
+    def _mount_detail_message(self, message: str) -> None:
+        self._clear_detail()
+        self.query_one("#monitor-service-detail", Container).mount(
+            Static(message, classes="service-tui-placeholder")
+        )
+
+    def _clear_detail(self) -> None:
+        container = self.query_one("#monitor-service-detail", Container)
+        for child in list(container.children):
+            child.remove()
+
+    def _row_by_key(self, row_key: str) -> dict[str, Any] | None:
+        try:
+            return self._rows[int(row_key)]
+        except (ValueError, IndexError):
+            return None
 
     def _update_metrics(self) -> None:
         services = len(self._rows)
@@ -220,3 +279,7 @@ class MonitorPanel(Static):
         if isinstance(value, datetime):
             return value.isoformat(sep=" ", timespec="seconds")
         return str(value or "-")
+
+    def _row_key(self, event: DataTable.RowSelected) -> str:
+        row_key = getattr(event.row_key, "value", event.row_key)
+        return str(row_key)
