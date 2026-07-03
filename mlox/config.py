@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Literal, TypedDict
 from mlox.service import (
     AbstractModelRegistryService,
     AbstractModelServerService,
+    AbstractMonitorService,
     AbstractRepositoryService,
     AbstractSecretManagerService,
     AbstractService,
@@ -50,6 +51,7 @@ SERVICE_CAPABILITY_ABCS = {
     ServiceCapability.REPOSITORY.value: AbstractRepositoryService,
     ServiceCapability.MODEL_REGISTRY.value: AbstractModelRegistryService,
     ServiceCapability.MODEL_SERVER.value: AbstractModelServerService,
+    ServiceCapability.MONITOR.value: AbstractMonitorService,
 }
 
 SERVICE_GROUP_ALIASES = {
@@ -58,6 +60,7 @@ SERVICE_GROUP_ALIASES = {
     "git": ServiceCapability.REPOSITORY.value,
     "model_registry": ServiceCapability.MODEL_REGISTRY.value,
     "model_server": ServiceCapability.MODEL_SERVER.value,
+    "monitor": ServiceCapability.MONITOR.value,
     "observability": ServiceCapability.OBSERVABILITY.value,
     "data_warehouse": ServiceCapability.DATA_WAREHOUSE.value,
     "object_storage": ServiceCapability.OBJECT_STORAGE.value,

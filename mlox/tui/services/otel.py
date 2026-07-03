@@ -103,6 +103,13 @@ class UsagePair:
             return None
         return self.used / total
 
+    @property
+    def free_ratio(self) -> float | None:
+        total = self.total
+        if total is None or total <= 0 or self.free is None:
+            return None
+        return self.free / total
+
 
 @dataclass
 class CpuUsage:

@@ -29,6 +29,7 @@ from mlox.tui.screens.dashboard.screen import (
     FIREWALL_TAB_ID,
     LOGS_TAB_ID,
     MODELS_TAB_ID,
+    MONITOR_TAB_ID,
     SECRET_MANAGER_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
     SIDEBAR_STEP,
@@ -178,7 +179,7 @@ def _secret_detail_text(panel: SecretManagerPanel) -> str:
 
 async def _visible_tabs_for(
     selection: SelectionInfo,
-) -> tuple[str, str, str, str, str, str]:
+) -> tuple[str, str, str, str, str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -189,6 +190,7 @@ async def _visible_tabs_for(
         server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
         secret_tab = tabs.get_tab(SECRET_MANAGER_TAB_ID)
         firewall_tab = tabs.get_tab(FIREWALL_TAB_ID)
+        monitor_tab = tabs.get_tab(MONITOR_TAB_ID)
         models_tab = tabs.get_tab(MODELS_TAB_ID)
         service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
@@ -196,6 +198,7 @@ async def _visible_tabs_for(
             server_tab.styles.display,
             secret_tab.styles.display,
             firewall_tab.styles.display,
+            monitor_tab.styles.display,
             models_tab.styles.display,
             service_tab.styles.display,
             logs_tab.styles.display,
@@ -207,6 +210,7 @@ def test_root_selection_shows_project_tabs() -> None:
         server_display,
         secret_display,
         firewall_display,
+        monitor_display,
         models_display,
         service_display,
         logs_display,
@@ -217,6 +221,7 @@ def test_root_selection_shows_project_tabs() -> None:
     assert server_display == "block"
     assert secret_display == "block"
     assert firewall_display == "block"
+    assert monitor_display == "block"
     assert models_display == "block"
     assert service_display == "none"
     assert logs_display == "none"
@@ -303,6 +308,54 @@ def test_models_tab_shows_top_metric_cards() -> None:
     assert "1" in text
     assert "2" in text
     assert "3" in text
+
+
+async def _monitor_table_text() -> str:
+    app = DashboardTestApp()
+    monitor_service = SimpleNamespace(
+        name="otel",
+        state="running",
+        capabilities={"monitor"},
+        get_monitor_snapshot=lambda bundle: {
+            "cpu_used_ratio": 0.42,
+            "ram_free_ratio": 0.73,
+            "disk_free_ratio": 0.81,
+            "network_in_rate": 2048,
+            "network_out_rate": 1024,
+            "network_unit": "By",
+            "metric_points": 9,
+        },
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[monitor_service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="root"))
+        tabs = screen.query_one("#main-tabs", TabbedContent)
+        tabs.active = MONITOR_TAB_ID
+        table = app.query_one("#monitor-table")
+        deadline = time.monotonic() + 2
+        while table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for monitor rows.")
+            await pilot.pause(0.05)
+        return " ".join(str(cell) for cell in table.get_row_at(0))
+
+
+def test_monitor_tab_shows_project_monitor_table() -> None:
+    text = asyncio.run(_monitor_table_text())
+
+    assert "prod" in text
+    assert "10.0.0.5" in text
+    assert "otel" in text
+    assert "42.0%" in text
+    assert "73.0%" in text
+    assert "2.0 KB/s" in text
 
 
 async def _secret_manager_panel_text() -> str:
@@ -1026,6 +1079,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
         server_display,
         secret_display,
         firewall_display,
+        monitor_display,
         models_display,
         service_display,
         logs_display,
@@ -1034,6 +1088,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
     assert server_display == "none"
     assert secret_display == "none"
     assert firewall_display == "none"
+    assert monitor_display == "none"
     assert models_display == "none"
     assert service_display == "block"
     assert logs_display == "none"
@@ -1063,6 +1118,7 @@ def test_server_selection_hides_template_tabs() -> None:
         server_display,
         secret_display,
         firewall_display,
+        monitor_display,
         models_display,
         service_display,
         logs_display,
@@ -1071,6 +1127,7 @@ def test_server_selection_hides_template_tabs() -> None:
     assert server_display == "none"
     assert secret_display == "none"
     assert firewall_display == "none"
+    assert monitor_display == "none"
     assert models_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
@@ -1081,6 +1138,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
         server_display,
         secret_display,
         firewall_display,
+        monitor_display,
         models_display,
         service_display,
         logs_display,
@@ -1089,6 +1147,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
     assert server_display == "none"
     assert secret_display == "none"
     assert firewall_display == "none"
+    assert monitor_display == "none"
     assert models_display == "none"
     assert service_display == "none"
     assert logs_display == "block"

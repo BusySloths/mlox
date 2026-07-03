@@ -5,7 +5,15 @@ from types import SimpleNamespace
 
 from mlox.application.result import OperationResult
 from mlox.server import ServerCapability
-from mlox.application.use_cases import models, project, secrets, servers, services
+from mlox.application.use_cases import (
+    models,
+    monitor,
+    project,
+    secrets,
+    servers,
+    services,
+)
+from mlox.service import ServiceCapability
 
 
 class _Connection:
@@ -699,6 +707,61 @@ def test_services_build_service_ui_widget_reports_missing_handler():
 
     assert not result.success
     assert result.message == "Selected service does not provide a TUI view."
+
+
+def test_monitor_describe_monitoring_collects_monitor_service_rows():
+    service = SimpleNamespace(
+        name="otel",
+        state="running",
+        capabilities={ServiceCapability.MONITOR},
+        get_monitor_snapshot=lambda bundle: {
+            "cpu_used_ratio": 0.4,
+            "ram_free_ratio": 0.7,
+            "disk_free_ratio": 0.8,
+            "network_in_rate": 2048,
+            "network_out_rate": 1024,
+            "network_unit": "By",
+            "metric_points": 12,
+        },
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[service],
+    )
+    infra = SimpleNamespace(bundles=[bundle])
+
+    result = monitor.describe_monitoring(infra)
+
+    assert result.success
+    assert result.data["rows"][0]["bundle"] == "prod"
+    assert result.data["rows"][0]["service"] == "otel"
+    assert result.data["rows"][0]["cpu_used_ratio"] == 0.4
+    assert result.data["rows"][0]["metric_points"] == 12
+
+
+def test_monitor_describe_monitoring_reports_snapshot_failures():
+    def fail(_bundle):
+        raise RuntimeError("collector unavailable")
+
+    service = SimpleNamespace(
+        name="otel",
+        state="running",
+        capabilities={"monitor"},
+        get_monitor_snapshot=fail,
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[service],
+    )
+
+    result = monitor.describe_monitoring(SimpleNamespace(bundles=[bundle]))
+
+    assert result.success
+    assert result.data["rows"][0]["message"] == (
+        "Failed to load monitor metrics: collector unavailable"
+    )
 
 
 def test_models_list_models_fails_for_unknown_registry():

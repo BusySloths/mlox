@@ -30,6 +30,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - monitor
   - observability
   backend:
   - docker

@@ -22,7 +22,7 @@ from typing import Dict, Any
 from urllib.parse import unquote
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractMonitorService, AbstractService, ServiceCapability
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -33,8 +33,8 @@ logging.basicConfig(
 
 
 @dataclass
-class OtelDockerService(AbstractService):
-    capabilities = {ServiceCapability.OBSERVABILITY}
+class OtelDockerService(AbstractService, AbstractMonitorService):
+    capabilities = {ServiceCapability.MONITOR, ServiceCapability.OBSERVABILITY}
     relic_endpoint: str
     relic_key: str
     config: str
@@ -93,6 +93,23 @@ class OtelDockerService(AbstractService):
                 conn, f"{self.target_path}/otel-data/telemetry.json", format="txt/plain"
             )
         return data
+
+    def get_monitor_snapshot(self, bundle) -> Dict[str, Any]:
+        telemetry_raw = self.get_telemetry_data(bundle)
+        from mlox.tui.services.otel import _build_resource_snapshot
+
+        snapshot = _build_resource_snapshot(telemetry_raw)
+        return {
+            "cpu_used_ratio": snapshot.cpu.now_used_ratio,
+            "ram_free_ratio": snapshot.memory.free_ratio,
+            "disk_free_ratio": snapshot.disk.free_ratio,
+            "network_in_rate": snapshot.network.receive_rate,
+            "network_out_rate": snapshot.network.transmit_rate,
+            "network_unit": snapshot.network.unit,
+            "latest_timestamp": snapshot.latest_timestamp,
+            "messages": snapshot.messages,
+            "metric_points": snapshot.summary.get("metric_points", 0),
+        }
 
     def setup(self, conn) -> None:
         self.grafana_cloud_key = self._normalize_auth_header(self.grafana_cloud_key)

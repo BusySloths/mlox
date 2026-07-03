@@ -66,6 +66,7 @@ class ServiceCapability(StrEnum):
     REPOSITORY = "repository"
     MODEL_REGISTRY = "model_registry"
     MODEL_SERVER = "model_server"
+    MONITOR = "monitor"
     OBSERVABILITY = "observability"
     DATA_WAREHOUSE = "data_warehouse"
     OBJECT_STORAGE = "object_storage"
@@ -181,6 +182,17 @@ class AbstractModelServerService(ABC):
             "-H 'Content-Type: application/json' "
             f"-d '{json.dumps(body)}'"
         )
+
+
+class AbstractMonitorService(ABC):
+    """Service capability mixin for project-level monitoring providers."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.MONITOR}
+
+    @abstractmethod
+    def get_monitor_snapshot(self, bundle: Any) -> Dict[str, Any]:
+        """Return a compact host/resource monitoring snapshot for one bundle."""
+        pass
 
 
 class ServiceLookup(Protocol):
