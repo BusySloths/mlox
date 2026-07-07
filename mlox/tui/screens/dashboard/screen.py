@@ -138,6 +138,15 @@ class DashboardScreen(Screen):
                     with Horizontal(id="project-reload-loading"):
                         yield LoadingIndicator(id="project-reload-indicator")
                         yield Static("Reloading project...", id="project-reload-label")
+                    with Horizontal(id="server-add-loading"):
+                        yield LoadingIndicator(id="server-add-indicator")
+                        yield Static("Adding server...", id="server-add-label")
+                    with Horizontal(id="bundle-lifecycle-loading"):
+                        yield LoadingIndicator(id="bundle-lifecycle-indicator")
+                        yield Static(
+                            "Setting up bundle...",
+                            id="bundle-lifecycle-label",
+                        )
                     with Horizontal(id="summary-pane"):
                         with TabbedContent(id="main-tabs"):
                             with TabPane("Overview", id=OVERVIEW_TAB_ID):
@@ -183,6 +192,8 @@ class DashboardScreen(Screen):
         tree.move_cursor(tree.root)
         self._apply_selection(tree.root.data)
         self._set_project_reload_loading(False)
+        self._set_server_add_loading(False)
+        self._set_bundle_lifecycle_loading(False)
         self._set_app_log_drawer_visible(False)
         self._apply_sidebar_width()
 
@@ -432,6 +443,7 @@ class DashboardScreen(Screen):
 
         actions = self.query_one(ServerActions)
         actions.set_bundle_lifecycle_loading(True)
+        self._set_bundle_lifecycle_loading(True, setup=setup)
 
         def run_operation() -> None:
             result = (
@@ -442,7 +454,7 @@ class DashboardScreen(Screen):
             self.app.call_from_thread(
                 self._finish_bundle_lifecycle,
                 result,
-                bundle if setup else None,
+                result.data.get("bundle") if setup and result.data else None,
                 success_message,
             )
 
@@ -460,10 +472,19 @@ class DashboardScreen(Screen):
         success_message: str,
     ) -> None:
         self.query_one(ServerActions).set_bundle_lifecycle_loading(False)
+        self._set_bundle_lifecycle_loading(False)
         if not result.success:
             self.notify(result.message, severity="error")
             return
 
+        if bundle is not None:
+            self._apply_selection(
+                SelectionInfo(
+                    type="bundle",
+                    bundle=bundle,
+                    server=getattr(bundle, "server", None),
+                )
+            )
         self._refresh_tree_after_server_add(bundle)
         self.notify(result.message or success_message)
 
@@ -616,6 +637,7 @@ class DashboardScreen(Screen):
 
         panel = self.query_one("#server-template-panel", TemplatePanel)
         panel.set_adding(True)
+        self._set_server_add_loading(True)
 
         def add_server() -> None:
             infra = getattr(workspace, "infrastructure", None)
@@ -646,11 +668,13 @@ class DashboardScreen(Screen):
 
     def _finish_server_template_add_error(self, message: str) -> None:
         self.query_one("#server-template-panel", TemplatePanel).set_adding(False)
+        self._set_server_add_loading(False)
         self.notify(message, severity="error")
 
     def _finish_server_template_add(self, result) -> None:
         panel = self.query_one("#server-template-panel", TemplatePanel)
         panel.set_adding(False)
+        self._set_server_add_loading(False)
         bundle = result.data.get("bundle") if result.data else None
         self._refresh_tree_after_server_add(bundle)
         self.notify(result.message)
@@ -896,6 +920,21 @@ class DashboardScreen(Screen):
 
     def _set_project_reload_loading(self, visible: bool) -> None:
         loading = self.query_one("#project-reload-loading", Horizontal)
+        loading.display = visible
+
+    def _set_server_add_loading(self, visible: bool) -> None:
+        loading = self.query_one("#server-add-loading", Horizontal)
+        loading.display = visible
+
+    def _set_bundle_lifecycle_loading(
+        self,
+        visible: bool,
+        *,
+        setup: bool = True,
+    ) -> None:
+        loading = self.query_one("#bundle-lifecycle-loading", Horizontal)
+        label = self.query_one("#bundle-lifecycle-label", Static)
+        label.update("Setting up bundle..." if setup else "Removing bundle...")
         loading.display = visible
 
     def action_narrow_sidebar(self) -> None:

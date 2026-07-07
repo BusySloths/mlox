@@ -155,22 +155,33 @@ Button {
   padding: 1;
 }
 
-#project-reload-loading {
+#project-reload-loading,
+#server-add-loading,
+#bundle-lifecycle-loading {
   height: auto;
   margin-bottom: 1;
   align-vertical: middle;
 }
 
-#project-reload-indicator {
+#project-reload-indicator,
+#server-add-indicator,
+#bundle-lifecycle-indicator {
   width: 4;
   height: 1;
 }
 
-#project-reload-label {
+#project-reload-label,
+#server-add-label,
+#bundle-lifecycle-label {
   width: 1fr;
   height: auto;
   margin-left: 1;
   color: #a6c9bdff;
+}
+
+#server-add-label,
+#bundle-lifecycle-label {
+  color: #f4e223ff;
 }
 
 #summary-pane {

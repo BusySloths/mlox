@@ -9,6 +9,7 @@
 ## Update
 
 - If you use applications installed with MLOX on VMs, also allow the corresponding client apps to connect, for example your browser and Multipass.
+- For Multipass server setup, also add the launcher app to **Privacy & Security** -> **Developer Tools**. This includes iTerm2 or Terminal.app for the Textual TUI, VS Code for Streamlit/tests/CLI, Multipass, and Docker or Docker Desktop when Docker-backed services are involved.
 - Check your local firewall settings as well.
 
 ---
@@ -56,25 +57,36 @@ You can reproduce the same issue when trying to connect from VS Code Remote afte
 
 On macOS 26, privacy settings can block an app from finding and communicating with local devices. If Terminal, iTerm, or VS Code does not have Local Network access, it cannot reach a Multipass-hosted VM on the host's local network interface.
 
+Separately, macOS Developer Tools permissions are applied to the parent app that
+launches MLOX. Streamlit may work from VS Code while the Textual TUI fails from
+iTerm2 if VS Code is allowed but iTerm2 is not. In that case Multipass can launch
+the VM, but provisioning steps such as SSH, Docker, or k3s setup may fail later.
+
 ---
 
 ## Solution / Workaround
 
 1. Open **System Settings** on macOS.
-2. Go to **Privacy & Security** -> **Local Network**.
-3. Enable the app you use to access the VM:
+2. Go to **Privacy & Security** -> **Developer Tools**.
+3. Enable the apps involved in launching and provisioning:
+   - `Multipass`
+   - `Docker` or `Docker Desktop`, if Docker-backed services are used
+   - `Terminal.app` or `iTerm2`, if the TUI runs there
+   - `Visual Studio Code`, if Streamlit, tests, or the CLI run there
+4. Go to **Privacy & Security** -> **Local Network**.
+5. Enable the app you use to access the VM:
    - `Terminal.app`
    - `iTerm`
    - `Visual Studio Code`
-4. Quit and reopen the affected app.
-5. If needed, restart the instance:
+6. Quit and reopen the affected app.
+7. If needed, restart the instance:
 
 ```bash
 multipass stop <instance-name>
 multipass start <instance-name>
 ```
 
-6. Retry the connection:
+8. Retry the connection:
 
 ```bash
 multipass shell <instance-name>

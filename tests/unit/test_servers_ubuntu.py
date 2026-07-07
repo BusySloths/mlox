@@ -257,6 +257,11 @@ def test_ubuntu_k3s_backend_paths():
     fake_exec = FakeExec()
     server.exec = fake_exec
     _server_conn(server)
+    fake_exec.responses["curl -sfL https://get.k3s.io -o /tmp/mlox-install-k3s.sh"] = ""
+    fake_exec.responses[
+        "K3S_URL=https://controller:6443 K3S_TOKEN=tok-123456 sh /tmp/mlox-install-k3s.sh"
+    ] = ""
+    fake_exec.responses["systemctl status k3s-agent"] = "active"
 
     server.setup_backend()
     assert "k3s-agent" in server.backend
@@ -279,6 +284,35 @@ def test_ubuntu_k3s_backend_paths():
     server.stop_backend_runtime()
     server.teardown_backend()
     assert server.state == "no-backend"
+
+
+def test_ubuntu_k3s_controller_setup_installs_helm():
+    server = UbuntuK3sServer(
+        ip="10.0.0.13",
+        root="root",
+        root_pw="pw",
+        service_config_id="ubuntu-k3s",
+    )
+    fake_exec = FakeExec()
+    server.exec = fake_exec
+    _server_conn(server)
+    for command in (
+        "curl -sfL https://get.k3s.io -o /tmp/mlox-install-k3s.sh",
+        "sh /tmp/mlox-install-k3s.sh",
+        "systemctl status k3s",
+        "kubectl get nodes",
+        "kubectl version",
+        "curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3",
+        "./get_helm.sh",
+        "helm version",
+    ):
+        fake_exec.responses[command] = ""
+
+    server.setup_backend()
+
+    assert server.state == "running"
+    commands = [args[0] for name, args, _ in fake_exec.calls if name == "execute"]
+    assert "helm version" in commands
 
 
 def test_ubuntu_k3s_agent_status_does_not_fetch_controller_node_info():
@@ -362,6 +396,33 @@ def test_ubuntu_simple_server_noops_and_debug(monkeypatch):
     server.disable_debug_access()
     assert server.is_debug_access_enabled is False
     assert isinstance(server.get_backend_status(), dict)
+
+
+def test_ubuntu_native_setup_installs_backend_before_disabling_password_auth(monkeypatch):
+    server = _new_native_server()
+    calls = []
+
+    for name in ("update", "install_packages", "add_mlox_user", "setup_users"):
+        monkeypatch.setattr(server, name, lambda name=name: calls.append(name))
+    monkeypatch.setattr(server, "setup_backend", lambda: calls.append("setup_backend"))
+    monkeypatch.setattr(
+        server,
+        "disable_password_authentication",
+        lambda: calls.append("disable_password_authentication"),
+    )
+
+    server.setup()
+
+    assert calls == [
+        "update",
+        "install_packages",
+        "update",
+        "add_mlox_user",
+        "setup_users",
+        "setup_backend",
+        "disable_password_authentication",
+    ]
+    assert server.state == "running"
 
 
 def test_ubuntu_native_firewall_calls_and_port_collection():

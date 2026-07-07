@@ -941,9 +941,70 @@ def test_server_template_modal_adds_server_and_refreshes_tree() -> None:
     assert selected_label == bundle_label
 
 
-async def _setup_uninitialized_bundle_from_action() -> tuple[str, str, list[str]]:
+async def _server_add_global_loading_state() -> tuple[bool, bool, bool]:
+    app = DashboardTestApp()
+    release = threading.Event()
+    bundle = SimpleNamespace(
+        name="127.0.0.1",
+        server=SimpleNamespace(ip="127.0.0.1", backend=["connector"]),
+        services=[],
+    )
+
+    def add_server_from_config(config, params):
+        release.wait(timeout=2)
+        app.workspace.infrastructure.bundles.append(bundle)
+        return OperationResult(True, 0, "Added server 127.0.0.1.", {"bundle": bundle})
+
+    app.workspace.add_server_from_config = add_server_from_config
+    spec = TemplateFormSpec(
+        title="Add Test Server",
+        fields=[TemplateFieldSpec("host", "Host")],
+        materialize=lambda values, infra: {"${MLOX_IP}": values["host"]},
+    )
+    config = SimpleNamespace(id="test-server", name="Test Server")
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._add_server_from_template_values(config, spec, {"host": "127.0.0.1"})
+        await pilot.pause()
+        loading = screen.query_one("#server-add-loading")
+        visible_while_adding = loading.display
+
+        screen._apply_selection(SelectionInfo(type="bundle", bundle=bundle))
+        await pilot.pause()
+        visible_after_selection_change = loading.display
+
+        release.set()
+        deadline = time.monotonic() + 2
+        while loading.display:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for server add loading state.")
+            await pilot.pause(0.05)
+
+        return visible_while_adding, visible_after_selection_change, loading.display
+
+
+def test_server_add_shows_global_loading_indicator_across_selection_changes() -> None:
+    visible_while_adding, visible_after_selection_change, visible_after_add = asyncio.run(
+        _server_add_global_loading_state()
+    )
+
+    assert visible_while_adding is True
+    assert visible_after_selection_change is True
+    assert visible_after_add is False
+
+
+async def _setup_uninitialized_bundle_from_action() -> tuple[
+    str,
+    str,
+    list[str],
+    bool,
+    bool,
+    bool,
+]:
     app = DashboardTestApp()
     calls: list[str] = []
+    release = threading.Event()
     server = SimpleNamespace(
         ip="10.0.0.5",
         backend=["kubernetes"],
@@ -954,8 +1015,9 @@ async def _setup_uninitialized_bundle_from_action() -> tuple[str, str, list[str]
 
     def setup_server(ip: str):
         calls.append(ip)
+        release.wait(timeout=2)
         server.state = "running"
-        return OperationResult(True, 0, "Server 10.0.0.5 set up.", {})
+        return OperationResult(True, 0, "Server 10.0.0.5 set up.", {"bundle": bundle})
 
     app.workspace.setup_server = setup_server
 
@@ -966,6 +1028,11 @@ async def _setup_uninitialized_bundle_from_action() -> tuple[str, str, list[str]
         )
         await pilot.pause()
         app.query_one("#setup-bundle", Button).press()
+        await pilot.pause()
+
+        loading = screen.query_one("#bundle-lifecycle-loading")
+        visible_while_setup = loading.display
+        release.set()
 
         deadline = time.monotonic() + 2
         while server.state != "running":
@@ -974,15 +1041,33 @@ async def _setup_uninitialized_bundle_from_action() -> tuple[str, str, list[str]
             await pilot.pause(0.05)
 
         tree = screen.query_one(InfraTree)
-        return server.state, tree.root.children[0].label.plain, calls
+        setup_button = screen.query_one("#setup-bundle", Button)
+        return (
+            server.state,
+            tree.root.children[0].label.plain,
+            calls,
+            visible_while_setup,
+            loading.display,
+            setup_button.display,
+        )
 
 
 def test_setup_bundle_action_initializes_bundle_and_refreshes_tree() -> None:
-    state, label, calls = asyncio.run(_setup_uninitialized_bundle_from_action())
+    (
+        state,
+        label,
+        calls,
+        loading_while_setup,
+        loading_after_setup,
+        setup_button_display,
+    ) = asyncio.run(_setup_uninitialized_bundle_from_action())
 
     assert state == "running"
     assert label == "Bundle: dev  Backend: kubernetes"
     assert calls == ["10.0.0.5"]
+    assert loading_while_setup is True
+    assert loading_after_setup is False
+    assert setup_button_display is False
 
 
 async def _remove_bundle_from_action() -> tuple[int, list[str]]:

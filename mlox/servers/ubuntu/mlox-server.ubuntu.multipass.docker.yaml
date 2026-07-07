@@ -3,7 +3,7 @@ name: Ubuntu Multipass VM (Docker)
 version: 24.04
 maintainer: Your Name
 description_short: Ubuntu Multipass VM with Docker backend.
-description: 'Launches a local Ubuntu VM with Multipass and provisions the Docker MLOX backend.'
+description: 'Launches a local Ubuntu VM with Multipass and provisions the Docker MLOX backend. On macOS, allow Multipass, Docker or Docker Desktop, and the app running MLOX, such as iTerm2, Terminal.app, or VS Code, in Privacy & Security -> Developer Tools.'
 links:
   project: https://multipass.run/
   news: https://ubuntu.com/

@@ -401,6 +401,75 @@ def test_servers_setup_server_invokes_server_without_persisting():
 
     assert result.success
     assert calls == ["setup"]
+    assert result.data == {"bundle": bundle, "server": server}
+
+
+def test_servers_setup_server_fails_if_server_stays_uninitialized():
+    server = SimpleNamespace(
+        state="un-initialized",
+        setup=lambda: None,
+    )
+    bundle = SimpleNamespace(server=server)
+    current = _project(
+        SimpleNamespace(get_bundle_by_ip=lambda ip: bundle if ip == "1.2.3.4" else None)
+    )
+
+    result = servers.setup_server(current, ip="1.2.3.4")
+
+    assert not result.success
+    assert result.message == (
+        "Server 1.2.3.4 setup did not complete; server is still un-initialized."
+    )
+    assert result.data == {"bundle": bundle, "server": server}
+
+
+def test_servers_setup_server_retries_runtime_backend_setup_when_backend_is_down():
+    calls = []
+    backend_statuses = [
+        {"backend.is_running": False},
+        {"backend.is_running": True},
+    ]
+    server = SimpleNamespace(
+        state="running",
+        backend=["kubernetes", "k3s"],
+        setup=lambda: calls.append("setup"),
+        setup_backend=lambda: calls.append("setup_backend"),
+        get_backend_status=lambda: backend_statuses.pop(0),
+    )
+    bundle = SimpleNamespace(server=server)
+    current = _project(
+        SimpleNamespace(get_bundle_by_ip=lambda ip: bundle if ip == "1.2.3.4" else None)
+    )
+
+    result = servers.setup_server(current, ip="1.2.3.4")
+
+    assert result.success
+    assert calls == ["setup", "setup_backend"]
+    assert result.data == {"bundle": bundle, "server": server}
+
+
+def test_servers_setup_server_fails_when_runtime_backend_remains_down():
+    server = SimpleNamespace(
+        state="running",
+        backend=["kubernetes", "k3s"],
+        setup=lambda: None,
+        setup_backend=lambda: None,
+        get_backend_status=lambda: {"backend.is_running": False},
+    )
+    bundle = SimpleNamespace(server=server)
+    current = _project(
+        SimpleNamespace(get_bundle_by_ip=lambda ip: bundle if ip == "1.2.3.4" else None)
+    )
+
+    result = servers.setup_server(current, ip="1.2.3.4")
+
+    assert not result.success
+    assert result.message == "Server 1.2.3.4 setup completed, but backend is not running."
+    assert result.data == {
+        "backend_status": {"backend.is_running": False},
+        "bundle": bundle,
+        "server": server,
+    }
 
 
 def test_servers_save_server_key_serializes_bundle_server(monkeypatch):
@@ -497,6 +566,29 @@ def test_servers_setup_bundle_delegates_to_workspace_and_returns_bundle():
     assert actual is result
     assert calls == ["1.2.3.4"]
     assert result.data == {"bundle": bundle}
+
+
+def test_servers_setup_bundle_uses_current_workspace_bundle_after_ip_changes():
+    calls = []
+    missing = OperationResult(False, 5, "Server not found in infrastructure.")
+    result = OperationResult(True, 0, "setup", {})
+    stale_bundle = SimpleNamespace(server=SimpleNamespace(ip="mlox-vm", uuid="srv-1"))
+    current_bundle = SimpleNamespace(server=SimpleNamespace(ip="10.0.64.12", uuid="srv-1"))
+
+    def setup_server(ip: str):
+        calls.append(ip)
+        return result if ip == "10.0.64.12" else missing
+
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(bundles=[current_bundle]),
+        setup_server=setup_server,
+    )
+
+    actual = servers.setup_bundle(workspace, stale_bundle)
+
+    assert actual is result
+    assert calls == ["mlox-vm", "10.0.64.12"]
+    assert result.data == {"bundle": current_bundle}
 
 
 def test_servers_remove_bundle_delegates_to_workspace():

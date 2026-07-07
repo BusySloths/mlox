@@ -67,8 +67,8 @@ class UbuntuNativeServer(
             self.update()
             self.add_mlox_user()
             self.setup_users()
-            self.disable_password_authentication()
             self.setup_backend()
+            self.disable_password_authentication()
             self.state = "running"
         except Exception:
             self.state = "un-initialized"

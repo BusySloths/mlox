@@ -3,7 +3,7 @@ name: Ubuntu Multipass VM (Native)
 version: 24.04
 maintainer: Your Name
 description_short: Ubuntu Multipass VM with Native backend.
-description: 'Launches a local Ubuntu VM with Multipass and provisions the native MLOX backend.'
+description: 'Launches a local Ubuntu VM with Multipass and provisions the native MLOX backend. On macOS, allow Multipass and the app running MLOX, such as iTerm2, Terminal.app, or VS Code, in Privacy & Security -> Developer Tools.'
 links:
   project: https://multipass.run/
   news: https://ubuntu.com/

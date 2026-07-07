@@ -80,7 +80,99 @@ def setup_server(project: WorkspaceState, *, ip: str) -> OperationResult:
     if not bundle:
         return OperationResult(False, 5, "Server not found in infrastructure.")
     bundle.server.setup()
-    return OperationResult(True, 0, f"Server {ip} set up.")
+    if getattr(bundle.server, "state", "unknown") == "un-initialized":
+        return OperationResult(
+            False,
+            6,
+            f"Server {ip} setup did not complete; server is still un-initialized.",
+            {"bundle": bundle, "server": bundle.server},
+        )
+    backend_result = _ensure_runtime_backend_running(bundle.server, ip)
+    if backend_result is not None:
+        backend_result.data = {
+            **(backend_result.data or {}),
+            "bundle": bundle,
+            "server": bundle.server,
+        }
+        return backend_result
+    return OperationResult(
+        True,
+        0,
+        f"Server {ip} set up.",
+        {"bundle": bundle, "server": bundle.server},
+    )
+
+
+def _ensure_runtime_backend_running(server, ip: str) -> OperationResult | None:
+    """Verify runtime backends that are expected to have an active daemon."""
+
+    backend = {str(item) for item in (getattr(server, "backend", None) or [])}
+    runtime_backend = backend & {
+        "docker",
+        "kubernetes",
+        "k3s",
+        "kubernetes-agent",
+        "k3s-agent",
+    }
+    if not runtime_backend:
+        return None
+
+    status_result = _runtime_backend_status(server, ip)
+    if not status_result.success:
+        return status_result
+    status = status_result.data.get("backend_status", {}) if status_result.data else {}
+    if status.get("backend.is_running") is True:
+        return None
+
+    setup_backend = getattr(server, "setup_backend", None)
+    if callable(setup_backend):
+        try:
+            setup_backend()
+        except Exception as exc:
+            return OperationResult(
+                False,
+                7,
+                f"Server {ip} setup completed, but backend setup failed: {exc}",
+                {"backend_status": status},
+            )
+
+    status_result = _runtime_backend_status(server, ip)
+    if not status_result.success:
+        return status_result
+    status = status_result.data.get("backend_status", {}) if status_result.data else {}
+    if status.get("backend.is_running") is True:
+        return None
+
+    return OperationResult(
+        False,
+        8,
+        f"Server {ip} setup completed, but backend is not running.",
+        {"backend_status": status},
+    )
+
+
+def _runtime_backend_status(server, ip: str) -> OperationResult:
+    get_backend_status = getattr(server, "get_backend_status", None)
+    if not callable(get_backend_status):
+        return OperationResult(
+            False,
+            9,
+            f"Server {ip} setup completed, but backend status is unavailable.",
+        )
+    try:
+        status = get_backend_status()
+    except Exception as exc:
+        return OperationResult(
+            False,
+            10,
+            f"Server {ip} setup completed, but backend status check failed: {exc}",
+        )
+    return OperationResult(
+        True,
+        0,
+        "Backend status retrieved.",
+        {"backend_status": status or {}},
+    )
 
 
 def teardown_server(project: WorkspaceState, *, ip: str) -> OperationResult:
@@ -212,11 +304,38 @@ def setup_bundle(workspace, bundle) -> OperationResult:
         result = setup(ip=ip)
     except Exception as exc:
         return OperationResult(False, 32, f"Failed to set up bundle: {exc}")
+    if not result.success and getattr(result, "code", None) == 5:
+        current_bundle = _current_bundle_for_server(workspace, bundle)
+        current_server = getattr(current_bundle, "server", None)
+        current_ip = getattr(current_server, "ip", "")
+        if current_bundle is not bundle and current_ip and current_ip != ip:
+            try:
+                result = setup(ip=current_ip)
+                bundle = current_bundle
+            except Exception as exc:
+                return OperationResult(False, 32, f"Failed to set up bundle: {exc}")
     if result.success:
         data = dict(result.data or {})
-        data["bundle"] = bundle
+        data["bundle"] = data.get("bundle") or _current_bundle_for_server(
+            workspace,
+            bundle,
+        )
         result.data = data
     return result
+
+
+def _current_bundle_for_server(workspace, fallback_bundle):
+    """Return the current workspace bundle after setup, even if server IP changed."""
+
+    infra = getattr(workspace, "infrastructure", None)
+    server = getattr(fallback_bundle, "server", None)
+    server_uuid = getattr(server, "uuid", None)
+    if infra and server_uuid:
+        for candidate in getattr(infra, "bundles", []) or []:
+            candidate_server = getattr(candidate, "server", None)
+            if getattr(candidate_server, "uuid", None) == server_uuid:
+                return candidate
+    return fallback_bundle
 
 
 def remove_bundle(workspace, bundle) -> OperationResult:

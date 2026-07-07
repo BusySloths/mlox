@@ -1,5 +1,6 @@
 import re
 import logging
+import shlex
 
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict
@@ -13,6 +14,8 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+K3S_INSTALLER_PATH = "/tmp/mlox-install-k3s.sh"
 
 
 @dataclass
@@ -53,43 +56,43 @@ class UbuntuK3sServer(
     def setup_backend(self):
         self.state = "starting"
 
-        # Controller URL Template: https://<controller-ip>:6443
-        agent_str = ""
-        if len(self.controller_url) > 6 and len(self.controller_token) > 6:
-            agent_str = (
-                f"K3S_URL={self.controller_url} K3S_TOKEN={self.controller_token} "
-            )
+        is_agent = len(self.controller_url) > 6 and len(self.controller_token) > 6
+        agent_str = self._k3s_agent_install_env()
 
         with self.get_server_connection() as conn:
-            self.exec.execute(
+            self._execute_required(
                 conn,
-                f"curl -sfL https://get.k3s.io | {agent_str}sh -s -",
+                f"curl -sfL https://get.k3s.io -o {K3S_INSTALLER_PATH}",
                 group=TaskGroup.NETWORKING,
-                sudo=True,
-                pty=True,
+                sudo=False,
             )
-            self.exec.execute(
+            self.exec.fs_set_permissions(conn, K3S_INSTALLER_PATH, "700")
+            self._execute_required(
                 conn,
-                "systemctl status k3s",
+                f"{agent_str}sh {K3S_INSTALLER_PATH}",
+                group=TaskGroup.SYSTEM_PACKAGES,
+                sudo=True,
+            )
+            self._execute_required(
+                conn,
+                f"systemctl status {'k3s-agent' if is_agent else 'k3s'}",
                 group=TaskGroup.SERVICE_CONTROL,
                 sudo=True,
             )
-            self.exec.execute(
-                conn,
-                "kubectl get nodes",
-                group=TaskGroup.KUBERNETES,
-                sudo=True,
+            if is_agent:
+                self.state = "running"
+                return
+
+            self._execute_required(
+                conn, "kubectl get nodes", group=TaskGroup.KUBERNETES, sudo=True
             )
-            self.exec.execute(
-                conn,
-                "kubectl version",
-                group=TaskGroup.KUBERNETES,
-                sudo=True,
+            self._execute_required(
+                conn, "kubectl version", group=TaskGroup.KUBERNETES, sudo=True
             )
 
             # Install Helm CLI
             logger.info("Installing Helm CLI...")
-            self.exec.execute(
+            self._execute_required(
                 conn,
                 "curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3",
                 group=TaskGroup.NETWORKING,
@@ -97,13 +100,13 @@ class UbuntuK3sServer(
             )
             self.exec.fs_set_permissions(conn, "get_helm.sh", "700")
             # The get_helm.sh script typically installs to /usr/local/bin/helm, which might require sudo.
-            self.exec.execute(
+            self._execute_required(
                 conn,
                 "./get_helm.sh",
                 group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
             )
-            self.exec.execute(
+            self._execute_required(
                 conn,
                 "helm version",
                 group=TaskGroup.KUBERNETES,
@@ -111,6 +114,19 @@ class UbuntuK3sServer(
             )  # Verify helm installation, using sudo to match kubectl checks
             logger.info("Helm CLI installed successfully.")
             self.state = "running"
+
+    def _execute_required(self, conn, command: str, **kwargs) -> str:
+        output = self.exec.execute(conn, command, **kwargs)
+        if output is None:
+            raise RuntimeError(f"Required k3s setup command failed: {command}")
+        return str(output)
+
+    def _k3s_agent_install_env(self) -> str:
+        if len(self.controller_url) <= 6 or len(self.controller_token) <= 6:
+            return ""
+        controller_url = shlex.quote(self.controller_url.strip())
+        controller_token = shlex.quote(self.controller_token.strip())
+        return f"K3S_URL={controller_url} K3S_TOKEN={controller_token} "
 
     def teardown_backend(self) -> None:
         self.state = "shutdown"

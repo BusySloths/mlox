@@ -20,6 +20,11 @@ from mlox.servers.ubuntu.native import UbuntuNativeServer
 
 logger = logging.getLogger(__name__)
 
+# macOS applies Developer Tools permissions to the parent app that launches MLOX.
+# Multipass setup can work from VS Code while failing from iTerm2/Terminal unless
+# Multipass, Docker when used, and the launcher app are allowed in Privacy &
+# Security -> Developer Tools.
+
 try:  # pragma: no cover - optional integration dependency
     from multipass import MultipassClient  # type: ignore
 

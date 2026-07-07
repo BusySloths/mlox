@@ -82,6 +82,24 @@ task vm:start
 task vm:purge
 ```
 
+### macOS Privacy & Security for Multipass
+
+On macOS, Multipass-backed setup depends on the app that starts MLOX. If the TUI
+runs in iTerm2, then iTerm2 needs the same permission as VS Code would need when
+running Streamlit.
+
+Open **System Settings** -> **Privacy & Security** -> **Developer Tools** and
+allow:
+
+- Multipass
+- Docker or Docker Desktop, when Docker-backed services are used
+- the terminal app that runs the TUI, for example iTerm2 or Terminal.app
+- VS Code or another editor/IDE, when it launches Streamlit, tests, or the CLI
+
+Quit and reopen the affected app after changing the setting. If the VM starts but
+cannot be reached, also check **Privacy & Security** -> **Local Network** for the
+same client app.
+
 ---
 
 ## Docker Hub

@@ -183,6 +183,8 @@ class ServerActions(Container):
     def set_bundle_lifecycle_loading(self, loading: bool) -> None:
         self.query_one("#setup-bundle", Button).disabled = loading
         self.query_one("#remove-bundle", Button).disabled = loading
+        if not loading:
+            self._render_bundle_lifecycle_actions(self.selection)
 
     @on(Button.Pressed, "#open-server-terminal")
     def handle_open_terminal(self, _: Button.Pressed) -> None:

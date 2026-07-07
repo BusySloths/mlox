@@ -160,6 +160,41 @@ def test_server_connection_retries_transient_open_failure(monkeypatch):
     assert closed == [(good_conn, success_tmpdir)]
 
 
+def test_server_connection_retries_socket_closed_during_verification(monkeypatch):
+    failed_tmpdir = DummyTmpDir()
+    success_tmpdir = DummyTmpDir()
+    failed_conn = DummyConn()
+    good_conn = DummyConn()
+    attempts = [
+        (failed_conn, failed_tmpdir),
+        (good_conn, success_tmpdir),
+    ]
+    closed = []
+
+    def fail_with_closed_socket(*args, **kwargs):
+        raise OSError("Socket is closed")
+
+    failed_conn.run = fail_with_closed_socket
+
+    monkeypatch.setattr(
+        "mlox.server.open_connection", lambda credentials: attempts.pop(0)
+    )
+    monkeypatch.setattr(
+        "mlox.server.close_connection",
+        lambda conn, tmpdir=None: closed.append((conn, tmpdir)),
+    )
+    monkeypatch.setattr("mlox.server.time.sleep", lambda seconds: None)
+
+    with ServerConnection(
+        {"host": "dummyhost", "user": "user", "pw": "pw", "port": 22},
+        retries=1,
+        retry_delay=0,
+    ) as conn:
+        assert conn is good_conn
+
+    assert closed == [(None, failed_tmpdir), (good_conn, success_tmpdir)]
+
+
 def test_server_connection_does_not_retry_non_retryable_error(monkeypatch):
     calls = []
 

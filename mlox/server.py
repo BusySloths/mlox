@@ -146,6 +146,7 @@ class ServerConnection:
             socket.timeout,  # General socket timeout
             NoValidConnectionsError,  # If all resolved IPs for a host fail connection
             EOFError,  # Can sometimes be transient network drop
+            OSError,  # Paramiko may raise "Socket is closed" while sshd restarts.
             SSHException,  # Covers transient SSH banner resets while sshd restarts.
         )
 

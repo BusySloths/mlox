@@ -53,6 +53,10 @@ def test_multipass_ubuntu_server_lifecycle(template, expected_backend):
         server.setup()
         assert server.state == "running"
         assert server.ip != name
+        status = server.get_backend_status()
+        assert status["backend.is_running"] is True
+        if expected_backend == "kubernetes":
+            assert status["k3s.is_running"] or status["k3s-agent.is_running"]
         with server.get_server_connection() as conn:
             assert conn.run("true", hide=True).ok
     finally:

@@ -52,6 +52,20 @@ docker start -ai mlox
 
 Integration tests use Multipass VMs and are slower than unit tests.
 
+### macOS Privacy & Security
+
+On macOS, Multipass-backed server setup can fail differently depending on the app
+that launches MLOX. Add the relevant host apps to **System Settings** ->
+**Privacy & Security** -> **Developer Tools**:
+
+- Multipass
+- Docker or Docker Desktop, if Docker-backed services are used
+- the terminal app that runs the Textual TUI, for example iTerm2 or Terminal.app
+- VS Code or another editor/IDE, if it launches Streamlit, tests, or the CLI
+
+Quit and reopen the affected app after changing the setting. For macOS 26 local
+network issues, also see the Multipass troubleshooting guide in the wiki.
+
 For running all integration tests just type (assumes multipass VM has been installed):
 
 ```bash
