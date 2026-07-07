@@ -13,6 +13,7 @@ class K8sHeadlampService(AbstractService):
     capabilities = {ServiceCapability.DASHBOARD}
     namespace: str = "kube-system"
     service_name: str = "my-headlamp"
+    ingress_path: str = "/headlamp"
     kubeconfig: str = field(default="/etc/rancher/k3s/k3s.yaml", init=False)
 
     def get_login_token(self, bundle) -> str:
@@ -49,15 +50,19 @@ class K8sHeadlampService(AbstractService):
             namespace=self.namespace,
             kubeconfig=self.kubeconfig,
             create_namespace=True,
+            values=self._helm_values(),
         )
         self._bind_service_account_cluster_admin(conn)
         # Install Plugins
         # self.install_gadgets_plugin(conn)
 
         # Expose the Dashboard Service via Ingress or NodePort
-        node_ip, port, path = self.expose_dashboard_ingress(conn)
+        node_ip, port, path = self.expose_dashboard_ingress(
+            conn,
+            path_prefix=self.ingress_path,
+        )
         # node_ip, port = self.expose_dashboard_nodeport(conn)
-        url_path = "" if path == "/" else path
+        url_path = "" if path == "/" else f"{path}/"
         self.service_urls["Headlamp"] = f"https://{node_ip}:{port}{url_path}"
         self.service_ports["Headlamp"] = port
         self.state = "running"
@@ -113,18 +118,12 @@ class K8sHeadlampService(AbstractService):
         node_ip = conn.host
         backend_port = backend_service_port or self._detect_service_port(conn)
         path = self._normalize_path_prefix(path_prefix)
-        middleware_name = f"{self.service_name}-strip-prefix" if path != "/" else None
 
         annotations_lines = [
             "    kubernetes.io/ingress.class: traefik",
             f"    traefik.ingress.kubernetes.io/router.entrypoints: {entrypoint}",
             '    traefik.ingress.kubernetes.io/router.tls: "true"',
         ]
-        if middleware_name:
-            annotations_lines.append(
-                "    traefik.ingress.kubernetes.io/router.middlewares: "
-                f"{self.namespace}-{middleware_name}@kubernetescrd"
-            )
         annotations_block = "\n".join(annotations_lines)
 
         template_vars = {
@@ -136,15 +135,6 @@ class K8sHeadlampService(AbstractService):
             "backend_port": backend_port,
         }
         manifest = self.render_template("ingress.yaml.tmpl", template_vars)
-        if middleware_name:
-            manifest += self.render_template(
-                "middleware.yaml.tmpl",
-                {
-                    "middleware_name": middleware_name,
-                    "namespace": self.namespace,
-                    "path": path,
-                },
-            )
 
         manifest_path = f"{self.target_path}/{ingress_name}.yaml"
         self.exec.fs_create_dir(conn, self.target_path)
@@ -153,12 +143,20 @@ class K8sHeadlampService(AbstractService):
             conn,
             manifest_path,
             namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
         )
 
         logger.info(
             f"Dashboard exposed at https://{node_ip}:{ingress_port}{'' if path == '/' else path} via ingress"
         )
         return node_ip, ingress_port, path
+
+    def _helm_values(self) -> dict[str, str]:
+        """Values that make Headlamp aware of its externally routed base path."""
+        path = self._normalize_path_prefix(self.ingress_path)
+        if path == "/":
+            return {"config.baseURL": ""}
+        return {"config.baseURL": path}
 
     def install_gadgets_plugin(self, conn) -> None:
         """Install/upgrade Headlamp with the Gadgets plugin enabled via Helm values."""
