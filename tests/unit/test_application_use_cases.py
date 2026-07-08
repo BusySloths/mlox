@@ -750,6 +750,7 @@ def test_services_teardown_service_runs_runtime_steps_and_removes_service():
     calls = []
     service = SimpleNamespace(
         name="svc",
+        state="running",
         spin_down=lambda conn: calls.append("spin_down"),
         teardown=lambda conn: calls.append("teardown"),
         clear_service_lookup=lambda: calls.append("clear_lookup"),
@@ -772,6 +773,37 @@ def test_services_teardown_service_runs_runtime_steps_and_removes_service():
     assert bundle.services == []
 
 
+def test_services_teardown_uninitialized_service_removes_without_runtime_steps():
+    calls = []
+    service = SimpleNamespace(
+        name="svc",
+        state="un-initialized",
+        spin_down=lambda conn: calls.append("spin_down"),
+        teardown=lambda conn: calls.append("teardown"),
+        clear_service_lookup=lambda: calls.append("clear_lookup"),
+    )
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(
+            get_server_connection=lambda: (_ for _ in ()).throw(
+                AssertionError("connection should not be opened")
+            )
+        ),
+        services=[service],
+    )
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service if name == "svc" else None,
+            get_bundle_by_service=lambda value: bundle if value is service else None,
+        )
+    )
+
+    result = services.teardown_service(current, name="svc")
+
+    assert result.success
+    assert calls == ["clear_lookup"]
+    assert bundle.services == []
+
+
 def test_services_browse_service_templates_filters_by_backend():
     docker = SimpleNamespace(
         id="docker",
@@ -789,6 +821,111 @@ def test_services_browse_service_templates_filters_by_backend():
 
     assert result.success
     assert result.data == {"configs": [docker]}
+
+
+def test_services_template_setup_resolves_handler_and_materializes_params():
+    setup = SimpleNamespace(
+        params=lambda values, infra: {"${NAME}": values["name"]},
+    )
+    config = SimpleNamespace(
+        get_ui_handler=lambda ui, handler: (
+            lambda infra, bundle, config_arg: setup
+        )
+    )
+
+    resolved = services.resolve_service_template_setup(
+        SimpleNamespace(),
+        SimpleNamespace(),
+        config,
+    )
+    materialized = services.materialize_service_template_params(
+        setup,
+        {"name": "svc"},
+        SimpleNamespace(),
+    )
+
+    assert resolved.success
+    assert resolved.data == {"setup": setup}
+    assert materialized.success
+    assert materialized.data == {"params": {"${NAME}": "svc"}}
+
+
+def test_services_add_service_from_template_delegates_to_workspace():
+    calls = []
+    config = SimpleNamespace(id="svc-template")
+    bundle = SimpleNamespace(server=SimpleNamespace(ip="10.0.0.5"))
+    workspace = SimpleNamespace(
+        add_service_from_config=lambda config_arg, **kwargs: (
+            calls.append((config_arg, kwargs))
+            or OperationResult(True, 0, "added")
+        )
+    )
+
+    result = services.add_service_from_template(
+        workspace,
+        bundle,
+        config,
+        {"${X}": "y"},
+    )
+
+    assert result.success
+    assert calls == [
+        (
+            config,
+            {
+                "server_ip": "10.0.0.5",
+                "params": {"${X}": "y"},
+            },
+        )
+    ]
+
+
+def test_services_setup_service_in_workspace_delegates_by_name():
+    calls = []
+    service = SimpleNamespace(name="svc")
+    workspace = SimpleNamespace(
+        setup_service=lambda **kwargs: (
+            calls.append(kwargs)
+            or OperationResult(True, 0, "setup")
+        )
+    )
+
+    result = services.setup_service_in_workspace(workspace, service)
+
+    assert result.success
+    assert calls == [{"name": "svc"}]
+
+
+def test_services_teardown_service_in_workspace_delegates_by_name():
+    calls = []
+    service = SimpleNamespace(name="svc")
+    workspace = SimpleNamespace(
+        teardown_service=lambda **kwargs: (
+            calls.append(kwargs)
+            or OperationResult(True, 0, "teardown")
+        )
+    )
+
+    result = services.teardown_service_in_workspace(workspace, service)
+
+    assert result.success
+    assert calls == [{"name": "svc"}]
+
+
+def test_services_rename_service_in_workspace_delegates_by_name():
+    calls = []
+    service = SimpleNamespace(name="svc")
+    workspace = SimpleNamespace(
+        rename_service=lambda **kwargs: (
+            calls.append(kwargs)
+            or OperationResult(True, 0, "renamed")
+        )
+    )
+
+    result = services.rename_service_in_workspace(workspace, service, "new")
+
+    assert result.success
+    assert calls == [{"name": "svc", "new_name": "new"}]
 
 
 def test_services_build_service_ui_widget_resolves_config_handler():

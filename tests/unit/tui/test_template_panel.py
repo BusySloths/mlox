@@ -104,6 +104,33 @@ def test_server_template_panel_shows_configure_action(monkeypatch) -> None:
     assert disabled is False
 
 
+async def _service_template_action_state(monkeypatch) -> tuple[str, bool, str]:
+    configs = [_fake_service_config("docker-service", "Docker Service", {"docker"})]
+    monkeypatch.setattr(
+        "mlox.application.use_cases.services.load_all_service_configs",
+        lambda include_plugins=True: configs,
+    )
+
+    app = TemplatePanelTestApp("service")
+    async with app.run_test() as pilot:
+        panel = app.query_one(TemplatePanel)
+        panel.selection = SelectionInfo(
+            type="bundle",
+            bundle=SimpleNamespace(server=SimpleNamespace(backend=["docker"])),
+        )
+        await pilot.pause()
+        button = panel.query_one("#configure-add-server", Button)
+        return button.styles.display, button.disabled, str(button.label)
+
+
+def test_service_template_panel_shows_add_service_action(monkeypatch) -> None:
+    display, disabled, label = asyncio.run(_service_template_action_state(monkeypatch))
+
+    assert display == "block"
+    assert disabled is False
+    assert "Add Service" in label
+
+
 async def _server_template_loading_state(monkeypatch) -> tuple[bool, bool]:
     configs = [_fake_config("template-one", "Template One")]
     monkeypatch.setattr(

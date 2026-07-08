@@ -109,6 +109,9 @@ class ServiceActions(Container):
     class TeardownRequested(Message):
         """Request that the dashboard confirms service teardown."""
 
+    class SetupRequested(Message):
+        """Request that the dashboard sets up the selected service."""
+
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
     def compose(self) -> ComposeResult:
@@ -131,6 +134,7 @@ class ServiceActions(Container):
                     variant="primary",
                 )
                 yield Button("Rename Service", id="rename-service", variant="success")
+                yield Button("Setup Service", id="setup-service", variant="warning")
             with Horizontal(id="service-destructive-action-buttons"):
                 yield Button("Teardown Service", id="teardown-service", variant="error")
 
@@ -153,6 +157,7 @@ class ServiceActions(Container):
                 and service_has_web_ui(selection.service if selection else None)
             )
             self._render_web_ui_login_actions(selection)
+            self._render_setup_action(selection)
 
     def _render_web_ui_login_actions(
         self, selection: Optional[SelectionInfo]
@@ -172,20 +177,34 @@ class ServiceActions(Container):
             "token" in fields
         )
 
+    def _render_setup_action(self, selection: Optional[SelectionInfo]) -> None:
+        button = self.query_one("#setup-service", Button)
+        service = selection.service if selection else None
+        button.display = bool(
+            self.display
+            and service
+            and getattr(service, "state", "unknown") == "un-initialized"
+        )
+
     def set_loading(self, loading: bool) -> None:
         open_web_ui = self.query_one("#open-service-web-ui", Button)
         copy_username = self.query_one("#copy-service-web-ui-username", Button)
         copy_password = self.query_one("#copy-service-web-ui-password", Button)
         copy_token = self.query_one("#copy-service-web-ui-token", Button)
         rename = self.query_one("#rename-service", Button)
+        setup = self.query_one("#setup-service", Button)
         teardown = self.query_one("#teardown-service", Button)
         open_web_ui.disabled = loading
         copy_username.disabled = loading
         copy_password.disabled = loading
         copy_token.disabled = loading
         rename.disabled = loading
+        setup.disabled = loading
+        setup.label = "Setting up..." if loading else "Setup Service"
         teardown.disabled = loading
         teardown.label = "Tearing down..." if loading else "Teardown Service"
+        if not loading:
+            self._update_visibility(self.selection)
 
     @on(Button.Pressed, "#open-service-web-ui")
     def handle_open_web_ui(self, _: Button.Pressed) -> None:
@@ -206,6 +225,10 @@ class ServiceActions(Container):
     @on(Button.Pressed, "#rename-service")
     def handle_rename(self, _: Button.Pressed) -> None:
         self.post_message(self.RenameRequested())
+
+    @on(Button.Pressed, "#setup-service")
+    def handle_setup(self, _: Button.Pressed) -> None:
+        self.post_message(self.SetupRequested())
 
     @on(Button.Pressed, "#teardown-service")
     def handle_teardown(self, _: Button.Pressed) -> None:

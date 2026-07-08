@@ -12,6 +12,7 @@ from mlox.tui.template_forms import (
     TemplateFieldSpec,
     TemplateFormSpec,
     TemplateSetupDialog,
+    valid_select_options,
 )
 
 
@@ -98,3 +99,74 @@ async def _optional_select_empty_default() -> str:
 
 def test_template_setup_dialog_allows_empty_string_select_default() -> None:
     assert asyncio.run(_optional_select_empty_default()) == ""
+
+
+async def _required_select_with_no_options_error() -> str:
+    spec = TemplateFormSpec(
+        title="Add Service",
+        fields=[
+            TemplateFieldSpec(
+                "secret_manager",
+                "Secret manager",
+                kind="select",
+                options=[],
+            )
+        ],
+        materialize=lambda values, infra: values,
+    )
+    app = DialogHost(spec)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        field = app.screen.query_one("#template-field-secret-manager", Input)
+        assert field.value == ""
+        assert field.disabled is True
+        await pilot.click("#confirm-template-setup")
+        await pilot.pause()
+        error = app.screen.query_one("#template-setup-error", Static)
+        return _render_text(error.render())
+
+
+def test_template_setup_dialog_handles_required_select_without_options() -> None:
+    error = asyncio.run(_required_select_with_no_options_error())
+
+    assert "Secret manager is required." in error
+
+
+async def _select_with_false_option_value() -> str:
+    spec = TemplateFormSpec(
+        title="Add Service",
+        fields=[
+            TemplateFieldSpec(
+                "secret_manager",
+                "Secret manager",
+                kind="select",
+                options=[("Broken manager", False), ("Valid manager", "manager-1")],
+            )
+        ],
+        materialize=lambda values, infra: values,
+    )
+    app = DialogHost(spec)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        select = app.screen.query_one("#template-field-secret-manager", Select)
+        return str(select.value)
+
+
+def test_template_setup_dialog_ignores_non_string_select_values() -> None:
+    selected_value = asyncio.run(_select_with_false_option_value())
+
+    assert selected_value == "manager-1"
+
+
+def test_valid_select_options_keeps_string_values_only() -> None:
+    field = TemplateFieldSpec(
+        "manager",
+        "Manager",
+        kind="select",
+        options=[("Empty", ""), ("Bad", False), ("Good", "manager-1")],
+    )
+
+    assert valid_select_options(field) == [
+        ("Empty", ""),
+        ("Good", "manager-1"),
+    ]

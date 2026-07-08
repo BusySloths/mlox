@@ -46,6 +46,16 @@ class TemplateFormSpec:
         return self.materialize(values, infra)
 
 
+def valid_select_options(field_spec: TemplateFieldSpec) -> list[tuple[str, str]]:
+    """Return only Textual-safe select options for a field spec."""
+
+    return [
+        (str(label), value)
+        for label, value in field_spec.options
+        if isinstance(value, str)
+    ]
+
+
 class TemplateSetupDialog(ModalScreen[FormValues | None]):
     """Modal prompt for collecting setup values for a template."""
 
@@ -63,12 +73,21 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
                     yield Label(field_spec.label, classes="template-field-label")
                     widget_id = self._field_id(field_spec.name)
                     if field_spec.kind == "select":
-                        yield Select(
-                            field_spec.options,
-                            value=self._select_default(field_spec),
-                            allow_blank=not field_spec.required,
-                            id=widget_id,
-                        )
+                        options = valid_select_options(field_spec)
+                        if options:
+                            yield Select(
+                                options,
+                                value=self._select_default(field_spec, options),
+                                allow_blank=not field_spec.required,
+                                id=widget_id,
+                            )
+                        else:
+                            yield Input(
+                                value="",
+                                placeholder="No options available",
+                                id=widget_id,
+                                disabled=True,
+                            )
                     elif field_spec.kind == "multiline":
                         yield TextArea(
                             field_spec.default,
@@ -163,8 +182,16 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
     def _field_id(self, name: str) -> str:
         return f"template-field-{name.replace('_', '-')}"
 
-    def _select_default(self, field_spec: TemplateFieldSpec):
-        option_values = {value for _, value in field_spec.options}
+    def _select_default(
+        self,
+        field_spec: TemplateFieldSpec,
+        options: list[tuple[str, str]] | None = None,
+    ):
+        option_values = {
+            value for _, value in (options or valid_select_options(field_spec))
+        }
         if field_spec.default in option_values:
             return field_spec.default
+        if field_spec.required and options:
+            return options[0][1]
         return Select.BLANK

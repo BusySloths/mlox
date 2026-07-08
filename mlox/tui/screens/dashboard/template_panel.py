@@ -40,9 +40,10 @@ class TemplatePanel(Container):
     class ConfigureTemplateRequested(Message):
         """Request setup for the currently selected template."""
 
-        def __init__(self, config: Any) -> None:
+        def __init__(self, config: Any, template_type: str = "server") -> None:
             super().__init__()
             self.config = config
+            self.template_type = template_type
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
@@ -249,18 +250,28 @@ class TemplatePanel(Container):
         indicator = self.query_one("#template-add-indicator", LoadingIndicator)
         status = self.query_one("#template-add-status", Static)
         button.disabled = adding or not bool(self.selected_config())
+        button.label = self._action_label(adding=adding)
         indicator.display = adding
         status.display = adding
+        status.update("Adding service..." if self.template_type == "service" else "Adding server...")
 
     def _update_action_visibility(self) -> None:
         if not self.is_mounted:
             return
         action_row = self.query_one("#template-action-row", Horizontal)
         button = self.query_one("#configure-add-server", Button)
-        action_row.display = self.template_type == "server"
+        action_row.display = self.template_type in {"server", "service"}
+        button.label = self._action_label()
         button.disabled = self._adding or not bool(self.selected_config())
         self.query_one("#template-add-indicator", LoadingIndicator).display = self._adding
-        self.query_one("#template-add-status", Static).display = self._adding
+        status = self.query_one("#template-add-status", Static)
+        status.display = self._adding
+        status.update("Adding service..." if self.template_type == "service" else "Adding server...")
+
+    def _action_label(self, *, adding: bool = False) -> str:
+        if self.template_type == "service":
+            return "Adding Service..." if adding else "Configure & Add Service"
+        return "Adding Server..." if adding else "Configure & Add Server"
 
     @on(DataTable.RowHighlighted)
     def handle_row_highlighted(
@@ -278,4 +289,6 @@ class TemplatePanel(Container):
     def handle_configure_server_template(self, _: Button.Pressed) -> None:
         config = self.selected_config()
         if config:
-            self.post_message(self.ConfigureTemplateRequested(config))
+            self.post_message(
+                self.ConfigureTemplateRequested(config, self.template_type)
+            )

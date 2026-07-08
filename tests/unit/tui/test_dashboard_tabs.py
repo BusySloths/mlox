@@ -942,6 +942,19 @@ async def _rename_service_from_action_modal() -> tuple[str, str]:
     infra.get_bundle_by_service = lambda value: bundle if value is service else None
     app.workspace.infrastructure = infra
 
+    def rename_service(name: str, new_name: str):
+        if name != service.name:
+            return OperationResult(False, 8, "Service not found.")
+        service.name = new_name
+        return OperationResult(
+            True,
+            0,
+            f"Service {name} renamed to {new_name}.",
+            {"service": service},
+        )
+
+    app.workspace.rename_service = rename_service
+
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
         selection = SelectionInfo(type="service", bundle=bundle, service=service)
@@ -1200,6 +1213,231 @@ def test_setup_bundle_action_initializes_bundle_and_refreshes_tree() -> None:
     assert loading_while_setup is True
     assert loading_after_setup is False
     assert setup_button_display is False
+
+
+async def _bundle_add_service_button_opens_service_templates() -> tuple[str, bool]:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        app.query_one("#add-service-to-bundle", Button).press()
+        await pilot.pause()
+        tabs = app.query_one("#main-tabs", TabbedContent)
+        return tabs.active, app.query_one("#add-service-to-bundle", Button).display
+
+
+def test_bundle_add_service_button_opens_service_templates_tab() -> None:
+    active_tab, button_display = asyncio.run(
+        _bundle_add_service_button_opens_service_templates()
+    )
+
+    assert active_tab == SERVICE_TEMPLATES_TAB_ID
+    assert button_display is True
+
+
+async def _bundle_add_service_tab_survives_selection_refresh() -> str:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+    selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(selection)
+        await pilot.pause()
+        app.query_one("#add-service-to-bundle", Button).press()
+        await pilot.pause()
+        screen._apply_selection(selection)
+        await pilot.pause()
+        return app.query_one("#main-tabs", TabbedContent).active
+
+
+def test_bundle_add_service_tab_survives_selection_refresh() -> None:
+    active_tab = asyncio.run(_bundle_add_service_tab_survives_selection_refresh())
+
+    assert active_tab == SERVICE_TEMPLATES_TAB_ID
+
+
+async def _bundle_add_service_tab_survives_late_overview_reset() -> str:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="bundle", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        app.query_one("#add-service-to-bundle", Button).press()
+        tabs = app.query_one("#main-tabs", TabbedContent)
+        tabs.active = "overview-tab"
+        await pilot.pause(0.1)
+        tabs.active = "overview-tab"
+        await pilot.pause(0.3)
+        return tabs.active
+
+
+def test_bundle_add_service_tab_survives_late_overview_reset() -> None:
+    active_tab = asyncio.run(_bundle_add_service_tab_survives_late_overview_reset())
+
+    assert active_tab == SERVICE_TEMPLATES_TAB_ID
+
+
+async def _add_service_from_template_modal() -> tuple[list[tuple[object, dict]], str]:
+    app = DashboardTestApp()
+    calls = []
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
+    service = SimpleNamespace(name="tracking", state="un-initialized")
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    def add_service_from_config(config, *, server_ip: str, params: dict):
+        calls.append((config, {"server_ip": server_ip, "params": params}))
+        bundle.services.append(service)
+        return OperationResult(True, 0, "Added service tracking.", {"service": service})
+
+    app.workspace.add_service_from_config = add_service_from_config
+    spec = TemplateFormSpec(
+        title="Add Test Service",
+        fields=[TemplateFieldSpec("name", "Name")],
+        materialize=lambda values, infra: {"${SERVICE_NAME}": values["name"]},
+    )
+    config = SimpleNamespace(
+        id="test-service",
+        name="Test Service",
+        get_ui_handler=lambda ui, handler: lambda infra, bundle_arg, cfg: spec,
+    )
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
+        screen._apply_selection(selection)
+        await screen._handle_service_template_configure_requested(
+            TemplatePanel.ConfigureTemplateRequested(config, "service")
+        )
+        await pilot.pause()
+        app.screen.query_one("#template-field-name", Input).value = "tracking"
+        await pilot.click("#confirm-template-setup")
+
+        deadline = time.monotonic() + 2
+        while not calls or len(bundle.services) != 1:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for service add.")
+            await pilot.pause(0.05)
+
+        tree = screen.query_one(InfraTree)
+        return calls, tree.cursor_node.label.plain
+
+
+def test_service_template_modal_adds_service_without_setup() -> None:
+    calls, selected_label = asyncio.run(_add_service_from_template_modal())
+
+    assert calls[0][1] == {
+        "server_ip": "10.0.0.5",
+        "params": {"${SERVICE_NAME}": "tracking"},
+    }
+    assert selected_label == "Service: tracking"
+
+
+async def _setup_uninitialized_service_from_action() -> tuple[str, list[str], bool]:
+    app = DashboardTestApp()
+    calls: list[str] = []
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
+    service = SimpleNamespace(name="tracking", state="un-initialized")
+    bundle = SimpleNamespace(name="dev", server=server, services=[service])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    def setup_service(name: str):
+        calls.append(name)
+        service.state = "running"
+        return OperationResult(True, 0, "Service tracking set up.", {"service": service})
+
+    app.workspace.setup_service = setup_service
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="service", bundle=bundle, server=server, service=service)
+        )
+        await pilot.pause()
+        app.query_one("#setup-service", Button).press()
+
+        deadline = time.monotonic() + 2
+        while service.state != "running":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for service setup.")
+            await pilot.pause(0.05)
+
+        return service.state, calls, app.query_one("#setup-service", Button).display
+
+
+def test_setup_service_action_initializes_uninitialized_service() -> None:
+    state, calls, setup_button_display = asyncio.run(
+        _setup_uninitialized_service_from_action()
+    )
+
+    assert state == "running"
+    assert calls == ["tracking"]
+    assert setup_button_display is False
+
+
+async def _teardown_service_from_action() -> tuple[list[str], list[object], str]:
+    app = DashboardTestApp()
+    calls: list[str] = []
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
+    service = SimpleNamespace(name="tracking", state="un-initialized")
+    bundle = SimpleNamespace(name="dev", server=server, services=[service])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    def teardown_service(name: str):
+        calls.append(name)
+        bundle.services.remove(service)
+        return OperationResult(True, 0, "Service tracking removed.", {"service": service})
+
+    app.workspace.teardown_service = teardown_service
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="service", bundle=bundle, server=server, service=service)
+        )
+        await pilot.pause()
+        app.query_one("#teardown-service", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#confirm-remove-service", Button).press()
+
+        tree = screen.query_one(InfraTree)
+        deadline = time.monotonic() + 2
+        while (
+            calls == []
+            or tree.cursor_node.label.plain != "Bundle: dev  Backend: docker"
+        ):
+            if time.monotonic() > deadline:
+                raise AssertionError(
+                    "Timed out waiting for service teardown "
+                    f"(calls={calls}, cursor={tree.cursor_node.label.plain!r})."
+                )
+            await pilot.pause(0.05)
+
+        return calls, bundle.services, tree.cursor_node.label.plain
+
+
+def test_teardown_service_action_uses_workspace_and_refreshes_tree() -> None:
+    calls, services, selected_label = asyncio.run(_teardown_service_from_action())
+
+    assert calls == ["tracking"]
+    assert services == []
+    assert selected_label == "Bundle: dev  Backend: docker"
 
 
 async def _remove_bundle_from_action() -> tuple[int, list[str]]:

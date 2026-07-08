@@ -275,9 +275,10 @@ def teardown_service(project: WorkspaceState, *, name: str) -> OperationResult:
     bundle = infra.get_bundle_by_service(service)
     if not bundle:
         return OperationResult(False, 10, "Could not find server bundle for service.")
-    with bundle.server.get_server_connection() as conn:
-        service.spin_down(conn)
-        service.teardown(conn)
+    if getattr(service, "state", "unknown") != "un-initialized":
+        with bundle.server.get_server_connection() as conn:
+            service.spin_down(conn)
+            service.teardown(conn)
     bundle.services.remove(service)
     service.clear_service_lookup()
     return OperationResult(True, 0, f"Service {name} removed.", {"service": service})
@@ -378,6 +379,140 @@ def browse_service_templates(
         ]
     message = "No service templates found." if not configs else "Service templates loaded."
     return OperationResult(True, 0, message, {"configs": configs})
+
+
+def resolve_service_template_setup(
+    infra,
+    bundle,
+    config,
+    *,
+    ui: str = "tui",
+    handler: str = "setup",
+) -> OperationResult:
+    """Resolve a service-template setup handler for UI adapters."""
+
+    if not config:
+        return OperationResult(False, 31, "No service template selected.")
+    if not bundle:
+        return OperationResult(False, 32, "No target bundle selected.")
+
+    callable_setup = config.get_ui_handler(ui, handler)
+    if not callable(callable_setup):
+        return OperationResult(
+            False,
+            33,
+            "Selected service template does not provide a TUI setup form.",
+        )
+
+    try:
+        setup = callable_setup(infra, bundle, config)
+    except TypeError:
+        setup = callable_setup(infra, bundle)
+    except Exception as exc:
+        return OperationResult(False, 34, f"Failed to load service setup form: {exc}")
+
+    if setup is None:
+        return OperationResult(
+            False,
+            35,
+            "Selected service template is missing required setup data.",
+        )
+    return OperationResult(True, 0, "Loaded service setup form.", {"setup": setup})
+
+
+def materialize_service_template_params(setup, values, infra) -> OperationResult:
+    """Convert setup form values to service template placeholder parameters."""
+
+    if not setup:
+        return OperationResult(False, 36, "No service setup form is available.")
+    try:
+        params = setup.params(values, infra)
+    except Exception as exc:
+        return OperationResult(False, 37, f"Failed to prepare service parameters: {exc}")
+    return OperationResult(
+        True,
+        0,
+        "Prepared service parameters.",
+        {"params": params},
+    )
+
+
+def add_service_from_template(
+    workspace,
+    bundle,
+    config,
+    params: Dict[str, str],
+) -> OperationResult:
+    """Add a service template to a bundle without setting it up."""
+
+    if not workspace:
+        return OperationResult(False, 38, "Project workspace is unavailable.")
+    server = getattr(bundle, "server", None)
+    server_ip = getattr(server, "ip", "")
+    if not bundle or not server or not server_ip:
+        return OperationResult(False, 39, "No target bundle selected.")
+    add_from_config = getattr(workspace, "add_service_from_config", None)
+    if not callable(add_from_config):
+        return OperationResult(
+            False,
+            40,
+            "Project workspace cannot add service templates.",
+        )
+    try:
+        return add_from_config(config, server_ip=server_ip, params=params or {})
+    except Exception as exc:
+        return OperationResult(False, 41, f"Failed to add service: {exc}")
+
+
+def setup_service_in_workspace(workspace, service) -> OperationResult:
+    """Set up one service through an open workspace adapter."""
+
+    if not workspace:
+        return OperationResult(False, 42, "Project workspace is unavailable.")
+    if not service:
+        return OperationResult(False, 43, "No service selected.")
+    setup = getattr(workspace, "setup_service", None)
+    if not callable(setup):
+        return OperationResult(False, 44, "Project workspace cannot set up services.")
+    try:
+        return setup(name=str(getattr(service, "name", "")))
+    except Exception as exc:
+        return OperationResult(False, 45, f"Failed to set up service: {exc}")
+
+
+def teardown_service_in_workspace(workspace, service) -> OperationResult:
+    """Tear down and remove one service through an open workspace adapter."""
+
+    if not workspace:
+        return OperationResult(False, 46, "Project workspace is unavailable.")
+    if not service:
+        return OperationResult(False, 47, "No service selected.")
+    teardown = getattr(workspace, "teardown_service", None)
+    if not callable(teardown):
+        return OperationResult(False, 48, "Project workspace cannot teardown services.")
+    try:
+        return teardown(name=str(getattr(service, "name", "")))
+    except Exception as exc:
+        return OperationResult(False, 49, f"Failed to teardown service: {exc}")
+
+
+def rename_service_in_workspace(workspace, service, new_name: str) -> OperationResult:
+    """Rename one service through an open workspace adapter."""
+
+    if not workspace:
+        return OperationResult(False, 50, "Project workspace is unavailable.")
+    if not service:
+        return OperationResult(False, 51, "No service selected.")
+    rename = getattr(workspace, "rename_service", None)
+    if not callable(rename):
+        return OperationResult(False, 52, "Project workspace cannot rename services.")
+    try:
+        return rename(
+            name=str(getattr(service, "name", "")),
+            new_name=new_name,
+        )
+    except Exception as exc:
+        return OperationResult(False, 53, f"Failed to rename service: {exc}")
 
 
 def build_service_ui_widget(

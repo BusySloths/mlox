@@ -37,3 +37,12 @@ def register_builtin_tui_services() -> None:
                     function_name=function_name,
                     handler=handler,
                 )
+
+    setup_module = importlib.import_module("mlox.tui.services.setup")
+    for config_id, handler in setup_module.SETUP_HANDLERS.items():
+        register(
+            config_id=config_id,
+            frontend="tui",
+            function_name="setup",
+            handler=handler,
+        )

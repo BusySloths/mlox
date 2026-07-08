@@ -53,13 +53,21 @@ from mlox.application.use_cases.project import (
     update_bundle_tags,
 )
 from mlox.application.use_cases.services import (
+    add_service_from_template,
     build_service_ui_widget,
     get_service_web_ui_login_value,
+    materialize_service_template_params,
     open_service_web_ui,
-    rename_service,
-    teardown_service,
+    rename_service_in_workspace,
+    resolve_service_template_setup,
+    setup_service_in_workspace,
+    teardown_service_in_workspace,
 )
-from mlox.tui.template_forms import TemplateFormSpec, TemplateSetupDialog
+from mlox.tui.template_forms import (
+    TemplateFormSpec,
+    TemplateSetupDialog,
+    valid_select_options,
+)
 
 
 FIREWALL_TAB_ID = "firewall-tab"
@@ -129,6 +137,7 @@ class DashboardScreen(Screen):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._sidebar_width = SIDEBAR_DEFAULT_WIDTH
+        self._requested_tab_id: str | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, classes="app-header")
@@ -143,6 +152,9 @@ class DashboardScreen(Screen):
                     with Horizontal(id="server-add-loading"):
                         yield LoadingIndicator(id="server-add-indicator")
                         yield Static("Adding server...", id="server-add-label")
+                    with Horizontal(id="service-add-loading"):
+                        yield LoadingIndicator(id="service-add-indicator")
+                        yield Static("Adding service...", id="service-add-label")
                     with Horizontal(id="bundle-lifecycle-loading"):
                         yield LoadingIndicator(id="bundle-lifecycle-indicator")
                         yield Static(
@@ -195,6 +207,7 @@ class DashboardScreen(Screen):
         self._apply_selection(tree.root.data)
         self._set_project_reload_loading(False)
         self._set_server_add_loading(False)
+        self._set_service_add_loading(False)
         self._set_bundle_lifecycle_loading(False)
         self._set_app_log_drawer_visible(False)
         self._apply_sidebar_width()
@@ -331,13 +344,32 @@ class DashboardScreen(Screen):
     def handle_project_add_bundle_requested(self, event: Button.Pressed) -> None:
         event.stop()
         self._set_tab_visible(SERVER_TEMPLATES_TAB_ID, True)
-        self._activate_server_templates_tab()
+        self._request_tab_activation(SERVER_TEMPLATES_TAB_ID)
         self.notify("Choose a server template to create a new bundle.")
+
+    @on(ServerActions.AddServiceRequested)
+    def handle_bundle_add_service_requested(
+        self, _: ServerActions.AddServiceRequested
+    ) -> None:
+        selection = self.query_one(ServerActions).selection
+        if not selection or selection.type != "bundle" or not selection.bundle:
+            self.notify("Select a bundle to add a service.", severity="warning")
+            return
+        self._set_tab_visible(SERVICE_TEMPLATES_TAB_ID, True)
+        self._request_tab_activation(SERVICE_TEMPLATES_TAB_ID)
+        self.notify("Choose a service template to add to this bundle.")
 
     def _activate_server_templates_tab(self) -> None:
         tabs = self.query_one("#main-tabs", TabbedContent)
         try:
             tabs.active = SERVER_TEMPLATES_TAB_ID
+        except Tabs.TabError:
+            pass
+
+    def _activate_service_templates_tab(self) -> None:
+        tabs = self.query_one("#main-tabs", TabbedContent)
+        try:
+            tabs.active = SERVICE_TEMPLATES_TAB_ID
         except Tabs.TabError:
             pass
 
@@ -520,8 +552,7 @@ class DashboardScreen(Screen):
             )
             return
 
-        current_name = str(getattr(selection.service, "name", ""))
-        result = rename_service(workspace, name=current_name, new_name=name)
+        result = rename_service_in_workspace(workspace, selection.service, name)
         if not result.success:
             self.notify(result.message, severity="error")
             return
@@ -586,6 +617,53 @@ class DashboardScreen(Screen):
         self.app.copy_to_clipboard(value)
         self.notify(f"Copied service web UI {field}.")
 
+    @on(ServiceActions.SetupRequested)
+    def handle_service_setup_requested(
+        self, _: ServiceActions.SetupRequested
+    ) -> None:
+        selection = self.query_one(ServiceActions).selection
+        if not selection or selection.type != "service" or not selection.service:
+            self.notify("Select a service to set up.", severity="warning")
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot set up service because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        self.query_one(ServiceActions).set_loading(True)
+
+        def run_operation() -> None:
+            result = setup_service_in_workspace(workspace, selection.service)
+            self.app.call_from_thread(
+                self._finish_service_setup,
+                result,
+                selection.bundle,
+                selection.service,
+            )
+
+        self.app.run_worker(
+            run_operation,
+            thread=True,
+            exclusive=True,
+            group="service-lifecycle",
+        )
+
+    def _finish_service_setup(
+        self,
+        result,
+        bundle: object | None,
+        service: object | None,
+    ) -> None:
+        self.query_one(ServiceActions).set_loading(False)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+        self._refresh_tree_after_service_change(bundle, service)
+        self.notify(result.message)
+
     @on(ServiceActions.TeardownRequested)
     async def handle_service_teardown_requested(
         self, _: ServiceActions.TeardownRequested
@@ -619,11 +697,10 @@ class DashboardScreen(Screen):
             )
             return
 
-        service_name = str(getattr(selection.service, "name", ""))
         self.query_one(ServiceActions).set_loading(True)
 
         def run_operation() -> None:
-            result = teardown_service(workspace, name=service_name)
+            result = teardown_service_in_workspace(workspace, selection.service)
             self.app.call_from_thread(
                 self._finish_service_teardown,
                 result,
@@ -646,6 +723,14 @@ class DashboardScreen(Screen):
         self.notify(result.message)
 
     @on(TemplatePanel.ConfigureTemplateRequested)
+    async def handle_template_configure_requested(
+        self, message: TemplatePanel.ConfigureTemplateRequested
+    ) -> None:
+        if message.template_type == "service":
+            await self._handle_service_template_configure_requested(message)
+            return
+        await self.handle_server_template_configure_requested(message)
+
     async def handle_server_template_configure_requested(
         self, message: TemplatePanel.ConfigureTemplateRequested
     ) -> None:
@@ -677,6 +762,69 @@ class DashboardScreen(Screen):
                 message.config, setup, values
             ),
         )
+
+    async def _handle_service_template_configure_requested(
+        self,
+        message: TemplatePanel.ConfigureTemplateRequested,
+    ) -> None:
+        workspace = getattr(self.app, "workspace", None)
+        infra = getattr(workspace, "infrastructure", None)
+        selection = self.query_one("#service-template-panel", TemplatePanel).selection
+        bundle = selection.bundle if selection and selection.type == "bundle" else None
+        if not workspace or not infra:
+            self.notify(
+                "Cannot add a service because the project workspace is unavailable.",
+                severity="error",
+            )
+            return
+        if not bundle:
+            self.notify("Select a bundle before adding a service.", severity="warning")
+            return
+
+        result = resolve_service_template_setup(infra, bundle, message.config)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+
+        setup = result.data["setup"] if result.data else None
+        if not isinstance(setup, TemplateFormSpec):
+            self.notify(
+                "Selected service template returned an unexpected setup form.",
+                severity="error",
+            )
+            return
+        missing_options = self._missing_required_select_options(setup)
+        if missing_options:
+            self.notify(
+                (
+                    "Cannot add this service yet. Missing options for: "
+                    + ", ".join(missing_options)
+                    + "."
+                ),
+                severity="error",
+            )
+            return
+        if not setup.fields:
+            self._add_service_from_template_values(message.config, bundle, setup, {})
+            return
+
+        await self.app.push_screen(
+            TemplateSetupDialog(setup),
+            lambda values: self._add_service_from_template_values(
+                message.config, bundle, setup, values
+            ),
+        )
+
+    def _missing_required_select_options(self, setup: TemplateFormSpec) -> list[str]:
+        return [
+            field.label
+            for field in setup.fields
+            if (
+                field.kind == "select"
+                and field.required
+                and not valid_select_options(field)
+            )
+        ]
 
     def _add_server_from_template_values(
         self,
@@ -738,6 +886,71 @@ class DashboardScreen(Screen):
         self._refresh_tree_after_server_add(bundle)
         self.notify(result.message)
 
+    def _add_service_from_template_values(
+        self,
+        config: object,
+        bundle: object,
+        setup: TemplateFormSpec,
+        values: dict[str, str] | None,
+    ) -> None:
+        if values is None:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot add a service because the project workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        panel = self.query_one("#service-template-panel", TemplatePanel)
+        panel.set_adding(True)
+        self._set_service_add_loading(True)
+
+        def add_service() -> None:
+            infra = getattr(workspace, "infrastructure", None)
+            params_result = materialize_service_template_params(setup, values, infra)
+            if not params_result.success:
+                self.app.call_from_thread(
+                    self._finish_service_template_add_error,
+                    params_result.message,
+                )
+                return
+
+            params = params_result.data["params"] if params_result.data else {}
+            add_result = add_service_from_template(workspace, bundle, config, params)
+            if not add_result.success:
+                self.app.call_from_thread(
+                    self._finish_service_template_add_error,
+                    add_result.message,
+                )
+                return
+            self.app.call_from_thread(
+                self._finish_service_template_add,
+                add_result,
+                bundle,
+            )
+
+        self.app.run_worker(
+            add_service,
+            thread=True,
+            exclusive=True,
+            group="service-template-add",
+        )
+
+    def _finish_service_template_add_error(self, message: str) -> None:
+        self.query_one("#service-template-panel", TemplatePanel).set_adding(False)
+        self._set_service_add_loading(False)
+        self.notify(message, severity="error")
+
+    def _finish_service_template_add(self, result, bundle: object | None) -> None:
+        panel = self.query_one("#service-template-panel", TemplatePanel)
+        panel.set_adding(False)
+        self._set_service_add_loading(False)
+        service = result.data.get("service") if result.data else None
+        self._refresh_tree_after_service_change(bundle, service)
+        self.notify(result.message)
+
     def _refresh_tree_after_server_add(self, bundle: object | None) -> None:
         tree = self.query_one(InfraTree)
         tree.populate_tree()
@@ -765,6 +978,7 @@ class DashboardScreen(Screen):
         tree = self.query_one(InfraTree)
         tree.populate_tree()
         tree.expand_all()
+        self._select_service_tree_node(bundle, service)
         self.call_after_refresh(self._select_service_tree_node, bundle, service)
 
     def _select_service_tree_node(
@@ -843,9 +1057,15 @@ class DashboardScreen(Screen):
         self.notify(f"Reloaded project infrastructure for {project}.")
 
     def _update_template_tabs(self, selection: SelectionInfo | None) -> None:
+        server_templates_visible = selection.type == "root" if selection else False
+        service_templates_visible = (
+            selection.type == "bundle" and is_bundle_initialized(selection.bundle)
+            if selection
+            else False
+        )
         self._set_tab_visible(
             SERVER_TEMPLATES_TAB_ID,
-            selection.type == "root" if selection else False,
+            server_templates_visible,
         )
         self._set_tab_visible(
             SECRET_MANAGER_TAB_ID,
@@ -865,14 +1085,46 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             SERVICE_TEMPLATES_TAB_ID,
-            selection.type == "bundle" and is_bundle_initialized(selection.bundle)
-            if selection
-            else False,
+            service_templates_visible,
         )
         self._set_tab_visible(
             LOGS_TAB_ID,
             selection.type in {"server", "service"} if selection else False,
         )
+        self._activate_requested_tab_if_visible(clear=False)
+
+    def _request_tab_activation(self, tab_id: str) -> None:
+        self._requested_tab_id = tab_id
+        self._activate_requested_tab_if_visible(clear=False)
+        self.call_after_refresh(self._activate_requested_tab_if_visible, False)
+        for delay in (0.05, 0.15, 0.35, 0.75):
+            self.set_timer(
+                delay,
+                lambda: self._activate_requested_tab_if_visible(clear=False),
+            )
+        self.set_timer(
+            0.85,
+            lambda: self._activate_requested_tab_if_visible(clear=True),
+        )
+
+    def _activate_requested_tab_if_visible(self, clear: bool = True) -> None:
+        requested = self._requested_tab_id
+        if not requested:
+            return
+        tabs = self.query_one("#main-tabs", TabbedContent)
+        try:
+            tab = tabs.get_tab(requested)
+        except Tabs.TabError:
+            if clear:
+                self._requested_tab_id = None
+            return
+        if tab.styles.display != "none":
+            try:
+                tabs.active = requested
+            except Tabs.TabError:
+                pass
+        if clear:
+            self._requested_tab_id = None
 
     def _update_tui_panel(self, selection: SelectionInfo | None) -> None:
         container = self.query_one("#service-tui-container", Container)
@@ -983,6 +1235,10 @@ class DashboardScreen(Screen):
 
     def _set_server_add_loading(self, visible: bool) -> None:
         loading = self.query_one("#server-add-loading", Horizontal)
+        loading.display = visible
+
+    def _set_service_add_loading(self, visible: bool) -> None:
+        loading = self.query_one("#service-add-loading", Horizontal)
         loading.display = visible
 
     def _set_bundle_lifecycle_loading(
