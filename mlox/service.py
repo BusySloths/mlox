@@ -62,6 +62,7 @@ if TYPE_CHECKING:
 class ServiceCapability(StrEnum):
     """User-facing service capabilities advertised by service configs/classes."""
 
+    WEB_UI = "web_ui"
     SECRET_MANAGER = "secret_manager"
     REPOSITORY = "repository"
     MODEL_REGISTRY = "model_registry"
@@ -95,6 +96,46 @@ class AbstractSecretManagerService(ABC):
     ) -> "AbstractSecretManager":
         """Return an AbstractSecretManager client for this service."""
         pass
+
+
+class AbstractWebUIService(ABC):
+    """Service capability mixin for services with a browser-facing UI."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.WEB_UI}
+    web_ui_url_label: ClassVar[str | None] = None
+    web_ui_login_fields: ClassVar[tuple[str, ...]] = ()
+
+    def get_web_ui_address(self) -> str:
+        """Return the preferred browser URL for this service, if available."""
+
+        urls = getattr(self, "service_urls", {}) or {}
+        if self.web_ui_url_label:
+            url = urls.get(self.web_ui_url_label)
+            if url:
+                return str(url)
+
+        for label, url in urls.items():
+            label_text = str(label).lower()
+            if any(
+                term in label_text
+                for term in ("ui", "dashboard", "console", "login")
+            ):
+                return str(url)
+
+        url = getattr(self, "service_url", "")
+        return str(url or "")
+
+    def get_web_ui_login(self, bundle: Any | None = None) -> dict[str, str]:
+        """Return browser-login credentials for this service, if available."""
+
+        credentials: dict[str, str] = {}
+        username = getattr(self, "ui_user", None) or getattr(self, "root_user", None)
+        password = getattr(self, "ui_pw", None) or getattr(self, "root_password", None)
+        if username:
+            credentials["username"] = str(username)
+        if password:
+            credentials["password"] = str(password)
+        return credentials
 
 
 @dataclass

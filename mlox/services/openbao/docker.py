@@ -29,8 +29,12 @@ from typing import Any, Dict
 from mlox.execution.base import TaskGroup
 from mlox.infra import Infrastructure
 from mlox.secret_manager import AbstractSecretManager
-from mlox.service import AbstractSecretManagerService
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractSecretManagerService,
+    AbstractService,
+    AbstractWebUIService,
+    ServiceCapability,
+)
 from .client import OpenBaoSecretManager
 from mlox.utils import generate_password
 
@@ -38,9 +42,14 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
+class OpenBaoDockerService(
+    AbstractService, AbstractSecretManagerService, AbstractWebUIService
+):
     """Deploy OpenBao via Docker compose and expose a secret manager client."""
 
+    capabilities = {ServiceCapability.SECRET_MANAGER, ServiceCapability.WEB_UI}
+    web_ui_url_label = "OpenBao UI"
+    web_ui_login_fields = ("username", "password")
     port: int | str
     mount_path: str = "secret"
     root_token: str = ""
@@ -63,6 +72,16 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
     unseal_keys: list[str] = field(default_factory=list)
     service_url: str = ""
     stack_prefix: str = ""
+
+    def get_web_ui_login(self, bundle: Any | None = None) -> dict[str, str]:
+        return {
+            key: value
+            for key, value in {
+                "username": self.admin_username,
+                "password": self.admin_password,
+            }.items()
+            if value
+        }
 
     def __post_init__(self) -> None:
         self.port = int(self.port)
@@ -112,6 +131,7 @@ class OpenBaoDockerService(AbstractService, AbstractSecretManagerService):
         self.service_ports["OpenBao API"] = int(self.port)
         self.service_url = f"https://{conn.host}:{self.port}"
         self.service_urls["OpenBao API"] = self.service_url
+        self.service_urls["OpenBao UI"] = f"{self.service_url}/ui/"
         self.state = "stopped"
 
     def teardown(self, conn) -> None:

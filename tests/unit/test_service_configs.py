@@ -293,6 +293,29 @@ def test_builtin_service_configs_have_matching_explicit_capabilities():
         assert config.service_capabilities() <= class_capabilities, config.path
 
 
+def test_builtin_web_ui_service_configs_advertise_web_ui_capability():
+    configs = {
+        config.id: config for config in load_all_service_configs(include_plugins=False)
+    }
+    web_ui_config_ids = {
+        "airflow-2.9.2-docker",
+        "airflow-3.1.3-docker",
+        "headlamp-newest-k3s",
+        "k8s-dashboard-newest-k3s",
+        "kubeapps-newest-k3s",
+        "kubeflow-1.10.1-k3s",
+        "litellm-ollama-1.77.7-docker",
+        "minio-release-2025-07-23-docker",
+        "mlflow-2.22.0-docker",
+        "mlflow-3.8.1-docker",
+        "openbao-docker",
+    }
+
+    assert web_ui_config_ids <= set(configs)
+    for config_id in web_ui_config_ids:
+        assert "web_ui" in configs[config_id].service_capabilities()
+
+
 def test_dev_terminal_supports_kubernetes_agent_backends():
     configs = {
         config.id: config for config in load_all_service_configs(include_plugins=False)

@@ -1,12 +1,159 @@
 from __future__ import annotations
 
+import webbrowser
 from typing import Any, Dict, List, Optional
 
 from mlox.application.result import OperationResult
 from mlox.config import get_stacks_path, load_all_service_configs
 from mlox.project.state import WorkspaceState
-from mlox.service import AbstractService
+from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
 from mlox.utils import auto_map_ports, generate_pw, generate_username
+
+
+def service_has_web_ui(service: object | None) -> bool:
+    """Return whether a service advertises a browser-facing UI capability."""
+
+    if isinstance(service, AbstractWebUIService):
+        return True
+    capabilities = getattr(service, "capabilities", set()) if service else set()
+    for capability in capabilities or []:
+        value = capability.value if hasattr(capability, "value") else capability
+        if (
+            str(value).strip().lower().replace("-", "_")
+            == ServiceCapability.WEB_UI.value
+        ):
+            return True
+    return callable(getattr(service, "get_web_ui_address", None))
+
+
+def get_service_web_ui_address(service: object | None) -> OperationResult:
+    """Resolve the browser URL for a web UI-capable service."""
+
+    if service is None:
+        return OperationResult(False, 20, "Service not found.")
+    if not service_has_web_ui(service):
+        return OperationResult(False, 21, "Selected service does not provide a web UI.")
+
+    getter = getattr(service, "get_web_ui_address", None)
+    if not callable(getter):
+        return OperationResult(
+            False,
+            22,
+            "Selected service cannot resolve a web UI address.",
+        )
+
+    try:
+        url = str(getter()).strip()
+    except Exception as exc:
+        return OperationResult(False, 23, f"Failed to resolve service web UI: {exc}")
+
+    if not url:
+        return OperationResult(
+            False,
+            24,
+            "Service web UI address is not available yet. Set up the service first.",
+        )
+
+    return OperationResult(True, 0, "Service web UI address resolved.", {"url": url})
+
+
+def list_service_web_ui_login_fields(service: object | None) -> OperationResult:
+    """Return browser-login fields advertised by a web UI-capable service."""
+
+    if service is None:
+        return OperationResult(False, 20, "Service not found.")
+    if not service_has_web_ui(service):
+        return OperationResult(False, 21, "Selected service does not provide a web UI.")
+
+    fields = [
+        str(field).strip()
+        for field in getattr(service, "web_ui_login_fields", ()) or ()
+        if str(field).strip()
+    ]
+    return OperationResult(
+        True,
+        0,
+        "Service web UI login fields resolved.",
+        {"fields": fields},
+    )
+
+
+def get_service_web_ui_login_value(
+    service: object | None,
+    field: str,
+    *,
+    bundle: object | None = None,
+) -> OperationResult:
+    """Resolve one browser-login credential value for a web UI-capable service."""
+
+    if service is None:
+        return OperationResult(False, 20, "Service not found.")
+    if not service_has_web_ui(service):
+        return OperationResult(False, 21, "Selected service does not provide a web UI.")
+
+    field = field.strip().lower()
+    if not field:
+        return OperationResult(False, 26, "Login field is required.")
+
+    getter = getattr(service, "get_web_ui_login", None)
+    if not callable(getter):
+        return OperationResult(
+            False,
+            27,
+            "Selected service does not provide web UI login details.",
+        )
+
+    try:
+        login = getter(bundle=bundle)
+    except TypeError:
+        login = getter()
+    except Exception as exc:
+        return OperationResult(False, 28, f"Failed to resolve web UI login: {exc}")
+
+    if not isinstance(login, dict):
+        return OperationResult(
+            False,
+            29,
+            "Selected service returned invalid web UI login details.",
+        )
+
+    value = str(login.get(field, "") or "")
+    if not value:
+        return OperationResult(
+            False,
+            30,
+            f"Web UI {field} is not available yet.",
+        )
+
+    return OperationResult(
+        True,
+        0,
+        f"Service web UI {field} resolved.",
+        {"field": field, "value": value},
+    )
+
+
+def open_service_web_ui(
+    service: object | None,
+    *,
+    opener=None,
+) -> OperationResult:
+    """Open the browser URL for a web UI-capable service."""
+
+    result = get_service_web_ui_address(service)
+    if not result.success:
+        return result
+
+    url = result.data["url"] if result.data else ""
+    open_url = opener or webbrowser.open
+    try:
+        opened = open_url(url)
+    except Exception as exc:
+        return OperationResult(False, 25, f"Failed to open service web UI: {exc}")
+
+    if opened is False:
+        return OperationResult(False, 25, "Failed to open service web UI.")
+    return OperationResult(True, 0, f"Opened service web UI: {url}", {"url": url})
 
 
 def list_services(project: WorkspaceState) -> OperationResult:

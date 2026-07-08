@@ -1034,9 +1034,28 @@ EditBundleTagsDialog {
 
 #rename-service {
   width: auto;
+  margin-left: 1;
   background: #0e9455ff;
   border: round #8fe388ff;
   color: #ffffff;
+}
+
+#open-service-web-ui,
+#copy-service-web-ui-username,
+#copy-service-web-ui-password,
+#copy-service-web-ui-token {
+  width: auto;
+  margin-left: 1;
+  background: #145fd7;
+  border: round #8eb7ff;
+  color: #ffffff;
+}
+
+#open-service-web-ui:hover,
+#copy-service-web-ui-username:hover,
+#copy-service-web-ui-password:hover,
+#copy-service-web-ui-token:hover {
+  background: #1f72f2;
 }
 
 #teardown-service {

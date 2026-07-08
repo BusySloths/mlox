@@ -54,6 +54,8 @@ from mlox.application.use_cases.project import (
 )
 from mlox.application.use_cases.services import (
     build_service_ui_widget,
+    get_service_web_ui_login_value,
+    open_service_web_ui,
     rename_service,
     teardown_service,
 )
@@ -526,6 +528,63 @@ class DashboardScreen(Screen):
 
         self._refresh_tree_after_service_change(selection.bundle, selection.service)
         self.notify(result.message)
+
+    @on(ServiceActions.OpenWebUIRequested)
+    def handle_service_open_web_ui_requested(
+        self, _: ServiceActions.OpenWebUIRequested
+    ) -> None:
+        selection = self.query_one(ServiceActions).selection
+        if not selection or selection.type != "service" or not selection.service:
+            self.notify("Select a service with a web UI.", severity="warning")
+            return
+
+        result = open_service_web_ui(selection.service)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+        self.notify(result.message)
+
+    @on(ServiceActions.CopyWebUILoginRequested)
+    def handle_service_copy_web_ui_login_requested(
+        self, message: ServiceActions.CopyWebUILoginRequested
+    ) -> None:
+        selection = self.query_one(ServiceActions).selection
+        if not selection or selection.type != "service" or not selection.service:
+            self.notify("Select a service with web UI login details.", severity="warning")
+            return
+
+        field = message.field
+
+        def resolve_login() -> None:
+            result = get_service_web_ui_login_value(
+                selection.service,
+                field,
+                bundle=selection.bundle,
+            )
+            self.app.call_from_thread(
+                self._finish_service_copy_web_ui_login,
+                result,
+            )
+
+        self.app.run_worker(
+            resolve_login,
+            thread=True,
+            exclusive=False,
+            group="service-web-ui-login",
+        )
+
+    def _finish_service_copy_web_ui_login(self, result) -> None:
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+        payload = result.data or {}
+        field = str(payload.get("field") or "login")
+        value = str(payload.get("value") or "")
+        if not value:
+            self.notify(f"Web UI {field} is not available.", severity="warning")
+            return
+        self.app.copy_to_clipboard(value)
+        self.notify(f"Copied service web UI {field}.")
 
     @on(ServiceActions.TeardownRequested)
     async def handle_service_teardown_requested(

@@ -6,16 +6,18 @@ from dataclasses import dataclass
 from typing import Dict
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class KubeflowService(AbstractService):
+class KubeflowService(AbstractService, AbstractWebUIService):
     """Install the upstream Kubeflow manifests on a Kubernetes cluster."""
 
-    capabilities = {ServiceCapability.DASHBOARD}
+    capabilities = {ServiceCapability.DASHBOARD, ServiceCapability.WEB_UI}
+    web_ui_url_label = "Kubeflow"
+    web_ui_login_fields = ("username", "password")
     version: str = "v1.10.1"
     kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
     ingress_namespace: str = "istio-system"
@@ -34,6 +36,16 @@ class KubeflowService(AbstractService):
     webhook_ready_timeout_seconds: int = 120
     pipeline_ready_timeout_seconds: int = 300
     teardown_timeout_seconds: int = 120
+
+    def get_web_ui_login(self, bundle=None) -> dict[str, str]:
+        return {
+            key: value
+            for key, value in {
+                "username": self.dex_email,
+                "password": self.dex_password,
+            }.items()
+            if value
+        }
 
     @property
     def manifests_url(self) -> str:

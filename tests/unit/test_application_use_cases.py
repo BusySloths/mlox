@@ -13,7 +13,25 @@ from mlox.application.use_cases import (
     servers,
     services,
 )
-from mlox.service import ServiceCapability
+from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
+
+
+class _FakeWebUIService(AbstractService, AbstractWebUIService):
+    capabilities = {ServiceCapability.WEB_UI}
+    web_ui_url_label = "Console"
+    web_ui_login_fields = ("username", "password")
+
+    def setup(self, conn):
+        pass
+
+    def teardown(self, conn):
+        pass
+
+    def check(self, conn):
+        return {}
+
+    def get_secrets(self):
+        return {}
 
 
 class _Connection:
@@ -799,6 +817,80 @@ def test_services_build_service_ui_widget_reports_missing_handler():
 
     assert not result.success
     assert result.message == "Selected service does not provide a TUI view."
+
+
+def test_services_web_ui_address_requires_capability_and_url():
+    missing = SimpleNamespace(name="api")
+    capable_without_url = SimpleNamespace(
+        name="ui",
+        capabilities={ServiceCapability.WEB_UI},
+        get_web_ui_address=lambda: "",
+    )
+    capable = SimpleNamespace(
+        name="ui",
+        capabilities={ServiceCapability.WEB_UI},
+        get_web_ui_address=lambda: "https://example.test/ui",
+    )
+
+    no_capability = services.get_service_web_ui_address(missing)
+    no_url = services.get_service_web_ui_address(capable_without_url)
+    result = services.get_service_web_ui_address(capable)
+
+    assert not no_capability.success
+    assert no_capability.message == "Selected service does not provide a web UI."
+    assert not no_url.success
+    assert "Set up the service first" in no_url.message
+    assert result.success
+    assert result.data == {"url": "https://example.test/ui"}
+
+
+def test_web_ui_service_prefers_configured_url_label():
+    service = _FakeWebUIService(
+        name="ui",
+        service_config_id="web-ui",
+        template="/tmp/template",
+        target_path="/tmp/target",
+    )
+    service.service_urls["API"] = "https://example.test/api"
+    service.service_urls["Console"] = "https://example.test/console"
+
+    result = services.get_service_web_ui_address(service)
+
+    assert result.success
+    assert result.data == {"url": "https://example.test/console"}
+
+
+def test_services_web_ui_login_value_resolves_requested_field():
+    service = _FakeWebUIService(
+        name="ui",
+        service_config_id="web-ui",
+        template="/tmp/template",
+        target_path="/tmp/target",
+    )
+    service.ui_user = "admin"
+    service.ui_pw = "secret"
+
+    fields = services.list_service_web_ui_login_fields(service)
+    password = services.get_service_web_ui_login_value(service, "password")
+
+    assert fields.success
+    assert fields.data == {"fields": ["username", "password"]}
+    assert password.success
+    assert password.data == {"field": "password", "value": "secret"}
+
+
+def test_services_open_service_web_ui_uses_injected_opener():
+    opened = []
+    service = SimpleNamespace(
+        name="ui",
+        capabilities={ServiceCapability.WEB_UI},
+        get_web_ui_address=lambda: "https://example.test/ui",
+    )
+
+    result = services.open_service_web_ui(service, opener=opened.append)
+
+    assert result.success
+    assert opened == ["https://example.test/ui"]
 
 
 def test_monitor_describe_monitoring_collects_monitor_service_rows():

@@ -15,6 +15,7 @@ from textual.containers import Container
 from textual.widgets import Button, Input, SelectionList, Static, TabbedContent, TextArea
 
 from mlox.application.result import OperationResult
+from mlox.service import ServiceCapability
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.project_actions import ProjectActions
 from mlox.tui.screens.dashboard.server_actions import ServerActions
@@ -794,6 +795,137 @@ def test_service_actions_show_only_for_service_nodes() -> None:
         asyncio.run(_service_actions_display_for(SelectionInfo(type="bundle")))
         is False
     )
+
+
+async def _service_web_ui_button_display_for(service: object) -> bool:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="service", service=service))
+        await pilot.pause()
+        return app.query_one("#open-service-web-ui", Button).display
+
+
+async def _service_web_ui_login_button_display_for(service: object) -> tuple[bool, bool, bool]:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="service", service=service))
+        await pilot.pause()
+        return (
+            app.query_one("#copy-service-web-ui-username", Button).display,
+            app.query_one("#copy-service-web-ui-password", Button).display,
+            app.query_one("#copy-service-web-ui-token", Button).display,
+        )
+
+
+def test_service_actions_show_web_ui_button_only_for_web_ui_services() -> None:
+    web_service = SimpleNamespace(
+        name="mlflow",
+        capabilities={ServiceCapability.WEB_UI},
+        get_web_ui_address=lambda: "https://example.test",
+    )
+    api_service = SimpleNamespace(name="api", capabilities=set())
+
+    assert asyncio.run(_service_web_ui_button_display_for(web_service)) is True
+    assert asyncio.run(_service_web_ui_button_display_for(api_service)) is False
+
+
+def test_service_actions_show_advertised_web_ui_login_buttons() -> None:
+    web_service = SimpleNamespace(
+        name="mlflow",
+        capabilities={ServiceCapability.WEB_UI},
+        web_ui_login_fields=("username", "password"),
+        get_web_ui_address=lambda: "https://example.test",
+    )
+
+    displays = asyncio.run(_service_web_ui_login_button_display_for(web_service))
+
+    assert displays == (True, True, False)
+
+
+async def _open_service_web_ui_from_action(monkeypatch) -> list[object]:
+    app = DashboardTestApp()
+    opened = []
+    service = SimpleNamespace(
+        name="mlflow",
+        capabilities={ServiceCapability.WEB_UI},
+        get_web_ui_address=lambda: "https://example.test",
+    )
+
+    def fake_open(service_arg: object) -> OperationResult:
+        opened.append(service_arg)
+        return OperationResult(True, 0, "opened", {"url": "https://example.test"})
+
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.screen.open_service_web_ui",
+        fake_open,
+    )
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="service", service=service))
+        await pilot.pause()
+        screen.handle_service_open_web_ui_requested(ServiceActions.OpenWebUIRequested())
+        await pilot.pause()
+
+    return opened
+
+
+def test_service_open_web_ui_action_uses_application_layer(monkeypatch) -> None:
+    opened = asyncio.run(_open_service_web_ui_from_action(monkeypatch))
+
+    assert len(opened) == 1
+    assert getattr(opened[0], "name") == "mlflow"
+
+
+async def _copy_service_web_ui_login_from_action(monkeypatch) -> tuple[str, list[str]]:
+    app = DashboardTestApp()
+    copied_fields = []
+    service = SimpleNamespace(
+        name="mlflow",
+        capabilities={ServiceCapability.WEB_UI},
+        web_ui_login_fields=("username", "password"),
+        get_web_ui_address=lambda: "https://example.test",
+    )
+
+    def fake_login_value(service_arg: object, field: str, *, bundle=None):
+        copied_fields.append(field)
+        return OperationResult(
+            True,
+            0,
+            "resolved",
+            {"field": field, "value": f"{field}-value"},
+        )
+
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.screen.get_service_web_ui_login_value",
+        fake_login_value,
+    )
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="service", service=service))
+        await pilot.pause()
+        screen.handle_service_copy_web_ui_login_requested(
+            ServiceActions.CopyWebUILoginRequested("password")
+        )
+        deadline = time.monotonic() + 2
+        while app.copied_text != "password-value":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for web UI login copy.")
+            await pilot.pause(0.05)
+
+    return app.copied_text, copied_fields
+
+
+def test_service_copy_web_ui_login_action_uses_application_layer(monkeypatch) -> None:
+    copied_text, copied_fields = asyncio.run(
+        _copy_service_web_ui_login_from_action(monkeypatch)
+    )
+
+    assert copied_text == "password-value"
+    assert copied_fields == ["password"]
 
 
 async def _rename_service_from_action_modal() -> tuple[str, str]:

@@ -3,18 +3,26 @@ from typing import Dict
 from dataclasses import dataclass, field
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class K8sHeadlampService(AbstractService):
-    capabilities = {ServiceCapability.DASHBOARD}
+class K8sHeadlampService(AbstractService, AbstractWebUIService):
+    capabilities = {ServiceCapability.DASHBOARD, ServiceCapability.WEB_UI}
+    web_ui_url_label = "Headlamp"
+    web_ui_login_fields = ("token",)
     namespace: str = "kube-system"
     service_name: str = "my-headlamp"
     ingress_path: str = "/headlamp"
     kubeconfig: str = field(default="/etc/rancher/k3s/k3s.yaml", init=False)
+
+    def get_web_ui_login(self, bundle=None) -> dict[str, str]:
+        if bundle is None:
+            return {}
+        token = self.get_login_token(bundle)
+        return {"token": token} if token and token != "no token" else {}
 
     def get_login_token(self, bundle) -> str:
         token = "no token"

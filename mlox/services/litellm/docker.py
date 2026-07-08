@@ -25,6 +25,7 @@ import yaml
 from mlox.service import (
     AbstractModelServerService,
     AbstractService,
+    AbstractWebUIService,
     ServiceCapability,
 )
 
@@ -38,8 +39,16 @@ logging.basicConfig(
 
 
 @dataclass
-class LiteLLMDockerService(AbstractService, AbstractModelServerService):
-    capabilities = {ServiceCapability.LLM, ServiceCapability.MODEL_SERVER}
+class LiteLLMDockerService(
+    AbstractService, AbstractModelServerService, AbstractWebUIService
+):
+    capabilities = {
+        ServiceCapability.LLM,
+        ServiceCapability.MODEL_SERVER,
+        ServiceCapability.WEB_UI,
+    }
+    web_ui_url_label = "Login"
+    web_ui_login_fields = ("username", "password")
     ollama_script: str
     litellm_config: str
     ui_user: str

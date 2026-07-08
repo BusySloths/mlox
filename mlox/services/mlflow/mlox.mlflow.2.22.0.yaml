@@ -28,6 +28,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - web_ui
   - model_registry
   backend:
   - docker

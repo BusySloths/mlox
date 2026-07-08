@@ -22,7 +22,12 @@ from typing import Any, Dict, List
 from datetime import datetime
 from dataclasses import dataclass, field
 
-from mlox.service import AbstractModelRegistryService, AbstractService
+from mlox.service import (
+    AbstractModelRegistryService,
+    AbstractService,
+    AbstractWebUIService,
+    ServiceCapability,
+)
 from mlox.services.mlflow.artifacts import (
     configure_mlflow_client,
     load_registered_model_json_artifact,
@@ -38,7 +43,12 @@ def _fmt_ts(ts: int | None) -> str:
 
 
 @dataclass
-class MLFlowDockerService(AbstractService, AbstractModelRegistryService):
+class MLFlowDockerService(
+    AbstractService, AbstractModelRegistryService, AbstractWebUIService
+):
+    capabilities = {ServiceCapability.MODEL_REGISTRY, ServiceCapability.WEB_UI}
+    web_ui_url_label = "MLFlow UI"
+    web_ui_login_fields = ("username", "password")
     ui_user: str
     ui_pw: str
     port: str | int

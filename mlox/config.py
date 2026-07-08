@@ -14,6 +14,7 @@ from mlox.service import (
     AbstractRepositoryService,
     AbstractSecretManagerService,
     AbstractService,
+    AbstractWebUIService,
     ServiceCapability,
 )
 from mlox.server import (
@@ -47,6 +48,7 @@ SERVER_CAPABILITY_ABCS = {
 
 
 SERVICE_CAPABILITY_ABCS = {
+    ServiceCapability.WEB_UI.value: AbstractWebUIService,
     ServiceCapability.SECRET_MANAGER.value: AbstractSecretManagerService,
     ServiceCapability.REPOSITORY.value: AbstractRepositoryService,
     ServiceCapability.MODEL_REGISTRY.value: AbstractModelRegistryService,
@@ -55,6 +57,8 @@ SERVICE_CAPABILITY_ABCS = {
 }
 
 SERVICE_GROUP_ALIASES = {
+    "web_ui": ServiceCapability.WEB_UI.value,
+    "web-ui": ServiceCapability.WEB_UI.value,
     "secret_manager": ServiceCapability.SECRET_MANAGER.value,
     "repository": ServiceCapability.REPOSITORY.value,
     "git": ServiceCapability.REPOSITORY.value,

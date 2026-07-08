@@ -24,6 +24,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - web_ui
   - secret_manager
   backend:
   - docker

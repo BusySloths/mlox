@@ -24,6 +24,7 @@ groups:
     kubernetes: null
 capabilities:
   service:
+    - web_ui
     - dashboard
   backend:
     - kubernetes

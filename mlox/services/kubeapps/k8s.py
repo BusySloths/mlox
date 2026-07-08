@@ -4,14 +4,16 @@ from dataclasses import dataclass
 from typing import Dict
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class KubeAppsService(AbstractService):
-    capabilities = {ServiceCapability.DASHBOARD}
+class KubeAppsService(AbstractService, AbstractWebUIService):
+    capabilities = {ServiceCapability.DASHBOARD, ServiceCapability.WEB_UI}
+    web_ui_url_label = "KubeApps"
+    web_ui_login_fields = ("token",)
     namespace: str = "kubeapps"
     kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
     release_name: str = "kubeapps"
@@ -21,6 +23,12 @@ class KubeAppsService(AbstractService):
     node_port: int = 30080
     ingress_port: int = 443
     ingress_path: str = ""
+
+    def get_web_ui_login(self, bundle=None) -> dict[str, str]:
+        if bundle is None:
+            return {}
+        token = self.get_login_token(bundle)
+        return {"token": token} if token and token != "no token" else {}
 
     def get_login_token(self, bundle) -> str:
         token = "no token"
