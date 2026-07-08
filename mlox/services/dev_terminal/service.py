@@ -19,6 +19,7 @@ class DeveloperTerminalService(AbstractService):
 
     capabilities = {ServiceCapability.DEVELOPER_TOOLS}
     install_claude_code: bool = True
+    install_codex: bool = True
     install_atuin: bool = True
     install_lazyvim: bool = True
     install_yazi: bool = True
@@ -32,6 +33,7 @@ class DeveloperTerminalService(AbstractService):
             "install-developer-terminal.sh.tmpl",
             {
                 "install_claude_code": str(self.install_claude_code).lower(),
+                "install_codex": str(self.install_codex).lower(),
                 "install_atuin": str(self.install_atuin).lower(),
                 "install_lazyvim": str(self.install_lazyvim).lower(),
                 "install_yazi": str(self.install_yazi).lower(),
@@ -79,7 +81,7 @@ class DeveloperTerminalService(AbstractService):
         return True
 
     def check(self, conn) -> Dict[str, str]:
-        command = """command -v zsh git nvim mc yazi atuin claude pyenv tmux >/dev/null
+        command = """command -v zsh git nvim mc yazi atuin claude codex pyenv tmux zellij >/dev/null
 nvim_version="$(nvim --version | sed -n '1s/^NVIM v//p' | cut -d- -f1)"
 [ -n "$nvim_version" ] && dpkg --compare-versions "$nvim_version" ge 0.11.2"""
         try:

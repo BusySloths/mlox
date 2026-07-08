@@ -22,6 +22,7 @@ def test_install_script_installs_modern_neovim_with_snap_when_needed() -> None:
     assert "ln -sf /snap/bin/nvim /usr/local/bin/nvim" in script
     assert "Neovim $MIN_NVIM_VERSION or newer is required for LazyVim." in script
     assert "npm install -g @anthropic-ai/claude-code" in script
+    assert "npm install -g @openai/codex" in script
     assert " mc neovim nodejs " not in script
 
 
@@ -38,7 +39,7 @@ def test_check_requires_lazyvim_compatible_neovim() -> None:
     assert service.check(object()) == {"status": "running"}
     assert commands
     assert "nvim --version" in commands[0]
-    assert "command -v zsh git nvim mc yazi atuin claude pyenv tmux" in commands[0]
+    assert "command -v zsh git nvim mc yazi atuin claude codex pyenv tmux zellij" in commands[0]
     assert 'dpkg --compare-versions "$nvim_version" ge 0.11.2' in commands[0]
 
 
@@ -126,6 +127,31 @@ def test_install_script_writes_tmux_shortcut_reference() -> None:
     assert 'alias tmux-help="cat ~/.tmux-shortcuts"' in script
 
 
+def test_install_script_installs_and_configures_zellij_for_lazyvim() -> None:
+    script = _service()._install_script()
+
+    assert "apt-get install -yq zellij || true" in script
+    assert "https://github.com/zellij-org/zellij/releases/latest/download/zellij-${zellij_arch}.tar.gz" in script
+    assert 'ZELLIJ_CONFIG="$ZELLIJ_CONFIG_DIR/config.kdl"' in script
+    assert 'default_mode "normal"' in script
+    assert "zellij-autolock.wasm" in script
+    assert '"swaits/zellij-nav.nvim"' in script
+    assert '"<cmd>ZellijNavigateLeftTab<cr>"' in script
+    assert '"<cmd>ZellijNavigateRightTab<cr>"' in script
+    assert 'command = "silent !zellij action switch-mode normal"' in script
+    assert 'alias zj="zellij attach dev --create"' in script
+    assert 'alias zellij-help="cat ~/.zellij-shortcuts"' in script
+
+
+def test_install_script_adds_codex_to_lazyvim() -> None:
+    script = _service()._install_script()
+
+    assert "INSTALL_CODEX=true" in script
+    assert '"<leader>ao"' in script
+    assert 'vim.cmd("terminal codex")' in script
+    assert 'desc = "Open Codex"' in script
+
+
 def test_install_script_installs_oh_my_zsh_without_interactive_installer() -> None:
     script = _service()._install_script()
 
@@ -152,6 +178,9 @@ def test_sensitive_cleanup_removes_claude_code_and_history_state() -> None:
     assert 'remove_home_path ".local/share/atuin"' in script
     assert 'remove_home_path ".tmux.conf"' in script
     assert 'remove_home_path ".tmux-shortcuts"' in script
+    assert 'remove_home_path ".config/zellij/config.kdl"' in script
+    assert 'remove_home_path ".zellij-shortcuts"' in script
+    assert 'remove_home_path ".codex"' in script
 
 
 def test_teardown_runs_sensitive_cleanup_before_removing_target_path() -> None:

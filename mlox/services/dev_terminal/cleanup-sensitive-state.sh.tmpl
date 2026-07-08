@@ -45,3 +45,12 @@ remove_home_path ".local/state/atuin"
 # removing them prevents stale aliases/configuration after service teardown.
 remove_home_path ".tmux.conf"
 remove_home_path ".tmux-shortcuts"
+remove_home_path ".config/zellij/config.kdl"
+remove_home_path ".zellij-shortcuts"
+
+# Codex stores authentication/session state in user-level config and state paths.
+remove_home_path ".codex"
+remove_home_path ".config/codex"
+remove_home_path ".cache/codex"
+remove_home_path ".local/share/codex"
+remove_home_path ".local/state/codex"

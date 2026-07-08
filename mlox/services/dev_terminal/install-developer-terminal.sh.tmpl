@@ -2,6 +2,7 @@
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 INSTALL_CLAUDE_CODE=@install_claude_code
+INSTALL_CODEX=@install_codex
 INSTALL_ATUIN=@install_atuin
 INSTALL_LAZYVIM=@install_lazyvim
 INSTALL_YAZI=@install_yazi
@@ -61,8 +62,32 @@ npm install -g neovim tree-sitter-cli || true
 if [ "$INSTALL_CLAUDE_CODE" = true ]; then
   npm install -g @@anthropic-ai/claude-code || true
 fi
+if [ "$INSTALL_CODEX" = true ]; then
+  npm install -g @@openai/codex || true
+fi
 if [ "$INSTALL_SPACESHIP" = true ]; then
   npm install -g spaceship-prompt || true
+fi
+
+if ! command -v zellij >/dev/null 2>&1; then
+  apt-get install -yq zellij || true
+fi
+if ! command -v zellij >/dev/null 2>&1; then
+  tmpdir="$(mktemp -d)"
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) zellij_arch="x86_64-unknown-linux-musl" ;;
+    aarch64|arm64) zellij_arch="aarch64-unknown-linux-musl" ;;
+    *) zellij_arch="" ;;
+  esac
+  if [ -n "$zellij_arch" ]; then
+    curl -fsSL "https://github.com/zellij-org/zellij/releases/latest/download/zellij-${zellij_arch}.tar.gz" -o "$tmpdir/zellij.tar.gz" || true
+    if [ -s "$tmpdir/zellij.tar.gz" ]; then
+      tar -xzf "$tmpdir/zellij.tar.gz" -C "$tmpdir"
+      find "$tmpdir" -type f -name zellij -exec install -m 0755 {} /usr/local/bin/zellij \; -quit
+    fi
+  fi
+  rm -rf "$tmpdir"
 fi
 
 if [ "$INSTALL_ATUIN" = true ] && ! command -v atuin >/dev/null 2>&1 && [ ! -x "$TARGET_HOME/.atuin/bin/atuin" ]; then
@@ -135,8 +160,49 @@ if [ "$INSTALL_LAZYVIM" = true ]; then
   install -d -o "$TARGET_USER" -g "$TARGET_USER" "$TARGET_HOME/.config/nvim/lua/plugins"
   NVIM_PLUGIN="$TARGET_HOME/.config/nvim/lua/plugins/mlox-dev-terminal.lua"
   cat > "$NVIM_PLUGIN" <<'MLOX_LAZYVIM_DEV_TERMINAL'
--- MLOX Developers Terminal Dream: Claude Code and Yazi integrations for LazyVim.
+-- MLOX Developers Terminal Dream: Claude Code, Codex, Yazi, and Zellij integrations for LazyVim.
 return {
+  {
+    "swaits/zellij-nav.nvim",
+    event = "VeryLazy",
+    keys = {
+      { "<c-h>", "<cmd>ZellijNavigateLeftTab<cr>", silent = true, desc = "Navigate left or tab" },
+      { "<c-j>", "<cmd>ZellijNavigateDown<cr>", silent = true, desc = "Navigate down" },
+      { "<c-k>", "<cmd>ZellijNavigateUp<cr>", silent = true, desc = "Navigate up" },
+      { "<c-l>", "<cmd>ZellijNavigateRightTab<cr>", silent = true, desc = "Navigate right or tab" },
+    },
+    opts = {},
+    init = function()
+      vim.api.nvim_create_autocmd("VimLeave", {
+        pattern = "*",
+        command = "silent !zellij action switch-mode normal",
+      })
+    end,
+  },
+  {
+    "LazyVim/LazyVim",
+    keys = {
+      {
+        "<leader>ao",
+        function()
+          vim.cmd("botright split")
+          vim.cmd("resize 15")
+          vim.cmd("terminal codex")
+          vim.cmd("startinsert")
+        end,
+        desc = "Open Codex",
+      },
+      {
+        "<leader>aO",
+        function()
+          vim.cmd("tabnew")
+          vim.cmd("terminal codex")
+          vim.cmd("startinsert")
+        end,
+        desc = "Open Codex in tab",
+      },
+    },
+  },
   {
     "coder/claudecode.nvim",
     opts = {},
@@ -261,6 +327,45 @@ Copy mode:
 MLOX_TMUX_SHORTCUTS
 chown "$TARGET_USER:$TARGET_USER" "$TMUX_SHORTCUTS" || true
 
+ZELLIJ_CONFIG_DIR="$TARGET_HOME/.config/zellij"
+install -d -o "$TARGET_USER" -g "$TARGET_USER" "$ZELLIJ_CONFIG_DIR"
+ZELLIJ_CONFIG="$ZELLIJ_CONFIG_DIR/config.kdl"
+cat > "$ZELLIJ_CONFIG" <<'MLOX_ZELLIJ_CONFIG'
+// MLOX Developer Terminal Zellij defaults for LazyVim/Neovim.
+default_mode "normal"
+pane_frames true
+plugins {
+  autolock location="https://github.com/fresh2dev/zellij-autolock/releases/latest/download/zellij-autolock.wasm" {
+    triggers "nvim|vim|v|nv"
+    watch_triggers "fzf|zoxide|atuin|yazi"
+    watch_interval "1.0"
+  }
+}
+MLOX_ZELLIJ_CONFIG
+chown "$TARGET_USER:$TARGET_USER" "$ZELLIJ_CONFIG" || true
+
+ZELLIJ_SHORTCUTS="$TARGET_HOME/.zellij-shortcuts"
+cat > "$ZELLIJ_SHORTCUTS" <<'MLOX_ZELLIJ_SHORTCUTS'
+zellij essentials for this host
+
+Start or attach:
+  zellij attach dev --create
+
+Modes:
+  Ctrl-g        lock/unlock controls
+  Ctrl-p        pane mode
+  Ctrl-t        tab mode
+  Ctrl-n        resize mode
+  Ctrl-s        scroll mode
+  Ctrl-o        session mode
+
+LazyVim:
+  Ctrl-h/j/k/l  move across Neovim windows and Zellij panes
+  Space a o     open Codex in a terminal split
+  Space a O     open Codex in a terminal tab
+MLOX_ZELLIJ_SHORTCUTS
+chown "$TARGET_USER:$TARGET_USER" "$ZELLIJ_SHORTCUTS" || true
+
 ZSHRC="$TARGET_HOME/.zshrc"
 touch "$ZSHRC"
 chown "$TARGET_USER:$TARGET_USER" "$ZSHRC" || true
@@ -300,6 +405,8 @@ append_once 'alias vi="nvim"'
 append_once 'alias fm="yazi"'
 append_once 'alias mux="tmux new -As dev"'
 append_once 'alias tmux-help="cat ~/.tmux-shortcuts"'
+append_once 'alias zj="zellij attach dev --create"'
+append_once 'alias zellij-help="cat ~/.zellij-shortcuts"'
 append_once 'eval "$(direnv hook zsh)"'
 append_once 'if [ -x "$HOME/.atuin/bin/atuin" ]; then eval "$($HOME/.atuin/bin/atuin init zsh)"; elif command -v atuin >/dev/null 2>&1; then eval "$(atuin init zsh)"; fi'
 append_once 'export ZSH="$HOME/.oh-my-zsh"'
