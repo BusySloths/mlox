@@ -435,6 +435,104 @@ def test_secrets_save_secret_updates_selected_manager():
     assert result.data["value"] == {"token": "new"}
 
 
+def test_secrets_collect_service_secrets_saves_by_service_uuid():
+    class SecretManager:
+        supports_keyfile_export = False
+
+        def __init__(self):
+            self.store = {}
+
+        def save_secret(self, name, value):
+            self.store[name] = value
+
+    manager = SecretManager()
+    descriptor = SimpleNamespace(
+        id="embedded",
+        name="Embedded Project Storage",
+        kind="embedded",
+        service_uuid=None,
+        is_active=True,
+        is_available=True,
+        supports_keyfile_export=False,
+        manager=manager,
+        service=None,
+    )
+    service_a = SimpleNamespace(
+        uuid="service-a",
+        name="MLflow",
+        get_secrets=lambda: {"basic_auth": {"password": "secret"}},
+    )
+    service_b = SimpleNamespace(
+        uuid="service-b",
+        name="Registry",
+        get_secrets=lambda: {"registry": {"token": "token"}},
+    )
+    workspace = SimpleNamespace(
+        probe_secret_manager=lambda manager_id: descriptor,
+        infrastructure=SimpleNamespace(
+            bundles=[
+                SimpleNamespace(services=[service_a]),
+                SimpleNamespace(services=[service_b]),
+            ]
+        ),
+    )
+
+    result = secrets.collect_service_secrets(workspace, "embedded")
+
+    assert result.success
+    assert manager.store == {
+        "service-a": {"basic_auth": {"password": "secret"}},
+        "service-b": {"registry": {"token": "token"}},
+    }
+    assert result.data["service_count"] == 2
+    assert result.data["secret_count"] == 2
+
+
+def test_secrets_collect_service_secrets_reports_service_failures():
+    class SecretManager:
+        supports_keyfile_export = False
+
+        def __init__(self):
+            self.store = {}
+
+        def save_secret(self, name, value):
+            self.store[name] = value
+
+    def fail():
+        raise RuntimeError("offline")
+
+    manager = SecretManager()
+    descriptor = SimpleNamespace(
+        id="embedded",
+        name="Embedded Project Storage",
+        kind="embedded",
+        service_uuid=None,
+        is_active=True,
+        is_available=True,
+        supports_keyfile_export=False,
+        manager=manager,
+        service=None,
+    )
+    good = SimpleNamespace(
+        uuid="good-service",
+        name="Good",
+        get_secrets=lambda: {"token": "ok"},
+    )
+    bad = SimpleNamespace(uuid="bad-service", name="Bad", get_secrets=fail)
+    workspace = SimpleNamespace(
+        probe_secret_manager=lambda manager_id: descriptor,
+        infrastructure=SimpleNamespace(bundles=[SimpleNamespace(services=[good, bad])]),
+    )
+
+    result = secrets.collect_service_secrets(workspace, "embedded")
+
+    assert result.success
+    assert manager.store == {"good-service": {"token": "ok"}}
+    assert result.data["service_count"] == 1
+    assert result.data["error_count"] == 1
+    assert result.data["errors"] == [{"service": "Bad", "error": "offline"}]
+
+
 def test_secrets_activate_secret_manager_delegates_to_workspace():
     calls = []
     workspace = SimpleNamespace(

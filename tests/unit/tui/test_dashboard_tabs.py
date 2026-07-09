@@ -574,6 +574,56 @@ def test_secret_manager_edit_secret_inline_updates_value() -> None:
     assert "updated" in detail
 
 
+async def _collect_service_secrets_from_panel() -> tuple[dict, list[str]]:
+    app = DashboardTestApp()
+    service = SimpleNamespace(
+        uuid="service-with-secrets",
+        name="MLflow",
+        get_secrets=lambda: {
+            "mlflow_credentials": {"username": "mlox", "password": "secret"}
+        },
+    )
+    app.workspace.infrastructure.bundles.append(
+        SimpleNamespace(
+            name="models",
+            server=SimpleNamespace(backend=["docker"]),
+            services=[service],
+        )
+    )
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
+        deadline = time.monotonic() + 2
+        while panel.table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret-manager panel.")
+            await pilot.pause(0.05)
+
+        app.query_one("#collect-service-secrets", Button).press()
+        deadline = time.monotonic() + 2
+        rows: list[str] = []
+        while "service-with-secrets" not in rows:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for collected service secret.")
+            await pilot.pause(0.05)
+            rows = [
+                str(panel.table.get_row_at(index)[0])
+                for index in range(panel.table.row_count)
+            ]
+
+        return app.secret_store, rows
+
+
+def test_secret_manager_collect_service_secrets_saves_service_uuid_key() -> None:
+    store, rows = asyncio.run(_collect_service_secrets_from_panel())
+
+    assert store["service-with-secrets"] == {
+        "mlflow_credentials": {"username": "mlox", "password": "secret"}
+    }
+    assert "service-with-secrets" in rows
+
+
 async def _activate_service_secret_manager() -> tuple[str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:

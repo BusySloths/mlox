@@ -19,6 +19,7 @@ from textual.widgets import Button, DataTable, Input, Label, Static, TextArea
 
 from mlox.application.use_cases.secrets import (
     activate_secret_manager,
+    collect_service_secrets,
     describe_secret_managers,
     list_secret_names,
     reveal_secret,
@@ -139,6 +140,7 @@ class SecretManagerPanel(Container):
         self._secret_names: list[str] = []
         self._revealed: dict[tuple[str, str], Any] = {}
         self._displayed_secret: tuple[str, str] | None = None
+        self._collecting_service_secrets = False
 
     def compose(self) -> ComposeResult:
         with Vertical(id="secret-manager-content"):
@@ -146,6 +148,11 @@ class SecretManagerPanel(Container):
             with Horizontal(id="secret-manager-actions"):
                 yield Button("Add Secret", id="add-secret", variant="success")
                 yield Button("Update", id="update-secret")
+                yield Button(
+                    "Collect Service Secrets",
+                    id="collect-service-secrets",
+                    variant="primary",
+                )
                 yield Button(
                     "Use Selected as Active",
                     id="activate-secret-manager",
@@ -405,6 +412,10 @@ class SecretManagerPanel(Container):
     def handle_activate_pressed(self, _: Button.Pressed) -> None:
         self.action_activate_selected_manager()
 
+    @on(Button.Pressed, "#collect-service-secrets")
+    def handle_collect_service_secrets_pressed(self, _: Button.Pressed) -> None:
+        self._collect_service_secrets()
+
     @on(Button.Pressed, "#add-secret")
     def handle_add_pressed(self, _: Button.Pressed) -> None:
         self._open_secret_dialog(
@@ -569,6 +580,58 @@ class SecretManagerPanel(Container):
             group="secret-manager-save",
         )
 
+    def _collect_service_secrets(self) -> None:
+        manager_id = self._selected_manager_id
+        if not manager_id:
+            return
+        self._collecting_service_secrets = True
+        self._update_action_state()
+        self._show_detail_panel(
+            Panel(
+                Text("Collecting service secrets..."),
+                title=self._selected_manager_name(),
+                border_style="yellow",
+            )
+        )
+        workspace = getattr(self.app, "workspace", None)
+
+        def collect() -> None:
+            result = collect_service_secrets(workspace, manager_id)
+            self.app.call_from_thread(
+                self._show_collect_service_secrets_result,
+                manager_id,
+                result,
+            )
+
+        self.app.run_worker(
+            collect,
+            thread=True,
+            exclusive=True,
+            group="secret-manager-collect",
+        )
+
+    def _show_collect_service_secrets_result(self, manager_id: str, result) -> None:
+        self._collecting_service_secrets = False
+        self._update_action_state()
+        if manager_id != self._selected_manager_id:
+            return
+        if not result.success:
+            self._show_detail_panel(
+                Panel(
+                    Text(result.message, style="bold red"),
+                    title=self._selected_manager_name(),
+                    border_style="red",
+                )
+            )
+            return
+        self.notify(result.message)
+        self._revealed = {
+            key: value
+            for key, value in self._revealed.items()
+            if key[0] != manager_id
+        }
+        self._select_manager(manager_id)
+
     def _show_save_result(self, manager_id: str, name: str, result) -> None:
         if manager_id != self._selected_manager_id:
             return
@@ -711,6 +774,9 @@ class SecretManagerPanel(Container):
         has_secret = bool(self._secret_names)
         self.query_one("#add-secret", Button).disabled = not has_manager
         self.query_one("#update-secret", Button).disabled = not has_secret
+        self.query_one("#collect-service-secrets", Button).disabled = (
+            not has_manager or self._collecting_service_secrets
+        )
         self.query_one("#activate-secret-manager", Button).disabled = (
             not self.can_activate_selected_manager()
         )

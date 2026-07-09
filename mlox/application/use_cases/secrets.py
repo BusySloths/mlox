@@ -185,6 +185,73 @@ def save_secret(workspace, manager_id: str, name: str, value: Any) -> OperationR
     )
 
 
+def collect_service_secrets(workspace, manager_id: str) -> OperationResult:
+    """Store every service's exported secrets in the selected secret manager."""
+
+    descriptor_result = _resolve_secret_manager(workspace, manager_id)
+    if not descriptor_result.success:
+        return descriptor_result
+
+    descriptor = descriptor_result.data["descriptor"]
+    manager = descriptor.manager
+    if manager is None:
+        return OperationResult(False, 18, "Secret manager is unavailable.")
+
+    services = list(_workspace_services(workspace))
+    collected: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    secret_count = 0
+
+    for service in services:
+        service_name = str(getattr(service, "name", "Unknown service"))
+        service_uuid = str(getattr(service, "uuid", "") or "").strip()
+        if not service_uuid:
+            errors.append({"service": service_name, "error": "missing service UUID"})
+            continue
+        get_secrets = getattr(service, "get_secrets", None)
+        if not callable(get_secrets):
+            continue
+        try:
+            service_secrets = get_secrets() or {}
+            manager.save_secret(service_uuid, deepcopy(service_secrets))
+        except Exception as exc:
+            errors.append({"service": service_name, "error": str(exc)})
+            continue
+
+        service_secret_count = _secret_count(service_secrets)
+        secret_count += service_secret_count
+        collected.append(
+            {
+                "service": service_name,
+                "uuid": service_uuid,
+                "secret_count": service_secret_count,
+            }
+        )
+
+    saved_count = len(collected)
+    error_count = len(errors)
+    message = f"Stored {secret_count} secrets from {saved_count} services."
+    if error_count:
+        message += f" {error_count} services failed."
+
+    return OperationResult(
+        True,
+        0,
+        message,
+        {
+            "manager": _manager_metadata(
+                descriptor,
+                getattr(workspace, "infrastructure", None),
+            ),
+            "services": collected,
+            "errors": errors,
+            "secret_count": secret_count,
+            "service_count": saved_count,
+            "error_count": error_count,
+        },
+    )
+
+
 def activate_secret_manager(workspace, manager_id: str) -> OperationResult:
     """Make one available secret manager the active project secret manager."""
 
@@ -239,6 +306,31 @@ def _resolve_secret_manager(workspace, manager_id: str) -> OperationResult:
             {"descriptor": _LegacySecretManagerDescriptor(workspace, manager)},
         )
     return OperationResult(False, 5, "Secret manager not found.")
+
+
+def _workspace_services(workspace):
+    infra = getattr(workspace, "infrastructure", None)
+    if not infra:
+        return []
+    services = getattr(infra, "services", None)
+    if callable(services):
+        try:
+            return list(services())
+        except Exception:
+            pass
+    return [
+        service
+        for bundle in getattr(infra, "bundles", []) or []
+        for service in getattr(bundle, "services", []) or []
+    ]
+
+
+def _secret_count(value: Any) -> int:
+    if isinstance(value, dict):
+        return len(value)
+    if isinstance(value, list):
+        return len(value)
+    return 1 if value else 0
 
 
 def _manager_metadata(descriptor, infra=None) -> dict[str, Any]:

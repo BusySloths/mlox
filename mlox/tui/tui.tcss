@@ -663,6 +663,18 @@ EnableFirewallDialog {
   border: round #69b7ffff;
 }
 
+#collect-service-secrets {
+  width: auto;
+  margin-left: 1;
+  background: #145fd7;
+  border: round #8eb7ff;
+  color: #ffffff;
+}
+
+#collect-service-secrets:hover {
+  background: #1f72f2;
+}
+
 #activate-secret-manager {
   width: auto;
   margin-left: 1;
