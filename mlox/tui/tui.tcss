@@ -888,18 +888,6 @@ SecretEditDialog {
   width: auto;
 }
 
-#add-service-to-bundle {
-  width: auto;
-  margin-left: 1;
-  background: #145fd7;
-  border: round #8eb7ff;
-  color: #ffffff;
-}
-
-#add-service-to-bundle:hover {
-  background: #1f72f2;
-}
-
 #toggle-server-credentials,
 #copy-server-password,
 #copy-server-passphrase {

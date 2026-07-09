@@ -138,6 +138,7 @@ class DashboardScreen(Screen):
         super().__init__(*args, **kwargs)
         self._sidebar_width = SIDEBAR_DEFAULT_WIDTH
         self._requested_tab_id: str | None = None
+        self._current_selection: SelectionInfo | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, classes="app-header")
@@ -247,6 +248,7 @@ class DashboardScreen(Screen):
         self.query_one(ServerActions).set_runtime_info_loading(False)
 
     def _apply_selection(self, selection: SelectionInfo | None) -> None:
+        self._current_selection = selection
         overview = self.query_one(OverviewPanel)
         overview.selection = selection
         server_actions = self.query_one(ServerActions)
@@ -347,29 +349,10 @@ class DashboardScreen(Screen):
         self._request_tab_activation(SERVER_TEMPLATES_TAB_ID)
         self.notify("Choose a server template to create a new bundle.")
 
-    @on(ServerActions.AddServiceRequested)
-    def handle_bundle_add_service_requested(
-        self, _: ServerActions.AddServiceRequested
-    ) -> None:
-        selection = self.query_one(ServerActions).selection
-        if not selection or selection.type != "bundle" or not selection.bundle:
-            self.notify("Select a bundle to add a service.", severity="warning")
-            return
-        self._set_tab_visible(SERVICE_TEMPLATES_TAB_ID, True)
-        self._request_tab_activation(SERVICE_TEMPLATES_TAB_ID)
-        self.notify("Choose a service template to add to this bundle.")
-
     def _activate_server_templates_tab(self) -> None:
         tabs = self.query_one("#main-tabs", TabbedContent)
         try:
             tabs.active = SERVER_TEMPLATES_TAB_ID
-        except Tabs.TabError:
-            pass
-
-    def _activate_service_templates_tab(self) -> None:
-        tabs = self.query_one("#main-tabs", TabbedContent)
-        try:
-            tabs.active = SERVICE_TEMPLATES_TAB_ID
         except Tabs.TabError:
             pass
 
@@ -1097,34 +1080,39 @@ class DashboardScreen(Screen):
         self._requested_tab_id = tab_id
         self._activate_requested_tab_if_visible(clear=False)
         self.call_after_refresh(self._activate_requested_tab_if_visible, False)
-        for delay in (0.05, 0.15, 0.35, 0.75):
-            self.set_timer(
-                delay,
-                lambda: self._activate_requested_tab_if_visible(clear=False),
-            )
         self.set_timer(
-            0.85,
-            lambda: self._activate_requested_tab_if_visible(clear=True),
+            0.4,
+            lambda: self._finish_requested_tab_activation(tab_id),
         )
 
-    def _activate_requested_tab_if_visible(self, clear: bool = True) -> None:
+    def _finish_requested_tab_activation(self, tab_id: str) -> None:
+        if self._requested_tab_id != tab_id:
+            return
+        self._requested_tab_id = None
+        self._update_template_tabs(self._current_selection)
+
+    def _activate_requested_tab_if_visible(self, clear: bool = True) -> bool:
         requested = self._requested_tab_id
         if not requested:
-            return
+            return False
         tabs = self.query_one("#main-tabs", TabbedContent)
         try:
             tab = tabs.get_tab(requested)
         except Tabs.TabError:
             if clear:
                 self._requested_tab_id = None
-            return
+            return False
         if tab.styles.display != "none":
             try:
                 tabs.active = requested
             except Tabs.TabError:
-                pass
+                return False
+            if clear:
+                self._requested_tab_id = None
+            return True
         if clear:
             self._requested_tab_id = None
+        return False
 
     def _update_tui_panel(self, selection: SelectionInfo | None) -> None:
         container = self.query_one("#service-tui-container", Container)
@@ -1173,6 +1161,9 @@ class DashboardScreen(Screen):
             if visible:
                 tabs.show_tab(tab_id)
             else:
+                if tab_id == self._requested_tab_id:
+                    tabs.show_tab(tab_id)
+                    return
                 if tabs.active == tab_id:
                     tabs.active = OVERVIEW_TAB_ID
                 tabs.hide_tab(tab_id)

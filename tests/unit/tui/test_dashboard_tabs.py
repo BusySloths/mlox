@@ -683,8 +683,13 @@ async def _add_bundle_project_action_opens_server_templates() -> str:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         app.query_one("#add-bundle-from-server-template", Button).press()
-        await pilot.pause(0.1)
-        return app.query_one("#main-tabs", TabbedContent).active
+        tabs = app.query_one("#main-tabs", TabbedContent)
+        deadline = time.monotonic() + 2
+        while tabs.active != SERVER_TEMPLATES_TAB_ID:
+            if time.monotonic() > deadline:
+                return tabs.active
+            await pilot.pause(0.05)
+        return tabs.active
 
 
 def test_project_add_bundle_action_opens_server_templates_tab() -> None:
@@ -756,7 +761,7 @@ def test_root_highlights_active_secret_manager() -> None:
     )
 
 
-async def _bundle_label() -> str:
+async def _bundle_tree_labels() -> tuple[str, str]:
     app = DashboardTestApp()
     server = SimpleNamespace(ip="10.0.0.5", backend=["docker", "k3s-agent"])
     bundle = SimpleNamespace(name="dev", server=server, services=[])
@@ -764,13 +769,55 @@ async def _bundle_label() -> str:
 
     async with app.run_test():
         tree = app.query_one(InfraTree)
-        return tree.root.children[0].label.plain
+        bundle_node = tree.root.children[0]
+        return bundle_node.label.plain, bundle_node.children[0].label.plain
 
 
-def test_bundle_tree_label_shows_backend_type() -> None:
-    assert asyncio.run(_bundle_label()) == (
-        "Bundle: dev  Backend: docker, k3s_agent"
+async def _server_tree_label_styles() -> tuple[str, list[str]]:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker", "k3s-agent"])
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test():
+        tree = app.query_one(InfraTree)
+        label = tree.root.children[0].children[0].label
+        return label.plain, [str(span.style) for span in label.spans]
+
+
+def test_bundle_tree_label_keeps_backend_on_server_leaf() -> None:
+    bundle_label, server_label = asyncio.run(_bundle_tree_labels())
+
+    assert bundle_label == "Bundle: dev"
+    assert server_label == "Docker, K3s Agent: 10.0.0.5"
+
+
+def test_server_tree_label_styles_backend_and_host() -> None:
+    label, styles = asyncio.run(_server_tree_label_styles())
+
+    assert label == "Docker, K3s Agent: 10.0.0.5"
+    assert "bold bright_cyan" in styles
+    assert "bold bright_green" in styles
+    assert styles[-1] == "dim"
+
+
+async def _service_capability_tree_label() -> str:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"])
+    service = SimpleNamespace(
+        name="Otel",
+        capabilities={ServiceCapability.MONITOR, ServiceCapability.WEB_UI},
     )
+    bundle = SimpleNamespace(name="dev", server=server, services=[service])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test():
+        tree = app.query_one(InfraTree)
+        return tree.root.children[0].children[1].label.plain
+
+
+def test_service_tree_label_uses_primary_capability() -> None:
+    assert asyncio.run(_service_capability_tree_label()) == "Monitor: Otel"
 
 
 async def _service_actions_display_for(selection: SelectionInfo) -> bool:
@@ -1086,9 +1133,7 @@ async def _add_server_from_template_modal() -> tuple[list[tuple[object, dict]], 
         await pilot.click("#confirm-template-setup")
 
         deadline = time.monotonic() + 2
-        while not calls or tree_label(app.query_one(InfraTree)) != (
-            "Bundle: 127.0.0.1  Backend: connector"
-        ):
+        while not calls or tree_label(app.query_one(InfraTree)) != "Bundle: 127.0.0.1":
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for server add.")
             await pilot.pause(0.05)
@@ -1101,7 +1146,7 @@ def test_server_template_modal_adds_server_and_refreshes_tree() -> None:
     calls, bundle_label, selected_label = asyncio.run(_add_server_from_template_modal())
 
     assert calls[0][1] == {"${MLOX_IP}": "127.0.0.1"}
-    assert bundle_label == "Bundle: 127.0.0.1  Backend: connector"
+    assert bundle_label == "Bundle: 127.0.0.1"
     assert selected_label == bundle_label
 
 
@@ -1227,14 +1272,14 @@ def test_setup_bundle_action_initializes_bundle_and_refreshes_tree() -> None:
     ) = asyncio.run(_setup_uninitialized_bundle_from_action())
 
     assert state == "running"
-    assert label == "Bundle: dev  Backend: kubernetes"
+    assert label == "Bundle: dev"
     assert calls == ["10.0.0.5"]
     assert loading_while_setup is True
     assert loading_after_setup is False
     assert setup_button_display is False
 
 
-async def _bundle_add_service_button_opens_service_templates() -> tuple[str, bool]:
+async def _bundle_actions_button_ids() -> list[str | None]:
     app = DashboardTestApp()
     server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
     bundle = SimpleNamespace(name="dev", server=server, services=[])
@@ -1246,70 +1291,14 @@ async def _bundle_add_service_button_opens_service_templates() -> tuple[str, boo
             SelectionInfo(type="bundle", bundle=bundle, server=server)
         )
         await pilot.pause()
-        app.query_one("#add-service-to-bundle", Button).press()
-        await pilot.pause()
-        tabs = app.query_one("#main-tabs", TabbedContent)
-        return tabs.active, app.query_one("#add-service-to-bundle", Button).display
+        row = app.query_one("#server-primary-action-buttons")
+        return [getattr(child, "id", None) for child in row.children]
 
 
-def test_bundle_add_service_button_opens_service_templates_tab() -> None:
-    active_tab, button_display = asyncio.run(
-        _bundle_add_service_button_opens_service_templates()
-    )
+def test_bundle_actions_do_not_show_add_service_button() -> None:
+    button_ids = asyncio.run(_bundle_actions_button_ids())
 
-    assert active_tab == SERVICE_TEMPLATES_TAB_ID
-    assert button_display is True
-
-
-async def _bundle_add_service_tab_survives_selection_refresh() -> str:
-    app = DashboardTestApp()
-    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
-    bundle = SimpleNamespace(name="dev", server=server, services=[])
-    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
-    selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
-
-    async with app.run_test() as pilot:
-        screen = app.query_one(DashboardScreen)
-        screen._apply_selection(selection)
-        await pilot.pause()
-        app.query_one("#add-service-to-bundle", Button).press()
-        await pilot.pause()
-        screen._apply_selection(selection)
-        await pilot.pause()
-        return app.query_one("#main-tabs", TabbedContent).active
-
-
-def test_bundle_add_service_tab_survives_selection_refresh() -> None:
-    active_tab = asyncio.run(_bundle_add_service_tab_survives_selection_refresh())
-
-    assert active_tab == SERVICE_TEMPLATES_TAB_ID
-
-
-async def _bundle_add_service_tab_survives_late_overview_reset() -> str:
-    app = DashboardTestApp()
-    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
-    bundle = SimpleNamespace(name="dev", server=server, services=[])
-    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
-
-    async with app.run_test() as pilot:
-        screen = app.query_one(DashboardScreen)
-        screen._apply_selection(
-            SelectionInfo(type="bundle", bundle=bundle, server=server)
-        )
-        await pilot.pause()
-        app.query_one("#add-service-to-bundle", Button).press()
-        tabs = app.query_one("#main-tabs", TabbedContent)
-        tabs.active = "overview-tab"
-        await pilot.pause(0.1)
-        tabs.active = "overview-tab"
-        await pilot.pause(0.3)
-        return tabs.active
-
-
-def test_bundle_add_service_tab_survives_late_overview_reset() -> None:
-    active_tab = asyncio.run(_bundle_add_service_tab_survives_late_overview_reset())
-
-    assert active_tab == SERVICE_TEMPLATES_TAB_ID
+    assert "add-service-to-bundle" not in button_ids
 
 
 async def _add_service_from_template_modal() -> tuple[list[tuple[object, dict]], str]:
@@ -1439,7 +1428,7 @@ async def _teardown_service_from_action() -> tuple[list[str], list[object], str]
         deadline = time.monotonic() + 2
         while (
             calls == []
-            or tree.cursor_node.label.plain != "Bundle: dev  Backend: docker"
+            or tree.cursor_node.label.plain != "Bundle: dev"
         ):
             if time.monotonic() > deadline:
                 raise AssertionError(
@@ -1456,7 +1445,7 @@ def test_teardown_service_action_uses_workspace_and_refreshes_tree() -> None:
 
     assert calls == ["tracking"]
     assert services == []
-    assert selected_label == "Bundle: dev  Backend: docker"
+    assert selected_label == "Bundle: dev"
 
 
 async def _remove_bundle_from_action() -> tuple[int, list[str]]:
@@ -1573,7 +1562,7 @@ def test_uninitialized_bundle_tree_entry_is_leaf() -> None:
     allow_expand, label = asyncio.run(_uninitialized_bundle_tree_entry())
 
     assert allow_expand is False
-    assert label == "Bundle: dev  Backend: kubernetes  State: pending"
+    assert label == "Bundle: dev  State: pending"
 
 
 async def _empty_bundle_tree_children() -> list[str]:
@@ -1595,7 +1584,7 @@ async def _empty_bundle_tree_children() -> list[str]:
 def test_empty_bundle_tree_has_no_no_services_leaf() -> None:
     children = asyncio.run(_empty_bundle_tree_children())
 
-    assert children == ["Server: 10.0.0.5"]
+    assert children == ["Docker: 10.0.0.5"]
 
 
 def test_bundle_selection_shows_only_service_templates_tab() -> None:
