@@ -10,6 +10,49 @@ from textual.widgets import Button, Input, Label, SelectionList, Static
 from textual.widgets.selection_list import Selection
 
 
+class RenameBundleDialog(ModalScreen[str | None]):
+    """Modal prompt for changing the bundle display name."""
+
+    def __init__(self, current_name: str) -> None:
+        super().__init__()
+        self.current_name = current_name
+
+    def compose(self) -> ComposeResult:
+        with Container(id="rename-bundle-dialog"):
+            yield Label("Rename Bundle", id="rename-bundle-title")
+            yield Input(
+                value=self.current_name,
+                placeholder="Bundle name",
+                id="rename-bundle-name",
+            )
+            with Horizontal(id="rename-bundle-actions"):
+                yield Button("Cancel", id="cancel-bundle-rename")
+                yield Button(
+                    "Rename",
+                    id="confirm-bundle-rename",
+                    variant="success",
+                )
+
+    def on_mount(self) -> None:
+        self.query_one("#rename-bundle-name", Input).focus()
+
+    @on(Input.Submitted, "#rename-bundle-name")
+    def handle_name_submitted(self, _: Input.Submitted) -> None:
+        self._dismiss_with_name()
+
+    @on(Button.Pressed, "#cancel-bundle-rename")
+    def handle_cancel(self, _: Button.Pressed) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#confirm-bundle-rename")
+    def handle_confirm(self, _: Button.Pressed) -> None:
+        self._dismiss_with_name()
+
+    def _dismiss_with_name(self) -> None:
+        name = self.query_one("#rename-bundle-name", Input).value.strip()
+        self.dismiss(name)
+
+
 class EditBundleTagsDialog(ModalScreen[list[str] | None]):
     """Modal prompt for selecting existing tags and adding new ones."""
 

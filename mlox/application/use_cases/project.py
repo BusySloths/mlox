@@ -103,6 +103,46 @@ def rename_project_workspace(workspace, name: str) -> OperationResult:
     )
 
 
+def rename_bundle(workspace, bundle, name: str) -> OperationResult:
+    """Rename one bundle in an open project workspace."""
+
+    new_name = name.strip()
+    if not new_name:
+        return OperationResult(False, 11, "Bundle name must not be empty.")
+
+    infra = getattr(workspace, "infrastructure", None)
+    bundles = getattr(infra, "bundles", []) or []
+    for candidate in bundles:
+        if candidate is bundle:
+            continue
+        if str(getattr(candidate, "name", "")).casefold() == new_name.casefold():
+            return OperationResult(
+                False,
+                12,
+                f"Bundle name '{new_name}' is already in use.",
+            )
+
+    old_name = getattr(bundle, "name", "")
+    try:
+        bundle.name = new_name
+        commit = getattr(workspace, "commit", None)
+        if callable(commit):
+            commit()
+    except Exception as exc:
+        try:
+            bundle.name = old_name
+        except Exception:
+            pass
+        return OperationResult(False, 13, f"Failed to rename bundle: {exc}")
+
+    return OperationResult(
+        True,
+        0,
+        f"Renamed bundle '{old_name}' to '{new_name}'.",
+        {"workspace": workspace, "bundle": bundle},
+    )
+
+
 def update_bundle_tags(workspace, bundle, tags: list[str]) -> OperationResult:
     """Update tags for a bundle in an open project workspace."""
 

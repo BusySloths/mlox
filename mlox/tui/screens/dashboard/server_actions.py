@@ -25,6 +25,9 @@ class ServerActions(Container):
     class EditTagsRequested(Message):
         """Request that the dashboard opens the bundle tag editor."""
 
+    class RenameBundleRequested(Message):
+        """Request that the dashboard opens the bundle rename modal."""
+
     class SetupBundleRequested(Message):
         """Request that the dashboard initializes the selected bundle."""
 
@@ -44,6 +47,7 @@ class ServerActions(Container):
                 yield Button("Show Credentials", id="toggle-server-credentials")
                 yield Button("Refresh Server Info", id="refresh-runtime-info")
                 yield Button("Setup Bundle", id="setup-bundle", variant="warning")
+                yield Button("Rename Bundle", id="rename-bundle", variant="primary")
                 yield Button("Edit Tags", id="edit-bundle-tags", variant="success")
             with Horizontal(id="server-destructive-action-buttons"):
                 yield Button("Remove Bundle", id="remove-bundle", variant="error")
@@ -59,6 +63,7 @@ class ServerActions(Container):
         self._render_credentials_action(self.selection)
         self._render_runtime_info_action(self.selection)
         self._render_bundle_lifecycle_actions(self.selection)
+        self._render_bundle_rename_action(self.selection)
         self._render_bundle_tag_action(self.selection)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
@@ -70,6 +75,7 @@ class ServerActions(Container):
             self._render_credentials_action(selection)
             self._render_runtime_info_action(selection)
             self._render_bundle_lifecycle_actions(selection)
+            self._render_bundle_rename_action(selection)
             self._render_bundle_tag_action(selection)
             self.set_runtime_info_loading(False)
             self._render_credentials()
@@ -120,6 +126,10 @@ class ServerActions(Container):
         is_bundle = bool(selection and selection.type == "bundle" and selection.bundle)
         setup.display = is_bundle and not is_bundle_initialized(selection.bundle)
         remove.display = is_bundle
+
+    def _render_bundle_rename_action(self, selection: Optional[SelectionInfo]) -> None:
+        button = self.query_one("#rename-bundle", Button)
+        button.display = bool(selection and selection.type == "bundle")
 
     def _render_bundle_tag_action(self, selection: Optional[SelectionInfo]) -> None:
         button = self.query_one("#edit-bundle-tags", Button)
@@ -183,8 +193,10 @@ class ServerActions(Container):
     def set_bundle_lifecycle_loading(self, loading: bool) -> None:
         self.query_one("#setup-bundle", Button).disabled = loading
         self.query_one("#remove-bundle", Button).disabled = loading
+        self.query_one("#rename-bundle", Button).disabled = loading
         if not loading:
             self._render_bundle_lifecycle_actions(self.selection)
+            self._render_bundle_rename_action(self.selection)
 
     @on(Button.Pressed, "#open-server-terminal")
     def handle_open_terminal(self, _: Button.Pressed) -> None:
@@ -213,6 +225,10 @@ class ServerActions(Container):
     @on(Button.Pressed, "#edit-bundle-tags")
     def handle_edit_bundle_tags(self, _: Button.Pressed) -> None:
         self.post_message(self.EditTagsRequested())
+
+    @on(Button.Pressed, "#rename-bundle")
+    def handle_rename_bundle(self, _: Button.Pressed) -> None:
+        self.post_message(self.RenameBundleRequested())
 
     @on(Button.Pressed, "#setup-bundle")
     def handle_setup_bundle(self, _: Button.Pressed) -> None:

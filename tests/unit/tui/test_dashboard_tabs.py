@@ -1097,6 +1097,58 @@ def test_bundle_edit_tags_action_updates_tags_and_overview() -> None:
     assert "gpu" in overview
 
 
+async def _rename_bundle_from_action_modal() -> tuple[str, list[str], str, str]:
+    app = DashboardTestApp()
+    server = SimpleNamespace(ip="10.0.0.5", state="running", backend=["docker"])
+    bundle = SimpleNamespace(
+        name="dev",
+        server=server,
+        services=[],
+        tags=[],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
+        screen._apply_selection(selection)
+        await screen.handle_bundle_rename_requested(
+            ServerActions.RenameBundleRequested()
+        )
+        await pilot.pause()
+
+        app.screen.query_one("#rename-bundle-name", Input).value = "renamed-dev"
+        await pilot.click("#confirm-bundle-rename")
+
+        tree = screen.query_one("#infra-tree", InfraTree)
+        deadline = time.monotonic() + 2
+        while bundle.name != "renamed-dev" or tree.cursor_node.label.plain != (
+            "Bundle: renamed-dev"
+        ):
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for bundle rename.")
+            await pilot.pause(0.05)
+
+        overview = screen.query_one(OverviewPanel)
+        return (
+            bundle.name,
+            app.commits,
+            tree.cursor_node.label.plain,
+            _render_text(overview.content),
+        )
+
+
+def test_bundle_rename_action_updates_bundle_and_tree_label() -> None:
+    bundle_name, commits, tree_label, overview = asyncio.run(
+        _rename_bundle_from_action_modal()
+    )
+
+    assert bundle_name == "renamed-dev"
+    assert commits == ["test-project"]
+    assert tree_label == "Bundle: renamed-dev"
+    assert "renamed-dev" in overview
+
+
 async def _add_server_from_template_modal() -> tuple[list[tuple[object, dict]], str, str]:
     app = DashboardTestApp()
     calls = []

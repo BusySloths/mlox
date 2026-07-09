@@ -117,6 +117,47 @@ def test_project_rename_workspace_restores_name_when_commit_fails():
     assert result.message == "Failed to rename project: disk full"
 
 
+def test_project_rename_bundle_sets_name_and_commits():
+    commits = []
+    bundle = SimpleNamespace(name="dev")
+    workspace = SimpleNamespace(infrastructure=SimpleNamespace(bundles=[bundle]))
+    workspace.commit = lambda: commits.append(bundle.name)
+
+    result = project.rename_bundle(workspace, bundle, " renamed dev ")
+
+    assert result.success
+    assert bundle.name == "renamed dev"
+    assert commits == ["renamed dev"]
+    assert result.data == {"workspace": workspace, "bundle": bundle}
+
+
+def test_project_rename_bundle_rejects_empty_and_duplicate_names():
+    bundle = SimpleNamespace(name="dev")
+    other_bundle = SimpleNamespace(name="prod")
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(bundles=[bundle, other_bundle])
+    )
+
+    empty = project.rename_bundle(workspace, bundle, " ")
+    duplicate = project.rename_bundle(workspace, bundle, "PROD")
+
+    assert not empty.success
+    assert not duplicate.success
+    assert bundle.name == "dev"
+
+
+def test_project_rename_bundle_restores_name_when_commit_fails():
+    bundle = SimpleNamespace(name="dev")
+    workspace = SimpleNamespace(infrastructure=SimpleNamespace(bundles=[bundle]))
+    workspace.commit = lambda: (_ for _ in ()).throw(RuntimeError("disk full"))
+
+    result = project.rename_bundle(workspace, bundle, "renamed")
+
+    assert not result.success
+    assert bundle.name == "dev"
+    assert result.message == "Failed to rename bundle: disk full"
+
+
 def test_project_update_bundle_tags_normalizes_and_commits():
     commits = []
     bundle = SimpleNamespace(name="demo", tags=["old"])

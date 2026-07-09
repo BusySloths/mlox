@@ -456,6 +456,7 @@ async def _uninitialized_bundle_action_visibility() -> dict[str, bool]:
         return {
             "refresh": actions.query_one("#refresh-runtime-info", Button).display,
             "setup": actions.query_one("#setup-bundle", Button).display,
+            "rename": actions.query_one("#rename-bundle", Button).display,
             "remove": actions.query_one("#remove-bundle", Button).display,
             "tags": actions.query_one("#edit-bundle-tags", Button).display,
         }
@@ -467,6 +468,7 @@ def test_uninitialized_bundle_actions_are_restricted() -> None:
     assert visibility == {
         "refresh": False,
         "setup": True,
+        "rename": True,
         "remove": True,
         "tags": True,
     }
@@ -483,6 +485,7 @@ async def _initialized_bundle_action_visibility() -> dict[str, bool]:
         return {
             "refresh": actions.query_one("#refresh-runtime-info", Button).display,
             "setup": actions.query_one("#setup-bundle", Button).display,
+            "rename": actions.query_one("#rename-bundle", Button).display,
             "remove": actions.query_one("#remove-bundle", Button).display,
             "tags": actions.query_one("#edit-bundle-tags", Button).display,
         }
@@ -494,6 +497,7 @@ def test_initialized_bundle_actions_hide_setup() -> None:
     assert visibility == {
         "refresh": True,
         "setup": False,
+        "rename": True,
         "remove": True,
         "tags": True,
     }

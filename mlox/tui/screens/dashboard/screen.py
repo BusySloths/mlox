@@ -21,7 +21,7 @@ from textual.widgets import (
 )
 
 from .app_log_panel import AppLogPanel
-from .bundle_tags import EditBundleTagsDialog
+from .bundle_tags import EditBundleTagsDialog, RenameBundleDialog
 from .firewall_panel import FirewallPanel
 from .history_panel import HistoryPanel
 from .log_panel import LogPanel
@@ -49,6 +49,7 @@ from mlox.application.use_cases.servers import (
 )
 from mlox.application.use_cases.project import (
     reload_project_workspace,
+    rename_bundle,
     rename_project_workspace,
     update_bundle_tags,
 )
@@ -342,6 +343,21 @@ class DashboardScreen(Screen):
             lambda tags: self._update_bundle_tags_from_dialog(selection, tags),
         )
 
+    @on(ServerActions.RenameBundleRequested)
+    async def handle_bundle_rename_requested(
+        self, _: ServerActions.RenameBundleRequested
+    ) -> None:
+        selection = self.query_one(ServerActions).selection
+        if not selection or selection.type != "bundle" or not selection.bundle:
+            self.notify("Select a bundle to rename.", severity="warning")
+            return
+
+        current_name = str(getattr(selection.bundle, "name", ""))
+        await self.app.push_screen(
+            RenameBundleDialog(current_name),
+            lambda name: self._rename_bundle_from_dialog(selection, name),
+        )
+
     @on(Button.Pressed, "#add-bundle-from-server-template")
     def handle_project_add_bundle_requested(self, event: Button.Pressed) -> None:
         event.stop()
@@ -397,6 +413,37 @@ class DashboardScreen(Screen):
 
         self._apply_selection(selection)
         self.query_one(OverviewPanel).show_bundle(selection)
+        self.notify(result.message)
+
+    def _rename_bundle_from_dialog(
+        self,
+        selection: SelectionInfo,
+        name: str | None,
+    ) -> None:
+        if name is None:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot rename bundle because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        result = rename_bundle(workspace, selection.bundle, name)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+
+        self._apply_selection(
+            SelectionInfo(
+                type="bundle",
+                bundle=selection.bundle,
+                server=selection.server or getattr(selection.bundle, "server", None),
+            )
+        )
+        self.query_one(OverviewPanel).show_bundle(selection)
+        self._refresh_tree_after_server_add(selection.bundle)
         self.notify(result.message)
 
     @on(ServerActions.SetupBundleRequested)
