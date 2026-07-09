@@ -822,18 +822,37 @@ async def _service_web_ui_login_button_display_for(service: object) -> tuple[boo
 def test_service_actions_show_web_ui_button_only_for_web_ui_services() -> None:
     web_service = SimpleNamespace(
         name="mlflow",
+        state="running",
         capabilities={ServiceCapability.WEB_UI},
         get_web_ui_address=lambda: "https://example.test",
     )
-    api_service = SimpleNamespace(name="api", capabilities=set())
+    api_service = SimpleNamespace(name="api", state="running", capabilities=set())
 
     assert asyncio.run(_service_web_ui_button_display_for(web_service)) is True
     assert asyncio.run(_service_web_ui_button_display_for(api_service)) is False
 
 
+def test_service_actions_hide_web_ui_for_uninitialized_services() -> None:
+    service = SimpleNamespace(
+        name="mlflow",
+        state="un-initialized",
+        capabilities={ServiceCapability.WEB_UI},
+        web_ui_login_fields=("username", "password"),
+        get_web_ui_address=lambda: "https://example.test",
+    )
+
+    assert asyncio.run(_service_web_ui_button_display_for(service)) is False
+    assert asyncio.run(_service_web_ui_login_button_display_for(service)) == (
+        False,
+        False,
+        False,
+    )
+
+
 def test_service_actions_show_advertised_web_ui_login_buttons() -> None:
     web_service = SimpleNamespace(
         name="mlflow",
+        state="running",
         capabilities={ServiceCapability.WEB_UI},
         web_ui_login_fields=("username", "password"),
         get_web_ui_address=lambda: "https://example.test",

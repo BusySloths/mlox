@@ -153,8 +153,7 @@ class ServiceActions(Container):
         )
         if self.is_mounted:
             self.query_one("#open-service-web-ui", Button).display = bool(
-                self.display
-                and service_has_web_ui(selection.service if selection else None)
+                self._has_initialized_web_ui_service(selection)
             )
             self._render_web_ui_login_actions(selection)
             self._render_setup_action(selection)
@@ -163,7 +162,7 @@ class ServiceActions(Container):
         self, selection: Optional[SelectionInfo]
     ) -> None:
         fields = set()
-        if self.display and selection and selection.service:
+        if self._has_initialized_web_ui_service(selection):
             result = list_service_web_ui_login_fields(selection.service)
             if result.success and result.data:
                 fields = set(result.data.get("fields", []))
@@ -184,6 +183,18 @@ class ServiceActions(Container):
             self.display
             and service
             and getattr(service, "state", "unknown") == "un-initialized"
+        )
+
+    def _has_initialized_web_ui_service(
+        self,
+        selection: Optional[SelectionInfo],
+    ) -> bool:
+        service = selection.service if selection else None
+        return bool(
+            self.display
+            and service
+            and getattr(service, "state", "unknown") != "un-initialized"
+            and service_has_web_ui(service)
         )
 
     def set_loading(self, loading: bool) -> None:

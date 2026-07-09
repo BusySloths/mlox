@@ -316,13 +316,20 @@ class OpenBaoSettingsPanel(VerticalScroll):
     def _run_operation(self, operation, callback, *, group: str) -> None:
         app = self.app
 
+        def finish(result) -> None:
+            if not self._settings_widgets_available():
+                return
+            callback(result)
+
         def run() -> None:
             result = operation()
-            app.call_from_thread(callback, result)
+            app.call_from_thread(finish, result)
 
         app.run_worker(run, thread=True, exclusive=True, group=group)
 
     def _show_settings_result(self, result) -> None:
+        if not self._settings_widgets_available():
+            return
         self._set_busy(False)
         if not result.success:
             self.status.update(
@@ -422,6 +429,16 @@ class OpenBaoSettingsPanel(VerticalScroll):
         self._busy = busy
         for button in self.query(Button):
             button.disabled = busy
+
+    def _settings_widgets_available(self) -> bool:
+        return all(
+            list(self.query(selector))
+            for selector in (
+                "#openbao-status",
+                "#openbao-application-table",
+                "#openbao-help",
+            )
+        )
 
     def _commit_workspace(self) -> None:
         workspace = getattr(self.app, "workspace", None)

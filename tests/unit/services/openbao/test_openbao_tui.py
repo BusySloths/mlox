@@ -222,6 +222,14 @@ def test_openbao_panel_loads_status_and_applications() -> None:
     assert rows == 1
 
 
+def test_openbao_panel_ignores_late_load_after_widgets_are_gone() -> None:
+    service = FakeOpenBaoService()
+    panel = OpenBaoSettingsPanel(None, None, service)
+    result = openbao.describe_openbao(None, service)
+
+    panel._show_settings_result(result)
+
+
 async def _openbao_panel_controls() -> tuple[bool, bool, bool, bool, bool]:
     service = FakeOpenBaoService()
     panel = OpenBaoSettingsPanel(None, None, service)
