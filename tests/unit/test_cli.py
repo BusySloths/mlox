@@ -255,6 +255,31 @@ def test_start_ui_invokes_streamlit(monkeypatch):
     assert call_args.kwargs["check"] is False
 
 
+def test_start_tui_invokes_app_with_tui_environment(monkeypatch):
+    mock_run = mock.Mock(return_value=mock.Mock(returncode=0))
+    monkeypatch.setattr(cli.subprocess, "run", mock_run)
+
+    result = runner.invoke(cli.app, ["tui"])
+
+    assert result.exit_code == 0
+    mock_run.assert_called_once()
+    call_args = mock_run.call_args
+    command = call_args.args[0]
+    assert command[0] == cli.sys.executable
+    assert command[1].endswith("mlox/tui/app.py")
+    assert call_args.kwargs["check"] is False
+    assert call_args.kwargs["env"]["MLOX_TUI"] == "true"
+
+
+def test_start_tui_exits_with_textual_return_code(monkeypatch):
+    mock_run = mock.Mock(return_value=mock.Mock(returncode=7))
+    monkeypatch.setattr(cli.subprocess, "run", mock_run)
+
+    result = runner.invoke(cli.app, ["tui"])
+
+    assert result.exit_code == 7
+
+
 def test_project_new_prints_canonical_project_path_without_password(monkeypatch, tmp_path):
     application = SimpleNamespace(
         project_created=mock.Mock(

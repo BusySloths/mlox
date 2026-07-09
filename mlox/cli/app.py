@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from importlib import metadata as importlib_metadata
@@ -45,6 +46,18 @@ def start_ui() -> None:
     app_path = Path(__file__).resolve().parents[1] / "app.py"
     command = [sys.executable, "-m", "streamlit", "run", str(app_path)]
     result = subprocess.run(command, check=False)
+    if result.returncode != 0:
+        raise typer.Exit(code=result.returncode)
+
+
+@app.command("tui")
+def start_tui() -> None:
+    """Start the terminal TUI."""
+
+    app_path = Path(__file__).resolve().parents[1] / "tui" / "app.py"
+    command = [sys.executable, str(app_path)]
+    env = {**os.environ, "MLOX_TUI": "true"}
+    result = subprocess.run(command, check=False, env=env)
     if result.returncode != 0:
         raise typer.Exit(code=result.returncode)
 

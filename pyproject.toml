@@ -69,6 +69,10 @@ minio = [
     "boto3==1.40.56",  # M
 ]
 
+tui = [
+    "textual==8.2.7",  # M
+]
+
 dev = [
     # Nicer Logging with colors
     "colorama==0.4.6",  # M
