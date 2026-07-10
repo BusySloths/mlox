@@ -1128,6 +1128,182 @@ def test_airflow_setup_and_check(conn, monkeypatch):
     assert out["version"] == "3.0"
 
 
+def test_airflow_list_workflows_loads_dags_and_latest_runs(conn, monkeypatch):
+    service = _set_exec(
+        AirflowDockerService(
+            **BASE,
+            path_dags="/data/dags",
+            path_output="/data/output",
+            ui_user="airflow",
+            ui_pw="airflowpw",
+            port="8080",
+        ),
+        FakeExec(),
+    )
+    service.setup(conn)
+    seen_urls = []
+
+    class _Resp:
+        def __init__(self, payload: dict):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+    def fake_urlopen(request, *args, **kwargs):
+        seen_urls.append(request.full_url)
+        if request.full_url.endswith("/auth/token"):
+            assert request.get_method() == "POST"
+            assert json.loads(request.data.decode("utf-8")) == {
+                "username": "airflow",
+                "password": "airflowpw",
+            }
+            return _Resp({"access_token": "jwt-token"})
+        assert request.headers["Authorization"] == "Bearer jwt-token"
+        if request.full_url.endswith("/api/v2/dags?limit=100"):
+            return _Resp(
+                {
+                    "dags": [
+                        {
+                            "dag_id": "daily_train",
+                            "timetable_summary": "@daily",
+                            "is_paused": False,
+                            "is_active": True,
+                            "owners": ["ml"],
+                            "tags": [{"name": "training"}],
+                            "fileloc": "/opt/airflow/dags/train.py",
+                        }
+                    ]
+                }
+            )
+        assert "/api/v2/dags/daily_train/dagRuns?" in request.full_url
+        return _Resp(
+            {
+                "dag_runs": [
+                    {
+                        "dag_run_id": "scheduled__2026-07-10",
+                        "state": "success",
+                        "logical_date": "2026-07-10T00:00:00+00:00",
+                        "end_date": "2026-07-10T00:05:00+00:00",
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(
+        "mlox.services.airflow.docker.urllib.request.urlopen",
+        fake_urlopen,
+    )
+
+    workflows = service.list_workflows()
+
+    assert workflows == [
+        {
+            "id": "daily_train",
+            "name": "daily_train",
+            "schedule": "@daily",
+            "is_paused": False,
+            "is_active": True,
+            "owners": "ml",
+            "tags": "training",
+            "fileloc": "/opt/airflow/dags/train.py",
+            "last_run_id": "scheduled__2026-07-10",
+            "last_run_state": "success",
+            "last_run_start": "2026-07-10T00:00:00+00:00",
+            "last_run_end": "2026-07-10T00:05:00+00:00",
+        }
+    ]
+    assert seen_urls[0] == "https://example.test:8080/auth/token"
+    assert seen_urls[1] == (
+        "https://example.test:8080/api/v2/dags?limit=100"
+    )
+
+
+def test_airflow_list_workflows_falls_back_to_v1_basic_auth(conn, monkeypatch):
+    service = _set_exec(
+        AirflowDockerService(
+            **BASE,
+            path_dags="/data/dags",
+            path_output="/data/output",
+            ui_user="airflow",
+            ui_pw="airflowpw",
+            port="8080",
+        ),
+        FakeExec(),
+    )
+    service.setup(conn)
+    seen_urls = []
+
+    class _Resp:
+        def __init__(self, payload: dict):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+    def fake_urlopen(request, *args, **kwargs):
+        seen_urls.append(request.full_url)
+        if request.full_url.endswith("/auth/token"):
+            raise HTTPError(
+                request.full_url,
+                404,
+                "Not Found",
+                hdrs=None,
+                fp=BytesIO(),
+            )
+        if "/api/v2/" in request.full_url:
+            raise HTTPError(
+                request.full_url,
+                404,
+                "Not Found",
+                hdrs=None,
+                fp=BytesIO(),
+            )
+        assert request.headers["Authorization"].startswith("Basic ")
+        if request.full_url.endswith("/api/v1/dags?limit=100"):
+            return _Resp(
+                {
+                    "dags": [
+                        {
+                            "dag_id": "legacy_dag",
+                            "schedule_interval": "@hourly",
+                            "is_paused": False,
+                            "is_active": True,
+                        }
+                    ]
+                }
+            )
+        assert "/api/v1/dags/legacy_dag/dagRuns?" in request.full_url
+        return _Resp({"dag_runs": []})
+
+    monkeypatch.setattr(
+        "mlox.services.airflow.docker.urllib.request.urlopen",
+        fake_urlopen,
+    )
+
+    workflows = service.list_workflows()
+
+    assert workflows[0]["name"] == "legacy_dag"
+    assert workflows[0]["schedule"] == "@hourly"
+    assert seen_urls[:3] == [
+        "https://example.test:8080/auth/token",
+        "https://example.test:8080/api/v1/dags?limit=100",
+        "https://example.test:8080/auth/token",
+    ]
+
+
 def test_litellm_setup_config_and_check_states(conn):
     service = _set_exec(
         LiteLLMDockerService(

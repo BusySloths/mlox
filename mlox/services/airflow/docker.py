@@ -19,12 +19,19 @@ import ssl
 import json
 import base64
 import logging
+import urllib.error
+import urllib.parse
 import urllib.request
 
-from typing import Dict
+from typing import Any, Dict
 from dataclasses import dataclass, field
 
-from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
+from mlox.service import (
+    AbstractService,
+    AbstractWebUIService,
+    AbstractWorkflowOrchestratorService,
+    ServiceCapability,
+)
 from mlox.utils import generate_password
 
 
@@ -32,7 +39,11 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class AirflowDockerService(AbstractService, AbstractWebUIService):
+class AirflowDockerService(
+    AbstractService,
+    AbstractWebUIService,
+    AbstractWorkflowOrchestratorService,
+):
     capabilities = {ServiceCapability.WORKFLOW_ORCHESTRATOR, ServiceCapability.WEB_UI}
     web_ui_url_label = "Airflow UI"
     web_ui_login_fields = ("username", "password")
@@ -173,6 +184,198 @@ class AirflowDockerService(AbstractService, AbstractWebUIService):
                 f"An unexpected error occurred during Airflow health check for {url}: {e}"
             )
             return {"status": "unknown", "message": f"Error: {e}"}
+
+    def list_workflows(self) -> list[dict[str, Any]]:
+        """Return Airflow DAG metadata with the latest DAG run when available."""
+
+        dags_payload = self._airflow_api_get(
+            "/dags",
+            {
+                "limit": "100",
+            },
+        )
+        raw_dags = dags_payload.get("dags", [])
+        if not isinstance(raw_dags, list):
+            raise ValueError("Airflow DAG response did not contain a DAG list.")
+
+        workflows: list[dict[str, Any]] = []
+        for dag in raw_dags:
+            if not isinstance(dag, dict):
+                continue
+            dag_id = str(dag.get("dag_id") or dag.get("dag_display_name") or "")
+            if not dag_id:
+                continue
+            latest_run = self._latest_dag_run(dag_id)
+            workflows.append(
+                {
+                    "id": dag_id,
+                    "name": dag_id,
+                    "schedule": self._dag_schedule(dag),
+                    "is_paused": dag.get("is_paused"),
+                    "is_active": dag.get("is_active"),
+                    "owners": self._join_list(dag.get("owners")),
+                    "tags": self._dag_tags(dag.get("tags")),
+                    "fileloc": str(dag.get("fileloc") or ""),
+                    "last_run_id": str(latest_run.get("dag_run_id") or ""),
+                    "last_run_state": str(latest_run.get("state") or ""),
+                    "last_run_start": str(
+                        latest_run.get("start_date")
+                        or latest_run.get("logical_date")
+                        or latest_run.get("execution_date")
+                        or ""
+                    ),
+                    "last_run_end": str(latest_run.get("end_date") or ""),
+                }
+            )
+        return workflows
+
+    def _latest_dag_run(self, dag_id: str) -> dict[str, Any]:
+        encoded_dag_id = urllib.parse.quote(dag_id, safe="")
+        try:
+            payload = self._airflow_api_get(
+                f"/dags/{encoded_dag_id}/dagRuns",
+                {
+                    "limit": "1",
+                    "order_by": "-logical_date",
+                },
+            )
+        except Exception as exc:
+            logger.info("Could not load latest Airflow DAG run for %s: %s", dag_id, exc)
+            return {}
+        runs = payload.get("dag_runs", [])
+        if isinstance(runs, list) and runs:
+            run = runs[0]
+            return run if isinstance(run, dict) else {}
+        return {}
+
+    def _airflow_api_get(
+        self,
+        path: str,
+        query: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        last_error: Exception | None = None
+        for api_prefix in ("/api/v2", "/api/v1"):
+            url = self._airflow_api_url(api_prefix, path, query)
+            try:
+                return self._urlopen_json(
+                    url,
+                    auth="bearer" if api_prefix == "/api/v2" else "basic",
+                )
+            except urllib.error.HTTPError as exc:
+                last_error = exc
+                if exc.code in {401, 404}:
+                    continue
+                raise
+            except urllib.error.URLError as exc:
+                last_error = exc
+                continue
+        if last_error:
+            raise last_error
+        raise RuntimeError("Airflow API request failed.")
+
+    def _airflow_api_url(
+        self,
+        api_prefix: str,
+        path: str,
+        query: dict[str, str] | None,
+    ) -> str:
+        base_url = self.service_urls.get("Airflow UI", "").rstrip("/")
+        if not base_url:
+            raise ValueError("Airflow UI URL is not available.")
+        normalized_path = "/" + path.lstrip("/")
+        url = f"{base_url}{api_prefix}{normalized_path}"
+        if query:
+            url = f"{url}?{urllib.parse.urlencode(query)}"
+        return url
+
+    def _urlopen_json(self, url: str, *, auth: str = "basic") -> dict[str, Any]:
+        ssl_context = ssl._create_unverified_context()
+        request = urllib.request.Request(url)
+        self._add_airflow_auth_header(request, auth)
+        with urllib.request.urlopen(
+            request,
+            timeout=15,
+            context=ssl_context,
+        ) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return data if isinstance(data, dict) else {}
+
+    def _add_airflow_auth_header(
+        self,
+        request: urllib.request.Request,
+        auth: str,
+    ) -> None:
+        if auth == "bearer":
+            request.add_header("Authorization", f"Bearer {self._airflow_access_token()}")
+            return
+
+        auth_string = f"{self.ui_user}:{self.ui_pw}"
+        encoded_auth = base64.b64encode(auth_string.encode("utf-8")).decode("ascii")
+        request.add_header("Authorization", f"Basic {encoded_auth}")
+
+    def _airflow_access_token(self) -> str:
+        token = str(getattr(self, "_cached_airflow_access_token", "") or "")
+        if token:
+            return token
+
+        base_url = self.service_urls.get("Airflow UI", "").rstrip("/")
+        if not base_url:
+            raise ValueError("Airflow UI URL is not available.")
+        payload = json.dumps(
+            {
+                "username": self.ui_user,
+                "password": self.ui_pw,
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            f"{base_url}/auth/token",
+            data=payload,
+            method="POST",
+        )
+        request.add_header("Content-Type", "application/json")
+        ssl_context = ssl._create_unverified_context()
+        with urllib.request.urlopen(
+            request,
+            timeout=15,
+            context=ssl_context,
+        ) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        if not isinstance(data, dict) or not data.get("access_token"):
+            raise ValueError("Airflow token response did not include an access token.")
+        token = str(data["access_token"])
+        setattr(self, "_cached_airflow_access_token", token)
+        return token
+
+    def _dag_schedule(self, dag: dict[str, Any]) -> str:
+        schedule = (
+            dag.get("timetable_summary")
+            or dag.get("schedule_interval")
+            or dag.get("schedule")
+            or ""
+        )
+        if isinstance(schedule, dict):
+            return str(
+                schedule.get("value")
+                or schedule.get("__type")
+                or json.dumps(schedule, sort_keys=True)
+            )
+        return str(schedule or "-")
+
+    def _dag_tags(self, tags: Any) -> str:
+        if not isinstance(tags, list):
+            return ""
+        values = []
+        for tag in tags:
+            if isinstance(tag, dict):
+                values.append(str(tag.get("name") or tag.get("tag_name") or ""))
+            else:
+                values.append(str(tag))
+        return ", ".join(value for value in values if value)
+
+    def _join_list(self, values: Any) -> str:
+        if isinstance(values, list):
+            return ", ".join(str(value) for value in values)
+        return str(values or "")
 
     def get_secrets(self) -> Dict[str, Dict]:
         credentials = {

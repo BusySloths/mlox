@@ -279,6 +279,20 @@ class AbstractMonitorService(ABC):
         pass
 
 
+@dataclass
+class AbstractWorkflowOrchestratorService(ABC):
+    """Service capability mixin for workflow orchestration providers."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {
+        ServiceCapability.WORKFLOW_ORCHESTRATOR
+    }
+
+    @abstractmethod
+    def list_workflows(self) -> List[Dict[str, Any]]:
+        """Return workflow/DAG metadata including recent run information."""
+        pass
+
+
 class ServiceLookup(Protocol):
     def get_service_by_uuid(self, service_uuid: str) -> Optional["AbstractService"]: ...
 

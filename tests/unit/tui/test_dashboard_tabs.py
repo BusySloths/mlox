@@ -39,6 +39,7 @@ from mlox.tui.screens.dashboard.screen import (
     SIDEBAR_STEP,
     SERVER_TEMPLATES_TAB_ID,
     SERVICE_TEMPLATES_TAB_ID,
+    WORKFLOW_TAB_ID,
 )
 from mlox.tui.template_forms import TemplateFieldSpec, TemplateFormSpec
 
@@ -183,7 +184,7 @@ def _secret_detail_text(panel: SecretManagerPanel) -> str:
 
 async def _visible_tabs_for(
     selection: SelectionInfo,
-) -> tuple[str, str, str, str, str, str, str, str]:
+) -> tuple[str, str, str, str, str, str, str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -196,6 +197,7 @@ async def _visible_tabs_for(
         firewall_tab = tabs.get_tab(FIREWALL_TAB_ID)
         monitor_tab = tabs.get_tab(MONITOR_TAB_ID)
         models_tab = tabs.get_tab(MODELS_TAB_ID)
+        workflow_tab = tabs.get_tab(WORKFLOW_TAB_ID)
         repository_tab = tabs.get_tab(REPOSITORY_TAB_ID)
         service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
@@ -205,6 +207,7 @@ async def _visible_tabs_for(
             firewall_tab.styles.display,
             monitor_tab.styles.display,
             models_tab.styles.display,
+            workflow_tab.styles.display,
             repository_tab.styles.display,
             service_tab.styles.display,
             logs_tab.styles.display,
@@ -218,6 +221,7 @@ def test_root_selection_shows_project_tabs() -> None:
         firewall_display,
         monitor_display,
         models_display,
+        workflow_display,
         repository_display,
         service_display,
         logs_display,
@@ -230,6 +234,7 @@ def test_root_selection_shows_project_tabs() -> None:
     assert firewall_display == "block"
     assert monitor_display == "block"
     assert models_display == "block"
+    assert workflow_display == "block"
     assert repository_display == "block"
     assert service_display == "none"
     assert logs_display == "none"
@@ -419,6 +424,68 @@ def test_monitor_tab_shows_selected_service_settings_below_table() -> None:
     text = asyncio.run(_monitor_detail_text())
 
     assert "Detailed monitor settings" in text
+
+
+async def _workflow_table_text() -> tuple[str, str]:
+    app = DashboardTestApp()
+    workflow_service = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        service_config_id="airflow",
+        state="running",
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+        service_urls={"Airflow UI": "https://example.test:8080"},
+        list_workflows=lambda: [
+            {
+                "id": "daily_train",
+                "name": "daily_train",
+                "schedule": "@daily",
+                "is_paused": False,
+                "is_active": True,
+                "owners": "ml",
+                "last_run_state": "success",
+                "last_run_start": "2026-07-10T00:00:00+00:00",
+            }
+        ],
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[workflow_service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="root"))
+        tabs = screen.query_one("#main-tabs", TabbedContent)
+        tabs.active = WORKFLOW_TAB_ID
+        orchestrator_table = app.query_one("#workflow-orchestrator-table")
+        dag_table = app.query_one("#workflow-dag-table")
+        deadline = time.monotonic() + 2
+        while dag_table.row_count == 0 or "daily_train" not in (
+            " ".join(str(cell) for cell in dag_table.get_row_at(0))
+            if dag_table.row_count
+            else ""
+        ):
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for workflow rows.")
+            await pilot.pause(0.05)
+        return (
+            " ".join(str(cell) for cell in orchestrator_table.get_row_at(0)),
+            " ".join(str(cell) for cell in dag_table.get_row_at(0)),
+        )
+
+
+def test_workflow_tab_shows_orchestrators_and_dags() -> None:
+    orchestrator_text, dag_text = asyncio.run(_workflow_table_text())
+
+    assert "Airflow" in orchestrator_text
+    assert "prod" in orchestrator_text
+    assert "1" in orchestrator_text
+    assert "daily_train" in dag_text
+    assert "@daily" in dag_text
+    assert "success" in dag_text
 
 
 class _RepositoryConnection:
@@ -962,6 +1029,7 @@ async def _initial_lazy_root_panel_state() -> tuple[str, list[object]]:
             screen.query_one("#firewall-panel"),
             screen.query_one("#monitor-panel"),
             screen.query_one("#models-panel"),
+            screen.query_one("#workflow-panel"),
             screen.query_one("#repository-panel"),
         ]
         return tabs.active, [getattr(panel, "selection") for panel in panels]
@@ -971,7 +1039,7 @@ def test_dashboard_does_not_eager_load_project_root_detail_tabs() -> None:
     active_tab, selections = asyncio.run(_initial_lazy_root_panel_state())
 
     assert active_tab == "overview-tab"
-    assert selections == [None, None, None, None, None]
+    assert selections == [None, None, None, None, None, None]
 
 
 async def _project_actions_display_for(selection: SelectionInfo) -> bool:
@@ -1955,6 +2023,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
         firewall_display,
         monitor_display,
         models_display,
+        workflow_display,
         repository_display,
         service_display,
         logs_display,
@@ -1965,6 +2034,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
     assert firewall_display == "none"
     assert monitor_display == "none"
     assert models_display == "none"
+    assert workflow_display == "none"
     assert repository_display == "none"
     assert service_display == "block"
     assert logs_display == "none"
@@ -1996,6 +2066,7 @@ def test_server_selection_hides_template_tabs() -> None:
         firewall_display,
         monitor_display,
         models_display,
+        workflow_display,
         repository_display,
         service_display,
         logs_display,
@@ -2006,6 +2077,7 @@ def test_server_selection_hides_template_tabs() -> None:
     assert firewall_display == "none"
     assert monitor_display == "none"
     assert models_display == "none"
+    assert workflow_display == "none"
     assert repository_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
@@ -2018,6 +2090,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
         firewall_display,
         monitor_display,
         models_display,
+        workflow_display,
         repository_display,
         service_display,
         logs_display,
@@ -2028,6 +2101,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
     assert firewall_display == "none"
     assert monitor_display == "none"
     assert models_display == "none"
+    assert workflow_display == "none"
     assert repository_display == "none"
     assert service_display == "none"
     assert logs_display == "block"

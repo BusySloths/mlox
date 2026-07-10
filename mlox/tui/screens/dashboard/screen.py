@@ -41,6 +41,7 @@ from .service_actions import (
 from .secret_manager_panel import SecretManagerPanel
 from .template_panel import TemplatePanel
 from .tree import InfraTree
+from .workflow_panel import WorkflowPanel
 from mlox.application.use_cases.servers import (
     add_server_from_template,
     materialize_server_template_params,
@@ -75,6 +76,7 @@ from mlox.tui.template_forms import (
 FIREWALL_TAB_ID = "firewall-tab"
 MONITOR_TAB_ID = "monitor-tab"
 MODELS_TAB_ID = "models-tab"
+WORKFLOW_TAB_ID = "workflow-tab"
 SERVICE_TUI_TAB_ID = "service-tui-tab"
 SECRET_MANAGER_TAB_ID = "secret-manager-tab"
 REPOSITORY_TAB_ID = "repository-tab"
@@ -191,6 +193,8 @@ class DashboardScreen(Screen):
                                 yield MonitorPanel(id="monitor-panel")
                             with TabPane("Models", id=MODELS_TAB_ID):
                                 yield ModelsPanel(id="models-panel")
+                            with TabPane("Workflow", id=WORKFLOW_TAB_ID):
+                                yield WorkflowPanel(id="workflow-panel")
                             with TabPane("Repositories", id=REPOSITORY_TAB_ID):
                                 yield RepositoryPanel(id="repository-panel")
                             with TabPane(
@@ -285,6 +289,7 @@ class DashboardScreen(Screen):
         self.query_one(FirewallPanel).selection = None
         self.query_one(MonitorPanel).selection = None
         self.query_one(ModelsPanel).selection = None
+        self.query_one(WorkflowPanel).selection = None
         self.query_one(RepositoryPanel).selection = None
 
     def _sync_active_root_panel(self) -> None:
@@ -299,6 +304,7 @@ class DashboardScreen(Screen):
             FIREWALL_TAB_ID: self.query_one(FirewallPanel),
             MONITOR_TAB_ID: self.query_one(MonitorPanel),
             MODELS_TAB_ID: self.query_one(ModelsPanel),
+            WORKFLOW_TAB_ID: self.query_one(WorkflowPanel),
             REPOSITORY_TAB_ID: self.query_one(RepositoryPanel),
         }
         for tab_id, panel in panel_by_tab.items():
@@ -1137,6 +1143,10 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             MODELS_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
+            WORKFLOW_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(

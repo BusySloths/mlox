@@ -13,6 +13,7 @@ from mlox.application.use_cases import (
     secrets,
     servers,
     services,
+    workflows,
 )
 from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
 
@@ -1223,6 +1224,82 @@ def test_monitor_describe_monitoring_reports_snapshot_failures():
     assert result.data["rows"][0]["message"] == (
         "Failed to load monitor metrics: collector unavailable"
     )
+
+
+def test_workflows_describe_workflows_collects_orchestrators_and_dags():
+    service = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        service_config_id="airflow",
+        state="running",
+        service_urls={"Airflow UI": "https://example.test:8080"},
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+        list_workflows=lambda: [
+            {
+                "id": "daily_train",
+                "name": "daily_train",
+                "schedule": "@daily",
+                "is_paused": False,
+                "is_active": True,
+                "owners": "ml",
+                "last_run_state": "success",
+            },
+            {
+                "id": "batch_score",
+                "name": "batch_score",
+                "schedule": "0 * * * *",
+                "is_paused": True,
+                "is_active": True,
+            },
+        ],
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[service],
+    )
+    infra = SimpleNamespace(bundles=[bundle])
+
+    result = workflows.describe_workflows(infra)
+
+    assert result.success
+    assert result.data["metrics"] == {
+        "orchestrators": 1,
+        "running_orchestrators": 1,
+        "workflows": 2,
+        "active_workflows": 2,
+        "paused_workflows": 1,
+    }
+    assert result.data["orchestrators"][0]["workflow_count"] == 2
+    assert result.data["workflows_by_orchestrator"]["airflow-1"][0]["name"] == (
+        "daily_train"
+    )
+
+
+def test_workflows_describe_workflows_reports_list_failures():
+    def fail():
+        raise RuntimeError("api unavailable")
+
+    service = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        state="running",
+        capabilities={"workflow_orchestrator"},
+        list_workflows=fail,
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[service],
+    )
+
+    result = workflows.describe_workflows(SimpleNamespace(bundles=[bundle]))
+
+    assert result.success
+    assert result.data["orchestrators"][0]["message"] == (
+        "Failed to load workflows: api unavailable"
+    )
+    assert result.data["workflows_by_orchestrator"]["airflow-1"] == []
 
 
 def _repository_workspace(service, *, commit_calls=None):
