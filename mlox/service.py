@@ -159,6 +159,49 @@ class AbstractRepositoryService(ABC):
     def git_pull(self, conn) -> None:
         pass
 
+    def get_repository_root(self) -> str:
+        """Return the absolute repository checkout root path when known."""
+
+        target_path = str(getattr(self, "target_path", "") or "").rstrip("/")
+        repo_name = str(getattr(self, "repo_name", "") or "").strip("/")
+        if target_path and repo_name:
+            return f"{target_path}/{repo_name}"
+        return target_path or repo_name
+
+    def repository_summary(self) -> dict[str, Any]:
+        """Return non-IO metadata for repository overview screens."""
+
+        deploy_keys = self.get_deploy_keys()
+        return {
+            "name": str(getattr(self, "repo_name", "") or getattr(self, "name", "-")),
+            "url": self.get_url(),
+            "root": self.get_repository_root(),
+            "private": bool(getattr(self, "is_private", False)),
+            "cloned": bool(getattr(self, "cloned", False)),
+            "state": str(getattr(self, "state", "unknown")),
+            "created": str(getattr(self, "created_timestamp", "") or ""),
+            "modified": str(getattr(self, "modified_timestamp", "") or ""),
+            "deploy_keys_available": bool(deploy_keys),
+        }
+
+    def get_deploy_keys(self) -> dict[str, str]:
+        """Return deploy keys safe to show or copy in a UI."""
+
+        return {}
+
+    def list_repository_tree(self, conn) -> list[dict[str, Any]]:
+        """List repository files for read-only browsing."""
+
+        root = self.get_repository_root()
+        if not root:
+            return []
+        return self.exec.fs_list_file_tree(conn, root)
+
+    def read_repository_file(self, conn, path: str) -> str:
+        """Read one repository file as text."""
+
+        return str(self.exec.fs_read_file(conn, path, format="string"))
+
 
 @dataclass
 class AbstractModelRegistryService(ABC):

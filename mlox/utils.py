@@ -100,6 +100,28 @@ def decrypt_dict(data: str, password: str) -> Dict:
     return json.loads(json_string)
 
 
+def _coerce_bool(value: Any) -> bool:
+    """Accept legacy string booleans persisted by older UI flows."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+    raise ValueError(
+        f"Cannot deserialize boolean value {value!r} of type {type(value).__name__}"
+    )
+
+
+def _dacite_config(type_hooks: Dict[Any, Any] | None = None) -> dacite.Config:
+    hooks = {bool: _coerce_bool}
+    hooks.update(type_hooks or {})
+    return dacite.Config(type_hooks=hooks)
+
+
 def save_to_json(my_data: Dict, path: str, password: str, encrypt: bool = True) -> None:
     """Saves a dictionary to an encrypted JSON file."""
     json_string = json.dumps(my_data, indent=2)
@@ -141,7 +163,7 @@ def _load_hook(data_item: Any) -> Any:
             return dacite.from_dict(
                 data_class=nested_concrete_cls,
                 data=data_copy,
-                config=dacite.Config(type_hooks={object: _load_hook}),
+                config=_dacite_config({object: _load_hook}),
             )
         except (ImportError, AttributeError, TypeError) as e:
             logging.error(
@@ -181,18 +203,26 @@ def dict_to_dataclass(data: Dict, hooks: List[Any] | None = None) -> Any:
         concrete_cls = getattr(module, class_name)
 
         # Use dacite with the dynamically determined top-level class and the hook for nested ones
-        config = None
+        type_hooks = {}
         if hooks:
-            config = dacite.Config(type_hooks={h: _load_hook for h in hooks})
+            type_hooks = {h: _load_hook for h in hooks}
 
-        return dacite.from_dict(data_class=concrete_cls, data=data, config=config)
+        return dacite.from_dict(
+            data_class=concrete_cls,
+            data=data,
+            config=_dacite_config(type_hooks),
+        )
 
     except (ImportError, AttributeError, TypeError) as e:
         logging.error(f"Error loading top-level class {module_name}.{class_name}: {e}")
-        raise ValueError("Could not load top-level dataclass") from e
+        raise ValueError(
+            f"Could not load top-level dataclass {module_name}.{class_name}: {e}"
+        ) from e
     except Exception as e:  # Catch potential errors from the hook or dacite
         logging.error(f"Error during dacite processing: {e}")
-        raise ValueError("Error during deserialization") from e
+        raise ValueError(
+            f"Error during deserialization of {module_name}.{class_name}: {e}"
+        ) from e
 
 
 def generate_password(length: int = 10, with_punctuation: bool = False) -> str:

@@ -30,6 +30,7 @@ from .models_panel import ModelsPanel
 from .monitor_panel import MonitorPanel
 from .overview_panel import OverviewPanel
 from .project_actions import ProjectActions, RenameProjectDialog
+from .repository_panel import RepositoryPanel
 from .server_actions import ServerActions
 from .server_info_panel import ServerInfoPanel
 from .service_actions import (
@@ -76,6 +77,7 @@ MONITOR_TAB_ID = "monitor-tab"
 MODELS_TAB_ID = "models-tab"
 SERVICE_TUI_TAB_ID = "service-tui-tab"
 SECRET_MANAGER_TAB_ID = "secret-manager-tab"
+REPOSITORY_TAB_ID = "repository-tab"
 SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
 SERVICE_TEMPLATES_TAB_ID = "service-templates-tab"
 OVERVIEW_TAB_ID = "overview-tab"
@@ -122,7 +124,7 @@ class DashboardScreen(Screen):
         ("l", "toggle_app_logs", "Logs"),
         ("O", "open_terminal", "Open Terminal"),
         ("R", "reload_infrastructure", "Reload"),
-        Binding("c", "copy_model_example", "Copy Curl", show=False),
+        Binding("c", "copy_model_example", "Copy Curl", show=False, priority=True),
         Binding("enter", "reveal_secret", "Reveal Secret", show=False, priority=True),
         Binding(
             "ctrl+a",
@@ -189,6 +191,8 @@ class DashboardScreen(Screen):
                                 yield MonitorPanel(id="monitor-panel")
                             with TabPane("Models", id=MODELS_TAB_ID):
                                 yield ModelsPanel(id="models-panel")
+                            with TabPane("Repositories", id=REPOSITORY_TAB_ID):
+                                yield RepositoryPanel(id="repository-panel")
                             with TabPane(
                                 "Service Templates", id=SERVICE_TEMPLATES_TAB_ID
                             ):
@@ -264,19 +268,41 @@ class DashboardScreen(Screen):
         logs.selection = selection
         history = self.query_one(HistoryPanel)
         history.selection = selection
-        secret_manager = self.query_one(SecretManagerPanel)
-        secret_manager.selection = selection
-        firewall = self.query_one(FirewallPanel)
-        firewall.selection = selection
-        monitor = self.query_one(MonitorPanel)
-        monitor.selection = selection
-        models = self.query_one(ModelsPanel)
-        models.selection = selection
+        self._clear_lazy_root_panels()
         for templates in self.query(TemplatePanel):
             templates.selection = selection
         self._update_template_tabs(selection)
+        self._sync_active_root_panel()
         self._update_tui_panel(selection)
         self.refresh_bindings()
+
+    @on(TabbedContent.TabActivated, "#main-tabs")
+    def handle_main_tab_activated(self, _: TabbedContent.TabActivated) -> None:
+        self._sync_active_root_panel()
+
+    def _clear_lazy_root_panels(self) -> None:
+        self.query_one(SecretManagerPanel).selection = None
+        self.query_one(FirewallPanel).selection = None
+        self.query_one(MonitorPanel).selection = None
+        self.query_one(ModelsPanel).selection = None
+        self.query_one(RepositoryPanel).selection = None
+
+    def _sync_active_root_panel(self) -> None:
+        selection = self._current_selection
+        if not selection or selection.type != "root":
+            self._clear_lazy_root_panels()
+            return
+
+        tabs = self.query_one("#main-tabs", TabbedContent)
+        panel_by_tab = {
+            SECRET_MANAGER_TAB_ID: self.query_one(SecretManagerPanel),
+            FIREWALL_TAB_ID: self.query_one(FirewallPanel),
+            MONITOR_TAB_ID: self.query_one(MonitorPanel),
+            MODELS_TAB_ID: self.query_one(ModelsPanel),
+            REPOSITORY_TAB_ID: self.query_one(RepositoryPanel),
+        }
+        for tab_id, panel in panel_by_tab.items():
+            panel.selection = selection if tabs.active == tab_id else None
 
     def action_copy_model_example(self) -> None:
         tabs = self.query_one("#main-tabs", TabbedContent)
@@ -1111,6 +1137,10 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             MODELS_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
+            REPOSITORY_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(

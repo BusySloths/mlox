@@ -5,6 +5,7 @@ from typing import Any, ClassVar
 from mlox.infra import Bundle, Infrastructure
 from mlox.service import AbstractService
 from mlox.server import AbstractServer, ServerCapability
+from mlox.services.github.service import GithubRepoService
 
 
 @dataclass
@@ -300,3 +301,26 @@ def test_from_dict_accepts_injected_runtime_config_catalog(monkeypatch):
 
     assert result is fake_infra
     assert captured["configs"] == [config]
+
+
+def test_from_dict_accepts_legacy_string_boolean_service_fields():
+    server = make_server(DummyServer, "10.0.0.1")
+    service = GithubRepoService(
+        name="Github:demo",
+        service_config_id="github",
+        template="/tmp/github.yaml",
+        target_path="/repos",
+        link="https://github.com/acme/demo",
+        is_private=False,
+    )
+    bundle = Bundle(name="repo-bundle", server=server)
+    bundle.services = [service]
+    infra = make_infra(bundles=[bundle])
+    payload = infra.to_dict()
+    payload["bundles"][0]["services"][0]["is_private"] = "True"
+
+    restored = Infrastructure.from_dict(payload, configs=[])
+
+    restored_service = restored.bundles[0].services[0]
+    assert isinstance(restored_service, GithubRepoService)
+    assert restored_service.is_private is True

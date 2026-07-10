@@ -9,6 +9,7 @@ from mlox.application.use_cases import (
     models,
     monitor,
     project,
+    repositories,
     secrets,
     servers,
     services,
@@ -1222,6 +1223,229 @@ def test_monitor_describe_monitoring_reports_snapshot_failures():
     assert result.data["rows"][0]["message"] == (
         "Failed to load monitor metrics: collector unavailable"
     )
+
+
+def _repository_workspace(service, *, commit_calls=None):
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        get_server_connection=lambda: _Connection(),
+    )
+    bundle = SimpleNamespace(name="dev", server=server, services=[service])
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(bundles=[bundle]),
+        commit=lambda: commit_calls.append("commit")
+        if commit_calls is not None
+        else None,
+    )
+    return workspace, bundle
+
+
+def _repository_service(**overrides):
+    service = SimpleNamespace(
+        uuid="repo-1",
+        name="Repo",
+        repo_name="demo",
+        state="running",
+        capabilities={ServiceCapability.REPOSITORY},
+        is_private=False,
+        cloned=False,
+        get_url=lambda: "https://github.com/acme/demo",
+        get_repository_root=lambda: "/repos/demo",
+        repository_summary=lambda: {
+            "name": "demo",
+            "url": "https://github.com/acme/demo",
+            "root": "/repos/demo",
+            "private": False,
+            "cloned": False,
+            "state": "running",
+            "created": "",
+            "modified": "",
+            "deploy_keys_available": False,
+        },
+        get_deploy_keys=lambda: {},
+        check=lambda conn: {"cloned": False, "exists": False, "private": False},
+        list_repository_tree=lambda conn: [],
+        read_repository_file=lambda conn, path: "content",
+    )
+    for key, value in overrides.items():
+        setattr(service, key, value)
+    return service
+
+
+def test_repositories_describe_finds_repository_services():
+    service = _repository_service()
+    workspace, _ = _repository_workspace(service)
+
+    result = repositories.describe_repositories(workspace.infrastructure)
+
+    assert result.success
+    assert result.data["metrics"]["total"] == 1
+    assert result.data["repositories"][0]["id"] == "repo-1"
+    assert result.data["repositories"][0]["bundle"] == "dev"
+    assert result.data["repositories"][0]["server"] == "10.0.0.5"
+    assert result.data["repositories"][0]["url"] == "https://github.com/acme/demo"
+
+
+def test_repositories_get_deploy_keys_returns_private_keys_and_empty_public_keys():
+    private = _repository_service(
+        is_private=True,
+        get_deploy_keys=lambda: {"public": "ssh-rsa AAA"},
+    )
+    private_workspace, _ = _repository_workspace(private)
+    public = _repository_service(get_deploy_keys=lambda: {})
+    public_workspace, _ = _repository_workspace(public)
+
+    private_result = repositories.get_repository_deploy_keys(
+        private_workspace, "repo-1"
+    )
+    public_result = repositories.get_repository_deploy_keys(public_workspace, "repo-1")
+
+    assert private_result.success
+    assert private_result.data["keys"] == {"public": "ssh-rsa AAA"}
+    assert public_result.success
+    assert public_result.data["keys"] == {}
+
+
+def test_repositories_clone_and_pull_call_service_methods_and_commit():
+    calls = []
+    commits = []
+    service = _repository_service()
+    service.git_clone = lambda conn: calls.append("clone")
+    service.git_pull = lambda conn: calls.append("pull")
+    workspace, _ = _repository_workspace(service, commit_calls=commits)
+
+    clone_result = repositories.clone_repository(workspace, "repo-1")
+    pull_result = repositories.pull_repository(workspace, "repo-1")
+
+    assert clone_result.success
+    assert pull_result.success
+    assert calls == ["clone", "pull"]
+    assert commits == ["commit", "commit"]
+
+
+def test_repositories_clone_failure_reports_error_and_does_not_commit():
+    commits = []
+    service = _repository_service()
+
+    def fail_clone(conn):
+        raise RuntimeError(
+            "Private GitHub repository clone failed. Use Copy Deploy Keys."
+        )
+
+    service.git_clone = fail_clone
+    workspace, _ = _repository_workspace(service, commit_calls=commits)
+
+    result = repositories.clone_repository(workspace, "repo-1")
+
+    assert not result.success
+    assert "Copy Deploy Keys" in result.message
+    assert commits == []
+
+
+def test_repositories_refresh_normalizes_tree_and_filters_git():
+    service = _repository_service(
+        check=lambda conn: {"cloned": True, "exists": True, "private": False},
+        list_repository_tree=lambda conn: [
+            {"name": "demo", "path": "/repos/demo", "is_dir": True, "size": 0},
+            {"name": ".git", "path": "/repos/demo/.git", "is_dir": True, "size": 0},
+            {
+                "name": "config",
+                "path": "/repos/demo/.git/config",
+                "is_file": True,
+                "size": 12,
+            },
+            {
+                "name": "app.py",
+                "path": "/repos/demo/src/app.py",
+                "is_file": True,
+                "size": 20,
+                "modification_datetime": "2026-01-01 10:00:00",
+            },
+        ],
+    )
+    workspace, _ = _repository_workspace(service)
+
+    result = repositories.refresh_repository(workspace, "repo-1")
+
+    assert result.success
+    assert result.data["tree"] == [
+        {
+            "name": "app.py",
+            "path": "/repos/demo/src/app.py",
+            "display_path": "src/app.py",
+            "is_file": True,
+            "is_dir": False,
+            "size": 20,
+            "modification_datetime": "2026-01-01 10:00:00",
+        }
+    ]
+
+
+def test_repositories_refresh_skips_tree_for_uncloned_repositories():
+    calls = []
+    service = _repository_service(
+        check=lambda conn: {"cloned": False, "exists": False, "private": False},
+        list_repository_tree=lambda conn: calls.append("tree"),
+    )
+    workspace, _ = _repository_workspace(service)
+
+    result = repositories.refresh_repository(workspace, "repo-1")
+    read_result = repositories.read_repository_file(
+        workspace,
+        "repo-1",
+        "/repos/demo/README.md",
+    )
+
+    assert result.success
+    assert result.data["tree"] == []
+    assert result.data["repository"]["cloned"] is False
+    assert result.data["repository"]["message"] == "Repository is not cloned yet."
+    assert not read_result.success
+    assert read_result.message == "Repository is not cloned yet."
+    assert calls == []
+
+
+def test_repositories_read_file_validates_path_directory_and_size():
+    service = _repository_service(
+        check=lambda conn: {"cloned": True, "exists": True, "private": False},
+        list_repository_tree=lambda conn: [
+            {"name": "src", "path": "/repos/demo/src", "is_dir": True, "size": 0},
+            {
+                "name": "small.py",
+                "path": "/repos/demo/src/small.py",
+                "is_file": True,
+                "size": 5,
+            },
+            {
+                "name": "large.bin",
+                "path": "/repos/demo/large.bin",
+                "is_file": True,
+                "size": 999,
+            },
+        ],
+        read_repository_file=lambda conn, path: "print('ok')",
+    )
+    workspace, _ = _repository_workspace(service)
+
+    outside = repositories.read_repository_file(workspace, "repo-1", "/tmp/file")
+    directory = repositories.read_repository_file(workspace, "repo-1", "/repos/demo/src")
+    large = repositories.read_repository_file(
+        workspace,
+        "repo-1",
+        "/repos/demo/large.bin",
+        max_bytes=10,
+    )
+    small = repositories.read_repository_file(
+        workspace,
+        "repo-1",
+        "/repos/demo/src/small.py",
+    )
+
+    assert not outside.success
+    assert not directory.success
+    assert not large.success
+    assert small.success
+    assert small.data["content"] == "print('ok')"
 
 
 def test_models_list_models_fails_for_unknown_registry():

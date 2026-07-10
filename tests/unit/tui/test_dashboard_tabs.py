@@ -18,11 +18,13 @@ from mlox.application.result import OperationResult
 from mlox.service import ServiceCapability
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.project_actions import ProjectActions
+from mlox.tui.screens.dashboard.repository_panel import RepositoryPanel
 from mlox.tui.screens.dashboard.server_actions import ServerActions
 from mlox.tui.screens.dashboard.service_actions import ServiceActions
 from mlox.tui.screens.dashboard.secret_manager_panel import SecretManagerPanel
 from mlox.tui.screens.dashboard.template_panel import TemplatePanel
 from mlox.tui.screens.dashboard.tree import InfraTree
+from mlox.tui.widgets.file_browser import FileBrowser
 from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.screen import (
@@ -31,6 +33,7 @@ from mlox.tui.screens.dashboard.screen import (
     LOGS_TAB_ID,
     MODELS_TAB_ID,
     MONITOR_TAB_ID,
+    REPOSITORY_TAB_ID,
     SECRET_MANAGER_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
     SIDEBAR_STEP,
@@ -180,7 +183,7 @@ def _secret_detail_text(panel: SecretManagerPanel) -> str:
 
 async def _visible_tabs_for(
     selection: SelectionInfo,
-) -> tuple[str, str, str, str, str, str, str]:
+) -> tuple[str, str, str, str, str, str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
@@ -193,6 +196,7 @@ async def _visible_tabs_for(
         firewall_tab = tabs.get_tab(FIREWALL_TAB_ID)
         monitor_tab = tabs.get_tab(MONITOR_TAB_ID)
         models_tab = tabs.get_tab(MODELS_TAB_ID)
+        repository_tab = tabs.get_tab(REPOSITORY_TAB_ID)
         service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
         return (
@@ -201,6 +205,7 @@ async def _visible_tabs_for(
             firewall_tab.styles.display,
             monitor_tab.styles.display,
             models_tab.styles.display,
+            repository_tab.styles.display,
             service_tab.styles.display,
             logs_tab.styles.display,
         )
@@ -213,6 +218,7 @@ def test_root_selection_shows_project_tabs() -> None:
         firewall_display,
         monitor_display,
         models_display,
+        repository_display,
         service_display,
         logs_display,
     ) = asyncio.run(
@@ -224,6 +230,7 @@ def test_root_selection_shows_project_tabs() -> None:
     assert firewall_display == "block"
     assert monitor_display == "block"
     assert models_display == "block"
+    assert repository_display == "block"
     assert service_display == "none"
     assert logs_display == "none"
 
@@ -234,6 +241,11 @@ async def _copy_model_example_with_keybinding() -> str:
         tabs = app.query_one("#main-tabs", TabbedContent)
         tabs.active = MODELS_TAB_ID
         panel = app.query_one("#models-panel")
+        deadline = time.monotonic() + 2
+        while getattr(panel, "selection") is None:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for models panel activation.")
+            await pilot.pause(0.05)
         panel.example.text = "curl -k https://endpoint/invocations"
         await pilot.press("c")
         await pilot.pause()
@@ -409,10 +421,233 @@ def test_monitor_tab_shows_selected_service_settings_below_table() -> None:
     assert "Detailed monitor settings" in text
 
 
+class _RepositoryConnection:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+def _repository_service(**overrides):
+    service = SimpleNamespace(
+        uuid="repo-1",
+        name="Github:demo",
+        repo_name="demo",
+        state="running",
+        capabilities={ServiceCapability.REPOSITORY},
+        is_private=False,
+        cloned=True,
+        get_url=lambda: "https://github.com/acme/demo",
+        get_repository_root=lambda: "/repos/demo",
+        repository_summary=lambda: {
+            "name": "demo",
+            "url": "https://github.com/acme/demo",
+            "root": "/repos/demo",
+            "private": False,
+            "cloned": True,
+            "state": "running",
+            "created": "",
+            "modified": "2026-01-01T10:00:00",
+            "deploy_keys_available": False,
+        },
+        get_deploy_keys=lambda: {},
+        check=lambda conn: {"cloned": True, "exists": True, "private": False},
+        list_repository_tree=lambda conn: [
+            {"name": "demo", "path": "/repos/demo", "is_dir": True, "size": 0},
+            {
+                "name": "README.md",
+                "path": "/repos/demo/README.md",
+                "is_file": True,
+                "size": 6,
+            },
+        ],
+        read_repository_file=lambda conn, path: "# Demo",
+        git_clone=lambda conn: None,
+        git_pull=lambda conn: None,
+    )
+    for key, value in overrides.items():
+        setattr(service, key, value)
+    return service
+
+
+def _repository_bundle(service):
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        backend=["docker"],
+        get_server_connection=lambda: _RepositoryConnection(),
+    )
+    return SimpleNamespace(name="dev", server=server, services=[service])
+
+
+async def _repository_panel_rows_and_metrics() -> tuple[list[str], str]:
+    app = DashboardTestApp()
+    app.workspace.infrastructure.bundles = [_repository_bundle(_repository_service())]
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(RepositoryPanel)
+        app.query_one("#main-tabs", TabbedContent).active = REPOSITORY_TAB_ID
+        deadline = time.monotonic() + 2
+        while panel.table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for repository panel.")
+            await pilot.pause(0.05)
+        row = [str(cell) for cell in panel.table.get_row_at(0)]
+        metrics = "\n".join(
+            _render_text(app.query_one(selector, Static).content)
+            for selector in (
+                "#repository-metric-total",
+                "#repository-metric-cloned",
+                "#repository-metric-private",
+                "#repository-metric-available",
+            )
+        )
+        return row, metrics
+
+
+def test_repository_tab_renders_metrics_and_repository_table() -> None:
+    row, metrics = asyncio.run(_repository_panel_rows_and_metrics())
+
+    assert "demo" in row[0]
+    assert "dev" in row
+    assert "10.0.0.5" in row
+    assert "Repositories" in metrics
+    assert "Cloned" in metrics
+
+
+async def _repository_sync_button_state(cloned: bool) -> tuple[str, str]:
+    app = DashboardTestApp()
+    service = _repository_service(
+        cloned=cloned,
+        repository_summary=lambda: {
+            "name": "demo",
+            "url": "https://github.com/acme/demo",
+            "root": "/repos/demo",
+            "private": False,
+            "cloned": cloned,
+            "state": "running",
+            "created": "",
+            "modified": "",
+            "deploy_keys_available": False,
+        },
+        check=lambda conn: {"cloned": cloned, "exists": cloned, "private": False},
+    )
+    app.workspace.infrastructure.bundles = [_repository_bundle(service)]
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(RepositoryPanel)
+        app.query_one("#main-tabs", TabbedContent).active = REPOSITORY_TAB_ID
+        button = app.query_one("#sync-repository", Button)
+        browser = app.query_one("#repository-file-browser", FileBrowser)
+        deadline = time.monotonic() + 2
+        while not panel._selected_repository_id:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for repository selection.")
+            await pilot.pause(0.05)
+        deadline = time.monotonic() + 2
+        expected_text = (
+            "Select a file to view its content."
+            if cloned
+            else "Clone this repository to browse files."
+        )
+        while expected_text not in browser.viewer.text:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for repository refresh.")
+            await pilot.pause(0.05)
+        return str(button.label), browser.viewer.text
+
+
+def test_repository_sync_button_switches_between_clone_and_pull() -> None:
+    uncloned_label, uncloned_message = asyncio.run(
+        _repository_sync_button_state(cloned=False)
+    )
+    cloned_label, _ = asyncio.run(_repository_sync_button_state(cloned=True))
+
+    assert uncloned_label == "Clone"
+    assert "Clone this repository" in uncloned_message
+    assert cloned_label == "Pull"
+
+
+async def _copy_repository_deploy_keys() -> tuple[str, bool, bool]:
+    app = DashboardTestApp()
+    service = _repository_service(
+        is_private=True,
+        get_deploy_keys=lambda: {"public": "ssh-rsa AAA"},
+        repository_summary=lambda: {
+            "name": "demo",
+            "url": "https://github.com/acme/demo",
+            "root": "/repos/demo",
+            "private": True,
+            "cloned": False,
+            "state": "running",
+            "created": "",
+            "modified": "",
+            "deploy_keys_available": True,
+        },
+        check=lambda conn: {"cloned": False, "exists": False, "private": True},
+    )
+    app.workspace.infrastructure.bundles = [_repository_bundle(service)]
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(RepositoryPanel)
+        app.query_one("#main-tabs", TabbedContent).active = REPOSITORY_TAB_ID
+        button = app.query_one("#copy-repository-deploy-keys", Button)
+        deadline = time.monotonic() + 2
+        while not panel._selected_repository_id or not button.display or button.disabled:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for deploy key button.")
+            await pilot.pause(0.05)
+        panel.handle_copy_deploy_keys(Button.Pressed(button))
+        await pilot.pause(0.1)
+        return app.copied_text, button.display, button.disabled
+
+
+def test_repository_tab_copies_private_deploy_keys() -> None:
+    copied, display, disabled = asyncio.run(_copy_repository_deploy_keys())
+
+    assert display is True
+    assert disabled is False
+    assert copied == "public:\nssh-rsa AAA"
+
+
+async def _repository_file_viewer_text() -> str:
+    app = DashboardTestApp()
+    service = _repository_service()
+    app.workspace.infrastructure.bundles = [_repository_bundle(service)]
+
+    async with app.run_test() as pilot:
+        panel = app.query_one(RepositoryPanel)
+        app.query_one("#main-tabs", TabbedContent).active = REPOSITORY_TAB_ID
+        browser = app.query_one("#repository-file-browser", FileBrowser)
+        deadline = time.monotonic() + 2
+        while not browser.tree.root.children:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for repository tree.")
+            await pilot.pause(0.05)
+        entry = {
+            "path": "/repos/demo/README.md",
+            "display_path": "README.md",
+            "is_file": True,
+            "size": 6,
+        }
+        panel.handle_file_selected(FileBrowser.FileSelected(browser, entry["path"], entry))
+        deadline = time.monotonic() + 2
+        while "# Demo" not in browser.viewer.text:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for repository file content.")
+            await pilot.pause(0.05)
+        return browser.viewer.text
+
+
+def test_repository_file_browser_loads_selected_file_content() -> None:
+    assert asyncio.run(_repository_file_viewer_text()) == "# Demo"
+
+
 async def _secret_manager_panel_text() -> str:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
         deadline = time.monotonic() + 2
         while panel.table.row_count == 0:
             if time.monotonic() > deadline:
@@ -452,6 +687,7 @@ async def _secret_manager_rows() -> list[list[str]]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
         deadline = time.monotonic() + 2
         while panel.manager_table.row_count < 2:
             if time.monotonic() > deadline:
@@ -713,6 +949,29 @@ def test_dashboard_initially_shows_project_root_overview() -> None:
     assert server_tab_display == "block"
     assert "Infrastructure Overview" in overview
     assert "No infrastructure available." in overview
+
+
+async def _initial_lazy_root_panel_state() -> tuple[str, list[object]]:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.query_one(DashboardScreen)
+        tabs = screen.query_one("#main-tabs", TabbedContent)
+        panels = [
+            screen.query_one("#secret-manager-panel"),
+            screen.query_one("#firewall-panel"),
+            screen.query_one("#monitor-panel"),
+            screen.query_one("#models-panel"),
+            screen.query_one("#repository-panel"),
+        ]
+        return tabs.active, [getattr(panel, "selection") for panel in panels]
+
+
+def test_dashboard_does_not_eager_load_project_root_detail_tabs() -> None:
+    active_tab, selections = asyncio.run(_initial_lazy_root_panel_state())
+
+    assert active_tab == "overview-tab"
+    assert selections == [None, None, None, None, None]
 
 
 async def _project_actions_display_for(selection: SelectionInfo) -> bool:
@@ -1696,6 +1955,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
         firewall_display,
         monitor_display,
         models_display,
+        repository_display,
         service_display,
         logs_display,
     ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="bundle")))
@@ -1705,6 +1965,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
     assert firewall_display == "none"
     assert monitor_display == "none"
     assert models_display == "none"
+    assert repository_display == "none"
     assert service_display == "block"
     assert logs_display == "none"
 
@@ -1735,6 +1996,7 @@ def test_server_selection_hides_template_tabs() -> None:
         firewall_display,
         monitor_display,
         models_display,
+        repository_display,
         service_display,
         logs_display,
     ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="server")))
@@ -1744,6 +2006,7 @@ def test_server_selection_hides_template_tabs() -> None:
     assert firewall_display == "none"
     assert monitor_display == "none"
     assert models_display == "none"
+    assert repository_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
 
@@ -1755,6 +2018,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
         firewall_display,
         monitor_display,
         models_display,
+        repository_display,
         service_display,
         logs_display,
     ) = asyncio.run(_visible_tabs_for(SelectionInfo(type="service")))
@@ -1764,6 +2028,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
     assert firewall_display == "none"
     assert monitor_display == "none"
     assert models_display == "none"
+    assert repository_display == "none"
     assert service_display == "none"
     assert logs_display == "block"
 

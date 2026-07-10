@@ -40,6 +40,14 @@ def _set_github_deploy_key(service: GithubRepoService) -> None:
     service.deploy_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD"
 
 
+class _FailingGitExecutor:
+    def git_run(self, conn, args, *, working_dir, env=None):
+        raise RuntimeError("Permission denied (publickey).")
+
+    def fs_exists_dir(self, conn, path):
+        return False
+
+
 SERVICE_CASES = [
     (
         AirflowDockerService,
@@ -364,3 +372,53 @@ def test_service_get_secrets(service_cls, extra_kwargs, expected, post_init):
         post_init(service)
     logger.info(f"secrets for service {service.name}: {service.get_secrets()}")
     assert service.get_secrets() == expected
+
+
+def test_github_repository_service_returns_public_deploy_key():
+    service = GithubRepoService(
+        **BASE_KWARGS,
+        link="https://github.com/example/repo",
+        is_private=True,
+    )
+    assert service.get_deploy_keys() == {}
+
+    _set_github_deploy_key(service)
+
+    assert service.get_deploy_keys() == {
+        "public": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD"
+    }
+
+
+def test_github_private_clone_failure_keeps_service_running_with_deploy_key_hint():
+    service = GithubRepoService(
+        **BASE_KWARGS,
+        link="git@github.com:example/private-repo.git",
+        is_private=True,
+    )
+    service.exec = _FailingGitExecutor()
+    service.state = "running"
+    _set_github_deploy_key(service)
+
+    with pytest.raises(RuntimeError, match="Copy Deploy Keys"):
+        service.git_clone(object())
+
+    assert service.cloned is False
+    assert service.state == "running"
+
+
+def test_github_private_pull_failure_keeps_service_running_with_deploy_key_hint():
+    service = GithubRepoService(
+        **BASE_KWARGS,
+        link="git@github.com:example/private-repo.git",
+        is_private=True,
+    )
+    service.exec = _FailingGitExecutor()
+    service.state = "running"
+    service.cloned = True
+    _set_github_deploy_key(service)
+
+    with pytest.raises(RuntimeError, match="Copy Deploy Keys"):
+        service.git_pull(object())
+
+    assert service.cloned is True
+    assert service.state == "running"

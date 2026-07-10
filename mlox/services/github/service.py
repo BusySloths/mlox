@@ -7,6 +7,13 @@ from typing import Dict, Literal
 from mlox.service import AbstractRepositoryService, AbstractService
 
 
+PRIVATE_DEPLOY_KEY_FAILURE_HINT = (
+    "Most likely cause: the deploy key has not been added to the GitHub "
+    "repository. Use Copy Deploy Keys, add the public key in GitHub Settings > "
+    "Deploy keys, then retry."
+)
+
+
 # Configure logging (optional, but recommended)
 logging.basicConfig(
     level=logging.INFO,
@@ -108,6 +115,11 @@ class GithubRepoService(AbstractService, AbstractRepositoryService):
             return {}
         return {"github_deploy_key": {"key": self.deploy_key}}
 
+    def get_deploy_keys(self) -> Dict[str, str]:
+        if not self.deploy_key:
+            return {}
+        return {"public": self.deploy_key}
+
     def _generate_deploy_ssh_key(
         self,
         conn,
@@ -192,17 +204,33 @@ class GithubRepoService(AbstractService, AbstractRepositoryService):
 
         if err_code == 0:
             self.cloned = True
-            self.state = "running"
-        else:
-            self.state = "unknown"
+        self.state = "running"
         return err_code
+
+    def _private_repo_failure(self, action: Literal["clone", "pull"]) -> RuntimeError:
+        return RuntimeError(
+            f"Private GitHub repository {action} failed. "
+            f"{PRIVATE_DEPLOY_KEY_FAILURE_HINT}"
+        )
 
     def git_clone(self, conn) -> None:
         if self.is_private:
-            self._repo_with_deploy_key(conn, "clone")
+            err_code = self._repo_with_deploy_key(conn, "clone")
+            repo_exists = False
+            if err_code == 0:
+                repo_exists = self.exec.fs_exists_dir(
+                    conn, self.target_path + "/" + self.repo_name
+                )
+            if err_code != 0 or not repo_exists:
+                self.cloned = False
+                self.state = "running"
+                raise self._private_repo_failure("clone")
         else:
             self._repo_public(conn, "clone")
-        if self.exec.fs_exists_dir(conn, self.target_path + "/" + self.repo_name):
+            repo_exists = self.exec.fs_exists_dir(
+                conn, self.target_path + "/" + self.repo_name
+            )
+        if repo_exists:
             self.modified_timestamp = datetime.now().isoformat()
             self.created_timestamp = datetime.now().isoformat()
             self.cloned = True
@@ -212,7 +240,10 @@ class GithubRepoService(AbstractService, AbstractRepositoryService):
 
     def git_pull(self, conn) -> None:
         if self.is_private:
-            self._repo_with_deploy_key(conn, "pull")
+            err_code = self._repo_with_deploy_key(conn, "pull")
+            if err_code != 0:
+                self.state = "running"
+                raise self._private_repo_failure("pull")
         else:
             self._repo_public(conn, "pull")
         self.modified_timestamp = datetime.now().isoformat()
