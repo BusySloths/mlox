@@ -871,6 +871,13 @@ EnableFirewallDialog {
   border: round #69b7ffff;
 }
 
+#copy-secret {
+  width: auto;
+  margin-left: 1;
+  background: #186c6bff;
+  border: round #57d5d2ff;
+}
+
 #collect-service-secrets {
   width: auto;
   margin-left: 1;

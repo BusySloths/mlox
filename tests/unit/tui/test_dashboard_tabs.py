@@ -1129,6 +1129,33 @@ def test_secret_manager_table_enter_reveals_selected_secret() -> None:
     assert '"password"' not in rendered
 
 
+async def _copy_selected_secret() -> str:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(SecretManagerPanel)
+        app.query_one("#main-tabs", TabbedContent).active = SECRET_MANAGER_TAB_ID
+        deadline = time.monotonic() + 2
+        while panel.table.row_count < 2:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret-manager panel.")
+            await pilot.pause(0.05)
+
+        panel.table.cursor_coordinate = (1, 0)
+        app.query_one("#copy-secret", Button).press()
+        deadline = time.monotonic() + 2
+        while not app.copied_text:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for copied secret.")
+            await pilot.pause(0.05)
+        return app.copied_text
+
+
+def test_secret_manager_copy_button_copies_selected_secret() -> None:
+    copied = asyncio.run(_copy_selected_secret())
+
+    assert copied == '{\n  "password": "secret-value"\n}'
+
+
 async def _initial_dashboard_overview() -> tuple[str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:

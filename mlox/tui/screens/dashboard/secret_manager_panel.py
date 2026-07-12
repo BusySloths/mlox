@@ -148,6 +148,7 @@ class SecretManagerPanel(Container):
             with Horizontal(id="secret-manager-actions"):
                 yield Button("Add Secret", id="add-secret", variant="success")
                 yield Button("Update", id="update-secret")
+                yield Button("Copy Secret", id="copy-secret")
                 yield Button(
                     "Collect Service Secrets",
                     id="collect-service-secrets",
@@ -440,6 +441,10 @@ class SecretManagerPanel(Container):
             return
         self._load_secret_for_edit(name)
 
+    @on(Button.Pressed, "#copy-secret")
+    def handle_copy_secret_pressed(self, _: Button.Pressed) -> None:
+        self._copy_selected_secret()
+
     def _reveal_secret(self, name: str) -> None:
         manager_id = self._selected_manager_id
         if not manager_id or not name:
@@ -499,6 +504,46 @@ class SecretManagerPanel(Container):
             group="secret-manager-edit",
         )
 
+    def _copy_selected_secret(self) -> None:
+        name = self._selected_secret_name()
+        manager_id = self._selected_manager_id
+        if not manager_id or not name:
+            self.notify("No secret selected.", severity="warning")
+            return
+
+        cache_key = (manager_id, name)
+        if self._displayed_secret == cache_key and self.detail_editor.display:
+            self._copy_secret_text(name, self.detail_editor.text)
+            return
+        if cache_key in self._revealed:
+            self._copy_secret_value(name, self._revealed[cache_key])
+            return
+
+        self._show_detail_panel(
+            Panel(
+                Text(f"Loading '{name}' for copy..."),
+                title=name,
+                border_style="yellow",
+            )
+        )
+        workspace = getattr(self.app, "workspace", None)
+
+        def load_value() -> None:
+            result = reveal_secret(workspace, manager_id, name)
+            self.app.call_from_thread(
+                self._copy_secret_from_result,
+                manager_id,
+                name,
+                result,
+            )
+
+        self.app.run_worker(
+            load_value,
+            thread=True,
+            exclusive=True,
+            group="secret-manager-copy",
+        )
+
     def _show_secret_result(self, manager_id: str, name: str, result) -> None:
         if manager_id != self._selected_manager_id:
             return
@@ -527,6 +572,24 @@ class SecretManagerPanel(Container):
         self._revealed[(manager_id, name)] = value
         self._show_secret_value(name, value)
         self.detail_editor.focus()
+
+    def _copy_secret_from_result(self, manager_id: str, name: str, result) -> None:
+        if manager_id != self._selected_manager_id:
+            return
+        if not result.success:
+            self._show_secret_result(manager_id, name, result)
+            return
+        value = (result.data or {}).get("value")
+        self._revealed[(manager_id, name)] = value
+        self._show_secret_value(name, value)
+        self._copy_secret_value(name, value)
+
+    def _copy_secret_value(self, name: str, value: Any) -> None:
+        self._copy_secret_text(name, self._format_secret_value(value))
+
+    def _copy_secret_text(self, name: str, text: str) -> None:
+        self.app.copy_to_clipboard(text)
+        self.notify(f"Copied secret '{name}'.")
 
     def _open_secret_dialog(
         self,
@@ -774,6 +837,7 @@ class SecretManagerPanel(Container):
         has_secret = bool(self._secret_names)
         self.query_one("#add-secret", Button).disabled = not has_manager
         self.query_one("#update-secret", Button).disabled = not has_secret
+        self.query_one("#copy-secret", Button).disabled = not has_secret
         self.query_one("#collect-service-secrets", Button).disabled = (
             not has_manager or self._collecting_service_secrets
         )
