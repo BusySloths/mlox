@@ -26,6 +26,10 @@ import urllib.request
 from typing import Any, Dict
 from dataclasses import dataclass, field
 
+from mlox.secret_manager import (
+    SECRET_MANAGER_KEYFILE_ENV,
+    SECRET_MANAGER_KEYFILE_PW_ENV,
+)
 from mlox.service import (
     AbstractService,
     AbstractWebUIService,
@@ -57,6 +61,8 @@ class AirflowDockerService(
         default="9d54873d8b53466dbcfd00a2bb9a104caa8071143f864aa88c36d3f5a8c8615f",
         init=False,
     )
+    workflow_secret_manager_uuid: str | None = field(default=None, init=False)
+    workflow_secret_manager_env: Dict[str, str] = field(default_factory=dict, init=False)
     compose_service_names: Dict[str, str] = field(
         init=False,
         default_factory=lambda: {
@@ -121,6 +127,7 @@ class AirflowDockerService(
             conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}"
         )
         self.exec.fs_append_line(conn, env_path, "_AIRFLOW_LOAD_EXAMPLES=false")
+        self._write_workflow_secret_manager_env(conn, env_path)
         self.service_urls["Airflow UI"] = base_url
         self.service_ports["Airflow Webserver"] = int(self.port)
 
@@ -228,6 +235,51 @@ class AirflowDockerService(
                 }
             )
         return workflows
+
+    def set_workflow_secret_manager_env(
+        self,
+        conn,
+        *,
+        manager_uuid: str,
+        encrypted_keyfile: str,
+        keyfile_password: str,
+    ) -> None:
+        """Expose a secret-manager keyfile to DAGs through Airflow env vars."""
+
+        self.workflow_secret_manager_uuid = manager_uuid
+        self.workflow_secret_manager_env = {
+            SECRET_MANAGER_KEYFILE_ENV: encrypted_keyfile,
+            SECRET_MANAGER_KEYFILE_PW_ENV: keyfile_password,
+        }
+        env_path = f"{self.target_path}/{self.target_docker_env}"
+        self._write_workflow_secret_manager_env(conn, env_path)
+        self.compose_up(conn)
+
+    def _write_workflow_secret_manager_env(self, conn, env_path: str) -> None:
+        if not self.workflow_secret_manager_env:
+            return
+        managed = {
+            f"_{SECRET_MANAGER_KEYFILE_ENV}": self.workflow_secret_manager_env.get(
+                SECRET_MANAGER_KEYFILE_ENV,
+                "",
+            ),
+            f"_{SECRET_MANAGER_KEYFILE_PW_ENV}": self.workflow_secret_manager_env.get(
+                SECRET_MANAGER_KEYFILE_PW_ENV,
+                "",
+            ),
+        }
+        existing = ""
+        try:
+            existing = str(self.exec.fs_read_file(conn, env_path, format="string") or "")
+        except Exception:
+            existing = ""
+        lines = [
+            line
+            for line in existing.splitlines()
+            if not any(line.startswith(f"{key}=") for key in managed)
+        ]
+        lines.extend(f"{key}={value}" for key, value in managed.items())
+        self.exec.fs_write_file(conn, env_path, "\n".join(lines) + "\n")
 
     def _latest_dag_run(self, dag_id: str) -> dict[str, Any]:
         encoded_dag_id = urllib.parse.quote(dag_id, safe="")

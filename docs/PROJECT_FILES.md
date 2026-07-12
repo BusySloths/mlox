@@ -58,6 +58,11 @@ workspace.use_embedded_secret_manager()
 Embedded storage cannot export an application keyfile. An active secret-manager
 service cannot be removed until another manager is selected.
 
+For OpenBao, application keyfiles are separate renewable credentials for the
+same project-level KV mount, not separate per-application secret namespaces. A
+secret saved in the MLOX Secret Manager tab for an OpenBao service is therefore
+shared with applications that receive keyfiles for that same OpenBao service.
+
 ## Data-source model
 
 Every project has an active data-source record. Initially it is:

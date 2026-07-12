@@ -1302,6 +1302,267 @@ def test_workflows_describe_workflows_reports_list_failures():
     assert result.data["workflows_by_orchestrator"]["airflow-1"] == []
 
 
+def test_workflows_add_repository_sets_orchestrator_and_dag_path():
+    repo_service = SimpleNamespace(
+        uuid="repo-1",
+        name="Github:old",
+        repo_name="demo",
+        target_path="/repos",
+        orchestrator_uuid=None,
+        cloned=True,
+        git_clone=lambda conn: (_ for _ in ()).throw(
+            AssertionError("already cloned")
+        ),
+        repository_summary=lambda: {
+            "name": "demo",
+            "root": "/airflow/dags/demo",
+            "url": "https://github.com/acme/demo",
+            "private": False,
+            "cloned": True,
+        },
+    )
+    orchestrator = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        path_dags="/airflow/dags",
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+    )
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        get_server_connection=lambda: _Connection(),
+    )
+    bundle = SimpleNamespace(name="prod", server=server, services=[orchestrator])
+    infra = SimpleNamespace(bundles=[bundle])
+    calls = []
+
+    def add_service_from_config(config, **kwargs):
+        calls.append(("add", config, kwargs))
+        bundle.services.append(repo_service)
+        return OperationResult(True, 0, "added", {"service": repo_service})
+
+    def setup_service(**kwargs):
+        calls.append(("setup", kwargs))
+        return OperationResult(True, 0, "setup")
+
+    workspace = SimpleNamespace(
+        infrastructure=infra,
+        add_service_from_config=add_service_from_config,
+        setup_service=setup_service,
+        commit=lambda: calls.append(("commit",)),
+    )
+    config = SimpleNamespace(id="github-repo-0.1-beta-docker")
+
+    result = workflows.add_workflow_repository(
+        workspace,
+        "airflow-1",
+        {
+            "${GITHUB_LINK}": "https://github.com/acme/demo.git",
+            "${GITHUB_NAME}": "demo",
+            "${GITHUB_PRIVATE}": "False",
+        },
+        config_loader=lambda template_id: config,
+    )
+
+    assert result.success
+    assert repo_service.name == "demo [Airflow DAG]"
+    assert repo_service.target_path == "/airflow/dags"
+    assert repo_service.orchestrator_uuid == "airflow-1"
+    assert calls[0] == (
+        "add",
+        config,
+        {
+            "server_ip": "10.0.0.5",
+            "params": {
+                "${GITHUB_LINK}": "https://github.com/acme/demo.git",
+                "${GITHUB_NAME}": "demo",
+                "${GITHUB_PRIVATE}": "False",
+            },
+        },
+    )
+    assert calls[1] == ("setup", {"name": "demo [Airflow DAG]"})
+
+
+def test_workflows_add_repository_suffixes_duplicate_final_name():
+    repo_service = SimpleNamespace(
+        uuid="repo-2",
+        name="Github:old",
+        repo_name="demo",
+        target_path="/repos",
+        orchestrator_uuid=None,
+        cloned=True,
+        repository_summary=lambda: {
+            "name": "demo",
+            "root": "/airflow/dags/demo",
+            "url": "https://github.com/acme/demo",
+            "private": False,
+            "cloned": True,
+        },
+    )
+    existing_repo = SimpleNamespace(
+        uuid="repo-1",
+        name="demo [Airflow DAG]",
+        orchestrator_uuid="airflow-1",
+    )
+    orchestrator = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        path_dags="/airflow/dags",
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+    )
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        get_server_connection=lambda: _Connection(),
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=server,
+        services=[orchestrator, existing_repo],
+    )
+    infra = SimpleNamespace(bundles=[bundle])
+    calls = []
+
+    def add_service_from_config(config, **kwargs):
+        bundle.services.append(repo_service)
+        return OperationResult(True, 0, "added", {"service": repo_service})
+
+    def setup_service(**kwargs):
+        calls.append(("setup", kwargs))
+        return OperationResult(True, 0, "setup")
+
+    workspace = SimpleNamespace(
+        infrastructure=infra,
+        add_service_from_config=add_service_from_config,
+        setup_service=setup_service,
+        commit=lambda: calls.append(("commit",)),
+    )
+
+    result = workflows.add_workflow_repository(
+        workspace,
+        "airflow-1",
+        {
+            "${GITHUB_LINK}": "https://github.com/acme/demo.git",
+            "${GITHUB_NAME}": "demo",
+            "${GITHUB_PRIVATE}": "False",
+        },
+        config_loader=lambda template_id: SimpleNamespace(id=template_id),
+    )
+
+    assert result.success
+    assert repo_service.name == "demo [Airflow DAG]_0"
+    assert calls[0] == ("setup", {"name": "demo [Airflow DAG]_0"})
+
+
+def test_workflows_expose_secret_manager_persists_orchestrator_env():
+    class ExportableManager:
+        supports_keyfile_export = True
+
+        def is_working(self):
+            return True
+
+        def get_access_secrets(self):
+            return {"token": "secret"}
+
+    captured = {}
+    orchestrator = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+        set_workflow_secret_manager_env=lambda conn, **kwargs: captured.update(kwargs),
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(
+            ip="10.0.0.5",
+            get_server_connection=lambda: _Connection(),
+        ),
+        services=[orchestrator],
+    )
+    descriptor = SimpleNamespace(
+        id="manager-1",
+        name="OpenBao",
+        kind="service",
+        is_available=True,
+        supports_keyfile_export=True,
+        manager=ExportableManager(),
+        service=None,
+    )
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(bundles=[bundle]),
+        probe_secret_manager=lambda manager_id: descriptor,
+        commit=lambda: captured.update({"committed": True}),
+    )
+
+    result = workflows.expose_secret_manager_to_workflow_orchestrator(
+        workspace,
+        "airflow-1",
+        "manager-1",
+    )
+
+    assert result.success
+    assert captured["manager_uuid"] == "manager-1"
+    assert captured["encrypted_keyfile"]
+    assert captured["keyfile_password"]
+    assert captured["committed"] is True
+    assert result.data["env"] == {
+        "MLOX_SECRET_MANAGER_KEYFILE": "hidden",
+        "MLOX_SECRET_MANAGER_KEYFILE_PW": "hidden",
+    }
+
+
+def test_workflows_secret_manager_options_filter_to_keyfile_exportable():
+    descriptors = [
+        SimpleNamespace(id="embedded", name="Embedded", kind="embedded"),
+        SimpleNamespace(id="manager-1", name="OpenBao", kind="service"),
+    ]
+    probed = {
+        "embedded": SimpleNamespace(
+            id="embedded",
+            name="Embedded",
+            kind="embedded",
+            is_available=True,
+            supports_keyfile_export=False,
+        ),
+        "manager-1": SimpleNamespace(
+            id="manager-1",
+            name="OpenBao",
+            kind="service",
+            is_available=True,
+            supports_keyfile_export=True,
+        ),
+    }
+    orchestrator = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        workflow_secret_manager_uuid="manager-1",
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[orchestrator],
+    )
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(bundles=[bundle]),
+        list_secret_managers=lambda: descriptors,
+        probe_secret_manager=lambda manager_id: probed[manager_id],
+    )
+
+    result = workflows.describe_workflow_secret_managers(workspace, "airflow-1")
+
+    assert result.success
+    assert result.data["managers"] == [
+        {
+            "id": "manager-1",
+            "name": "OpenBao",
+            "kind": "service",
+            "available": True,
+            "supports_keyfile_export": True,
+            "selected": True,
+            "message": "",
+        }
+    ]
+
+
 def _repository_workspace(service, *, commit_calls=None):
     server = SimpleNamespace(
         ip="10.0.0.5",

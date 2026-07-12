@@ -12,7 +12,15 @@ from types import SimpleNamespace
 from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.containers import Container
-from textual.widgets import Button, Input, SelectionList, Static, TabbedContent, TextArea
+from textual.widgets import (
+    Button,
+    Input,
+    Select,
+    SelectionList,
+    Static,
+    TabbedContent,
+    TextArea,
+)
 
 from mlox.application.result import OperationResult
 from mlox.service import ServiceCapability
@@ -488,6 +496,135 @@ def test_workflow_tab_shows_orchestrators_and_dags() -> None:
     assert "success" in dag_text
 
 
+async def _wait_for_widget(app, selector: str, widget_type, pilot):
+    deadline = time.monotonic() + 2
+    while True:
+        if time.monotonic() > deadline:
+            raise AssertionError(f"Timed out waiting for {selector}.")
+        await pilot.pause(0.05)
+        try:
+            return app.screen_stack[-1].query_one(selector, widget_type)
+        except Exception:
+            continue
+
+
+async def _workflow_add_repo_dialog_title() -> str:
+    app = DashboardTestApp()
+    workflow_service = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        path_dags="/airflow/dags",
+        service_config_id="airflow",
+        state="running",
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+        service_urls={"Airflow UI": "https://example.test:8080"},
+        list_workflows=lambda: [],
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[workflow_service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="root"))
+        screen.query_one("#main-tabs", TabbedContent).active = WORKFLOW_TAB_ID
+        table = app.query_one("#workflow-orchestrator-table")
+        deadline = time.monotonic() + 2
+        while table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for workflow orchestrator.")
+            await pilot.pause(0.05)
+        app.query_one("#add-workflow-repo", Button).press()
+        title = await _wait_for_widget(
+            app,
+            "#template-setup-title",
+            Static,
+            pilot,
+        )
+        return str(title.render())
+
+
+def test_workflow_tab_add_repo_opens_github_form() -> None:
+    assert asyncio.run(_workflow_add_repo_dialog_title()) == "Add GitHub Repository"
+
+
+async def _workflow_secret_manager_modal_selection() -> tuple[str, bool]:
+    app = DashboardTestApp()
+    workflow_service = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        path_dags="/airflow/dags",
+        workflow_secret_manager_uuid="manager-1",
+        service_config_id="airflow",
+        state="running",
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+        service_urls={"Airflow UI": "https://example.test:8080"},
+        list_workflows=lambda: [],
+    )
+    bundle = SimpleNamespace(
+        name="prod",
+        server=SimpleNamespace(ip="10.0.0.5"),
+        services=[workflow_service],
+    )
+    descriptors = [
+        SimpleNamespace(id="manager-1", name="OpenBao", kind="service"),
+    ]
+    probed = SimpleNamespace(
+        id="manager-1",
+        name="OpenBao",
+        kind="service",
+        is_available=True,
+        supports_keyfile_export=True,
+        manager=SimpleNamespace(),
+        service=None,
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+    app.workspace.list_secret_managers = lambda: descriptors
+    app.workspace.probe_secret_manager = lambda manager_id: probed
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="root"))
+        screen.query_one("#main-tabs", TabbedContent).active = WORKFLOW_TAB_ID
+        table = app.query_one("#workflow-orchestrator-table")
+        deadline = time.monotonic() + 2
+        while table.row_count == 0:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for workflow orchestrator.")
+            await pilot.pause(0.05)
+        app.query_one("#expose-workflow-secret-manager", Button).press()
+        deadline = time.monotonic() + 2
+        while True:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for secret manager modal.")
+            await pilot.pause(0.05)
+            try:
+                screen = app.screen_stack[-1]
+                select = screen.query_one(
+                    "#workflow-secret-manager-select",
+                    Select,
+                )
+                button = screen.query_one(
+                    "#confirm-workflow-secret-manager",
+                    Button,
+                )
+                if select.value is Select.BLANK:
+                    continue
+                return str(select.value), button.disabled
+            except Exception:
+                continue
+
+
+def test_workflow_tab_secret_manager_modal_lists_eligible_managers() -> None:
+    selected, disabled = asyncio.run(_workflow_secret_manager_modal_selection())
+
+    assert selected == "manager-1"
+    assert disabled is False
+
+
 class _RepositoryConnection:
     def __enter__(self):
         return self
@@ -674,7 +811,7 @@ def test_repository_tab_copies_private_deploy_keys() -> None:
 
     assert display is True
     assert disabled is False
-    assert copied == "public:\nssh-rsa AAA"
+    assert copied == "ssh-rsa AAA"
 
 
 async def _repository_file_viewer_text() -> str:

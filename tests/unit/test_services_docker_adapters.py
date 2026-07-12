@@ -1304,6 +1304,63 @@ def test_airflow_list_workflows_falls_back_to_v1_basic_auth(conn, monkeypatch):
     ]
 
 
+def test_airflow_set_workflow_secret_manager_env_upserts_env_and_restarts(conn):
+    service = _set_exec(
+        AirflowDockerService(
+            **BASE,
+            path_dags="/data/dags",
+            path_output="/data/output",
+            ui_user="airflow",
+            ui_pw="airflowpw",
+            port="8080",
+        ),
+        FakeExec(),
+    )
+    service.setup(conn)
+    env_path = "/tmp/stack/service.env"
+    service.exec.files[env_path] = (
+        "_AIRFLOW_OUT_PORT=8080\n"
+        "_MLOX_SECRET_MANAGER_KEYFILE=old\n"
+        "_MLOX_SECRET_MANAGER_KEYFILE_PW=old\n"
+    )
+
+    service.set_workflow_secret_manager_env(
+        conn,
+        manager_uuid="manager-1",
+        encrypted_keyfile="encrypted-keyfile",
+        keyfile_password="keyfile-password",
+    )
+
+    assert service.workflow_secret_manager_uuid == "manager-1"
+    assert service.workflow_secret_manager_env == {
+        "MLOX_SECRET_MANAGER_KEYFILE": "encrypted-keyfile",
+        "MLOX_SECRET_MANAGER_KEYFILE_PW": "keyfile-password",
+    }
+    assert service.exec.files[env_path] == (
+        "_AIRFLOW_OUT_PORT=8080\n"
+        "_MLOX_SECRET_MANAGER_KEYFILE=encrypted-keyfile\n"
+        "_MLOX_SECRET_MANAGER_KEYFILE_PW=keyfile-password\n"
+    )
+    assert (
+        "docker_up",
+        ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),
+        {},
+    ) in service.exec.calls
+
+
+def test_airflow_compose_templates_pass_secret_manager_env():
+    for filename in (
+        "docker-compose-airflow-2.9.2.yaml",
+        "docker-compose-airflow-3.1.3.yaml",
+    ):
+        content = Path("mlox/services/airflow", filename).read_text()
+        assert "MLOX_SECRET_MANAGER_KEYFILE: ${_MLOX_SECRET_MANAGER_KEYFILE:-}" in content
+        assert (
+            "MLOX_SECRET_MANAGER_KEYFILE_PW: ${_MLOX_SECRET_MANAGER_KEYFILE_PW:-}"
+            in content
+        )
+
+
 def test_litellm_setup_config_and_check_states(conn):
     service = _set_exec(
         LiteLLMDockerService(

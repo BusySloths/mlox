@@ -47,7 +47,7 @@ class RepositoryPanel(Static):
                 yield Static("Project Repositories", id="repository-title")
                 yield Button("Refresh", id="refresh-repository")
                 yield Button("Clone", id="sync-repository")
-                yield Button("Copy Deploy Keys", id="copy-repository-deploy-keys")
+                yield Button("Copy Deploy Key", id="copy-repository-deploy-keys")
             table = DataTable(id="repository-table")
             table.cursor_type = "row"
             table.add_columns(
@@ -135,9 +135,9 @@ class RepositoryPanel(Static):
                 severity="warning",
             )
             return
-        payload = "\n\n".join(f"{label}:\n{value}" for label, value in keys.items())
+        payload = self._deploy_key_clipboard_payload(keys)
         self.app.copy_to_clipboard(payload)
-        self.notify("Repository deploy keys copied.")
+        self.notify("Repository deploy key copied.")
 
     @on(FileBrowser.FileSelected, "#repository-file-browser")
     def handle_file_selected(self, event: FileBrowser.FileSelected) -> None:
@@ -392,6 +392,14 @@ class RepositoryPanel(Static):
             if str(row.get("id") or "") == self._selected_repository_id:
                 return row
         return None
+
+    def _deploy_key_clipboard_payload(self, keys: dict[str, Any]) -> str:
+        public_key = str(keys.get("public") or "").strip()
+        if public_key:
+            return public_key
+        return "\n\n".join(
+            f"{label}:\n{str(value).strip()}" for label, value in keys.items()
+        )
 
     def _update_metrics(self) -> None:
         total = len(self._rows)

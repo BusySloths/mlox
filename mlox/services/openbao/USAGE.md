@@ -53,6 +53,15 @@ access.
 Application credentials are periodic renewable tokens. They can run indefinitely
 only if the application renews them before each selected period expires.
 
+Application credentials are not separate secret namespaces in the current mlox
+OpenBao integration. They are separate tokens for the same shared project KV
+mount. A secret created from the mlox Secret Manager tab is saved under the
+configured `mount_path` and can be read by any application token/keyfile issued
+for that OpenBao service.
+
+Use separate OpenBao services or mounts if different workloads must not share
+the same project-level secret set.
+
 ## External clients
 
 A slim client only needs the OpenBao address, scoped token, mount path, and TLS
@@ -62,6 +71,16 @@ Secrets are stored in KV v2 paths under:
 
 ```text
 /<mount_path>/data/<secret-name>
+```
+
+DAGs or other workloads that receive an exported keyfile through environment
+variables can use:
+
+```python
+from mlox.secret_manager import load_secret_manager_from_env
+
+sm = load_secret_manager_from_env()
+secret = sm.load_secret("<secret-name>")
 ```
 
 If a downloaded application token expires, renew it from the application before

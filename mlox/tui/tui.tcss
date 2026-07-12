@@ -374,11 +374,24 @@ Button {
   text-style: bold;
 }
 
+#add-workflow-repo,
+#expose-workflow-secret-manager,
 #refresh-workflows {
   width: auto;
-  min-width: 20;
+  min-width: 18;
+  margin-left: 1;
   background: #24406fff;
   border: round #69b7ffff;
+}
+
+#add-workflow-repo {
+  background: #0e9455ff;
+  border: round #8fe388ff;
+}
+
+#expose-workflow-secret-manager {
+  background: #3b3f8fff;
+  border: round #9aa7ffff;
 }
 
 #workflow-browser {
@@ -397,6 +410,45 @@ Button {
   width: 19fr;
   height: 1fr;
   border: round #1bd6f3ff;
+}
+
+WorkflowSecretManagerDialog {
+  align: center middle;
+}
+
+#workflow-secret-manager-dialog {
+  width: 78;
+  height: auto;
+  padding: 1 2;
+  background: #17214aff;
+  border: round #69b7ffff;
+}
+
+#workflow-secret-manager-title {
+  width: 1fr;
+  height: 1;
+  content-align: center middle;
+  text-style: bold;
+  color: #f4e223ff;
+}
+
+#workflow-secret-manager-description {
+  width: 1fr;
+  height: auto;
+  margin-top: 1;
+  margin-bottom: 1;
+  color: #a6c9bdff;
+}
+
+#workflow-secret-manager-select {
+  width: 1fr;
+  height: 3;
+  margin-bottom: 1;
+}
+
+#workflow-secret-manager-actions {
+  height: 3;
+  align-horizontal: center;
 }
 
 ModelCallResultDialog {

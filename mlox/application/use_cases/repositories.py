@@ -281,6 +281,10 @@ def _repository_row(
         "exists": exists if isinstance(exists, bool) else None,
         "url": str(summary.get("url") or ""),
         "root": str(summary.get("root") or _repository_root(service)),
+        "orchestrator_uuid": summary.get(
+            "orchestrator_uuid",
+            getattr(service, "orchestrator_uuid", None),
+        ),
         "created": str(summary.get("created") or ""),
         "modified": str(summary.get("modified") or ""),
         "deploy_keys_available": bool(deploy_keys),
@@ -300,6 +304,7 @@ def _repository_summary(service) -> dict[str, Any]:
         "name": str(getattr(service, "repo_name", "") or getattr(service, "name", "-")),
         "url": str(url or ""),
         "root": _repository_root(service),
+        "orchestrator_uuid": getattr(service, "orchestrator_uuid", None),
         "private": bool(getattr(service, "is_private", False)),
         "cloned": bool(getattr(service, "cloned", False)),
         "state": str(getattr(service, "state", "unknown")),

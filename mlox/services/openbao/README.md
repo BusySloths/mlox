@@ -109,6 +109,38 @@ password. For OpenBao, keyfiles are generated for named applications. mlox store
 only each application's token accessor and metadata, so the root-backed UI can
 renew or revoke that application's credential without storing the token value.
 
+## Secret Scope And Application Access
+
+OpenBao applications in mlox are credentials, not separate secret namespaces.
+When the mlox Secret Manager tab is pointed at an OpenBao service, creating or
+updating a secret writes it into the shared mlox KV mount configured by
+`mount_path` (`secret` by default). Application keyfiles receive separate
+renewable tokens, but those tokens use the same mlox KV policy and can read the
+same shared project secrets.
+
+For example, a secret created in the Secret Manager tab as `warehouse_password`
+is written below:
+
+```text
+/v1/<mount_path>/data/warehouse_password
+```
+
+Any application that receives a keyfile for the same OpenBao service can load
+that value through the generic helper:
+
+```python
+from mlox.secret_manager import load_secret_manager_from_env
+
+sm = load_secret_manager_from_env()
+secret = sm.load_secret("warehouse_password")
+```
+
+This is intentional for the current project-level secret model: one active
+secret manager stores shared project secrets, while application credentials
+control which workloads can access that manager. They do not isolate secrets per
+application name. Use separate OpenBao services, mounts, or future policy
+support if hard per-application secret isolation is required.
+
 Secrets can be added, listed, and read directly from the mlox UI. The client uses
 KV v2 paths, so a secret named `example` is written to:
 
@@ -193,6 +225,9 @@ and the bootstrap call is container-local. mlox clients also default
   access instead of the root token.
 - Application keyfile tokens are periodic renewable tokens. They can keep
   running indefinitely if they are renewed before each selected period expires.
+- Application keyfile tokens access the shared mlox KV mount. A secret created
+  in the mlox Secret Manager tab is therefore visible to workloads using
+  keyfiles from the same OpenBao service.
 - If a keyfile token expires, API calls made with that keyfile fail with
   OpenBao's token-expired/permission error. Rotate and download a new keyfile.
 - Rotating the service token does not update already downloaded keyfiles because

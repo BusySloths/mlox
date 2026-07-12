@@ -144,6 +144,7 @@ class AbstractRepositoryService(ABC):
 
     capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.REPOSITORY}
     repo_name: str = field(default="", init=False)
+    orchestrator_uuid: str | None = field(default=None, init=False)
     created_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
     modified_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
 
@@ -178,6 +179,7 @@ class AbstractRepositoryService(ABC):
             "root": self.get_repository_root(),
             "private": bool(getattr(self, "is_private", False)),
             "cloned": bool(getattr(self, "cloned", False)),
+            "orchestrator_uuid": getattr(self, "orchestrator_uuid", None),
             "state": str(getattr(self, "state", "unknown")),
             "created": str(getattr(self, "created_timestamp", "") or ""),
             "modified": str(getattr(self, "modified_timestamp", "") or ""),

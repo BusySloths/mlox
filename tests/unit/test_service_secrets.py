@@ -380,6 +380,8 @@ def test_github_repository_service_returns_public_deploy_key():
         link="https://github.com/example/repo",
         is_private=True,
     )
+    assert service.orchestrator_uuid is None
+    assert service.repository_summary()["orchestrator_uuid"] is None
     assert service.get_deploy_keys() == {}
 
     _set_github_deploy_key(service)
