@@ -248,9 +248,10 @@ def test_root_selection_shows_project_tabs() -> None:
     assert logs_display == "none"
 
 
-async def _copy_model_example_with_keybinding() -> str:
+async def _copy_model_example_with_screen_action() -> str:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
         tabs = app.query_one("#main-tabs", TabbedContent)
         tabs.active = MODELS_TAB_ID
         panel = app.query_one("#models-panel")
@@ -260,13 +261,13 @@ async def _copy_model_example_with_keybinding() -> str:
                 raise AssertionError("Timed out waiting for models panel activation.")
             await pilot.pause(0.05)
         panel.example.text = "curl -k https://endpoint/invocations"
-        await pilot.press("c")
+        screen.action_copy_model_example()
         await pilot.pause()
         return app.copied_text
 
 
-def test_models_tab_copy_keybinding_copies_current_curl_example() -> None:
-    clipboard = asyncio.run(_copy_model_example_with_keybinding())
+def test_models_tab_copy_action_copies_current_curl_example() -> None:
+    clipboard = asyncio.run(_copy_model_example_with_screen_action())
 
     assert clipboard == "curl -k https://endpoint/invocations"
 
