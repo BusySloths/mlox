@@ -235,7 +235,7 @@ def expose_secret_manager_to_workflow_orchestrator(
             manager = create_keyfile_manager(
                 getattr(workspace, "infrastructure", None),
                 application_name=application_name,
-                period="24h",
+                period="7d",
             )
             credentials = getattr(service, "application_credentials", {}) or {}
             if application_name in credentials:

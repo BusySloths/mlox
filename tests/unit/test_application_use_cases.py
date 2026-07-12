@@ -1462,6 +1462,17 @@ def test_workflows_expose_secret_manager_persists_orchestrator_env():
         def get_access_secrets(self):
             return {"token": "secret"}
 
+    class OpenBaoService:
+        application_credentials = {
+            "airflow-airflow-1": {},
+        }
+
+        def create_keyfile_secret_manager(self, infra, *, application_name, period):
+            captured["application_name"] = application_name
+            captured["period"] = period
+            captured["infra"] = infra
+            return ExportableManager()
+
     captured = {}
     orchestrator = SimpleNamespace(
         uuid="airflow-1",
@@ -1484,7 +1495,7 @@ def test_workflows_expose_secret_manager_persists_orchestrator_env():
         is_available=True,
         supports_keyfile_export=True,
         manager=ExportableManager(),
-        service=None,
+        service=OpenBaoService(),
     )
     workspace = SimpleNamespace(
         infrastructure=SimpleNamespace(bundles=[bundle]),
@@ -1500,6 +1511,8 @@ def test_workflows_expose_secret_manager_persists_orchestrator_env():
 
     assert result.success
     assert captured["manager_uuid"] == "manager-1"
+    assert captured["application_name"] == "airflow-airflow-1"
+    assert captured["period"] == "7d"
     assert captured["encrypted_keyfile"]
     assert captured["keyfile_password"]
     assert captured["committed"] is True
