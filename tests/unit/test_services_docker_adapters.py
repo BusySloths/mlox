@@ -1323,6 +1323,7 @@ def test_airflow_set_workflow_secret_manager_env_upserts_env_and_restarts(conn):
         "_MLOX_SECRET_MANAGER_KEYFILE=old\n"
         "_MLOX_SECRET_MANAGER_KEYFILE_PW=old\n"
     )
+    expose_call_start = len(service.exec.calls)
 
     service.set_workflow_secret_manager_env(
         conn,
@@ -1341,11 +1342,36 @@ def test_airflow_set_workflow_secret_manager_env_upserts_env_and_restarts(conn):
         "_MLOX_SECRET_MANAGER_KEYFILE=encrypted-keyfile\n"
         "_MLOX_SECRET_MANAGER_KEYFILE_PW=keyfile-password\n"
     )
+    expose_calls = service.exec.calls[expose_call_start:]
+    assert (
+        "fs_copy",
+        (
+            service.template,
+            "/tmp/stack/docker-compose.yaml",
+        ),
+        {},
+    ) in expose_calls
     assert (
         "docker_up",
         ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),
         {},
-    ) in service.exec.calls
+    ) in expose_calls
+    assert expose_calls.index(
+        (
+            "fs_copy",
+            (
+                service.template,
+                "/tmp/stack/docker-compose.yaml",
+            ),
+            {},
+        )
+    ) < expose_calls.index(
+        (
+            "docker_up",
+            ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),
+            {},
+        )
+    )
 
 
 def test_airflow_compose_templates_pass_secret_manager_env():

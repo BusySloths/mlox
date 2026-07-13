@@ -252,8 +252,18 @@ class AirflowDockerService(
             SECRET_MANAGER_KEYFILE_PW_ENV: keyfile_password,
         }
         env_path = f"{self.target_path}/{self.target_docker_env}"
+        self._write_workflow_secret_manager_compose(conn)
         self._write_workflow_secret_manager_env(conn, env_path)
         self.compose_up(conn)
+
+    def _write_workflow_secret_manager_compose(self, conn) -> None:
+        """Refresh compose file so existing stacks get env pass-through entries."""
+
+        self.exec.fs_copy(
+            conn,
+            self.template,
+            f"{self.target_path}/{self.target_docker_script}",
+        )
 
     def _write_workflow_secret_manager_env(self, conn, env_path: str) -> None:
         if not self.workflow_secret_manager_env:
