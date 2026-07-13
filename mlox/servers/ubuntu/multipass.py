@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import shutil
@@ -40,6 +41,18 @@ def _coerce_positive_int(value: str | int, default: int) -> int:
         return coerced if coerced > 0 else default
     except (TypeError, ValueError):
         return default
+
+
+def _callable_supports_kwarg(func: Any, kwarg: str) -> bool:
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return False
+    return any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        or parameter.name == kwarg
+        for parameter in signature.parameters.values()
+    )
 
 
 @dataclass
@@ -159,15 +172,32 @@ class MultipassUbuntuServerMixin:
             self.disk,
             cloud_init_path,
         )
-        if _HAS_MULTIPASS_SDK:
+        use_sdk_launch = _HAS_MULTIPASS_SDK
+        if use_sdk_launch:
             client = MultipassClient()
+            launch_supports_cloud_init = _callable_supports_kwarg(
+                client.launch, "cloud_init"
+            )
+            launch_supports_cloud_config = _callable_supports_kwarg(
+                client.launch, "cloud_config"
+            )
+            if cloud_init_path and not (
+                launch_supports_cloud_init or launch_supports_cloud_config
+            ):
+                use_sdk_launch = False
+
+        if use_sdk_launch:
             launch_kwargs = {
                 "vm_name": self.vm_name,
                 "cpu": _coerce_positive_int(self.cpus, 2),
                 "disk": self.disk,
                 "mem": self.memory,
-                "cloud_init": str(cloud_init_path) if cloud_init_path else None,
             }
+            if cloud_init_path:
+                if launch_supports_cloud_init:
+                    launch_kwargs["cloud_init"] = str(cloud_init_path)
+                elif launch_supports_cloud_config:
+                    launch_kwargs["cloud_config"] = str(cloud_init_path)
             try:
                 self._multipass_vm = client.launch(
                     image=self.image, **launch_kwargs

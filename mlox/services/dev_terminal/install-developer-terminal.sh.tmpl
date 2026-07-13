@@ -22,7 +22,7 @@ apt-get install -yq \
   gnupg gzip htop jq libbz2-dev libffi-dev liblzma-dev libncursesw5-dev \
   libreadline-dev libsqlite3-dev libssl-dev libxml2-dev libxmlsec1-dev \
   llvm locales lsb-release make mc ncurses-bin ncurses-term nodejs npm pipx python3 \
-  python3-pip ripgrep snapd tar tk-dev tmux unzip wget xz-utils \
+  python3-pip ripgrep tar tk-dev tmux unzip wget xz-utils \
   zlib1g-dev zsh
 
 locale-gen C.UTF-8 >/dev/null 2>&1 || true
@@ -44,13 +44,33 @@ nvim_version_meets_min() {
   [ -n "$version" ] && dpkg --compare-versions "$version" ge "$MIN_NVIM_VERSION"
 }
 
-if ! nvim_version_meets_min; then
-  systemctl enable --now snapd.socket >/dev/null 2>&1 || true
-  snap wait system seed.loaded >/dev/null 2>&1 || true
-  snap install nvim --classic
-  if [ -x /snap/bin/nvim ]; then
-    ln -sf /snap/bin/nvim /usr/local/bin/nvim
+install_neovim_release() {
+  local tmpdir arch nvim_asset
+  tmpdir="$(mktemp -d)"
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) nvim_asset="nvim-linux-x86_64" ;;
+    aarch64|arm64) nvim_asset="nvim-linux-arm64" ;;
+    *) nvim_asset="" ;;
+  esac
+
+  if [ -n "$nvim_asset" ]; then
+    curl -fsSL "https://github.com/neovim/neovim/releases/latest/download/${nvim_asset}.tar.gz" -o "$tmpdir/nvim.tar.gz" || true
+    if [ -s "$tmpdir/nvim.tar.gz" ]; then
+      tar -xzf "$tmpdir/nvim.tar.gz" -C "$tmpdir"
+      if [ -x "$tmpdir/$nvim_asset/bin/nvim" ]; then
+        install -d /opt/mlox
+        rm -rf /opt/mlox/nvim
+        cp -a "$tmpdir/$nvim_asset" /opt/mlox/nvim
+        ln -sf /opt/mlox/nvim/bin/nvim /usr/local/bin/nvim
+      fi
+    fi
   fi
+  rm -rf "$tmpdir"
+}
+
+if ! nvim_version_meets_min; then
+  install_neovim_release
 fi
 
 if ! nvim_version_meets_min; then

@@ -11,15 +11,20 @@ def _service() -> DeveloperTerminalService:
     )
 
 
-def test_install_script_installs_modern_neovim_with_snap_when_needed() -> None:
+def test_install_script_installs_modern_neovim_from_release_tarball_when_needed() -> None:
     script = _service()._install_script()
 
     assert "@install_" not in script
     assert "MIN_NVIM_VERSION=0.11.2" in script
     assert "nvim_version_meets_min" in script
-    assert "snapd" in script
-    assert "snap install nvim --classic" in script
-    assert "ln -sf /snap/bin/nvim /usr/local/bin/nvim" in script
+    assert "install_neovim_release" in script
+    assert "snapd" not in script
+    assert "snap install nvim --classic" not in script
+    assert "nvim-linux-x86_64" in script
+    assert "nvim-linux-arm64" in script
+    assert "https://github.com/neovim/neovim/releases/latest/download/${nvim_asset}.tar.gz" in script
+    assert "cp -a \"$tmpdir/$nvim_asset\" /opt/mlox/nvim" in script
+    assert "ln -sf /opt/mlox/nvim/bin/nvim /usr/local/bin/nvim" in script
     assert "Neovim $MIN_NVIM_VERSION or newer is required for LazyVim." in script
     assert "npm install -g @anthropic-ai/claude-code" in script
     assert "npm install -g @openai/codex" in script

@@ -574,6 +574,64 @@ def test_multipass_launch_waits_for_root_login(monkeypatch):
     assert calls == ["launch", "root-login"]
 
 
+def test_multipass_launch_uses_cli_when_sdk_lacks_cloud_init(monkeypatch, tmp_path):
+    from mlox.servers.ubuntu import multipass
+    from mlox.servers.ubuntu.multipass import MultipassUbuntuNativeServer
+
+    cloud_init = tmp_path / "cloud-init.yaml"
+    cloud_init.write_text("#cloud-config\n", encoding="utf-8")
+    server = MultipassUbuntuNativeServer(
+        ip="mlox-unit-vm",
+        port="22",
+        root="root",
+        root_pw="pass",
+        service_config_id="ubuntu-multipass-native",
+        vm_name="mlox-unit-vm",
+        cpus="3",
+        memory="6G",
+        disk="30G",
+        image="24.04",
+        cloud_init=str(cloud_init),
+    )
+    calls = []
+
+    class Client:
+        def launch(self, vm_name, cpu=1, disk="5G", mem="1G", image=None):
+            raise AssertionError("SDK launch should not be used without cloud-init support")
+
+    monkeypatch.setattr(
+        type(server), "is_multipass_available", property(lambda self: True)
+    )
+    monkeypatch.setattr(multipass, "_HAS_MULTIPASS_SDK", True)
+    monkeypatch.setattr(multipass, "MultipassClient", Client)
+    monkeypatch.setattr(
+        server,
+        "_run_multipass_cli",
+        lambda args, **_kwargs: calls.append(args),
+    )
+    monkeypatch.setattr(server, "wait_for_ssh", lambda: "10.0.0.5")
+    monkeypatch.setattr(server, "wait_for_root_login", lambda: calls.append("root-login"))
+
+    server.launch_vm()
+
+    assert calls[0] == [
+        "launch",
+        "24.04",
+        "--name",
+        "mlox-unit-vm",
+        "--cpus",
+        "3",
+        "--memory",
+        "6G",
+        "--disk",
+        "30G",
+        "--cloud-init",
+        str(cloud_init.resolve()),
+    ]
+    assert calls[1] == "root-login"
+    assert server.ip == "10.0.0.5"
+
+
 def test_multipass_setup_cleans_up_vm_on_provisioning_failure(monkeypatch):
     from mlox.servers.ubuntu.multipass import MultipassUbuntuNativeServer
 
