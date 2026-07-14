@@ -225,6 +225,48 @@ class KubernetesMixin(TaskRunnerABC):
         )
         return result
 
+    def k8s_resource_log_tail(
+        self,
+        connection: Connection,
+        resource: str,
+        *,
+        namespace: str,
+        tail: int = 200,
+        kubeconfig: str | None = None,
+        container: str | None = None,
+        sudo: bool = True,
+    ) -> str:
+        parts: list[str] = [
+            "kubectl",
+            "logs",
+            resource,
+            "--namespace",
+            namespace,
+            "--tail",
+            str(int(tail)),
+        ]
+        if container:
+            parts.extend(["--container", container])
+        if kubeconfig:
+            parts.extend(["--kubeconfig", kubeconfig])
+        command = _quote_command(parts)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+            pty=False,
+            description=f"Fetch Kubernetes logs for {namespace}/{resource}",
+            extra_metadata={
+                "log_source": "kubernetes",
+                "namespace": namespace,
+                "resource": resource,
+                "container": container or "",
+                "tail": int(tail),
+            },
+        )
+        return result or "No Kubernetes logs found"
+
     def k8s_patch_resource(
         self,
         connection: Connection,

@@ -129,6 +129,12 @@ class DockerMixin(TaskRunnerABC):
                     command=cmd,
                     sudo=True,
                     pty=False,
+                    description=f"Fetch Docker logs for {service_name}",
+                    extra_metadata={
+                        "log_source": "docker",
+                        "service_name": service_name,
+                        "tail": int(tail),
+                    },
                 )
                 or "No docker logs found"
             )

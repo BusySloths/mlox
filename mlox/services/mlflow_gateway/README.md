@@ -13,8 +13,8 @@ In MLOX, add an MLflow model registry first, then select one gateway service:
 During setup, select the registry and optionally configure additional Python
 requirements, the maximum cached models, and the cache TTL.
 
-MLOX generates the external port and gateway credentials. Both are shown on the
-service settings page.
+MLOX generates gateway credentials. Docker deployments also get an external
+port; k3s deployments use a generated URL path on the k3s Traefik endpoint.
 
 ## Usage
 
@@ -22,6 +22,7 @@ Health check:
 
 ```bash
 curl -k -u 'USER:PASSWORD' https://HOST:PORT/health
+# k3s: curl -k -u 'USER:PASSWORD' https://HOST/gateway-ID/health
 ```
 
 Invoke a registered model version:
@@ -60,20 +61,17 @@ Pitfalls:
 ## Kubernetes / k3s
 
 The k3s service creates an isolated namespace containing a ConfigMap, Secret,
-single-replica Deployment, and ClusterIP Service. It installs a dedicated pinned
-Traefik Helm release for that gateway. It does **not** use k3s's default Traefik.
+single-replica Deployment, ClusterIP Service, Traefik middlewares, and an
+Ingress. It uses the Traefik instance that k3s installs by default.
 
-MLOX assigns the external port through `${MLOX_AUTO_PORT_REST}` and configures
-Traefik to expose it. Kubernetes does not choose this port automatically. A
-second gateway receives another available MLOX port and its own namespace and
-Traefik release. Namespace and Traefik release names include the service UUID
-prefix, so separately configured gateways do not reuse the same Kubernetes
-resources even if their templates are otherwise identical.
+MLOX derives a gateway ID from the service UUID. A second gateway receives its
+own namespace and its own path, for example `https://HOST/gateway-abc12345`.
 
 Advantages:
 
 - Kubernetes-native readiness, health checks, and workload recovery.
 - Each gateway is isolated from the default ingress and other gateways.
+- No per-gateway Traefik Helm release is installed.
 - No container registry or custom image publication is required.
 
 Pitfalls:
@@ -82,8 +80,8 @@ Pitfalls:
   first start and pod replacements are slower and require outbound access.
   During this phase MLOX reports the service as starting until the deployment
   has a ready replica and the `/health` endpoint answers.
-- Helm must reach the Traefik chart repository.
-- The external port must be allowed by the host firewall.
+- The k3s Traefik CRDs must be available.
+- The k3s HTTPS ingress port must be allowed by the host firewall.
 - Credentials are stored in a Kubernetes Secret; protect cluster access.
 
 ## Common Limitations

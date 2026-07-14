@@ -148,7 +148,7 @@ def service_logs(
     name: str = typer.Argument(..., help="Service name"),
     label: Optional[str] = typer.Option(
         None,
-        help="Compose service label to fetch logs for",
+        help="Service log label to fetch logs for",
     ),
     tail: int = typer.Option(200, help="Number of log lines to return"),
 ) -> None:

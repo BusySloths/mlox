@@ -18,6 +18,20 @@ except ImportError:  # pragma: no cover - fallback for older textual releases
 from .model import SelectionInfo
 
 
+def _service_log_labels(service) -> list[str]:
+    labels = getattr(service, "log_labels", None)
+    if callable(labels):
+        return list(labels())
+    return list((getattr(service, "compose_service_names", {}) or {}).keys())
+
+
+def _service_log_tail(service, conn, *, label: str, tail: int) -> str:
+    log_tail = getattr(service, "service_log_tail", None)
+    if callable(log_tail):
+        return log_tail(conn, label=label, tail=tail)
+    return service.compose_service_log_tail(conn, label=label, tail=tail)
+
+
 class LogPanel(Container):
     """Service log viewer."""
 
@@ -25,7 +39,7 @@ class LogPanel(Container):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="log-controls"):
-            yield Select(options=[], prompt="Compose label", id="log-label")
+            yield Select(options=[], prompt="Log label", id="log-label")
             yield Input(placeholder="Lines", id="log-tail", value="200")
             yield Button("Fetch", id="log-fetch")
         yield LogWidget(id="log-output", highlight=True)
@@ -54,9 +68,7 @@ class LogPanel(Container):
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         if selection and selection.type == "service" and selection.service:
-            labels = list(
-                getattr(selection.service, "compose_service_names", {}).keys()
-            )
+            labels = _service_log_labels(selection.service)
             if labels:
                 options = [(label, label) for label in labels]
                 self.label_input.set_options(options)
@@ -67,7 +79,7 @@ class LogPanel(Container):
             else:
                 self.label_input.set_options([])
                 self.label_input.clear()
-                self.status.update("Selected service does not expose compose labels.")
+                self.status.update("Selected service does not expose log labels.")
         else:
             self.label_input.set_options([])
             self.label_input.clear()
@@ -89,12 +101,12 @@ class LogPanel(Container):
             return
         raw_label = self.label_input.value
         label = raw_label.strip() if isinstance(raw_label, str) else ""
-        labels = list(getattr(selection.service, "compose_service_names", {}).keys())
+        labels = _service_log_labels(selection.service)
         if not label:
             if labels:
                 label = labels[0]
             else:
-                self.status.update("No compose labels available for this service.")
+                self.status.update("No log labels available for this service.")
                 return
         try:
             tail = int(self.tail_input.value.strip() or "200")
@@ -108,7 +120,7 @@ class LogPanel(Container):
         def fetch_logs() -> None:
             try:
                 with server.get_server_connection() as conn:
-                    logs = service.compose_service_log_tail(conn, label=label, tail=tail)
+                    logs = _service_log_tail(service, conn, label=label, tail=tail)
             except Exception as exc:  # pragma: no cover - network/IO heavy
                 self.app.call_from_thread(
                     self._show_logs, "", f"Failed to fetch logs: {exc}"
@@ -133,8 +145,6 @@ class LogPanel(Container):
             return False
         compose_map = getattr(service, "compose_service_names", {}) or {}
         container = compose_map.get(label)
-        if not container:
-            return False
         executor = getattr(service, "exec", None)
         if not executor:
             return False
@@ -143,10 +153,17 @@ class LogPanel(Container):
         for entry in reversed(records):
             if not isinstance(entry, dict):
                 continue
-            if entry.get("action") != "docker_service_log_tails":
-                continue
             metadata = entry.get("metadata") or {}
-            if metadata.get("service_name") != container:
+            if (
+                entry.get("action") == "docker_service_log_tails"
+                or metadata.get("log_source") == "docker"
+            ):
+                if container and metadata.get("service_name") != container:
+                    continue
+            elif metadata.get("log_source") == "kubernetes":
+                if label not in _service_log_labels(service):
+                    continue
+            else:
                 continue
             logs = str(entry.get("output", ""))
             self.log_output.clear()

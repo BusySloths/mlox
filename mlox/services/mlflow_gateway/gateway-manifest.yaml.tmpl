@@ -27,6 +27,15 @@ stringData:
   tracking-user: @tracking_user
   tracking-password: @tracking_password
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: @basic_auth_secret
+  namespace: @namespace
+type: Opaque
+stringData:
+  users: @basic_auth_user
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -137,3 +146,45 @@ spec:
     - name: http
       port: @container_port
       targetPort: http
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: @basic_auth_middleware
+  namespace: @namespace
+spec:
+  basicAuth:
+    secret: @basic_auth_secret
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: @strip_prefix_middleware
+  namespace: @namespace
+spec:
+  stripPrefix:
+    prefixes:
+      - @ingress_path
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: @ingress_name
+  namespace: @namespace
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: @namespace-@basic_auth_middleware@@kubernetescrd,@namespace-@strip_prefix_middleware@@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: @ingress_path
+            pathType: Prefix
+            backend:
+              service:
+                name: @service_name
+                port:
+                  number: @container_port

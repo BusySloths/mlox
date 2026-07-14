@@ -168,9 +168,7 @@ def list_services(project: WorkspaceState) -> OperationResult:
                     ),
                     "server_ip": bundle.server.ip,
                     "state": getattr(service, "state", "unknown"),
-                    "labels": list(
-                        getattr(service, "compose_service_names", {}).keys()
-                    ),
+                    "labels": _service_log_labels(service),
                     "ports": [
                         f"{name}:{port}"
                         for name, port in (
@@ -342,18 +340,29 @@ def service_logs(
         return OperationResult(False, 8, "Service not found in infrastructure.")
     chosen_label = label
     if chosen_label is None:
-        compose_names = getattr(service, "compose_service_names", {})
-        if not compose_names:
+        labels = _service_log_labels(service)
+        if not labels:
             return OperationResult(
-                False, 9, "No compose service labels configured for this service."
+                False, 9, "No log labels configured for this service."
             )
-        chosen_label = next(iter(compose_names))
+        chosen_label = labels[0]
     bundle = infra.get_bundle_by_service(service)
     if not bundle:
         return OperationResult(False, 10, "Could not find server bundle for service.")
     with bundle.server.get_server_connection() as conn:
-        logs = service.compose_service_log_tail(conn, label=chosen_label, tail=tail)
+        log_tail = getattr(service, "service_log_tail", None)
+        if callable(log_tail):
+            logs = log_tail(conn, label=chosen_label, tail=tail)
+        else:
+            logs = service.compose_service_log_tail(conn, label=chosen_label, tail=tail)
     return OperationResult(True, 0, "Fetched service logs.", {"logs": logs})
+
+
+def _service_log_labels(service: object) -> List[str]:
+    labels = getattr(service, "log_labels", None)
+    if callable(labels):
+        return list(labels())
+    return list((getattr(service, "compose_service_names", {}) or {}).keys())
 
 
 def list_service_configs(list_configs) -> OperationResult:

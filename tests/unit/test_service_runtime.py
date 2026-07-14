@@ -81,6 +81,8 @@ def test_compose_service_status_and_logs_paths():
 
     assert svc.compose_service_log_tail(conn=object(), label="api", tail=10).startswith("logs:")
     assert svc.compose_service_log_tail(conn=object(), label="missing") == "Not found"
+    assert svc.log_labels() == ["api", "db"]
+    assert svc.service_log_tail(conn=object(), label="api", tail=10).startswith("logs:")
 
 
 def test_dump_state_writes_debug_files():

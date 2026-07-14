@@ -229,14 +229,15 @@ def test_mlflow_gateway_k3s_templates_render_expected_resources(tmp_path) -> Non
     )
 
     manifest = service._render_gateway_manifest()
-    values = service._render_traefik_values()
 
     assert "kind: ConfigMap" in manifest
     assert "kind: Secret" in manifest
     assert "kind: Deployment" in manifest
+    assert "kind: Middleware" in manifest
+    assert "kind: Ingress" in manifest
     assert "print('gateway')" in manifest
     assert "pydantic==2.0.0" in manifest
     assert f"namespace: {service.namespace}" in manifest
-    assert f"exposedPort: {service.port}" in values
-    assert "gateway-auth" in values
-    assert "@" not in manifest + values
+    assert f'path: "{service.ingress_path}"' in manifest
+    assert "mlflow-gateway-auth" in manifest
+    assert "@" not in manifest.replace("@kubernetescrd", "")

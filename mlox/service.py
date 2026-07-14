@@ -530,6 +530,25 @@ class AbstractService(ABC):
 
         return f"Service with label {label} ({service}) not found"
 
+    def log_labels(self) -> List[str]:
+        """Return selectable log labels for this service.
+
+        Docker-backed services use their compose labels by default. Kubernetes
+        services can override this to expose deployment, pod, or container
+        labels without making callers know the backend.
+        """
+
+        return list((self.compose_service_names or {}).keys())
+
+    def service_log_tail(self, conn, label: str | None = None, tail: int = 200) -> str:
+        """Return recent logs for the selected service log label."""
+
+        labels = self.log_labels()
+        chosen_label = label or (labels[0] if labels else None)
+        if not chosen_label:
+            return "No log labels configured for this service."
+        return self.compose_service_log_tail(conn, label=chosen_label, tail=tail)
+
     def get_dependent_service(self, service_uuid: str) -> Optional["AbstractService"]:
         """Get a dependent service by UUID via the bound service lookup."""
 

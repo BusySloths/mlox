@@ -4,8 +4,9 @@ version: 3.8.1
 maintainer: Busy Sloths
 description_short: Lightweight multi-model HTTP gateway for MLflow on Kubernetes.
 description: Provides an authenticated HTTPS endpoint that loads MLflow pyfunc
-  models dynamically from a configured MLflow registry. The gateway and its
-  dedicated Traefik release run in an isolated Kubernetes namespace.
+  models dynamically from a configured MLflow registry. The gateway runs in an
+  isolated Kubernetes namespace and is exposed through the k3s Traefik ingress
+  on a service-specific URL path.
 links:
   project: https://mlflow.org/
   news: https://mlflow.org/releases/
