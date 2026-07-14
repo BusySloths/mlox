@@ -1,4 +1,5 @@
 import logging
+import re
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,9 +32,16 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        self.namespace = f"mlflow-gateway-{self.port}"
+        suffix = self._resource_suffix()
+        self.namespace = f"mlflow-gateway-{suffix}"
+        self.traefik_release = f"mlflow-gateway-traefik-{suffix}"[:63].rstrip("-")
         self.manifest_path = f"{self.target_path}/mlflow-gateway.yaml"
         self.traefik_values_path = f"{self.target_path}/traefik-values.yaml"
+
+    def _resource_suffix(self) -> str:
+        port = re.sub(r"[^a-z0-9-]", "-", str(self.port).lower()).strip("-")
+        unique = re.sub(r"[^a-z0-9-]", "-", self.uuid[:8].lower()).strip("-")
+        return f"{port}-{unique}" if port else unique
 
     def _render_gateway_manifest(self) -> str:
         serve_script = Path(self.serve_script).read_text(encoding="utf-8")
@@ -111,9 +119,10 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
             description="Wait for the MLflow Gateway deployment",
         )
         if rollout is None:
-            logger.error("MLflow Gateway deployment did not become ready.")
-            self.state = "unknown"
-            return
+            logger.warning(
+                "MLflow Gateway deployment is still starting after %s seconds.",
+                self.rollout_timeout_seconds,
+            )
 
         if (
             self.exec.helm_repo_add(
@@ -174,8 +183,8 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
             description="Check MLflow Gateway deployment readiness",
         )
         if ready is None or ready.strip() != "1":
-            self.state = "unknown"
-            return {"status": "unknown", "ready_replicas": (ready or "0").strip()}
+            self.state = "running"
+            return {"status": "starting", "ready_replicas": (ready or "0").strip()}
 
         status = self.exec.execute(
             conn,

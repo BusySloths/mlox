@@ -126,9 +126,37 @@ def test_renders_dedicated_traefik_values(
     assert "PathPrefix(`/`)" in values
     assert "basicAuth:" in values
     assert "gateway-user:$apr1$" in values
-    assert "mlflow-gateway.mlflow-gateway-30433.svc.cluster.local:8080" in values
+    assert f"mlflow-gateway.{gateway.namespace}.svc.cluster.local:8080" in values
     assert "exposedPort: 30433" in values
     assert "type: LoadBalancer" in values
+
+
+def test_multiple_gateways_get_distinct_kubernetes_identities(tmp_path: Path) -> None:
+    serve_script = tmp_path / "serve.py"
+    serve_script.write_text(
+        "from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8"
+    )
+    common = {
+        "name": "MLflow Gateway",
+        "service_config_id": "mlflow-gateway-3.8.1-k3s",
+        "template": "/tmp/mlflow-gateway-k3s.yaml",
+        "target_path": "/tmp/mlflow-gateway",
+        "dockerfile": "/tmp/Dockerfile",
+        "serve_script": str(serve_script),
+        "start_script": "/tmp/start_gateway.sh",
+        "port": 30433,
+        "tracking_uri": "https://mlflow.example:5043",
+        "tracking_user": "tracking-user",
+        "tracking_pw": "tracking-password",
+    }
+
+    first = MLFlowGatewayK3sService(**common)
+    second = MLFlowGatewayK3sService(**common)
+
+    assert first.namespace.startswith("mlflow-gateway-30433-")
+    assert second.namespace.startswith("mlflow-gateway-30433-")
+    assert first.namespace != second.namespace
+    assert first.traefik_release != second.traefik_release
 
 
 def test_setup_applies_rolls_out_and_installs_traefik(
@@ -149,6 +177,8 @@ def test_setup_applies_rolls_out_and_installs_traefik(
     install = next(
         call for call in gateway.exec.calls if call[0] == "helm_upgrade_install"
     )
+    assert install[2]["release"] == gateway.traefik_release
+    assert install[2]["namespace"] == gateway.namespace
     assert install[2]["extra_args"] == [
         "--version",
         "34.4.1",
@@ -167,7 +197,6 @@ def test_setup_applies_rolls_out_and_installs_traefik(
     ("failure", "expected_helm_installs"),
     [
         ("apply", 0),
-        ("rollout", 0),
         ("traefik", 1),
     ],
 )
@@ -178,8 +207,6 @@ def test_setup_failure_paths(
 ) -> None:
     if failure == "apply":
         gateway.exec.apply_result = None
-    elif failure == "rollout":
-        gateway.exec.rollout_result = None
     else:
         gateway.exec.helm_install_result = None
 
@@ -190,6 +217,18 @@ def test_setup_failure_paths(
         call for call in gateway.exec.calls if call[0] == "helm_upgrade_install"
     ]
     assert len(installs) == expected_helm_installs
+
+
+def test_setup_rollout_timeout_keeps_gateway_starting(
+    gateway: MLFlowGatewayK3sService,
+) -> None:
+    gateway.exec.rollout_result = None
+
+    gateway.setup(SimpleNamespace(host="gateway.example"))
+
+    assert gateway.state == "running"
+    assert any(call[0] == "helm_upgrade_install" for call in gateway.exec.calls)
+    assert gateway.service_url == "https://gateway.example:30433"
 
 
 def test_check_uses_deployment_and_authenticated_health(
@@ -209,7 +248,8 @@ def test_check_uses_deployment_and_authenticated_health(
     assert curl.endswith("https://gateway.example:30433/health")
 
     gateway.exec.ready_result = ""
-    assert gateway.check(conn)["status"] == "unknown"
+    assert gateway.check(conn)["status"] == "starting"
+    assert gateway.state == "running"
 
 
 def test_teardown_is_non_blocking_and_clears_service_state(
@@ -284,7 +324,7 @@ def test_catalog_and_streamlit_handlers_are_registered() -> None:
         }
     )
     assert isinstance(service, MLFlowGatewayK3sService)
-    assert service.namespace == "mlflow-gateway-30433"
+    assert service.namespace.startswith("mlflow-gateway-30433-")
     binding = _STREAMLIT_SERVICE_BINDINGS["mlox.view.services.mlflow_gateway"]
     assert "mlflow-gateway-3.8.1-k3s" in binding["config_ids"]
     assert binding["function_names"] == ("settings", "setup")

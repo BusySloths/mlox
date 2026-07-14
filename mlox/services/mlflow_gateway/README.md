@@ -66,7 +66,9 @@ Traefik Helm release for that gateway. It does **not** use k3s's default Traefik
 MLOX assigns the external port through `${MLOX_AUTO_PORT_REST}` and configures
 Traefik to expose it. Kubernetes does not choose this port automatically. A
 second gateway receives another available MLOX port and its own namespace and
-Traefik release.
+Traefik release. Namespace and Traefik release names include the service UUID
+prefix, so separately configured gateways do not reuse the same Kubernetes
+resources even if their templates are otherwise identical.
 
 Advantages:
 
@@ -78,6 +80,8 @@ Pitfalls:
 
 - The pod installs MLflow and other dependencies from PyPI at startup, so the
   first start and pod replacements are slower and require outbound access.
+  During this phase MLOX reports the service as starting until the deployment
+  has a ready replica and the `/health` endpoint answers.
 - Helm must reach the Traefik chart repository.
 - The external port must be allowed by the host firewall.
 - Credentials are stored in a Kubernetes Secret; protect cluster access.
