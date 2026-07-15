@@ -13,6 +13,7 @@ from textual.widgets import Button, Static
 
 from mlox.application.use_cases.servers import (
     can_open_server_terminal,
+    server_has_health,
     open_server_terminal,
 )
 
@@ -27,6 +28,9 @@ class ServerActions(Container):
 
     class RenameBundleRequested(Message):
         """Request that the dashboard opens the bundle rename modal."""
+
+    class CheckHealthRequested(Message):
+        """Request that the dashboard checks selected server health."""
 
     class SetupBundleRequested(Message):
         """Request that the dashboard initializes the selected bundle."""
@@ -46,6 +50,7 @@ class ServerActions(Container):
                 yield Button("Open Terminal", id="open-server-terminal")
                 yield Button("Show Credentials", id="toggle-server-credentials")
                 yield Button("Refresh Server Info", id="refresh-runtime-info")
+                yield Button("Check Health", id="check-server-health")
                 yield Button("Setup Bundle", id="setup-bundle", variant="warning")
                 yield Button("Rename Bundle", id="rename-bundle", variant="primary")
                 yield Button("Edit Tags", id="edit-bundle-tags", variant="success")
@@ -62,6 +67,7 @@ class ServerActions(Container):
         self._render_terminal_action(self.selection)
         self._render_credentials_action(self.selection)
         self._render_runtime_info_action(self.selection)
+        self._render_health_action(self.selection)
         self._render_bundle_lifecycle_actions(self.selection)
         self._render_bundle_rename_action(self.selection)
         self._render_bundle_tag_action(self.selection)
@@ -74,6 +80,7 @@ class ServerActions(Container):
             self._render_terminal_action(selection)
             self._render_credentials_action(selection)
             self._render_runtime_info_action(selection)
+            self._render_health_action(selection)
             self._render_bundle_lifecycle_actions(selection)
             self._render_bundle_rename_action(selection)
             self._render_bundle_tag_action(selection)
@@ -117,6 +124,14 @@ class ServerActions(Container):
             return
         button.display = bool(selection and selection.type == "server")
         button.label = "Refresh Server Info"
+
+    def _render_health_action(self, selection: Optional[SelectionInfo]) -> None:
+        button = self.query_one("#check-server-health", Button)
+        button.display = bool(
+            selection
+            and selection.type == "server"
+            and server_has_health(selection.server)
+        )
 
     def _render_bundle_lifecycle_actions(
         self, selection: Optional[SelectionInfo]
@@ -190,6 +205,13 @@ class ServerActions(Container):
         button = self.query_one("#refresh-runtime-info", Button)
         button.disabled = loading
 
+    def set_health_loading(self, loading: bool) -> None:
+        button = self.query_one("#check-server-health", Button)
+        button.disabled = loading
+        button.label = "Checking..." if loading else "Check Health"
+        if not loading:
+            self._render_health_action(self.selection)
+
     def set_bundle_lifecycle_loading(self, loading: bool) -> None:
         self.query_one("#setup-bundle", Button).disabled = loading
         self.query_one("#remove-bundle", Button).disabled = loading
@@ -229,6 +251,10 @@ class ServerActions(Container):
     @on(Button.Pressed, "#rename-bundle")
     def handle_rename_bundle(self, _: Button.Pressed) -> None:
         self.post_message(self.RenameBundleRequested())
+
+    @on(Button.Pressed, "#check-server-health")
+    def handle_check_health(self, _: Button.Pressed) -> None:
+        self.post_message(self.CheckHealthRequested())
 
     @on(Button.Pressed, "#setup-bundle")
     def handle_setup_bundle(self, _: Button.Pressed) -> None:

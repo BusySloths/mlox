@@ -491,6 +491,14 @@ class ProjectWorkspace:
     def setup_server(self, *, ip: str) -> OperationResult:
         return self._mutate(lambda: servers.setup_server(self._state, ip=ip))
 
+    def check_server_health(self, *, ip: str) -> OperationResult:
+        bundle = self.infrastructure.get_bundle_by_ip(ip)
+        if not bundle:
+            return OperationResult(False, 5, "Server not found in infrastructure.")
+        return self._mutate(
+            lambda: servers.check_server_health(bundle.server),
+        )
+
     def teardown_server(self, *, ip: str) -> OperationResult:
         bundle = self.infrastructure.get_bundle_by_ip(ip)
         active_uuid = self.secret_manager_service_uuid
@@ -554,6 +562,11 @@ class ProjectWorkspace:
 
     def setup_service(self, *, name: str) -> OperationResult:
         return self._mutate(lambda: services.setup_service(self._state, name=name))
+
+    def check_service_health(self, *, name: str) -> OperationResult:
+        return self._mutate(
+            lambda: services.check_service_health(self._state, name=name)
+        )
 
     def teardown_service(self, *, name: str) -> OperationResult:
         service = self.infrastructure.get_service(name)

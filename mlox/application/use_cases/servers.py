@@ -427,6 +427,89 @@ def can_open_server_terminal(server) -> OperationResult:
     )
 
 
+def server_has_health(server) -> bool:
+    """Return whether a server advertises live health checks."""
+
+    if not server:
+        return False
+    if ServerCapability.HEALTH.value in _server_capability_names(server):
+        return callable(getattr(server, "get_health", None))
+    return False
+
+
+def check_server_health(server, *, no_cache: bool = True) -> OperationResult:
+    """Run a server health check and update the server state from the response."""
+
+    if not server:
+        return OperationResult(False, 37, "No server selected.")
+    if not server_has_health(server):
+        return OperationResult(
+            False,
+            38,
+            "Selected server does not provide health checks.",
+        )
+
+    try:
+        health = server.get_health(no_cache=no_cache)
+    except Exception as exc:
+        return OperationResult(False, 39, f"Failed to check server health: {exc}")
+
+    if not isinstance(health, dict):
+        return OperationResult(
+            False,
+            40,
+            "Selected server returned invalid health data.",
+        )
+
+    _update_server_state_from_health(server, health)
+    status = str(health.get("status") or getattr(server, "state", "unknown"))
+    return OperationResult(
+        True,
+        0,
+        f"Server health checked: {status}.",
+        {"server": server, "health": health},
+    )
+
+
+def check_server_health_in_workspace(workspace, server) -> OperationResult:
+    """Check server health through an open workspace adapter when available."""
+
+    if not workspace:
+        return OperationResult(False, 41, "Project workspace is unavailable.")
+    if not server:
+        return OperationResult(False, 37, "No server selected.")
+
+    check_health = getattr(workspace, "check_server_health", None)
+    if callable(check_health):
+        try:
+            return check_health(ip=str(getattr(server, "ip", "")))
+        except Exception as exc:
+            return OperationResult(False, 42, f"Failed to check server health: {exc}")
+
+    return check_server_health(server)
+
+
+def _update_server_state_from_health(server, health: Dict[str, Any]) -> None:
+    state = str(health.get("state") or health.get("status") or "").strip()
+    if state not in {
+        "un-initialized",
+        "no-backend",
+        "starting",
+        "running",
+        "shutdown",
+        "unknown",
+    }:
+        if health.get("healthy") is True:
+            state = "running"
+        elif health.get("healthy") is False:
+            state = "unknown"
+    if state:
+        try:
+            setattr(server, "state", state)
+        except Exception:
+            pass
+
+
 def _server_capability_names(server) -> set[str]:
     return {
         capability.value if hasattr(capability, "value") else str(capability)

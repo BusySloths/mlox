@@ -34,6 +34,40 @@ def test_successful_mutation_commits(monkeypatch):
     workspace.reload.assert_not_called()
 
 
+def test_server_health_mutation_commits(monkeypatch):
+    workspace = _workspace()
+    server = SimpleNamespace(ip="1.2.3.4")
+    workspace.infrastructure.bundles.append(SimpleNamespace(server=server, services=[]))
+    workspace.commit = mock.Mock()
+    workspace.reload = mock.Mock()
+    monkeypatch.setattr(
+        "mlox.project.workspace.servers.check_server_health",
+        lambda server_arg: OperationResult(True, 0, "checked", {"server": server_arg}),
+    )
+
+    result = workspace.check_server_health(ip="1.2.3.4")
+
+    assert result.success
+    workspace.commit.assert_called_once_with()
+    workspace.reload.assert_not_called()
+
+
+def test_service_health_mutation_commits(monkeypatch):
+    workspace = _workspace()
+    workspace.commit = mock.Mock()
+    workspace.reload = mock.Mock()
+    monkeypatch.setattr(
+        "mlox.project.workspace.services.check_service_health",
+        lambda project, name: OperationResult(True, 0, "checked", {"name": name}),
+    )
+
+    result = workspace.check_service_health(name="svc")
+
+    assert result.success
+    workspace.commit.assert_called_once_with()
+    workspace.reload.assert_not_called()
+
+
 def test_failed_mutation_reloads_without_commit(monkeypatch):
     workspace = _workspace()
     workspace.commit = mock.Mock()

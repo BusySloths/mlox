@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import io
 import threading
+import time
 from types import SimpleNamespace
 
 from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.widgets import Button, Static
 
+from mlox.application.result import OperationResult
 from mlox.server import ServerCapability
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.screen import DashboardScreen
@@ -424,6 +426,94 @@ def test_server_actions_has_server_info_refresh_button() -> None:
 
     assert label == "Refresh Server Info"
     assert title == "Server Info"
+
+
+async def _server_health_button_visibility(selection: SelectionInfo) -> bool:
+    app = ServerActionsTestApp()
+    async with app.run_test() as pilot:
+        actions = app.query_one(ServerActions)
+        actions.selection = selection
+        await pilot.pause()
+        return actions.query_one("#check-server-health", Button).display
+
+
+def test_server_health_button_requires_server_health_capability() -> None:
+    health_server = SimpleNamespace(
+        ip="10.0.0.5",
+        capabilities={ServerCapability.HEALTH},
+        get_health=lambda no_cache=True: {"status": "running"},
+    )
+    plain_server = SimpleNamespace(
+        ip="10.0.0.6",
+        capabilities=set(),
+        get_health=lambda no_cache=True: {"status": "running"},
+    )
+
+    assert asyncio.run(
+        _server_health_button_visibility(
+            SelectionInfo(type="server", server=health_server)
+        )
+    )
+    assert not asyncio.run(
+        _server_health_button_visibility(
+            SelectionInfo(type="bundle", bundle=SimpleNamespace(server=health_server))
+        )
+    )
+    assert not asyncio.run(
+        _server_health_button_visibility(
+            SelectionInfo(type="server", server=plain_server)
+        )
+    )
+
+
+async def _check_server_health_from_action() -> tuple[str, list[str]]:
+    app = DashboardServerInfoTestApp()
+    checked: list[str] = []
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        state="running",
+        backend=["docker"],
+        capabilities={ServerCapability.HEALTH},
+        get_health=lambda no_cache=True: {"status": "running"},
+    )
+    bundle = SimpleNamespace(name="dev", server=server, services=[])
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    def check_server_health(ip: str):
+        checked.append(ip)
+        server.state = "shutdown"
+        return OperationResult(
+            True,
+            0,
+            "Server health checked: shutdown.",
+            {"server": server, "health": {"status": "shutdown"}},
+        )
+
+    app.workspace.check_server_health = check_server_health
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="server", bundle=bundle, server=server)
+        )
+        await pilot.pause()
+        screen.handle_server_health_requested(ServerActions.CheckHealthRequested())
+        deadline = time.monotonic() + 2
+        while server.state != "shutdown":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for server health check.")
+            await pilot.pause(0.05)
+        tree_label = (
+            screen.query_one("#infra-tree").root.children[0].children[0].label.plain
+        )
+        return tree_label, checked
+
+
+def test_server_health_action_uses_workspace_and_refreshes_tree() -> None:
+    tree_label, checked = asyncio.run(_check_server_health_from_action())
+
+    assert checked == ["10.0.0.5"]
+    assert tree_label == "Docker: 10.0.0.5"
 
 
 async def _bundle_runtime_refresh_button_label() -> str:

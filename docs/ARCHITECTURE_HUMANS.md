@@ -84,13 +84,14 @@ become active requirements.
 
 ## Services, Servers, And Execution
 
-A bundle contains one compute/server and the services deployed onto it. Servers advertise capabilities such as `git`, `docker`, `kubernetes`, `firewall`, or native execution support. Services declare their intended capabilities in config, but that model is still evolving.
+A bundle contains one compute/server and the services deployed onto it. Servers advertise capabilities such as `git`, `docker`, `kubernetes`, `firewall`, `health`, or native execution support. Services declare their intended capabilities in config, including `health` when they provide a richer live probe than the generic lifecycle state.
 
 Rules for new service/server work:
 
 - Add or update the MLOX YAML config.
 - Keep deployment assets beside the service/server implementation.
 - Route remote/system work through executors instead of ad-hoc shell calls in UI code.
+- Route health checks through the application use cases so the reported state is normalized and persisted before the UI refreshes.
 - Expose access details through `get_secret()` when the service has credentials or endpoints.
 - Store service dependencies by UUID and resolve them through infrastructure/session helpers.
 - Keep Streamlit/TUI setup panels in frontend modules, registered through `mlox/ui/registry.py`.
@@ -98,7 +99,7 @@ Rules for new service/server work:
 ## Current Limitations
 
 - `requirements` in YAML are parsed but not fully enforced at runtime.
-- Service capabilities are useful metadata but not yet a complete placement policy.
+- Service capabilities are useful metadata and UI affordances but not yet a complete placement policy.
 - `Infrastructure` contains queries, serialization, and runtime hydration only.
 - UI handler plugin registration is not yet part of the documented external plugin API.
 

@@ -1408,6 +1408,15 @@ async def _service_web_ui_login_button_display_for(service: object) -> tuple[boo
         )
 
 
+async def _service_health_button_display_for(service: object) -> bool:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="service", service=service))
+        await pilot.pause()
+        return app.query_one("#check-service-health", Button).display
+
+
 def test_service_actions_show_web_ui_button_only_for_web_ui_services() -> None:
     web_service = SimpleNamespace(
         name="mlflow",
@@ -1419,6 +1428,31 @@ def test_service_actions_show_web_ui_button_only_for_web_ui_services() -> None:
 
     assert asyncio.run(_service_web_ui_button_display_for(web_service)) is True
     assert asyncio.run(_service_web_ui_button_display_for(api_service)) is False
+
+
+def test_service_actions_show_health_button_only_for_initialized_health_services() -> None:
+    health_service = SimpleNamespace(
+        name="mlflow",
+        state="running",
+        capabilities={ServiceCapability.HEALTH},
+        get_health=lambda conn: {"status": "running"},
+    )
+    uninitialized = SimpleNamespace(
+        name="mlflow",
+        state="un-initialized",
+        capabilities={ServiceCapability.HEALTH},
+        get_health=lambda conn: {"status": "running"},
+    )
+    plain_service = SimpleNamespace(
+        name="api",
+        state="running",
+        capabilities=set(),
+        get_health=lambda conn: {"status": "running"},
+    )
+
+    assert asyncio.run(_service_health_button_display_for(health_service)) is True
+    assert asyncio.run(_service_health_button_display_for(uninitialized)) is False
+    assert asyncio.run(_service_health_button_display_for(plain_service)) is False
 
 
 def test_service_actions_hide_web_ui_for_uninitialized_services() -> None:
@@ -1534,6 +1568,62 @@ def test_service_copy_web_ui_login_action_uses_application_layer(monkeypatch) ->
 
     assert copied_text == "password-value"
     assert copied_fields == ["password"]
+
+
+async def _check_service_health_from_action(monkeypatch) -> tuple[str, list[object]]:
+    app = DashboardTestApp()
+    service = SimpleNamespace(
+        name="mlflow",
+        state="running",
+        capabilities={ServiceCapability.HEALTH},
+        get_health=lambda conn: {"status": "running"},
+    )
+    bundle = SimpleNamespace(
+        name="dev",
+        server=SimpleNamespace(ip="10.0.0.5", state="running", backend=["docker"]),
+        services=[service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+    checked = []
+
+    def fake_check(workspace, service_arg: object) -> OperationResult:
+        checked.append(service_arg)
+        service_arg.state = "failed"
+        return OperationResult(
+            True,
+            0,
+            "Service health checked: failed.",
+            {"service": service_arg, "health": {"status": "failed"}},
+        )
+
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.screen.check_service_health_in_workspace",
+        fake_check,
+    )
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        selection = SelectionInfo(type="service", bundle=bundle, service=service)
+        screen._apply_selection(selection)
+        screen.handle_service_health_requested(ServiceActions.CheckHealthRequested())
+        deadline = time.monotonic() + 2
+        while service.state != "failed":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for service health check.")
+            await pilot.pause(0.05)
+        return (
+            screen.query_one("#infra-tree", InfraTree).root.children[0].children[
+                1
+            ].label.plain,
+            checked,
+        )
+
+
+def test_service_health_action_uses_application_layer(monkeypatch) -> None:
+    tree_label, checked = asyncio.run(_check_service_health_from_action(monkeypatch))
+
+    assert len(checked) == 1
+    assert tree_label == "Service: mlflow"
 
 
 async def _rename_service_from_action_modal() -> tuple[str, str]:

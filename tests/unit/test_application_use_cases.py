@@ -792,6 +792,54 @@ def test_servers_terminal_capability_rejects_connector_servers():
     assert result.message == "The selected server does not support terminal login."
 
 
+def test_servers_check_health_updates_state_from_payload():
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        state="running",
+        capabilities={ServerCapability.HEALTH},
+        get_health=lambda no_cache=True: {
+            "status": "shutdown",
+            "healthy": False,
+        },
+    )
+
+    result = servers.check_server_health(server)
+
+    assert result.success
+    assert server.state == "shutdown"
+    assert result.data["health"]["status"] == "shutdown"
+
+
+def test_servers_check_health_requires_capability():
+    server = SimpleNamespace(
+        ip="10.0.0.5",
+        state="running",
+        capabilities=set(),
+        get_health=lambda no_cache=True: {"status": "running"},
+    )
+
+    result = servers.check_server_health(server)
+
+    assert not result.success
+    assert result.message == "Selected server does not provide health checks."
+
+
+def test_servers_check_health_in_workspace_delegates_by_ip():
+    calls = []
+    server = SimpleNamespace(ip="10.0.0.5")
+    workspace = SimpleNamespace(
+        check_server_health=lambda **kwargs: (
+            calls.append(kwargs)
+            or OperationResult(True, 0, "checked")
+        )
+    )
+
+    result = servers.check_server_health_in_workspace(workspace, server)
+
+    assert result.success
+    assert calls == [{"ip": "10.0.0.5"}]
+
+
 def test_servers_get_runtime_info_collects_server_and_backend_info():
     server = SimpleNamespace(
         get_server_info=lambda no_cache=True: {"cpu_count": 4, "host": "demo"},
@@ -865,6 +913,47 @@ def test_services_setup_service_runs_runtime_steps():
 
     assert result.success
     assert calls == ["setup", "spin_up"]
+
+
+def test_services_check_health_updates_state_from_payload():
+    service = SimpleNamespace(
+        name="svc",
+        state="running",
+        capabilities={ServiceCapability.HEALTH},
+        get_health=lambda conn: {"status": "failed", "healthy": False},
+    )
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: _Connection())
+    )
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service if name == "svc" else None,
+            get_bundle_by_service=lambda value: bundle if value is service else None,
+        )
+    )
+
+    result = services.check_service_health(current, name="svc")
+
+    assert result.success
+    assert service.state == "failed"
+    assert result.data["health"]["status"] == "failed"
+
+
+def test_services_check_health_requires_capability():
+    service = SimpleNamespace(
+        name="svc",
+        state="running",
+        capabilities=set(),
+        get_health=lambda conn: {"status": "running"},
+    )
+    current = _project(
+        SimpleNamespace(get_service=lambda name: service if name == "svc" else None)
+    )
+
+    result = services.check_service_health(current, name="svc")
+
+    assert not result.success
+    assert result.message == "Selected service does not provide health checks."
 
 
 def test_services_rename_service_validates_and_updates_name():
@@ -1032,6 +1121,22 @@ def test_services_setup_service_in_workspace_delegates_by_name():
     )
 
     result = services.setup_service_in_workspace(workspace, service)
+
+    assert result.success
+    assert calls == [{"name": "svc"}]
+
+
+def test_services_check_service_health_in_workspace_delegates_by_name():
+    calls = []
+    service = SimpleNamespace(name="svc")
+    workspace = SimpleNamespace(
+        check_service_health=lambda **kwargs: (
+            calls.append(kwargs)
+            or OperationResult(True, 0, "checked")
+        )
+    )
+
+    result = services.check_service_health_in_workspace(workspace, service)
 
     assert result.success
     assert calls == [{"name": "svc"}]

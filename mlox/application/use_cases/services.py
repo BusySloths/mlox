@@ -26,6 +26,76 @@ def service_has_web_ui(service: object | None) -> bool:
     return callable(getattr(service, "get_web_ui_address", None))
 
 
+def service_has_health(service: object | None) -> bool:
+    """Return whether a service advertises live health checks."""
+
+    if not service:
+        return False
+    if ServiceCapability.HEALTH.value in _service_capability_names(service):
+        return callable(getattr(service, "get_health", None))
+    return False
+
+
+def check_service_health(project: WorkspaceState, *, name: str) -> OperationResult:
+    """Run a service health check and persist the service state."""
+
+    infra = project.infrastructure
+    service = infra.get_service(name)
+    if not service:
+        return OperationResult(False, 54, "Service not found in infrastructure.")
+    if not service_has_health(service):
+        return OperationResult(
+            False,
+            55,
+            "Selected service does not provide health checks.",
+        )
+    bundle = infra.get_bundle_by_service(service)
+    if not bundle:
+        return OperationResult(False, 56, "Could not find server bundle for service.")
+
+    try:
+        with bundle.server.get_server_connection() as conn:
+            health = service.get_health(conn)
+    except Exception as exc:
+        return OperationResult(False, 57, f"Failed to check service health: {exc}")
+
+    if not isinstance(health, dict):
+        return OperationResult(
+            False,
+            58,
+            "Selected service returned invalid health data.",
+        )
+
+    _update_service_state_from_health(service, health)
+    status = str(health.get("status") or getattr(service, "state", "unknown"))
+    return OperationResult(
+        True,
+        0,
+        f"Service health checked: {status}.",
+        {"service": service, "health": health},
+    )
+
+
+def check_service_health_in_workspace(workspace, service) -> OperationResult:
+    """Check service health through an open workspace adapter."""
+
+    if not workspace:
+        return OperationResult(False, 59, "Project workspace is unavailable.")
+    if not service:
+        return OperationResult(False, 60, "No service selected.")
+    check_health = getattr(workspace, "check_service_health", None)
+    if not callable(check_health):
+        return OperationResult(
+            False,
+            61,
+            "Project workspace cannot check service health.",
+        )
+    try:
+        return check_health(name=str(getattr(service, "name", "")))
+    except Exception as exc:
+        return OperationResult(False, 62, f"Failed to check service health: {exc}")
+
+
 def get_service_web_ui_address(service: object | None) -> OperationResult:
     """Resolve the browser URL for a web UI-capable service."""
 
@@ -306,6 +376,36 @@ def stop_service(project: WorkspaceState, *, name: str) -> OperationResult:
     with bundle.server.get_server_connection() as conn:
         service.spin_down(conn)
     return OperationResult(True, 0, f"Service {name} stopped.", {"service": service})
+
+
+def _update_service_state_from_health(service: object, health: Dict[str, Any]) -> None:
+    state = str(health.get("state") or health.get("status") or "").strip()
+    if state not in {
+        "un-initialized",
+        "running",
+        "stopped",
+        "starting",
+        "terminating",
+        "failed",
+        "error",
+        "unknown",
+    }:
+        if health.get("healthy") is True:
+            state = "running"
+        elif health.get("healthy") is False:
+            state = "unknown"
+    if state:
+        try:
+            setattr(service, "state", state)
+        except Exception:
+            pass
+
+
+def _service_capability_names(service: object) -> set[str]:
+    return {
+        capability.value if hasattr(capability, "value") else str(capability)
+        for capability in getattr(service, "capabilities", set()) or set()
+    }
 
 
 def rename_service(project: WorkspaceState, *, name: str, new_name: str) -> OperationResult:

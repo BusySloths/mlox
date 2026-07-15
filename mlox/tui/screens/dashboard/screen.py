@@ -44,6 +44,7 @@ from .tree import InfraTree
 from .workflow_panel import WorkflowPanel
 from mlox.application.use_cases.servers import (
     add_server_from_template,
+    check_server_health_in_workspace,
     materialize_server_template_params,
     remove_bundle,
     resolve_server_template_setup,
@@ -58,6 +59,7 @@ from mlox.application.use_cases.project import (
 from mlox.application.use_cases.services import (
     add_service_from_template,
     build_service_ui_widget,
+    check_service_health_in_workspace,
     get_service_web_ui_login_value,
     materialize_service_template_params,
     open_service_web_ui,
@@ -243,6 +245,48 @@ class DashboardScreen(Screen):
                 "Select a bundle or server to refresh runtime information.",
                 severity="warning",
             )
+
+    @on(ServerActions.CheckHealthRequested)
+    def handle_server_health_requested(
+        self,
+        _: ServerActions.CheckHealthRequested,
+    ) -> None:
+        selection = self.query_one(ServerActions).selection
+        if not selection or selection.type != "server" or not selection.server:
+            self.notify("Select a health-capable server.", severity="warning")
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot check server health because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        self.query_one(ServerActions).set_health_loading(True)
+
+        def run_health_check() -> None:
+            result = check_server_health_in_workspace(workspace, selection.server)
+            self.app.call_from_thread(
+                self._finish_server_health_check,
+                result,
+                selection,
+            )
+
+        self.app.run_worker(
+            run_health_check,
+            thread=True,
+            exclusive=True,
+            group="server-health",
+        )
+
+    def _finish_server_health_check(self, result, selection: SelectionInfo) -> None:
+        self.query_one(ServerActions).set_health_loading(False)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+        self._refresh_tree_after_server_health(selection)
+        self.notify(result.message)
 
     @on(ServerInfoPanel.RuntimeInfoLoadStarted)
     def handle_runtime_info_load_started(
@@ -679,6 +723,54 @@ class DashboardScreen(Screen):
         self.app.copy_to_clipboard(value)
         self.notify(f"Copied service web UI {field}.")
 
+    @on(ServiceActions.CheckHealthRequested)
+    def handle_service_health_requested(
+        self,
+        _: ServiceActions.CheckHealthRequested,
+    ) -> None:
+        selection = self.query_one(ServiceActions).selection
+        if not selection or selection.type != "service" or not selection.service:
+            self.notify("Select a health-capable service.", severity="warning")
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot check service health because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        self.query_one(ServiceActions).set_health_loading(True)
+
+        def run_health_check() -> None:
+            result = check_service_health_in_workspace(workspace, selection.service)
+            self.app.call_from_thread(
+                self._finish_service_health_check,
+                result,
+                selection.bundle,
+                selection.service,
+            )
+
+        self.app.run_worker(
+            run_health_check,
+            thread=True,
+            exclusive=True,
+            group="service-health",
+        )
+
+    def _finish_service_health_check(
+        self,
+        result,
+        bundle: object | None,
+        service: object | None,
+    ) -> None:
+        self.query_one(ServiceActions).set_health_loading(False)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+        self._refresh_tree_after_service_change(bundle, service)
+        self.notify(result.message)
+
     @on(ServiceActions.SetupRequested)
     def handle_service_setup_requested(
         self, _: ServiceActions.SetupRequested
@@ -1026,6 +1118,30 @@ class DashboardScreen(Screen):
             for node in tree.root.children:
                 selection = node.data
                 if isinstance(selection, SelectionInfo) and selection.bundle is bundle:
+                    tree.move_cursor(node)
+                    self._apply_selection(selection)
+                    return
+        tree.move_cursor(tree.root)
+        self._apply_selection(tree.root.data)
+
+    def _refresh_tree_after_server_health(self, selection: SelectionInfo) -> None:
+        tree = self.query_one(InfraTree)
+        tree.populate_tree()
+        tree.expand_all()
+        self._select_server_tree_node(selection.server)
+        self.call_after_refresh(self._select_server_tree_node, selection.server)
+
+    def _select_server_tree_node(self, server: object | None) -> None:
+        tree = self.query_one(InfraTree)
+        tree.expand_all()
+        for bundle_node in tree.root.children:
+            for node in bundle_node.children:
+                selection = node.data
+                if (
+                    isinstance(selection, SelectionInfo)
+                    and selection.type == "server"
+                    and selection.server is server
+                ):
                     tree.move_cursor(node)
                     self._apply_selection(selection)
                     return

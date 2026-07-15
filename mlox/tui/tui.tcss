@@ -1134,6 +1134,20 @@ SecretEditDialog {
   background: #12b86aff;
 }
 
+#check-server-health,
+#check-service-health {
+  width: auto;
+  margin-left: 1;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#check-server-health:hover,
+#check-service-health:hover {
+  background: #12b86aff;
+}
+
 #edit-bundle-tags {
   width: auto;
   margin-left: 1;
