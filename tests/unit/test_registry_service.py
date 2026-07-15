@@ -68,6 +68,26 @@ def test_openbao_tui_settings_handler_is_registered(monkeypatch):
     clear_handlers()
 
 
+def test_mlflow_gateway_tui_settings_handlers_are_registered(monkeypatch):
+    clear_handlers(bootstrapped=True)
+    monkeypatch.setattr(tui_services, "_REGISTERED", False)
+
+    tui_services.register_builtin_tui_services()
+
+    for config_id in (
+        "mlflow-gateway-3.8.1-docker",
+        "mlflow-gateway-3.8.1-k3s",
+    ):
+        handler = get_handler(
+            config_id=config_id,
+            frontend="tui",
+            function_name="settings",
+        )
+        assert callable(handler)
+
+    clear_handlers()
+
+
 def test_ui_registry_retries_after_failed_bootstrap(monkeypatch):
     calls = []
 

@@ -2,16 +2,27 @@ import os
 import sys
 import json
 import logging
+import threading
+import time
+import uuid
 import mlflow  # type: ignore
 import numpy as np
 import pandas as pd
 
+from contextvars import ContextVar
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SYS_PATH = list(sys.path)
@@ -26,6 +37,69 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_MAX_MODELS = 10
 DEFAULT_CACHE_TTL_DAYS = 10.0
+REQUEST_ID_HEADER = "X-Request-ID"
+request_id_context: ContextVar[str] = ContextVar("request_id", default="")
+model_first_request_keys: set[tuple[str, str]] = set()
+model_first_request_lock = threading.Lock()
+
+HTTP_REQUESTS = Counter(
+    "mlox_gateway_http_requests_total",
+    "HTTP requests handled by the gateway.",
+    ("method", "route", "status"),
+)
+HTTP_REQUEST_DURATION = Histogram(
+    "mlox_gateway_http_request_duration_seconds",
+    "HTTP request duration in seconds.",
+    ("method", "route"),
+)
+HTTP_REQUESTS_IN_PROGRESS = Gauge(
+    "mlox_gateway_http_requests_in_progress",
+    "HTTP requests currently being processed.",
+    ("method",),
+)
+PREDICTIONS = Counter(
+    "mlox_gateway_predictions_total",
+    "Predictions handled by model, version, status, and model-cache result.",
+    ("model", "version", "status", "model_cache_hit"),
+)
+PREDICTION_DURATION = Histogram(
+    "mlox_gateway_prediction_duration_seconds",
+    "End-to-end prediction duration in seconds.",
+    ("model", "version"),
+)
+MODEL_REQUEST_FIRST = Gauge(
+    "mlox_gateway_model_first_request_timestamp_seconds",
+    "Unix timestamp of the first request observed for a model version.",
+    ("model", "version"),
+)
+MODEL_REQUEST_LAST = Gauge(
+    "mlox_gateway_model_last_request_timestamp_seconds",
+    "Unix timestamp of the latest request observed for a model version.",
+    ("model", "version"),
+)
+MODEL_CACHE_OPERATIONS = Counter(
+    "mlox_gateway_model_cache_operations_total",
+    "Model-cache lookups by result.",
+    ("result",),
+)
+MODEL_CACHE_EVICTIONS = Counter(
+    "mlox_gateway_model_cache_evictions_total",
+    "Model-cache evictions by reason.",
+    ("reason",),
+)
+MODEL_CACHE_ENTRIES = Gauge(
+    "mlox_gateway_model_cache_entries",
+    "Models currently held in the process-local cache.",
+)
+MODEL_LOADS = Counter(
+    "mlox_gateway_model_loads_total",
+    "Model load attempts by status.",
+    ("status",),
+)
+MODEL_LOAD_DURATION = Histogram(
+    "mlox_gateway_model_load_duration_seconds",
+    "MLflow model load duration in seconds.",
+)
 
 
 def _env_int(name: str, default: int) -> int:
@@ -96,6 +170,45 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def observe_http_request(request: Request, call_next):
+    request_id = request.headers.get(REQUEST_ID_HEADER) or str(uuid.uuid4())
+    token = request_id_context.set(request_id)
+    started = time.perf_counter()
+    status_code = 500
+    HTTP_REQUESTS_IN_PROGRESS.labels(request.method).inc()
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+    finally:
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+        duration = time.perf_counter() - started
+        HTTP_REQUESTS.labels(request.method, route_path, str(status_code)).inc()
+        HTTP_REQUEST_DURATION.labels(request.method, route_path).observe(duration)
+        HTTP_REQUESTS_IN_PROGRESS.labels(request.method).dec()
+        logger.info(
+            json.dumps(
+                {
+                    "event": "http_request",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "route": route_path,
+                    "status": status_code,
+                    "duration_sec": round(duration, 6),
+                }
+            )
+        )
+        request_id_context.reset(token)
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")
@@ -213,7 +326,9 @@ def _read_requirements(model_uri: str) -> List[str]:
     try:
         artifact_path = mlflow.artifacts.download_artifacts(model_uri)
     except Exception as exc:
-        logger.info("Could not download model artifacts for requirement inspection: %s", exc)
+        logger.info(
+            "Could not download model artifacts for requirement inspection: %s", exc
+        )
         return []
 
     req_file = Path(artifact_path) / "requirements.txt"
@@ -247,6 +362,7 @@ def _evict_cache(
             if entry.last_call < expires_before:
                 model_cache.pop(uri, None)
                 evicted["ttl"].append(uri)
+                MODEL_CACHE_EVICTIONS.labels("ttl").inc()
 
     while len(model_cache) > max_models:
         candidates = [
@@ -259,7 +375,9 @@ def _evict_cache(
         uri, _ = min(candidates, key=lambda item: item[1].last_call)
         model_cache.pop(uri, None)
         evicted["lru"].append(uri)
+        MODEL_CACHE_EVICTIONS.labels("lru").inc()
 
+    MODEL_CACHE_ENTRIES.set(len(model_cache))
     if evicted["ttl"] or evicted["lru"]:
         logger.info("Evicted cache entries: %s", evicted)
     return evicted
@@ -268,16 +386,32 @@ def _evict_cache(
 def _load_model(model_uri: str) -> tuple[Any, bool]:
     _evict_cache(protected_uri=model_uri)
     if model_uri not in model_cache:
-        loaded_model = mlflow.pyfunc.load_model(model_uri=model_uri)
+        MODEL_CACHE_OPERATIONS.labels("miss").inc()
+        load_started = time.perf_counter()
+        try:
+            loaded_model = mlflow.pyfunc.load_model(model_uri=model_uri)
+        except Exception:
+            MODEL_LOADS.labels("error").inc()
+            raise
+        finally:
+            MODEL_LOAD_DURATION.observe(time.perf_counter() - load_started)
+        MODEL_LOADS.labels("success").inc()
+        now = datetime.now()
         model_cache[model_uri] = ModelCacheEntry(
             model=loaded_model,
             model_uri=model_uri,
             sys_path=list(sys.path),
             requirements=_read_requirements(model_uri),
+            num_calls=1,
+            loaded_at=now,
+            first_call=now,
+            last_call=now,
         )
+        MODEL_CACHE_ENTRIES.set(len(model_cache))
         _evict_cache(protected_uri=model_uri)
         return loaded_model, False
 
+    MODEL_CACHE_OPERATIONS.labels("hit").inc()
     mce = model_cache[model_uri]
     mce.last_call = datetime.now()
     mce.num_calls += 1
@@ -286,43 +420,57 @@ def _load_model(model_uri: str) -> tuple[Any, bool]:
 
 
 def runandget(data: PredictionRequest):
-    logger.info(f"sys.path.BASELINE {SYS_PATH}")
-    logger.info(f"Input data: {data}")
-    logger.info(f"Input model_name: {data.registry_model_name}")
-    logger.info(f"Input model_version: {data.registry_model_version}")
-    logger.info(f"Input model_alias: {data.registry_model_alias}")
-
     resolved_model = _resolve_model_reference(data)
     model_uri = resolved_model.resolved_model_uri
-    logger.info(f"Load model from = {model_uri}")
 
     loaded_model, is_cached_model = _load_model(model_uri)
-    logger.info(f"Model loaded: {loaded_model}")
     input_data = _prediction_input(data)
-    logger.info(f"Model data: {input_data}")
-    logger.info(f"Model params: {data.params}")
     df_pred = loaded_model.predict(input_data, params=data.params)
-    logger.info(f"Model prediction: {df_pred}")
 
     # Proper JSON serialization
     if not isinstance(df_pred, pd.DataFrame):
         df_pred = pd.DataFrame(df_pred)
     parsed = json.loads(df_pred.to_json(orient="records", date_format="iso"))
 
-    logger.info(f"sys.path.AFTER_PREDICT {sys.path}")
     sys.path = list(SYS_PATH)
-    logger.info(f"sys.path.RESET {sys.path}")
     _evict_cache(protected_uri=model_uri)
     return parsed, is_cached_model, resolved_model
 
 
 @app.post("/prod/predict")
 def predict(data: PredictionRequest):
+    started = time.perf_counter()
+    model_name = data.registry_model_name
+    model_version = "unresolved"
+    cache_hit = "unknown"
     try:
         prediction_time = datetime.now()
         data, is_cached_model, resolved_model = runandget(data)
+        model_version = resolved_model.resolved_model_version
+        cache_hit = str(is_cached_model).lower()
+        now = time.time()
+        model_key = (model_name, model_version)
+        with model_first_request_lock:
+            if model_key not in model_first_request_keys:
+                MODEL_REQUEST_FIRST.labels(*model_key).set(now)
+                model_first_request_keys.add(model_key)
+        MODEL_REQUEST_LAST.labels(model_name, model_version).set(now)
+        PREDICTIONS.labels(model_name, model_version, "success", cache_hit).inc()
 
         prediction_tdelta = datetime.now() - prediction_time
+        logger.info(
+            json.dumps(
+                {
+                    "event": "prediction",
+                    "request_id": request_id_context.get(),
+                    "model": model_name,
+                    "version": model_version,
+                    "model_cache_hit": is_cached_model,
+                    "duration_sec": round(prediction_tdelta.total_seconds(), 6),
+                    "status": "success",
+                }
+            )
+        )
         return {
             "data": data,
             "prediction_time_sec": prediction_tdelta.total_seconds(),
@@ -330,14 +478,21 @@ def predict(data: PredictionRequest):
             "model": resolved_model.model_dump(),
         }
     except mlflow.exceptions.RestException as e:
+        PREDICTIONS.labels(model_name, model_version, "not_found", cache_hit).inc()
         sys.path = list(SYS_PATH)
         raise HTTPException(status_code=404, detail=f"Model not found: {str(e)}")
     except ValueError as ve:
+        PREDICTIONS.labels(model_name, model_version, "invalid_input", cache_hit).inc()
         sys.path = list(SYS_PATH)
         raise HTTPException(status_code=400, detail=f"Invalid input: {str(ve)}")
     except Exception as e:
+        PREDICTIONS.labels(model_name, model_version, "error", cache_hit).inc()
         sys.path = list(SYS_PATH)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    finally:
+        PREDICTION_DURATION.labels(model_name, model_version).observe(
+            time.perf_counter() - started
+        )
 
 
 @app.get("/model/{model_name}/list")
@@ -398,6 +553,7 @@ def list_cached_models():
 def clear_cached_models():
     count = len(model_cache)
     model_cache.clear()
+    MODEL_CACHE_ENTRIES.set(0)
     sys.path = list(SYS_PATH)
     return {"cleared_models_count": count}
 

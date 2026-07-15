@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 import pytest
+from fastapi.testclient import TestClient
+from prometheus_client import generate_latest
 
 from mlox.services.mlflow import mlops
 from mlox.services.mlflow_gateway import serve
@@ -290,6 +292,69 @@ def test_serve_run_predict_and_list_models(monkeypatch):
     models = serve.list_models("Demo")
     assert models["model"] == "Demo"
     assert len(models["versions"]) == 2
+
+
+def test_serve_exposes_prometheus_metrics_and_request_ids():
+    client = TestClient(serve.app)
+
+    generated_id_response = client.get("/health")
+    supplied_id_response = client.get(
+        "/health", headers={serve.REQUEST_ID_HEADER: "request-from-client"}
+    )
+    metrics_response = client.get("/metrics")
+
+    assert generated_id_response.status_code == 200
+    assert generated_id_response.headers[serve.REQUEST_ID_HEADER]
+    assert (
+        supplied_id_response.headers[serve.REQUEST_ID_HEADER]
+        == "request-from-client"
+    )
+    assert metrics_response.status_code == 200
+    assert metrics_response.headers["content-type"].startswith("text/plain")
+    assert "mlox_gateway_http_requests_total" in metrics_response.text
+    assert "mlox_gateway_http_request_duration_seconds" in metrics_response.text
+    assert "mlox_gateway_model_cache_entries" in metrics_response.text
+
+
+def test_serve_records_prediction_and_model_cache_metrics(monkeypatch):
+    serve.clear_cached_models()
+
+    class _LoadedModel:
+        def predict(self, input_data, params=None):
+            return pd.DataFrame({"result": [float(np.sum(input_data))]})
+
+    monkeypatch.setattr(
+        serve.mlflow.pyfunc, "load_model", lambda model_uri: _LoadedModel()
+    )
+    monkeypatch.setattr(
+        serve.mlflow.artifacts, "download_artifacts", lambda *_a, **_k: ""
+    )
+    request = serve.PredictionRequest(
+        input_data=[[2.0, 3.0]],
+        registry_model_name="MetricsDemo",
+        registry_model_version=42,
+    )
+
+    first = serve.predict(request)
+    second = serve.predict(request)
+    output = generate_latest().decode("utf-8")
+
+    assert first["is_cached_model"] is False
+    assert second["is_cached_model"] is True
+    assert 'mlox_gateway_model_cache_operations_total{result="miss"}' in output
+    assert 'mlox_gateway_model_cache_operations_total{result="hit"}' in output
+    assert (
+        'mlox_gateway_predictions_total{model="MetricsDemo",model_cache_hit="false",'
+        'status="success",version="42"}' in output
+    )
+    assert (
+        'mlox_gateway_model_first_request_timestamp_seconds{model="MetricsDemo",'
+        'version="42"}' in output
+    )
+    assert (
+        'mlox_gateway_model_last_request_timestamp_seconds{model="MetricsDemo",'
+        'version="42"}' in output
+    )
 
 
 def test_serve_model_reference_supports_version_or_alias(monkeypatch):

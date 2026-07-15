@@ -233,6 +233,65 @@ Button {
   width: 1fr;
 }
 
+MLflowGatewaySettingsPanel {
+  height: 1fr;
+  width: 1fr;
+  padding: 0 1;
+  overflow: hidden;
+}
+
+#mlflow-gateway-actions {
+  height: 3;
+  min-height: 3;
+  align-vertical: middle;
+  margin-bottom: 1;
+}
+
+#mlflow-gateway-actions Button {
+  width: auto;
+  min-width: 12;
+  margin-right: 1;
+}
+
+#mlflow-gateway-status {
+  height: auto;
+  min-height: 1;
+  max-height: 2;
+  color: #94a3b8;
+  margin-bottom: 1;
+}
+
+#mlflow-gateway-summary {
+  height: 5;
+  min-height: 5;
+  margin-bottom: 1;
+}
+
+#mlflow-gateway-content-tabs {
+  height: 1fr;
+  min-height: 8;
+}
+
+#mlflow-gateway-models-tab,
+#mlflow-gateway-cache-tab,
+#mlflow-gateway-metrics-tab {
+  height: 1fr;
+  padding: 0;
+}
+
+.mlflow-gateway-tab-help {
+  height: 1;
+  color: #94a3b8;
+  margin: 0 1;
+}
+
+#mlflow-gateway-models,
+#mlflow-gateway-cache,
+#mlflow-gateway-metrics {
+  height: 1fr;
+  width: 1fr;
+}
+
 #server-template-panel,
 #service-template-panel,
 #secret-manager-panel,

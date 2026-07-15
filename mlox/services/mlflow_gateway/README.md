@@ -25,6 +25,15 @@ curl -k -u 'USER:PASSWORD' https://HOST:PORT/health
 # k3s: curl -k -u 'USER:PASSWORD' https://HOST/gateway-ID/health
 ```
 
+Prometheus metrics:
+
+```bash
+curl -k -u 'USER:PASSWORD' https://HOST:PORT/metrics
+```
+
+The gateway returns an `X-Request-ID` response header. Callers may supply their
+own `X-Request-ID` to correlate gateway access logs with client-side telemetry.
+
 Invoke a registered model version:
 
 ```bash
