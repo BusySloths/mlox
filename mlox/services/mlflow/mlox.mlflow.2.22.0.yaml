@@ -30,6 +30,7 @@ capabilities:
   service:
   - web_ui
   - model_registry
+  - health
   backend:
   - docker
 ports:

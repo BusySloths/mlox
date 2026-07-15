@@ -5,7 +5,7 @@ from typing import cast
 
 from mlox.project import ProjectWorkspace
 from mlox.config import load_all_service_configs
-from mlox.service import AbstractSecretManagerService
+from mlox.service import AbstractSecretManagerService, ServiceCapability
 from mlox.view.logs import show_service_logs_ui
 
 
@@ -248,7 +248,12 @@ def installed_services():
             st.rerun()
         if b3.button("Check", key=f"check-{svc.uuid}"):
             with bndl.server.get_server_connection() as conn:
-                status = svc.check(conn)
+                if ServiceCapability.HEALTH in (
+                    getattr(svc, "capabilities", set()) or set()
+                ) and hasattr(svc, "get_health"):
+                    status = svc.get_health(conn)
+                else:
+                    status = svc.check(conn)
             st.toast(f"{svc.name} status: {status}")
         if b7.button("Teardown", key=f"teardown-{svc.uuid}", type="primary"):
             with st.spinner(f"Deleting {svc.name}…", show_time=True):

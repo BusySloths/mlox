@@ -20,8 +20,12 @@ import secrets
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, ServiceCapability
-
+from mlox.service import (
+    AbstractHealthService,
+    AbstractService,
+    ServiceCapability,
+    service_health_payload,
+)
 
 
 logging.basicConfig(
@@ -40,8 +44,8 @@ def _generate_cluster_id() -> str:
 
 
 @dataclass
-class KafkaDockerService(AbstractService):
-    capabilities = {ServiceCapability.MESSAGE_BROKER}
+class KafkaDockerService(AbstractService, AbstractHealthService):
+    capabilities = {ServiceCapability.MESSAGE_BROKER, ServiceCapability.HEALTH}
     """Docker based deployment for a single-node Kafka broker."""
 
     ssl_password: str
@@ -56,7 +60,9 @@ class KafkaDockerService(AbstractService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/{self.target_docker_script}")
+        self.exec.fs_copy(
+            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        )
 
         # Generate self-signed TLS assets for the broker
         self.exec.tls_setup_no_config(conn, conn.host, self.target_path)
@@ -78,7 +84,9 @@ class KafkaDockerService(AbstractService):
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_create_empty_file(conn, env_path)
-        self.exec.fs_append_line(conn, env_path, f"MY_KAFKA_CLUSTER_ID={self.cluster_id}")
+        self.exec.fs_append_line(
+            conn, env_path, f"MY_KAFKA_CLUSTER_ID={self.cluster_id}"
+        )
         self.exec.fs_append_line(conn, env_path, f"MY_KAFKA_SSL_PORT={self.ssl_port}")
         self.exec.fs_append_line(conn, env_path, f"MY_KAFKA_PUBLIC_HOST={conn.host}")
         # PEM mode: compose file supplies the SSL_* PEM config and mounts certs
@@ -137,6 +145,9 @@ class KafkaDockerService(AbstractService):
             logger.error("Error checking Kafka service status: %s", exc)
             self.state = "unknown"
             return {"status": "unknown", "error": str(exc)}
+
+    def get_health(self, conn) -> Dict[str, object]:
+        return service_health_payload(self, self.check(conn))
 
     def get_secrets(self) -> Dict[str, Dict]:
         if not self.ssl_password:

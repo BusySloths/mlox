@@ -152,6 +152,24 @@ def _ensure_runtime_backend_running(server, ip: str) -> OperationResult | None:
 
 
 def _runtime_backend_status(server, ip: str) -> OperationResult:
+    capabilities = getattr(server, "capabilities", set()) or set()
+    get_health = getattr(server, "get_health", None)
+    if ServerCapability.HEALTH in capabilities and callable(get_health):
+        try:
+            status = get_health()
+        except Exception as exc:
+            return OperationResult(
+                False,
+                10,
+                f"Server {ip} setup completed, but health check failed: {exc}",
+            )
+        return OperationResult(
+            True,
+            0,
+            "Server health retrieved.",
+            {"backend_status": status or {}},
+        )
+
     get_backend_status = getattr(server, "get_backend_status", None)
     if not callable(get_backend_status):
         return OperationResult(
@@ -215,7 +233,9 @@ def browse_server_templates(
 
     list_configs = list_configs or load_all_server_configs
     configs = list(list_configs())
-    message = "No server templates found." if not configs else "Server templates loaded."
+    message = (
+        "No server templates found." if not configs else "Server templates loaded."
+    )
     return OperationResult(True, 0, message, {"configs": configs})
 
 
@@ -270,7 +290,9 @@ def materialize_server_template_params(setup, values, infra) -> OperationResult:
     )
 
 
-def add_server_from_template(workspace, config, params: Dict[str, str]) -> OperationResult:
+def add_server_from_template(
+    workspace, config, params: Dict[str, str]
+) -> OperationResult:
     """Add a server template to an open workspace through the workspace adapter."""
 
     if not workspace:
@@ -484,4 +506,6 @@ def get_backend_info(server) -> OperationResult:
         except Exception as exc:
             return OperationResult(False, 15, f"Failed to load backend info: {exc}")
 
-    return OperationResult(True, 0, "No backend information available.", {"backend_info": {}})
+    return OperationResult(
+        True, 0, "No backend information available.", {"backend_info": {}}
+    )

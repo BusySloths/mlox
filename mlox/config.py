@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Literal, TypedDict
 
 from mlox.service import (
+    AbstractHealthService,
     AbstractModelRegistryService,
     AbstractModelServerService,
     AbstractMonitorService,
@@ -22,6 +23,7 @@ from mlox.server import (
     AbstractDockerServer,
     AbstractFirewallServer,
     AbstractGitServer,
+    AbstractHealthServer,
     AbstractInitialPasswordAuthServer,
     AbstractKubernetesServer,
     AbstractLocalServer,
@@ -36,6 +38,7 @@ PluginKind = Literal["service", "server"]
 
 
 SERVER_CAPABILITY_ABCS = {
+    ServerCapability.HEALTH.value: AbstractHealthServer,
     ServerCapability.GIT.value: AbstractGitServer,
     ServerCapability.FIREWALL.value: AbstractFirewallServer,
     ServerCapability.INITIAL_AUTH_PASSWORD.value: AbstractInitialPasswordAuthServer,
@@ -48,6 +51,7 @@ SERVER_CAPABILITY_ABCS = {
 
 
 SERVICE_CAPABILITY_ABCS = {
+    ServiceCapability.HEALTH.value: AbstractHealthService,
     ServiceCapability.WEB_UI.value: AbstractWebUIService,
     ServiceCapability.SECRET_MANAGER.value: AbstractSecretManagerService,
     ServiceCapability.REPOSITORY.value: AbstractRepositoryService,
@@ -57,6 +61,7 @@ SERVICE_CAPABILITY_ABCS = {
 }
 
 SERVICE_GROUP_ALIASES = {
+    "health": ServiceCapability.HEALTH.value,
     "web_ui": ServiceCapability.WEB_UI.value,
     "web-ui": ServiceCapability.WEB_UI.value,
     "secret_manager": ServiceCapability.SECRET_MANAGER.value,

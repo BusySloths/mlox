@@ -22,6 +22,7 @@ from typing import Any, ClassVar, IO
 from mlox.executors import UbuntuTaskExecutor
 from mlox.server import (
     AbstractGitServer,
+    AbstractHealthServer,
     AbstractLocalServer,
     AbstractServer,
     MloxUser,
@@ -160,10 +161,13 @@ class LocalServerConnection(ServerConnection):
 
 
 @dataclass
-class LocalhostServer(AbstractServer, AbstractGitServer, AbstractLocalServer):
+class LocalhostServer(
+    AbstractServer, AbstractHealthServer, AbstractGitServer, AbstractLocalServer
+):
     """A server representation that targets the local machine."""
 
     capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.HEALTH,
         ServerCapability.GIT,
         ServerCapability.LOCAL,
     }

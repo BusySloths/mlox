@@ -26,16 +26,23 @@ from dataclasses import dataclass, field
 
 from mlox.executors import TaskGroup
 from mlox.service import (
+    AbstractHealthService,
     AbstractModelRegistryService,
     AbstractModelServerService,
     AbstractService,
+    ServiceCapability,
+    service_health_payload,
 )
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MLFlowMLServerDockerService(AbstractService, AbstractModelServerService):
+class MLFlowMLServerDockerService(
+    AbstractService, AbstractHealthService, AbstractModelServerService
+):
+    capabilities = {ServiceCapability.MODEL_SERVER, ServiceCapability.HEALTH}
+
     dockerfile: str
     port: str | int
     model: str
@@ -156,6 +163,9 @@ class MLFlowMLServerDockerService(AbstractService, AbstractModelServerService):
             logger.error("Error checking MLServer status: %s", exc)
             self.state = "unknown"
         return {"status": "unknown"}
+
+    def get_health(self, conn) -> Dict[str, Any]:
+        return service_health_payload(self, self.check(conn))
 
     def get_secrets(self) -> Dict[str, Dict]:
         secrets: Dict[str, Dict] = {}

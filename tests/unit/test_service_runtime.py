@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractHealthService,
+    AbstractService,
+    ServiceCapability,
+    service_health_payload,
+)
 
 
 class _Exec:
@@ -57,7 +62,9 @@ class _Service(AbstractService):
 
 
 def _svc():
-    svc = _Service(name="svc", service_config_id="cfg", template="t", target_path="/tmp/svc")
+    svc = _Service(
+        name="svc", service_config_id="cfg", template="t", target_path="/tmp/svc"
+    )
     svc.exec = _Exec()
     svc.compose_service_names = {"api": "api", "db": "db"}
     return svc
@@ -79,7 +86,9 @@ def test_compose_service_status_and_logs_paths():
     statuses = svc.compose_service_status(conn=object())
     assert statuses["db"] == "exited"
 
-    assert svc.compose_service_log_tail(conn=object(), label="api", tail=10).startswith("logs:")
+    assert svc.compose_service_log_tail(conn=object(), label="api", tail=10).startswith(
+        "logs:"
+    )
     assert svc.compose_service_log_tail(conn=object(), label="missing") == "Not found"
     assert svc.log_labels() == ["api", "db"]
     assert svc.service_log_tail(conn=object(), label="api", tail=10).startswith("logs:")
@@ -93,3 +102,41 @@ def test_dump_state_writes_debug_files():
     write_calls = [c for c in svc.exec.calls if c[0] == "write"]
     assert any("start.sh" in c[1] for c in write_calls)
     assert any("service-state.json" in c[1] for c in write_calls)
+
+
+def test_health_capability_is_optional_for_services():
+    svc = _svc()
+
+    assert ServiceCapability.HEALTH.value == "health"
+    assert ServiceCapability.HEALTH not in getattr(svc, "capabilities", set())
+    assert not hasattr(svc, "get_health")
+
+
+@dataclass
+class _HealthService(_Service, AbstractHealthService):
+    capabilities = {ServiceCapability.HEALTH}
+
+    def check(self, conn):
+        self.state = "running"
+        return {"status": "running", "detail": "probe ok"}
+
+    def get_health(self, conn):
+        return service_health_payload(self, self.check(conn))
+
+
+def test_health_service_normalizes_probe_payload():
+    svc = _HealthService(
+        name="svc",
+        service_config_id="cfg",
+        template="t",
+        target_path="/tmp/svc",
+    )
+
+    health = svc.get_health(conn=object())
+
+    assert health == {
+        "status": "running",
+        "detail": "probe ok",
+        "state": "running",
+        "healthy": True,
+    }

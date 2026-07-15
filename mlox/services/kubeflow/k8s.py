@@ -6,16 +6,26 @@ from dataclasses import dataclass
 from typing import Dict
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
+from mlox.service import (
+    AbstractHealthService,
+    AbstractService,
+    AbstractWebUIService,
+    ServiceCapability,
+    service_health_payload,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class KubeflowService(AbstractService, AbstractWebUIService):
+class KubeflowService(AbstractService, AbstractHealthService, AbstractWebUIService):
     """Install the upstream Kubeflow manifests on a Kubernetes cluster."""
 
-    capabilities = {ServiceCapability.DASHBOARD, ServiceCapability.WEB_UI}
+    capabilities = {
+        ServiceCapability.DASHBOARD,
+        ServiceCapability.WEB_UI,
+        ServiceCapability.HEALTH,
+    }
     web_ui_url_label = "Kubeflow"
     web_ui_login_fields = ("username", "password")
     version: str = "v1.10.1"
@@ -27,9 +37,7 @@ class KubeflowService(AbstractService, AbstractWebUIService):
     traefik_namespace: str = "kubeflow-traefik"
     traefik_release: str = "kubeflow-traefik"
     traefik_chart_version: str = "34.4.1"
-    minio_image: str = (
-        "docker.io/minio/minio:RELEASE.2019-08-14T20-37-41Z"
-    )
+    minio_image: str = "docker.io/minio/minio:RELEASE.2019-08-14T20-37-41Z"
     dex_email: str = "user@example.com"
     dex_password: str = "12341234"
     install_attempts: int = 3
@@ -164,6 +172,9 @@ class KubeflowService(AbstractService, AbstractWebUIService):
                 "available replicas."
             ),
         }
+
+    def get_health(self, conn) -> Dict[str, object]:
+        return service_health_payload(self, self.check(conn))
 
     def get_secrets(self) -> Dict[str, Dict]:
         return {
@@ -373,14 +384,17 @@ class KubeflowService(AbstractService, AbstractWebUIService):
             args.append("--ignore-not-found")
         command = self._kubectl_command(*args)
         if action == "delete":
-            command = shlex.join(
-                [
-                    "timeout",
-                    "--signal=TERM",
-                    "--kill-after=10s",
-                    f"{self.teardown_timeout_seconds}s",
-                ]
-            ) + f" {command}"
+            command = (
+                shlex.join(
+                    [
+                        "timeout",
+                        "--signal=TERM",
+                        "--kill-after=10s",
+                        f"{self.teardown_timeout_seconds}s",
+                    ]
+                )
+                + f" {command}"
+            )
         return self.exec.execute(
             conn,
             command,

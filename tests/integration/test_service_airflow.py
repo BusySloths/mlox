@@ -6,6 +6,7 @@ import logging
 
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
+from mlox.service import ServiceCapability
 
 # Mark this module as an integration test
 pytestmark = pytest.mark.integration
@@ -45,7 +46,9 @@ def install_airflow_service(ubuntu_docker_server):
     # Teardown after tests
     result = remove_service(infra, service.name)
     if not result.success:
-        logger.warning("Failed to remove service via application logic: %s", result.message)
+        logger.warning(
+            "Failed to remove service via application logic: %s", result.message
+        )
 
 
 def test_airflow_service_is_running(install_airflow_service):
@@ -56,13 +59,18 @@ def test_airflow_service_is_running(install_airflow_service):
     web_url = service.service_urls.get("Airflow UI", None)
     assert web_url, "Airflow UI URL not found in service URLs"
 
-    # Check service status via its check() method
+    # Prefer rich health for services that advertise it, otherwise use check().
     retries = 40
     for i in range(retries):
         try:
             with bundle.server.get_server_connection() as conn:
-                status = service.check(conn)
-            if status.get("status") == "running":
+                if ServiceCapability.HEALTH in (
+                    getattr(service, "capabilities", set()) or set()
+                ) and hasattr(service, "get_health"):
+                    status = service.get_health(conn)
+                else:
+                    status = service.check(conn)
+            if status.get("healthy") is True or status.get("status") == "running":
                 break
             logger.warning(
                 f"Retry {i + 1}/{retries} in 60s. Service state is {service.state} but Airflow service not yet up: {status}"
@@ -74,6 +82,6 @@ def test_airflow_service_is_running(install_airflow_service):
                 f"Retry {i + 1}/{retries} in 60s. Exception during status check: {e}"
             )
 
-    assert status.get("status") == "running"
+    assert status.get("healthy") is True or status.get("status") == "running"
     # state may be 'running' depending on service implementation
     assert service.state == "running"

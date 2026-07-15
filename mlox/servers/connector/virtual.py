@@ -14,6 +14,7 @@ from typing import Any, ClassVar, IO
 
 from mlox.server import (
     AbstractConnectorServer,
+    AbstractHealthServer,
     AbstractServer,
     MloxUser,
     ServerCapability,
@@ -97,10 +98,15 @@ class VirtualServerConnection(ServerConnection):
 
 
 @dataclass
-class VirtualConnectorServer(AbstractServer, AbstractConnectorServer):
+class VirtualConnectorServer(
+    AbstractServer, AbstractHealthServer, AbstractConnectorServer
+):
     """Virtual backend for externally hosted connector services."""
 
-    capabilities: ClassVar[set[ServerCapability]] = {ServerCapability.CONNECTOR}
+    capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.HEALTH,
+        ServerCapability.CONNECTOR,
+    }
 
     def __post_init__(self) -> None:
         super().__post_init__()

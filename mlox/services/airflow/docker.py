@@ -31,10 +31,12 @@ from mlox.secret_manager import (
     SECRET_MANAGER_KEYFILE_PW_ENV,
 )
 from mlox.service import (
+    AbstractHealthService,
     AbstractService,
     AbstractWebUIService,
     AbstractWorkflowOrchestratorService,
     ServiceCapability,
+    service_health_payload,
 )
 from mlox.utils import generate_password
 
@@ -45,10 +47,15 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AirflowDockerService(
     AbstractService,
+    AbstractHealthService,
     AbstractWebUIService,
     AbstractWorkflowOrchestratorService,
 ):
-    capabilities = {ServiceCapability.WORKFLOW_ORCHESTRATOR, ServiceCapability.WEB_UI}
+    capabilities = {
+        ServiceCapability.WORKFLOW_ORCHESTRATOR,
+        ServiceCapability.WEB_UI,
+        ServiceCapability.HEALTH,
+    }
     web_ui_url_label = "Airflow UI"
     web_ui_login_fields = ("username", "password")
     path_dags: str
@@ -62,7 +69,9 @@ class AirflowDockerService(
         init=False,
     )
     workflow_secret_manager_uuid: str | None = field(default=None, init=False)
-    workflow_secret_manager_env: Dict[str, str] = field(default_factory=dict, init=False)
+    workflow_secret_manager_env: Dict[str, str] = field(
+        default_factory=dict, init=False
+    )
     compose_service_names: Dict[str, str] = field(
         init=False,
         default_factory=lambda: {
@@ -192,6 +201,9 @@ class AirflowDockerService(
             )
             return {"status": "unknown", "message": f"Error: {e}"}
 
+    def get_health(self, conn) -> Dict[str, Any]:
+        return service_health_payload(self, self.check(conn))
+
     def list_workflows(self) -> list[dict[str, Any]]:
         """Return Airflow DAG metadata with the latest DAG run when available."""
 
@@ -280,7 +292,9 @@ class AirflowDockerService(
         }
         existing = ""
         try:
-            existing = str(self.exec.fs_read_file(conn, env_path, format="string") or "")
+            existing = str(
+                self.exec.fs_read_file(conn, env_path, format="string") or ""
+            )
         except Exception:
             existing = ""
         lines = [
@@ -368,7 +382,9 @@ class AirflowDockerService(
         auth: str,
     ) -> None:
         if auth == "bearer":
-            request.add_header("Authorization", f"Bearer {self._airflow_access_token()}")
+            request.add_header(
+                "Authorization", f"Bearer {self._airflow_access_token()}"
+            )
             return
 
         auth_string = f"{self.ui_user}:{self.ui_pw}"

@@ -22,7 +22,13 @@ from typing import Dict, Any
 from urllib.parse import unquote
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractMonitorService, AbstractService, ServiceCapability
+from mlox.service import (
+    AbstractHealthService,
+    AbstractMonitorService,
+    AbstractService,
+    ServiceCapability,
+    service_health_payload,
+)
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -33,8 +39,12 @@ logging.basicConfig(
 
 
 @dataclass
-class OtelDockerService(AbstractService, AbstractMonitorService):
-    capabilities = {ServiceCapability.MONITOR, ServiceCapability.OBSERVABILITY}
+class OtelDockerService(AbstractService, AbstractHealthService, AbstractMonitorService):
+    capabilities = {
+        ServiceCapability.MONITOR,
+        ServiceCapability.OBSERVABILITY,
+        ServiceCapability.HEALTH,
+    }
     relic_endpoint: str
     relic_key: str
     config: str
@@ -222,6 +232,13 @@ class OtelDockerService(AbstractService, AbstractMonitorService):
             status = "starting"
 
         return {"status": status, "docker_state": docker_state}
+
+    def get_health(self, conn) -> Dict[str, Any]:
+        payload = self.check(conn)
+        health_url = self.service_urls.get("OTLP health")
+        if health_url:
+            payload["health_url"] = health_url
+        return service_health_payload(self, payload)
 
     def get_secrets(self) -> Dict[str, Dict]:
         secrets: Dict[str, Dict] = {}

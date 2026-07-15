@@ -4,14 +4,24 @@ from dataclasses import dataclass
 from typing import Dict
 
 from mlox.executors import TaskGroup
-from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
+from mlox.service import (
+    AbstractHealthService,
+    AbstractService,
+    AbstractWebUIService,
+    ServiceCapability,
+    service_health_payload,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class KubeAppsService(AbstractService, AbstractWebUIService):
-    capabilities = {ServiceCapability.DASHBOARD, ServiceCapability.WEB_UI}
+class KubeAppsService(AbstractService, AbstractHealthService, AbstractWebUIService):
+    capabilities = {
+        ServiceCapability.DASHBOARD,
+        ServiceCapability.WEB_UI,
+        ServiceCapability.HEALTH,
+    }
     web_ui_url_label = "KubeApps"
     web_ui_login_fields = ("token",)
     namespace: str = "kubeapps"
@@ -289,7 +299,7 @@ class KubeAppsService(AbstractService, AbstractWebUIService):
         jsonpath = r"{.status.phase}"
         cmd = (
             f"kubectl --kubeconfig {self.kubeconfig} get namespace {namespace} "
-            f"--ignore-not-found -o jsonpath=\"{jsonpath}\""
+            f'--ignore-not-found -o jsonpath="{jsonpath}"'
         )
         try:
             result = self.exec.execute(
@@ -340,7 +350,7 @@ class KubeAppsService(AbstractService, AbstractWebUIService):
         for jsonpath in jsonpaths:
             cmd = (
                 f"kubectl --kubeconfig {self.kubeconfig} -n {self.namespace} "
-                f"get svc {service_name} -o jsonpath=\"{jsonpath}\""
+                f'get svc {service_name} -o jsonpath="{jsonpath}"'
             )
             try:
                 result = self.exec.execute(
@@ -401,6 +411,9 @@ class KubeAppsService(AbstractService, AbstractWebUIService):
             "status": "unknown",
             "details": f"Helm release status: {release_state}.",
         }
+
+    def get_health(self, conn) -> Dict[str, object]:
+        return service_health_payload(self, self.check(conn))
 
     def get_secrets(self) -> Dict[str, Dict]:
         return {}

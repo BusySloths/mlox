@@ -33,6 +33,7 @@ groups:
 capabilities:
   service:
   - message_broker
+  - health
   backend:
   - docker
 ports:

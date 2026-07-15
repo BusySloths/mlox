@@ -17,6 +17,8 @@ groups:
   backend:
     connector:
 capabilities:
+  server:
+    - health
   backend:
     - connector
 build:

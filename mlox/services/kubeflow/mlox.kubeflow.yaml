@@ -26,6 +26,7 @@ capabilities:
   service:
     - web_ui
     - dashboard
+    - health
   backend:
     - kubernetes
 ports:

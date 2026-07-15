@@ -62,6 +62,7 @@ if TYPE_CHECKING:
 class ServiceCapability(StrEnum):
     """User-facing service capabilities advertised by service configs/classes."""
 
+    HEALTH = "health"
     WEB_UI = "web_ui"
     SECRET_MANAGER = "secret_manager"
     REPOSITORY = "repository"
@@ -85,15 +86,58 @@ class ServiceCapability(StrEnum):
     DEVELOPER_TOOLS = "developer_tools"
 
 
+SERVICE_HEALTHY_STATUSES = {"running"}
+SERVICE_HEALTH_STATUSES = {
+    "running",
+    "stopped",
+    "starting",
+    "terminating",
+    "failed",
+    "error",
+    "unknown",
+    "un-initialized",
+}
+
+
+def service_health_payload(
+    service: Any, probe: Mapping[str, Any] | None
+) -> Dict[str, Any]:
+    """Return a normalized health payload from a service probe result."""
+
+    payload: Dict[str, Any] = dict(probe or {})
+    reported = str(payload.get("status") or "").strip()
+    current_state = str(getattr(service, "state", "") or "unknown")
+    state = reported if reported in SERVICE_HEALTH_STATUSES else current_state
+    if reported in SERVICE_HEALTH_STATUSES:
+        try:
+            setattr(service, "state", state)
+        except Exception:
+            pass
+
+    payload["state"] = state
+    payload["status"] = reported or state
+    payload["healthy"] = payload["status"] in SERVICE_HEALTHY_STATUSES
+    return payload
+
+
+class AbstractHealthService(ABC):
+    """Optional service capability for richer live health information."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.HEALTH}
+
+    @abstractmethod
+    def get_health(self, conn) -> Dict[str, Any]:
+        """Return a rich live health payload for this service."""
+        pass
+
+
 class AbstractSecretManagerService(ABC):
     """Service capability mixin for services that provide a secret manager client."""
 
     capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.SECRET_MANAGER}
 
     @abstractmethod
-    def get_secret_manager(
-        self, infra: "Infrastructure"
-    ) -> "AbstractSecretManager":
+    def get_secret_manager(self, infra: "Infrastructure") -> "AbstractSecretManager":
         """Return an AbstractSecretManager client for this service."""
         pass
 
@@ -117,8 +161,7 @@ class AbstractWebUIService(ABC):
         for label, url in urls.items():
             label_text = str(label).lower()
             if any(
-                term in label_text
-                for term in ("ui", "dashboard", "console", "login")
+                term in label_text for term in ("ui", "dashboard", "console", "login")
             ):
                 return str(url)
 
@@ -146,7 +189,9 @@ class AbstractRepositoryService(ABC):
     repo_name: str = field(default="", init=False)
     orchestrator_uuid: str | None = field(default=None, init=False)
     created_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
-    modified_timestamp: str = field(default_factory=datetime.now().isoformat, init=False)
+    modified_timestamp: str = field(
+        default_factory=datetime.now().isoformat, init=False
+    )
 
     @abstractmethod
     def get_url(self) -> str:
@@ -346,9 +391,7 @@ class AbstractService(ABC):
 
         return Path(inspect.getfile(type(self))).resolve().parent
 
-    def render_template(
-        self, template_name: str, variables: Mapping[str, Any]
-    ) -> str:
+    def render_template(self, template_name: str, variables: Mapping[str, Any]) -> str:
         """Render a service-local template with explicit ``@variable`` values.
 
         Templates are resolved relative to the concrete service implementation
@@ -370,7 +413,9 @@ class AbstractService(ABC):
                 f"{template_path}"
             ) from exc
         except ValueError as exc:
-            raise ValueError(f"Invalid template syntax in {template_path}: {exc}") from exc
+            raise ValueError(
+                f"Invalid template syntax in {template_path}: {exc}"
+            ) from exc
 
     def render_template_to_file(
         self,

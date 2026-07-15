@@ -27,6 +27,7 @@ groups:
     docker: null
 capabilities:
   server:
+  - health
   - git
   - firewall
   - initial_auth_password

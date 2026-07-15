@@ -18,6 +18,7 @@ groups:
     local:
 capabilities:
   server:
+    - health
     - git
   backend:
     - local

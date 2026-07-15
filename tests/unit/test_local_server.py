@@ -46,6 +46,7 @@ def test_local_connection_sudo_falls_back(tmp_path):
 
 def test_localhost_server_capabilities():
     assert LocalhostServer.capabilities == {
+        ServerCapability.HEALTH,
         ServerCapability.GIT,
         ServerCapability.LOCAL,
     }
@@ -126,3 +127,26 @@ def test_localhost_server_reports_docker_status(monkeypatch):
     status = server.get_backend_status()
     assert status["backend.is_running"] is True
     assert status["backend.docker.available"] is True
+
+
+def test_localhost_server_health_uses_local_backend(monkeypatch):
+    server = LocalhostServer(
+        ip="127.0.0.1",
+        root="tester",
+        root_pw="",
+        service_config_id="svc",
+    )
+    with patch("mlox.servers.local.local.shutil.which", return_value="/usr/bin/docker"):
+        with patch(
+            "mlox.servers.local.local.subprocess.run",
+            return_value=SimpleNamespace(returncode=0),
+        ):
+            server.setup_backend()
+
+    health = server.get_health()
+
+    assert health["state"] == "running"
+    assert health["status"] == "running"
+    assert health["healthy"] is True
+    assert health["backend.is_running"] is True
+    assert health["backend.docker.available"] is True

@@ -28,6 +28,7 @@ groups:
       k3s: null
 capabilities:
   server:
+  - health
   - git
   - firewall
   - initial_auth_password

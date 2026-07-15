@@ -109,7 +109,10 @@ class MLFlowMLServerK3sService(MLFlowMLServerDockerService):
             )
             if not replicas or replicas.strip() != "1":
                 self.state = "unknown"
-                return {"status": "unknown", "ready_replicas": (replicas or "0").strip()}
+                return {
+                    "status": "unknown",
+                    "ready_replicas": (replicas or "0").strip(),
+                }
 
             health_url = shlex.quote(f"{self.service_url}/v2/health/ready")
             cmd = f"curl -s -o /dev/null -w '%{{http_code}}' {health_url}"

@@ -28,6 +28,7 @@ groups:
 capabilities:
   service:
   - model_server
+  - health
   backend:
   - docker
 ports:

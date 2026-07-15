@@ -12,6 +12,7 @@ from typing import Callable, Dict, Optional
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure
 from mlox.executors import TaskGroup
+from mlox.service import ServiceCapability
 
 logger = logging.getLogger(__name__)
 try:
@@ -145,8 +146,14 @@ def wait_for_service_ready(
                     status = check_fn()
                 else:
                     with bundle.server.get_server_connection() as conn:
-                        status = service.check(conn)
-                if status.get("status") == "running":
+                        capabilities = getattr(service, "capabilities", set()) or set()
+                        if ServiceCapability.HEALTH in capabilities and hasattr(
+                            service, "get_health"
+                        ):
+                            status = service.get_health(conn)
+                        else:
+                            status = service.check(conn)
+                if status.get("healthy") is True or status.get("status") == "running":
                     return status
             logging.warning(
                 f"Retry {i + 1}/{retries} in {interval}s. Service state {getattr(service, 'state', '?')} not yet running: {status}"

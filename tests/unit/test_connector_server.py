@@ -20,7 +20,10 @@ def make_server() -> VirtualConnectorServer:
 def test_virtual_connector_server_has_no_physical_resources():
     server = make_server()
 
-    assert server.capabilities == {ServerCapability.CONNECTOR}
+    assert server.capabilities == {
+        ServerCapability.HEALTH,
+        ServerCapability.CONNECTOR,
+    }
     assert server.backend == ["connector"]
     assert server.state == "running"
     assert server.test_connection() is True
@@ -31,6 +34,19 @@ def test_virtual_connector_server_has_no_physical_resources():
         "storage_gb": 0.0,
         "pretty_name": "Virtual connector backend",
     }
+
+
+def test_virtual_connector_server_health_is_virtual():
+    server = make_server()
+
+    health = server.get_health()
+
+    assert health["state"] == "running"
+    assert health["status"] == "running"
+    assert health["healthy"] is True
+    assert health["connection.is_reachable"] is True
+    assert health["backend.is_running"] is True
+    assert health["backend.connector.virtual"] is True
 
 
 def test_virtual_connection_supports_connector_service_lifecycle_shape():

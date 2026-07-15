@@ -32,6 +32,7 @@ capabilities:
   service:
   - monitor
   - observability
+  - health
   backend:
   - docker
 ports:

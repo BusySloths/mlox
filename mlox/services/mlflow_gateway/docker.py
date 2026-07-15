@@ -12,9 +12,12 @@ from passlib.hash import apr_md5_crypt  # type: ignore
 
 from mlox.executors import TaskGroup
 from mlox.service import (
+    AbstractHealthService,
     AbstractModelRegistryService,
     AbstractModelServerService,
     AbstractService,
+    ServiceCapability,
+    service_health_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,7 +35,11 @@ def _resolved_setting(value: str | int | float, default: str) -> str:
 
 
 @dataclass
-class MLFlowGatewayDockerService(AbstractService, AbstractModelServerService):
+class MLFlowGatewayDockerService(
+    AbstractService, AbstractHealthService, AbstractModelServerService
+):
+    capabilities = {ServiceCapability.MODEL_SERVER, ServiceCapability.HEALTH}
+
     dockerfile: str
     serve_script: str
     start_script: str
@@ -92,8 +99,12 @@ class MLFlowGatewayDockerService(AbstractService, AbstractModelServerService):
         )
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_GATEWAY_URL={conn.host}")
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_GATEWAY_PORT={self.port}")
-        self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_URI={self.tracking_uri}")
-        self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_USER={self.tracking_user}")
+        self.exec.fs_append_line(
+            conn, env_path, f"MLFLOW_REMOTE_URI={self.tracking_uri}"
+        )
+        self.exec.fs_append_line(
+            conn, env_path, f"MLFLOW_REMOTE_USER={self.tracking_user}"
+        )
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_REMOTE_PW={self.tracking_pw}")
         self.exec.fs_append_line(conn, env_path, "MLFLOW_REMOTE_INSECURE=true")
         self.exec.fs_append_line(
@@ -109,7 +120,9 @@ class MLFlowGatewayDockerService(AbstractService, AbstractModelServerService):
         )
 
         self.service_ports["MLflow Gateway REST API"] = int(self.port)
-        self.service_urls["MLflow Gateway REST API"] = f"https://{conn.host}:{self.port}"
+        self.service_urls["MLflow Gateway REST API"] = (
+            f"https://{conn.host}:{self.port}"
+        )
         self.service_url = f"https://{conn.host}:{self.port}"
 
     def teardown(self, conn):
@@ -157,6 +170,9 @@ class MLFlowGatewayDockerService(AbstractService, AbstractModelServerService):
             logger.error("Error checking MLflow Gateway status: %s", exc)
             self.state = "unknown"
         return {"status": "unknown"}
+
+    def get_health(self, conn) -> Dict[str, Any]:
+        return service_health_payload(self, self.check(conn))
 
     def get_secrets(self) -> Dict[str, Dict]:
         secrets: Dict[str, Dict] = {}

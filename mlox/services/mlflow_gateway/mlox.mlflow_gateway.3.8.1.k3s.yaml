@@ -25,6 +25,7 @@ groups:
 capabilities:
   service:
   - model_server
+  - health
   backend:
   - kubernetes
 ports:

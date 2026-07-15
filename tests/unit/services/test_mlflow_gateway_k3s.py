@@ -6,6 +6,7 @@ import yaml
 
 from mlox.config import load_all_service_configs
 from mlox.executors import TaskGroup
+from mlox.service import ServiceCapability
 from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
 from mlox.view.services import _STREAMLIT_SERVICE_BINDINGS
 
@@ -111,7 +112,7 @@ def test_renders_gateway_manifest(gateway: MLFlowGatewayK3sService) -> None:
     assert f'path: "{gateway.ingress_path}"' in manifest
     assert "kind: Ingress" in manifest
     assert "router.entrypoints: websecure" in manifest
-    assert "router.tls: \"true\"" in manifest
+    assert 'router.tls: "true"' in manifest
     assert "@kubernetescrd" in manifest
     assert len(list(yaml.safe_load_all(manifest))) == 9
 
@@ -226,6 +227,27 @@ def test_check_uses_deployment_and_authenticated_health(
     assert gateway.state == "running"
 
 
+def test_get_health_normalizes_gateway_readiness(
+    gateway: MLFlowGatewayK3sService,
+) -> None:
+    conn = SimpleNamespace(host="gateway.example")
+    gateway.service_url = f"https://gateway.example{gateway.ingress_path}"
+
+    assert ServiceCapability.HEALTH in gateway.capabilities
+    health = gateway.get_health(conn)
+
+    assert health["status"] == "running"
+    assert health["state"] == "running"
+    assert health["healthy"] is True
+
+    gateway.exec.ready_result = ""
+    health = gateway.get_health(conn)
+    assert health["status"] == "starting"
+    assert health["state"] == "starting"
+    assert health["healthy"] is False
+    assert health["ready_replicas"] == "0"
+
+
 def test_fetches_gateway_kubernetes_logs(gateway: MLFlowGatewayK3sService) -> None:
     logs = gateway.service_log_tail(object(), tail=25)
 
@@ -293,7 +315,7 @@ def test_catalog_and_streamlit_handlers_are_registered() -> None:
     config = configs["mlflow-gateway-3.8.1-k3s"]
 
     assert config.capabilities["backend"] == ["kubernetes"]
-    assert config.capabilities["service"] == ["model_server"]
+    assert config.capabilities["service"] == ["model_server", "health"]
     assert (
         config.build.class_name
         == "mlox.services.mlflow_gateway.k3s.MLFlowGatewayK3sService"

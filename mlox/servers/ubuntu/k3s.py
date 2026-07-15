@@ -24,6 +24,7 @@ class UbuntuK3sServer(
     AbstractKubernetesServer,
 ):
     capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.HEALTH,
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
@@ -204,12 +205,9 @@ class UbuntuK3sServer(
                 sudo=True,
                 pty=False,
             )
-            backend_info["k3s-agent.is_running"] = (
-                str(agent_status).strip() == "active"
-            )
+            backend_info["k3s-agent.is_running"] = str(agent_status).strip() == "active"
             backend_info["backend.is_running"] = bool(
-                backend_info["k3s.is_running"]
-                or backend_info["k3s-agent.is_running"]
+                backend_info["k3s.is_running"] or backend_info["k3s-agent.is_running"]
             )
 
             if not backend_info["k3s.is_running"]:

@@ -79,7 +79,7 @@ class FakeExec:
 
 
 def _server_conn(server):
-    conn = SimpleNamespace(host=server.ip)
+    conn = SimpleNamespace(host=server.ip, is_connected=True)
 
     def _run(command, warn=True):
         ok = "k3s-uninstall.sh" in command
@@ -122,6 +122,7 @@ def test_ubuntu_server_capabilities():
         ServerCapability.NATIVE,
     }
     assert UbuntuDockerServer.capabilities == {
+        ServerCapability.HEALTH,
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
@@ -129,6 +130,7 @@ def test_ubuntu_server_capabilities():
         ServerCapability.DOCKER,
     }
     assert UbuntuK3sServer.capabilities == {
+        ServerCapability.HEALTH,
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
@@ -245,6 +247,31 @@ def test_ubuntu_docker_backend_lifecycle_and_status(monkeypatch):
     assert server.state == "no-backend"
 
 
+def test_ubuntu_docker_health_uses_backend_status(monkeypatch):
+    server = _new_docker_server()
+    fake_exec = FakeExec()
+    server.exec = fake_exec
+    _server_conn(server)
+    server.state = "running"
+
+    fake_exec.responses["systemctl is-active docker"] = "active"
+    fake_exec.responses["systemctl is-enabled docker"] = "enabled"
+    fake_exec.responses["docker version --format '{{json .}}'"] = (
+        '{"Client":{"Version":"1"}}'
+    )
+    fake_exec.responses["docker ps -a --format '{{json .}}'"] = ""
+    fake_exec.sys_get_distro_info = lambda conn: {}
+
+    health = server.get_health()
+
+    assert health["state"] == "running"
+    assert health["status"] == "running"
+    assert health["healthy"] is True
+    assert health["connection.is_reachable"] is True
+    assert health["backend.is_running"] is True
+    assert health["docker.is_running"] is True
+
+
 def test_ubuntu_k3s_backend_paths():
     server = UbuntuK3sServer(
         ip="10.0.0.12",
@@ -342,6 +369,33 @@ def test_ubuntu_k3s_agent_status_does_not_fetch_controller_node_info():
     assert "kubectl get nodes -o wide" not in commands
 
 
+def test_ubuntu_k3s_health_redacts_controller_token():
+    server = UbuntuK3sServer(
+        ip="10.0.0.14",
+        root="root",
+        root_pw="pw",
+        service_config_id="ubuntu-k3s",
+    )
+    fake_exec = FakeExec()
+    server.exec = fake_exec
+    _server_conn(server)
+    server.state = "running"
+
+    fake_exec.responses["systemctl is-active k3s || true"] = "active"
+    fake_exec.responses["systemctl is-active k3s-agent || true"] = "inactive"
+    fake_exec.responses["cat /var/lib/rancher/k3s/server/node-token"] = (
+        "password: super-token"
+    )
+    fake_exec.responses["kubectl get nodes -o wide"] = "NAME STATUS\nnode-1 Ready\n"
+    fake_exec.sys_get_distro_info = lambda conn: {}
+
+    health = server.get_health()
+
+    assert health["healthy"] is True
+    assert health["backend.is_running"] is True
+    assert health["k3s.token"] == "<redacted>"
+
+
 def test_ubuntu_k3s_node_info_does_not_depend_on_token_output():
     server = UbuntuK3sServer(
         ip="10.0.0.14",
@@ -398,7 +452,9 @@ def test_ubuntu_simple_server_noops_and_debug(monkeypatch):
     assert isinstance(server.get_backend_status(), dict)
 
 
-def test_ubuntu_native_setup_installs_backend_before_disabling_password_auth(monkeypatch):
+def test_ubuntu_native_setup_installs_backend_before_disabling_password_auth(
+    monkeypatch,
+):
     server = _new_native_server()
     calls = []
 
@@ -597,7 +653,9 @@ def test_multipass_launch_uses_cli_when_sdk_lacks_cloud_init(monkeypatch, tmp_pa
 
     class Client:
         def launch(self, vm_name, cpu=1, disk="5G", mem="1G", image=None):
-            raise AssertionError("SDK launch should not be used without cloud-init support")
+            raise AssertionError(
+                "SDK launch should not be used without cloud-init support"
+            )
 
     monkeypatch.setattr(
         type(server), "is_multipass_available", property(lambda self: True)
@@ -610,7 +668,9 @@ def test_multipass_launch_uses_cli_when_sdk_lacks_cloud_init(monkeypatch, tmp_pa
         lambda args, **_kwargs: calls.append(args),
     )
     monkeypatch.setattr(server, "wait_for_ssh", lambda: "10.0.0.5")
-    monkeypatch.setattr(server, "wait_for_root_login", lambda: calls.append("root-login"))
+    monkeypatch.setattr(
+        server, "wait_for_root_login", lambda: calls.append("root-login")
+    )
 
     server.launch_vm()
 
@@ -776,7 +836,11 @@ def test_multipass_backend_status_includes_vm_metadata(monkeypatch):
         memory="8G",
         disk="40G",
     )
-    monkeypatch.setattr(UbuntuDockerServer, "get_backend_status", lambda self: {"backend.is_running": True})
+    monkeypatch.setattr(
+        UbuntuDockerServer,
+        "get_backend_status",
+        lambda self: {"backend.is_running": True},
+    )
     monkeypatch.setattr(server, "multipass_info", lambda: {"state": "Running"})
 
     status = server.get_backend_status()

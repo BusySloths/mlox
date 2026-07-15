@@ -6,10 +6,12 @@ from datetime import datetime
 from dataclasses import dataclass, field
 
 from mlox.service import (
+    AbstractHealthService,
     AbstractModelRegistryService,
     AbstractService,
     AbstractWebUIService,
     ServiceCapability,
+    service_health_payload,
 )
 from mlox.services.mlflow.artifacts import (
     configure_mlflow_client,
@@ -27,9 +29,16 @@ def _fmt_ts(ts: int | None) -> str:
 
 @dataclass
 class MLFlow3DockerService(
-    AbstractService, AbstractModelRegistryService, AbstractWebUIService
+    AbstractService,
+    AbstractHealthService,
+    AbstractModelRegistryService,
+    AbstractWebUIService,
 ):
-    capabilities = {ServiceCapability.MODEL_REGISTRY, ServiceCapability.WEB_UI}
+    capabilities = {
+        ServiceCapability.MODEL_REGISTRY,
+        ServiceCapability.WEB_UI,
+        ServiceCapability.HEALTH,
+    }
     web_ui_url_label = "MLFlow UI"
     web_ui_login_fields = ("username", "password")
     ui_user: str
@@ -102,6 +111,9 @@ class MLFlow3DockerService(
             "status": "unknown",
             "message": "MLflow API not reachable",
         }
+
+    def get_health(self, conn) -> Dict[str, Any]:
+        return service_health_payload(self, self.check(conn))
 
     def get_secrets(self) -> Dict[str, Dict]:
         credentials = {

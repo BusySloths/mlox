@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Dict
 
 from mlox.executors import TaskGroup
-from mlox.server import AbstractDockerServer, ServerCapability
+from mlox.server import AbstractDockerServer, AbstractHealthServer, ServerCapability
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 
 # Configure logging (optional, but recommended)
@@ -16,8 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class UbuntuDockerServer(UbuntuNativeServer, AbstractDockerServer):
+class UbuntuDockerServer(
+    UbuntuNativeServer, AbstractHealthServer, AbstractDockerServer
+):
     capabilities: ClassVar[set[ServerCapability]] = {
+        ServerCapability.HEALTH,
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,

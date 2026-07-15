@@ -29,6 +29,7 @@ capabilities:
   service:
   - web_ui
   - workflow_orchestrator
+  - health
   backend:
   - docker
 ports:
