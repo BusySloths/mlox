@@ -184,6 +184,7 @@ tasks:
         {{if eq .VSCODE_DEBUG "true"}}
         if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('debugpy') else 1)"; then
           printf '\n\033[1;31m✖ debugpy is not installed.\033[0m\n';
+
           printf 'Please install it first: \033[1m{{.PYTHON | default "python"}} -m pip install debugpy\033[0m\n\n';
           exit 1;
         fi
