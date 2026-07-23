@@ -915,6 +915,89 @@ def test_services_setup_service_runs_runtime_steps():
     assert calls == ["setup", "spin_up"]
 
 
+def test_services_restart_service_uses_service_restart_without_setup():
+    calls = []
+    service = SimpleNamespace(
+        name="svc",
+        state="running",
+        setup=lambda conn: calls.append("setup"),
+        spin_up=lambda conn: calls.append("spin_up"),
+        restart=lambda conn: calls.append("restart"),
+    )
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: _Connection())
+    )
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service if name == "svc" else None,
+            get_bundle_by_service=lambda value: bundle if value is service else None,
+        )
+    )
+
+    result = services.restart_service(current, name="svc")
+
+    assert result.success
+    assert calls == ["restart"]
+    assert result.message == "Service svc restarted."
+
+
+def test_services_restart_service_rejects_uninitialized_services():
+    service = SimpleNamespace(name="svc", state="un-initialized")
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service if name == "svc" else None,
+            get_bundle_by_service=lambda value: None,
+        )
+    )
+
+    result = services.restart_service(current, name="svc")
+
+    assert not result.success
+    assert result.message == "Set up the service before restarting it."
+
+
+def test_services_restart_service_rejects_services_without_restart_support():
+    service = _FakeWebUIService(
+        name="svc",
+        service_config_id="cfg",
+        template="template",
+        target_path="/tmp/svc",
+    )
+    service.state = "running"
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: _Connection())
+    )
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service if name == "svc" else None,
+            get_bundle_by_service=lambda value: bundle if value is service else None,
+        )
+    )
+
+    result = services.restart_service(current, name="svc")
+
+    assert not result.success
+    assert result.message == "Selected service cannot be restarted."
+
+
+def test_services_restart_service_requires_restart_hook_for_legacy_objects():
+    service = SimpleNamespace(name="svc", state="running")
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: _Connection())
+    )
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service if name == "svc" else None,
+            get_bundle_by_service=lambda value: bundle if value is service else None,
+        )
+    )
+
+    result = services.restart_service(current, name="svc")
+
+    assert not result.success
+    assert result.message == "Selected service cannot be restarted."
+
+
 def test_services_check_health_updates_state_from_payload():
     service = SimpleNamespace(
         name="svc",
@@ -1121,6 +1204,22 @@ def test_services_setup_service_in_workspace_delegates_by_name():
     )
 
     result = services.setup_service_in_workspace(workspace, service)
+
+    assert result.success
+    assert calls == [{"name": "svc"}]
+
+
+def test_services_restart_service_in_workspace_delegates_by_name():
+    calls = []
+    service = SimpleNamespace(name="svc")
+    workspace = SimpleNamespace(
+        restart_service=lambda **kwargs: (
+            calls.append(kwargs)
+            or OperationResult(True, 0, "restarted")
+        )
+    )
+
+    result = services.restart_service_in_workspace(workspace, service)
 
     assert result.success
     assert calls == [{"name": "svc"}]

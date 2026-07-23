@@ -23,7 +23,7 @@ from textual.widgets import (
 )
 
 from mlox.application.result import OperationResult
-from mlox.service import ServiceCapability
+from mlox.service import AbstractService, ServiceCapability
 from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.project_actions import ProjectActions
 from mlox.tui.screens.dashboard.repository_panel import RepositoryPanel
@@ -1417,6 +1417,29 @@ async def _service_health_button_display_for(service: object) -> bool:
         return app.query_one("#check-service-health", Button).display
 
 
+async def _service_restart_button_display_for(service: object) -> bool:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="service", service=service))
+        await pilot.pause()
+        return app.query_one("#restart-service", Button).display
+
+
+class _NonComposeService(AbstractService):
+    def setup(self, conn):
+        pass
+
+    def teardown(self, conn):
+        pass
+
+    def check(self, conn):
+        return {}
+
+    def get_secrets(self):
+        return {}
+
+
 def test_service_actions_show_web_ui_button_only_for_web_ui_services() -> None:
     web_service = SimpleNamespace(
         name="mlflow",
@@ -1453,6 +1476,28 @@ def test_service_actions_show_health_button_only_for_initialized_health_services
     assert asyncio.run(_service_health_button_display_for(health_service)) is True
     assert asyncio.run(_service_health_button_display_for(uninitialized)) is False
     assert asyncio.run(_service_health_button_display_for(plain_service)) is False
+
+
+def test_service_actions_show_restart_button_only_for_initialized_services() -> None:
+    initialized = SimpleNamespace(
+        name="mlflow",
+        state="running",
+        compose_service_names={"MLflow": "mlflow"},
+        exec=SimpleNamespace(docker_restart=lambda conn, compose, env: None),
+        restart=lambda conn: None,
+    )
+    uninitialized = SimpleNamespace(name="mlflow", state="un-initialized")
+    non_compose = _NonComposeService(
+        name="headlamp",
+        service_config_id="cfg",
+        template="template",
+        target_path="/tmp/headlamp",
+    )
+    non_compose.state = "running"
+
+    assert asyncio.run(_service_restart_button_display_for(initialized)) is True
+    assert asyncio.run(_service_restart_button_display_for(uninitialized)) is False
+    assert asyncio.run(_service_restart_button_display_for(non_compose)) is False
 
 
 def test_service_actions_hide_web_ui_for_uninitialized_services() -> None:
@@ -1623,6 +1668,57 @@ def test_service_health_action_uses_application_layer(monkeypatch) -> None:
     tree_label, checked = asyncio.run(_check_service_health_from_action(monkeypatch))
 
     assert len(checked) == 1
+    assert tree_label == "Service: mlflow"
+
+
+async def _restart_service_from_action(monkeypatch) -> tuple[list[object], str]:
+    app = DashboardTestApp()
+    service = SimpleNamespace(name="mlflow", state="failed")
+    bundle = SimpleNamespace(
+        name="dev",
+        server=SimpleNamespace(ip="10.0.0.5", state="running", backend=["docker"]),
+        services=[service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+    restarted = []
+
+    def fake_restart(workspace, service_arg: object) -> OperationResult:
+        restarted.append(service_arg)
+        service_arg.state = "running"
+        return OperationResult(
+            True,
+            0,
+            "Service mlflow restarted.",
+            {"service": service_arg},
+        )
+
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.screen.restart_service_in_workspace",
+        fake_restart,
+    )
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        selection = SelectionInfo(type="service", bundle=bundle, service=service)
+        screen._apply_selection(selection)
+        screen.handle_service_restart_requested(ServiceActions.RestartRequested())
+        deadline = time.monotonic() + 2
+        while service.state != "running":
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for service restart.")
+            await pilot.pause(0.05)
+        return (
+            restarted,
+            screen.query_one("#infra-tree", InfraTree).root.children[0].children[
+                1
+            ].label.plain,
+        )
+
+
+def test_service_restart_action_uses_application_layer(monkeypatch) -> None:
+    restarted, tree_label = asyncio.run(_restart_service_from_action(monkeypatch))
+
+    assert len(restarted) == 1
     assert tree_label == "Service: mlflow"
 
 

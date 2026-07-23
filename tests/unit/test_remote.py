@@ -242,6 +242,28 @@ def test_docker_service_state(
     )
 
 
+def test_docker_restart_reconciles_compose_stack(
+    mock_connection: MagicMock, executor: UbuntuTaskExecutor
+) -> None:
+    mock_connection.sudo.return_value = FakeResult(stdout="ok")
+
+    result = executor.docker_restart(
+        mock_connection,
+        "/tmp/stack/docker-compose.yaml",
+        "/tmp/stack/service.env",
+    )
+
+    assert result == "ok"
+    mock_connection.sudo.assert_called_once_with(
+        (
+            "docker compose --env-file /tmp/stack/service.env "
+            '-f "/tmp/stack/docker-compose.yaml" up -d --build'
+        ),
+        hide="stderr",
+        pty=False,
+    )
+
+
 def test_docker_all_service_states(
     mock_connection: MagicMock, executor: UbuntuTaskExecutor
 ) -> None:

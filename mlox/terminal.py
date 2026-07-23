@@ -161,21 +161,69 @@ def _write_launch_files(
 def _terminal_command(script_path: Path, platform: str) -> tuple[str, list[str]]:
     if platform == "darwin":
         terminal = "/Applications/iTerm.app"
-        opener = "/usr/bin/open"
-        if not Path(opener).is_file():
-            raise TerminalLaunchError("The macOS application launcher was not found.")
+        osascript = "/usr/bin/osascript"
+        if not Path(osascript).is_file():
+            raise TerminalLaunchError("The macOS scripting launcher was not found.")
         if not Path(terminal).is_dir():
             raise TerminalLaunchError("iTerm2 was not found in /Applications.")
-        return terminal, [opener, "-a", "iTerm", str(script_path)]
+        # Tell iTerm to run the script after the new session exists; `open -a`
+        # can race with the temp script path and leave zsh reporting it missing.
+        # Prefix a harmless space because some iTerm/zsh startup paths have
+        # been observed to drop the first character sent to a fresh session.
+        script = (
+            "on run argv\n"
+            "  set scriptPath to item 1 of argv\n"
+            "  set commandText to \" command /bin/sh \" & quoted form of scriptPath\n"
+            "  tell application id \"com.googlecode.iterm2\"\n"
+            "    activate\n"
+            "    set newWindow to (create window with default profile)\n"
+            "    tell current session of newWindow\n"
+            "      delay 0.2\n"
+            "      write text commandText\n"
+            "    end tell\n"
+            "  end tell\n"
+            "end run\n"
+        )
+        return terminal, [osascript, "-e", script, str(script_path)]
 
     if platform.startswith("linux"):
-        terminal = shutil.which("x-terminal-emulator")
-        if not terminal:
-            raise TerminalLaunchError("x-terminal-emulator was not found.")
-        return terminal, [terminal, "-e", str(script_path)]
+        return _linux_terminal_command(script_path)
 
     raise TerminalLaunchError(
         f"External SSH terminals are not supported on {platform or 'this platform'}."
+    )
+
+
+def _linux_terminal_command(script_path: Path) -> tuple[str, list[str]]:
+    script = str(script_path)
+    candidates = (
+        ("x-terminal-emulator", ["-e", script]),
+        ("xdg-terminal-exec", [script]),
+        ("ghostty", ["-e", script]),
+        ("alacritty", ["-e", script]),
+        ("kitty", [script]),
+        ("wezterm", ["start", "--", script]),
+        ("foot", [script]),
+        ("footclient", [script]),
+        ("gnome-terminal", ["--", script]),
+        ("kgx", ["--", script]),
+        ("konsole", ["-e", script]),
+        ("xfce4-terminal", [f"--command={script}"]),
+        ("tilix", ["-e", script]),
+        ("terminator", ["-x", script]),
+        ("mate-terminal", ["--", script]),
+        ("lxterminal", ["-e", script]),
+        ("xterm", ["-e", script]),
+    )
+    for executable, args in candidates:
+        terminal = shutil.which(executable)
+        if terminal:
+            return terminal, [terminal, *args]
+
+    names = ", ".join(executable for executable, _ in candidates)
+    raise TerminalLaunchError(
+        "No supported Linux terminal emulator was found. "
+        f"Install one of: {names}."
     )
 
 

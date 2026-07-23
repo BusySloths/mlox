@@ -36,6 +36,20 @@ def service_has_health(service: object | None) -> bool:
     return False
 
 
+def service_can_restart(service: object | None) -> bool:
+    """Return whether a service provides a meaningful restart/repair action."""
+
+    if not service or getattr(service, "state", "unknown") == "un-initialized":
+        return False
+    if not callable(getattr(service, "restart", None)):
+        return False
+    if _service_has_compose_restart(service):
+        return True
+    if not isinstance(service, AbstractService):
+        return True
+    return getattr(type(service), "restart", None) is not AbstractService.restart
+
+
 def check_service_health(project: WorkspaceState, *, name: str) -> OperationResult:
     """Run a service health check and persist the service state."""
 
@@ -365,6 +379,30 @@ def start_service(project: WorkspaceState, *, name: str) -> OperationResult:
     return OperationResult(True, 0, f"Service {name} started.", {"service": service})
 
 
+def restart_service(project: WorkspaceState, *, name: str) -> OperationResult:
+    """Restart or repair an initialized service using its current configuration."""
+
+    infra = project.infrastructure
+    service = infra.get_service(name)
+    if not service:
+        return OperationResult(False, 8, "Service not found in infrastructure.")
+    if getattr(service, "state", "unknown") == "un-initialized":
+        return OperationResult(False, 14, "Set up the service before restarting it.")
+    bundle = infra.get_bundle_by_service(service)
+    if not bundle:
+        return OperationResult(False, 10, "Could not find server bundle for service.")
+    if not service_can_restart(service):
+        return OperationResult(False, 15, "Selected service cannot be restarted.")
+    with bundle.server.get_server_connection() as conn:
+        service.restart(conn)
+    return OperationResult(
+        True,
+        0,
+        f"Service {name} restarted.",
+        {"service": service},
+    )
+
+
 def stop_service(project: WorkspaceState, *, name: str) -> OperationResult:
     infra = project.infrastructure
     service = infra.get_service(name)
@@ -406,6 +444,13 @@ def _service_capability_names(service: object) -> set[str]:
         capability.value if hasattr(capability, "value") else str(capability)
         for capability in getattr(service, "capabilities", set()) or set()
     }
+
+
+def _service_has_compose_restart(service: object) -> bool:
+    return bool(
+        getattr(service, "compose_service_names", None)
+        and callable(getattr(getattr(service, "exec", None), "docker_restart", None))
+    )
 
 
 def rename_service(project: WorkspaceState, *, name: str, new_name: str) -> OperationResult:
@@ -587,6 +632,22 @@ def setup_service_in_workspace(workspace, service) -> OperationResult:
         return setup(name=str(getattr(service, "name", "")))
     except Exception as exc:
         return OperationResult(False, 45, f"Failed to set up service: {exc}")
+
+
+def restart_service_in_workspace(workspace, service) -> OperationResult:
+    """Restart or repair one service through an open workspace adapter."""
+
+    if not workspace:
+        return OperationResult(False, 63, "Project workspace is unavailable.")
+    if not service:
+        return OperationResult(False, 64, "No service selected.")
+    restart = getattr(workspace, "restart_service", None)
+    if not callable(restart):
+        return OperationResult(False, 65, "Project workspace cannot restart services.")
+    try:
+        return restart(name=str(getattr(service, "name", "")))
+    except Exception as exc:
+        return OperationResult(False, 66, f"Failed to restart service: {exc}")
 
 
 def teardown_service_in_workspace(workspace, service) -> OperationResult:

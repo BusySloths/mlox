@@ -584,6 +584,9 @@ class ProjectWorkspace:
     def start_service(self, *, name: str) -> OperationResult:
         return self._mutate(lambda: services.start_service(self._state, name=name))
 
+    def restart_service(self, *, name: str) -> OperationResult:
+        return self._mutate(lambda: services.restart_service(self._state, name=name))
+
     def stop_service(self, *, name: str) -> OperationResult:
         return self._mutate(lambda: services.stop_service(self._state, name=name))
 

@@ -246,7 +246,13 @@ def test_terminal_commands_for_macos_and_linux(monkeypatch, tmp_path) -> None:
 
     terminal, command = _terminal_command(script_path, "darwin")
     assert terminal == "/Applications/iTerm.app"
-    assert command == ["/usr/bin/open", "-a", "iTerm", str(script_path)]
+    assert command[0:2] == ["/usr/bin/osascript", "-e"]
+    assert command[-1] == str(script_path)
+    assert 'set commandText to " command /bin/sh ' in command[2]
+    assert 'set commandText to "/bin/sh ' not in command[2]
+    assert "delay 0.2" in command[2]
+    assert "quoted form of scriptPath" in command[2]
+    assert "com.googlecode.iterm2" in command[2]
 
     monkeypatch.setattr(
         "mlox.terminal.shutil.which",
@@ -256,6 +262,24 @@ def test_terminal_commands_for_macos_and_linux(monkeypatch, tmp_path) -> None:
     )
     terminal, command = _terminal_command(script_path, "linux")
     assert terminal == "/usr/bin/x-terminal-emulator"
+    assert command == [terminal, "-e", str(script_path)]
+
+
+def test_linux_terminal_command_falls_back_to_common_terminal(
+    monkeypatch, tmp_path
+) -> None:
+    script_path = tmp_path / "connect.sh"
+
+    def fake_which(executable: str) -> str | None:
+        if executable == "ghostty":
+            return "/usr/bin/ghostty"
+        return None
+
+    monkeypatch.setattr("mlox.terminal.shutil.which", fake_which)
+
+    terminal, command = _terminal_command(script_path, "linux")
+
+    assert terminal == "/usr/bin/ghostty"
     assert command == [terminal, "-e", str(script_path)]
 
 
@@ -336,7 +360,7 @@ def test_launch_rejects_missing_linux_terminal_and_cleans_up(monkeypatch) -> Non
 
     monkeypatch.setattr("mlox.terminal._write_launch_files", capture_write)
 
-    with pytest.raises(TerminalLaunchError, match="x-terminal-emulator"):
+    with pytest.raises(TerminalLaunchError, match="supported Linux terminal"):
         launch_external_ssh_terminal(
             _server({"host": "example.test", "port": 22, "user": "mlox"}),
             platform="linux",

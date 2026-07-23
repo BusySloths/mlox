@@ -14,6 +14,7 @@ from textual.widgets import Button, Input, Label, Static
 
 from mlox.application.use_cases.services import (
     list_service_web_ui_login_fields,
+    service_can_restart,
     service_has_health,
     service_has_web_ui,
 )
@@ -103,6 +104,9 @@ class ServiceActions(Container):
     class CheckHealthRequested(Message):
         """Request that the dashboard checks selected service health."""
 
+    class RestartRequested(Message):
+        """Request that the dashboard restarts the selected service."""
+
     class CopyWebUILoginRequested(Message):
         """Request that the dashboard copies one web UI login field."""
 
@@ -141,6 +145,7 @@ class ServiceActions(Container):
                 yield Button("Rename Service", id="rename-service", variant="success")
                 yield Button("Setup Service", id="setup-service", variant="warning")
             with Horizontal(id="service-destructive-action-buttons"):
+                yield Button("Restart Service", id="restart-service", variant="warning")
                 yield Button("Teardown Service", id="teardown-service", variant="error")
 
     def on_mount(self) -> None:
@@ -163,6 +168,7 @@ class ServiceActions(Container):
             self._render_health_action(selection)
             self._render_web_ui_login_actions(selection)
             self._render_setup_action(selection)
+            self._render_restart_action(selection)
 
     def _render_web_ui_login_actions(
         self, selection: Optional[SelectionInfo]
@@ -201,6 +207,11 @@ class ServiceActions(Container):
             and getattr(service, "state", "unknown") == "un-initialized"
         )
 
+    def _render_restart_action(self, selection: Optional[SelectionInfo]) -> None:
+        button = self.query_one("#restart-service", Button)
+        service = selection.service if selection else None
+        button.display = bool(self.display and service_can_restart(service))
+
     def _has_initialized_web_ui_service(
         self,
         selection: Optional[SelectionInfo],
@@ -221,6 +232,7 @@ class ServiceActions(Container):
         health = self.query_one("#check-service-health", Button)
         rename = self.query_one("#rename-service", Button)
         setup = self.query_one("#setup-service", Button)
+        restart = self.query_one("#restart-service", Button)
         teardown = self.query_one("#teardown-service", Button)
         open_web_ui.disabled = loading
         copy_username.disabled = loading
@@ -231,6 +243,8 @@ class ServiceActions(Container):
         rename.disabled = loading
         setup.disabled = loading
         setup.label = "Setting up..." if loading else "Setup Service"
+        restart.disabled = loading
+        restart.label = "Restart Service"
         teardown.disabled = loading
         teardown.label = "Tearing down..." if loading else "Teardown Service"
         if not loading:
@@ -244,6 +258,7 @@ class ServiceActions(Container):
         health = self.query_one("#check-service-health", Button)
         rename = self.query_one("#rename-service", Button)
         setup = self.query_one("#setup-service", Button)
+        restart = self.query_one("#restart-service", Button)
         teardown = self.query_one("#teardown-service", Button)
         open_web_ui.disabled = loading
         copy_username.disabled = loading
@@ -253,6 +268,30 @@ class ServiceActions(Container):
         health.label = "Checking..." if loading else "Check Health"
         rename.disabled = loading
         setup.disabled = loading
+        restart.disabled = loading
+        teardown.disabled = loading
+        if not loading:
+            self._update_visibility(self.selection)
+
+    def set_restart_loading(self, loading: bool) -> None:
+        open_web_ui = self.query_one("#open-service-web-ui", Button)
+        copy_username = self.query_one("#copy-service-web-ui-username", Button)
+        copy_password = self.query_one("#copy-service-web-ui-password", Button)
+        copy_token = self.query_one("#copy-service-web-ui-token", Button)
+        health = self.query_one("#check-service-health", Button)
+        rename = self.query_one("#rename-service", Button)
+        setup = self.query_one("#setup-service", Button)
+        restart = self.query_one("#restart-service", Button)
+        teardown = self.query_one("#teardown-service", Button)
+        open_web_ui.disabled = loading
+        copy_username.disabled = loading
+        copy_password.disabled = loading
+        copy_token.disabled = loading
+        health.disabled = loading
+        rename.disabled = loading
+        setup.disabled = loading
+        restart.disabled = loading
+        restart.label = "Restarting..." if loading else "Restart Service"
         teardown.disabled = loading
         if not loading:
             self._update_visibility(self.selection)
@@ -284,6 +323,10 @@ class ServiceActions(Container):
     @on(Button.Pressed, "#setup-service")
     def handle_setup(self, _: Button.Pressed) -> None:
         self.post_message(self.SetupRequested())
+
+    @on(Button.Pressed, "#restart-service")
+    def handle_restart(self, _: Button.Pressed) -> None:
+        self.post_message(self.RestartRequested())
 
     @on(Button.Pressed, "#teardown-service")
     def handle_teardown(self, _: Button.Pressed) -> None:

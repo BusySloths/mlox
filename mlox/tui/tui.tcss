@@ -1207,6 +1207,18 @@ SecretEditDialog {
   background: #12b86aff;
 }
 
+#restart-service {
+  width: auto;
+  margin-right: 1;
+  background: #c96f15ff;
+  border: round #f2b56bff;
+  color: #ffffff;
+}
+
+#restart-service:hover {
+  background: #e58622ff;
+}
+
 #edit-bundle-tags {
   width: auto;
   margin-left: 1;

@@ -64,6 +64,7 @@ from mlox.application.use_cases.services import (
     materialize_service_template_params,
     open_service_web_ui,
     rename_service_in_workspace,
+    restart_service_in_workspace,
     resolve_service_template_setup,
     setup_service_in_workspace,
     teardown_service_in_workspace,
@@ -812,6 +813,53 @@ class DashboardScreen(Screen):
         service: object | None,
     ) -> None:
         self.query_one(ServiceActions).set_loading(False)
+        if not result.success:
+            self.notify(result.message, severity="error")
+            return
+        self._refresh_tree_after_service_change(bundle, service)
+        self.notify(result.message)
+
+    @on(ServiceActions.RestartRequested)
+    def handle_service_restart_requested(
+        self, _: ServiceActions.RestartRequested
+    ) -> None:
+        selection = self.query_one(ServiceActions).selection
+        if not selection or selection.type != "service" or not selection.service:
+            self.notify("Select a service to restart.", severity="warning")
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if not workspace:
+            self.notify(
+                "Cannot restart service because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        self.query_one(ServiceActions).set_restart_loading(True)
+
+        def run_operation() -> None:
+            result = restart_service_in_workspace(workspace, selection.service)
+            self.app.call_from_thread(
+                self._finish_service_restart,
+                result,
+                selection.bundle,
+                selection.service,
+            )
+
+        self.app.run_worker(
+            run_operation,
+            thread=True,
+            exclusive=True,
+            group="service-lifecycle",
+        )
+
+    def _finish_service_restart(
+        self,
+        result,
+        bundle: object | None,
+        service: object | None,
+    ) -> None:
+        self.query_one(ServiceActions).set_restart_loading(False)
         if not result.success:
             self.notify(result.message, severity="error")
             return

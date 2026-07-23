@@ -176,6 +176,9 @@ class RepoDeployDockerService(AbstractService):
     def spin_up(self, conn) -> bool:
         return self._compose_up(conn)
 
+    def restart(self, conn) -> bool:
+        return self._compose_up(conn)
+
     def spin_down(self, conn) -> bool:
         return self._compose_down(conn, remove_volumes=True)
 

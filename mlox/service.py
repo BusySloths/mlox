@@ -476,10 +476,30 @@ class AbstractService(ABC):
 
         raise NotImplementedError("spin_down must be implemented by subclasses")
 
+    def restart(self, conn) -> bool:
+        """Repair or restart the service without changing its configuration."""
+
+        if self.compose_service_names and callable(
+            getattr(self.exec, "docker_restart", None)
+        ):
+            return self.compose_restart(conn)
+        return self.spin_up(conn)
+
     def compose_up(self, conn) -> bool:
         """Bring up the docker compose stack for this service."""
 
         self.exec.docker_up(
+            conn,
+            f"{self.target_path}/{self.target_docker_script}",
+            f"{self.target_path}/{self.target_docker_env}",
+        )
+        self.state = "running"
+        return True
+
+    def compose_restart(self, conn) -> bool:
+        """Reconcile the docker compose stack for this service."""
+
+        self.exec.docker_restart(
             conn,
             f"{self.target_path}/{self.target_docker_script}",
             f"{self.target_path}/{self.target_docker_env}",

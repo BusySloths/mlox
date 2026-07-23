@@ -15,6 +15,18 @@ logger = logging.getLogger(__name__)
 
 
 class DockerMixin(TaskRunnerABC):
+    def _docker_compose_up_command(
+        self,
+        config_yaml: str,
+        env_file: str | None = None,
+    ) -> str:
+        command = f'docker compose -f "{config_yaml}" up -d --build'
+        if env_file is not None:
+            command = (
+                f'docker compose --env-file {env_file} -f "{config_yaml}" up -d --build'
+            )
+        return command
+
     def docker_list_container(self, connection: Connection) -> list[list[str]]:
         res = (
             self._run_task(
@@ -59,11 +71,24 @@ class DockerMixin(TaskRunnerABC):
         config_yaml: str,
         env_file: str | None = None,
     ) -> str | None:
-        command = f'docker compose -f "{config_yaml}" up -d --build'
-        if env_file is not None:
-            command = (
-                f'docker compose --env-file {env_file} -f "{config_yaml}" up -d --build'
-            )
+        command = self._docker_compose_up_command(config_yaml, env_file)
+        result = self._run_task(
+            connection,
+            group=TaskGroup.CONTAINER_RUNTIME,
+            command=command,
+            sudo=True,
+        )
+        return result
+
+    def docker_restart(
+        self,
+        connection: Connection,
+        config_yaml: str,
+        env_file: str | None = None,
+    ) -> str | None:
+        """Reconcile a compose stack without forcing a stop/start cycle."""
+
+        command = self._docker_compose_up_command(config_yaml, env_file)
         result = self._run_task(
             connection,
             group=TaskGroup.CONTAINER_RUNTIME,

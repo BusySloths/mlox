@@ -68,6 +68,22 @@ def test_service_health_mutation_commits(monkeypatch):
     workspace.reload.assert_not_called()
 
 
+def test_service_restart_mutation_commits(monkeypatch):
+    workspace = _workspace()
+    workspace.commit = mock.Mock()
+    workspace.reload = mock.Mock()
+    monkeypatch.setattr(
+        "mlox.project.workspace.services.restart_service",
+        lambda project, name: OperationResult(True, 0, "restarted", {"name": name}),
+    )
+
+    result = workspace.restart_service(name="svc")
+
+    assert result.success
+    workspace.commit.assert_called_once_with()
+    workspace.reload.assert_not_called()
+
+
 def test_failed_mutation_reloads_without_commit(monkeypatch):
     workspace = _workspace()
     workspace.commit = mock.Mock()

@@ -21,6 +21,9 @@ class _Exec:
     def docker_down(self, conn, compose, remove_volumes=False):
         self.calls.append(("down", compose, remove_volumes))
 
+    def docker_restart(self, conn, compose, env):
+        self.calls.append(("restart", compose, env))
+
     def docker_all_service_states(self, conn):
         return {
             "proj_api_1": {"Status": "running"},
@@ -70,14 +73,36 @@ def _svc():
     return svc
 
 
-def test_compose_up_and_down_update_state():
+def test_compose_up_restart_and_down_update_state():
     svc = _svc()
 
     assert svc.compose_up(conn=object()) is True
     assert svc.state == "running"
+    assert svc.exec.calls[-1] == ("up", "/tmp/svc/docker-compose.yaml", "/tmp/svc/service.env")
+
+    svc.state = "unknown"
+    assert svc.compose_restart(conn=object()) is True
+    assert svc.state == "running"
+    assert svc.exec.calls[-1] == (
+        "restart",
+        "/tmp/svc/docker-compose.yaml",
+        "/tmp/svc/service.env",
+    )
 
     assert svc.compose_down(conn=object(), remove_volumes=True) is True
     assert svc.state == "stopped"
+
+
+def test_service_restart_prefers_compose_restart_for_compose_services():
+    svc = _svc()
+
+    assert svc.restart(conn=object()) is True
+
+    assert svc.exec.calls[-1] == (
+        "restart",
+        "/tmp/svc/docker-compose.yaml",
+        "/tmp/svc/service.env",
+    )
 
 
 def test_compose_service_status_and_logs_paths():
