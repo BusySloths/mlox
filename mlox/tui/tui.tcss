@@ -233,6 +233,89 @@ Button {
   width: 1fr;
 }
 
+#postgres-settings {
+  height: 1fr;
+  width: 1fr;
+  padding: 0 1 1 1;
+}
+
+#postgres-toolbar {
+  height: 3;
+  min-height: 3;
+  align-vertical: middle;
+}
+
+#postgres-refresh {
+  width: auto;
+  min-width: 18;
+  margin-right: 2;
+}
+
+#postgres-readonly-label {
+  width: 1fr;
+  height: 1;
+  color: #a8b3c7ff;
+}
+
+#postgres-summary {
+  height: auto;
+  min-height: 5;
+  margin-bottom: 1;
+}
+
+#postgres-browser {
+  height: 1fr;
+  width: 1fr;
+}
+
+#postgres-tree {
+  width: 34;
+  min-width: 24;
+  height: 1fr;
+  margin-right: 1;
+  border: round #24406fff;
+}
+
+#postgres-data-panel {
+  width: 1fr;
+  height: 1fr;
+}
+
+#postgres-table-details {
+  height: auto;
+  min-height: 2;
+  color: #d9e2f2ff;
+  padding: 0 1;
+}
+
+#postgres-data-table {
+  height: 1fr;
+  width: 1fr;
+}
+
+#postgres-pagination {
+  height: 3;
+  min-height: 3;
+  align-horizontal: center;
+  align-vertical: middle;
+}
+
+#postgres-pagination Button {
+  width: 14;
+  margin: 0 1;
+}
+
+#postgres-page-label {
+  width: 28;
+  height: 1;
+  content-align: center middle;
+}
+
+#postgres-message {
+  height: 1;
+  color: #a8b3c7ff;
+}
+
 MLflowGatewaySettingsPanel {
   height: 1fr;
   width: 1fr;

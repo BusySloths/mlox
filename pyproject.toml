@@ -71,6 +71,7 @@ minio = [
 
 tui = [
     "textual==8.2.7",  # M
+    "psycopg2-binary>=2.9",
 ]
 
 dev = [

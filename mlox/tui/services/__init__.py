@@ -15,6 +15,10 @@ _TUI_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "config_ids": ("openbao-docker",),
         "function_names": ("settings",),
     },
+    "mlox.tui.services.postgres": {
+        "config_ids": ("postgres-16-bullseye-docker",),
+        "function_names": ("settings",),
+    },
     "mlox.tui.services.mlflow_gateway": {
         "config_ids": (
             "mlflow-gateway-3.8.1-docker",
