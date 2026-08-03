@@ -233,7 +233,7 @@ Button {
   width: 1fr;
 }
 
-#postgres-settings {
+PostgresSettingsPanel {
   height: 1fr;
   width: 1fr;
   padding: 0 1 1 1;

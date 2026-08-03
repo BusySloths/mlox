@@ -9,6 +9,7 @@ def test_tui_settings_returns_postgres_panel() -> None:
     panel = settings(None, None, DummyService())  # type: ignore[arg-type]
 
     assert isinstance(panel, PostgresSettingsPanel)
+    assert panel.id is None
 
 
 def test_format_bytes_uses_compact_binary_units() -> None:

@@ -31,7 +31,10 @@ class PostgresSettingsPanel(Vertical):
         bundle: Bundle | None,
         service: PostgresDockerService | Any,
     ) -> None:
-        super().__init__(id="postgres-settings")
+        # Service widgets are replaced asynchronously by Textual. The root must not
+        # have a fixed ID because the outgoing and incoming panels can briefly be
+        # siblings while removal completes.
+        super().__init__()
         self.infra = infra
         self.bundle = bundle
         self.service = service
