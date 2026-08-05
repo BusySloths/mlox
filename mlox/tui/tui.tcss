@@ -380,6 +380,7 @@ MLflowGatewaySettingsPanel {
 #secret-manager-panel,
 #firewall-panel,
 #monitor-panel,
+#databases-panel,
 #models-panel,
 #workflow-panel {
   height: 1fr;
@@ -741,6 +742,60 @@ ModelCallResultDialog {
 }
 
 #monitor-service-detail {
+  height: 2fr;
+  width: 1fr;
+  margin-top: 1;
+  border: round #35635bff;
+}
+
+#database-content {
+  height: 1fr;
+  width: 1fr;
+}
+
+#database-metrics {
+  height: 5;
+  margin-bottom: 1;
+}
+
+.database-metric {
+  width: 1fr;
+  height: 5;
+  margin-right: 1;
+  padding: 0 2;
+  content-align: center middle;
+  border: round #35635bff;
+  background: #10211fff;
+}
+
+#database-metric-endpoints {
+  margin-right: 0;
+  border: round #61d394ff;
+}
+
+#database-actions {
+  height: 3;
+  align-horizontal: right;
+}
+
+#database-title {
+  width: 1fr;
+  content-align: left middle;
+  text-style: bold;
+}
+
+#refresh-databases {
+  width: auto;
+  min-width: 12;
+}
+
+#database-table {
+  height: 2fr;
+  width: 1fr;
+  border: round #1bd6f3ff;
+}
+
+#database-service-detail {
   height: 2fr;
   width: 1fr;
   margin-top: 1;

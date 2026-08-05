@@ -22,6 +22,7 @@ from textual.widgets import (
 
 from .app_log_panel import AppLogPanel
 from .bundle_tags import EditBundleTagsDialog, RenameBundleDialog
+from .database_panel import DatabasePanel
 from .firewall_panel import FirewallPanel
 from .history_panel import HistoryPanel
 from .log_panel import LogPanel
@@ -77,6 +78,7 @@ from mlox.tui.template_forms import (
 
 
 FIREWALL_TAB_ID = "firewall-tab"
+DATABASES_TAB_ID = "databases-tab"
 MONITOR_TAB_ID = "monitor-tab"
 MODELS_TAB_ID = "models-tab"
 WORKFLOW_TAB_ID = "workflow-tab"
@@ -194,6 +196,8 @@ class DashboardScreen(Screen):
                                 yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Monitor", id=MONITOR_TAB_ID):
                                 yield MonitorPanel(id="monitor-panel")
+                            with TabPane("Databases", id=DATABASES_TAB_ID):
+                                yield DatabasePanel(id="databases-panel")
                             with TabPane("Models", id=MODELS_TAB_ID):
                                 yield ModelsPanel(id="models-panel")
                             with TabPane("Workflow", id=WORKFLOW_TAB_ID):
@@ -333,6 +337,7 @@ class DashboardScreen(Screen):
         self.query_one(SecretManagerPanel).selection = None
         self.query_one(FirewallPanel).selection = None
         self.query_one(MonitorPanel).selection = None
+        self.query_one(DatabasePanel).selection = None
         self.query_one(ModelsPanel).selection = None
         self.query_one(WorkflowPanel).selection = None
         self.query_one(RepositoryPanel).selection = None
@@ -348,6 +353,7 @@ class DashboardScreen(Screen):
             SECRET_MANAGER_TAB_ID: self.query_one(SecretManagerPanel),
             FIREWALL_TAB_ID: self.query_one(FirewallPanel),
             MONITOR_TAB_ID: self.query_one(MonitorPanel),
+            DATABASES_TAB_ID: self.query_one(DatabasePanel),
             MODELS_TAB_ID: self.query_one(ModelsPanel),
             WORKFLOW_TAB_ID: self.query_one(WorkflowPanel),
             REPOSITORY_TAB_ID: self.query_one(RepositoryPanel),
@@ -1303,6 +1309,10 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             MONITOR_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
+            DATABASES_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(
