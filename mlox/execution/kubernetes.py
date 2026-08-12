@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import secrets
+from io import BytesIO
 from typing import Any, Mapping, Sequence
 
 from fabric import Connection  # type: ignore
@@ -11,6 +13,113 @@ from mlox.execution.base import TaskGroup, TaskRunnerABC, _quote_command
 
 
 class KubernetesMixin(TaskRunnerABC):
+    def k8s_ensure_namespace(
+        self,
+        connection: Connection,
+        namespace: str,
+        *,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+    ) -> str | None:
+        """Idempotently create a namespace without a persistent manifest."""
+
+        create_parts = [
+            "kubectl",
+            "create",
+            "namespace",
+            namespace,
+            "--dry-run=client",
+            "-o",
+            "yaml",
+        ]
+        apply_parts = ["kubectl", "apply", "-f", "-"]
+        if kubeconfig:
+            create_parts.extend(["--kubeconfig", kubeconfig])
+            apply_parts.extend(["--kubeconfig", kubeconfig])
+        command = f"{_quote_command(create_parts)} | {_quote_command(apply_parts)}"
+        return self._run_task(
+            connection,
+            group=TaskGroup.KUBERNETES,
+            command=command,
+            sudo=sudo,
+        )
+
+    def k8s_apply_tls_secret(
+        self,
+        connection: Connection,
+        name: str,
+        *,
+        namespace: str,
+        certificate: str,
+        private_key: str,
+        kubeconfig: str | None = None,
+        sudo: bool = True,
+    ) -> str | None:
+        """Create or update a TLS Secret without recording PEM data in history."""
+
+        suffix = secrets.token_hex(16)
+        temp_dir = f"/tmp/mlox_tls_{suffix}"
+        cert_path = f"{temp_dir}/tls.crt"
+        key_path = f"{temp_dir}/tls.key"
+        try:
+            prepare = _quote_command(["mkdir", "-m", "700", temp_dir])
+            if (
+                self._run_task(
+                    connection,
+                    group=TaskGroup.SECURITY_ASSETS,
+                    command=prepare,
+                    sudo=False,
+                )
+                is None
+            ):
+                return None
+            connection.put(BytesIO(certificate.encode("utf-8")), remote=cert_path)
+            connection.put(BytesIO(private_key.encode("utf-8")), remote=key_path)
+
+            create_parts = [
+                "kubectl",
+                "create",
+                "secret",
+                "tls",
+                name,
+                "--namespace",
+                namespace,
+                f"--cert={cert_path}",
+                f"--key={key_path}",
+                "--dry-run=client",
+                "-o",
+                "yaml",
+            ]
+            apply_parts = [
+                "kubectl",
+                "apply",
+                "-f",
+                "-",
+                "--namespace",
+                namespace,
+            ]
+            if kubeconfig:
+                create_parts.extend(["--kubeconfig", kubeconfig])
+                apply_parts.extend(["--kubeconfig", kubeconfig])
+            command = f"{_quote_command(create_parts)} | {_quote_command(apply_parts)}"
+            return self._run_task(
+                connection,
+                group=TaskGroup.KUBERNETES,
+                command=command,
+                sudo=sudo,
+            )
+        finally:
+            cleanup = (
+                f"{_quote_command(['rm', '-f', cert_path, key_path])} "
+                f"&& {_quote_command(['rmdir', temp_dir])}"
+            )
+            self._run_task(
+                connection,
+                group=TaskGroup.SECURITY_ASSETS,
+                command=cleanup,
+                sudo=sudo,
+            )
+
     def helm_repo_add(
         self,
         connection: Connection,

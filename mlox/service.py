@@ -39,6 +39,7 @@ from typing import (
     Mapping,
     Optional,
     Protocol,
+    cast,
 )
 from dataclasses import dataclass, field, asdict
 
@@ -631,6 +632,21 @@ class AbstractService(ABC):
         if lookup is None:
             return None
         return lookup.get_service_by_name(service_name)
+
+    def get_dependent_secret_manager(
+        self, service_uuid: str
+    ) -> "AbstractSecretManager":
+        """Resolve a secret manager through the runtime-only service lookup."""
+
+        lookup = self._service_lookup
+        if lookup is None:
+            raise ValueError("Service dependency lookup is not available.")
+        service = self.get_dependent_service(service_uuid)
+        if not isinstance(service, AbstractSecretManagerService):
+            raise ValueError(
+                f"Service {service_uuid} is not an available secret manager service."
+            )
+        return service.get_secret_manager(cast("Infrastructure", lookup))
 
     def dump_state(self, conn) -> None:
         """Persist service debugging artifacts to the target directory."""
