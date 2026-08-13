@@ -11,6 +11,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from passlib.hash import apr_md5_crypt
 
+from mlox.service import AbstractSecretManagerService, ServiceCapability
 from mlox.services.mlflow_gateway.docker import _resolved_setting, _resolved_text
 from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
 
@@ -37,7 +38,16 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
         if not _valid_hostname(self.tls_hostname):
             raise ValueError("A valid TLS hostname is required.")
 
-        manager = self.get_dependent_secret_manager(self.tls_secret_manager_uuid)
+        manager_service = self.get_dependent_service(
+            self.tls_secret_manager_uuid,
+            required_type=AbstractSecretManagerService,
+            required_capabilities={ServiceCapability.SECRET_MANAGER},
+        )
+        if not isinstance(manager_service, AbstractSecretManagerService):
+            raise ValueError(
+                f"Service {self.tls_secret_manager_uuid} is not an available secret manager."
+            )
+        manager = manager_service.get_secret_manager(self._service_lookup)
         secret = manager.load_secret(self.tls_secret_name)
         if not isinstance(secret, dict):
             raise ValueError("The TLS secret must be an object with tls.crt and tls.key.")

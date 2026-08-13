@@ -73,6 +73,33 @@ def _svc():
     return svc
 
 
+def test_get_dependent_service_can_require_type_and_capabilities():
+    service = _svc()
+    dependency = _svc()
+    dependency.capabilities = {ServiceCapability.SECRET_MANAGER, "web_ui"}
+    lookup = type(
+        "Lookup",
+        (),
+        {
+            "get_service_by_uuid": lambda self, uuid: dependency,
+            "get_service_by_name": lambda self, name: None,
+        },
+    )()
+    service.bind_service_lookup(lookup)
+
+    assert service.get_dependent_service(
+        dependency.uuid,
+        required_type=_Service,
+        required_capabilities={ServiceCapability.SECRET_MANAGER, "web_ui"},
+    ) is dependency
+    assert service.get_dependent_service(
+        dependency.uuid, required_type=_HealthService
+    ) is None
+    assert service.get_dependent_service(
+        dependency.uuid, required_capabilities={ServiceCapability.DATABASE}
+    ) is None
+
+
 def test_compose_up_restart_and_down_update_state():
     svc = _svc()
 

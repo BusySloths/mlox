@@ -33,13 +33,13 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
+    Collection,
     Dict,
     List,
     Literal,
     Mapping,
     Optional,
     Protocol,
-    cast,
 )
 from dataclasses import dataclass, field, asdict
 
@@ -615,13 +615,35 @@ class AbstractService(ABC):
             return "No log labels configured for this service."
         return self.compose_service_log_tail(conn, label=chosen_label, tail=tail)
 
-    def get_dependent_service(self, service_uuid: str) -> Optional["AbstractService"]:
-        """Get a dependent service by UUID via the bound service lookup."""
+    def get_dependent_service(
+        self,
+        service_uuid: str,
+        *,
+        required_type: type[Any] | tuple[type[Any], ...] | None = None,
+        required_capabilities: Collection[ServiceCapability | str] = (),
+    ) -> Optional["AbstractService"]:
+        """Get a compatible dependent service by UUID via the bound lookup."""
 
         lookup = self._service_lookup
         if lookup is None:
             return None
-        return lookup.get_service_by_uuid(service_uuid)
+        service = lookup.get_service_by_uuid(service_uuid)
+        if service is None:
+            return None
+        if required_type is not None and not isinstance(service, required_type):
+            return None
+
+        available_capabilities = {
+            capability.value if isinstance(capability, ServiceCapability) else str(capability)
+            for capability in (getattr(service, "capabilities", set()) or set())
+        }
+        expected_capabilities = {
+            capability.value if isinstance(capability, ServiceCapability) else str(capability)
+            for capability in required_capabilities
+        }
+        if not expected_capabilities.issubset(available_capabilities):
+            return None
+        return service
 
     def get_dependent_service_by_name(
         self, service_name: str
@@ -632,21 +654,6 @@ class AbstractService(ABC):
         if lookup is None:
             return None
         return lookup.get_service_by_name(service_name)
-
-    def get_dependent_secret_manager(
-        self, service_uuid: str
-    ) -> "AbstractSecretManager":
-        """Resolve a secret manager through the runtime-only service lookup."""
-
-        lookup = self._service_lookup
-        if lookup is None:
-            raise ValueError("Service dependency lookup is not available.")
-        service = self.get_dependent_service(service_uuid)
-        if not isinstance(service, AbstractSecretManagerService):
-            raise ValueError(
-                f"Service {service_uuid} is not an available secret manager service."
-            )
-        return service.get_secret_manager(cast("Infrastructure", lookup))
 
     def dump_state(self, conn) -> None:
         """Persist service debugging artifacts to the target directory."""
