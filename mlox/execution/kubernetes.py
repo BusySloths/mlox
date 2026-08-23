@@ -13,37 +13,6 @@ from mlox.execution.base import TaskGroup, TaskRunnerABC, _quote_command
 
 
 class KubernetesMixin(TaskRunnerABC):
-    def k8s_ensure_namespace(
-        self,
-        connection: Connection,
-        namespace: str,
-        *,
-        kubeconfig: str | None = None,
-        sudo: bool = True,
-    ) -> str | None:
-        """Idempotently create a namespace without a persistent manifest."""
-
-        create_parts = [
-            "kubectl",
-            "create",
-            "namespace",
-            namespace,
-            "--dry-run=client",
-            "-o",
-            "yaml",
-        ]
-        apply_parts = ["kubectl", "apply", "-f", "-"]
-        if kubeconfig:
-            create_parts.extend(["--kubeconfig", kubeconfig])
-            apply_parts.extend(["--kubeconfig", kubeconfig])
-        command = f"{_quote_command(create_parts)} | {_quote_command(apply_parts)}"
-        return self._run_task(
-            connection,
-            group=TaskGroup.KUBERNETES,
-            command=command,
-            sudo=sudo,
-        )
-
     def k8s_apply_tls_secret(
         self,
         connection: Connection,
@@ -101,7 +70,11 @@ class KubernetesMixin(TaskRunnerABC):
             if kubeconfig:
                 create_parts.extend(["--kubeconfig", kubeconfig])
                 apply_parts.extend(["--kubeconfig", kubeconfig])
-            command = f"{_quote_command(create_parts)} | {_quote_command(apply_parts)}"
+            pipeline = f"{_quote_command(create_parts)} | {_quote_command(apply_parts)}"
+            # Keep both sides of the pipe inside the privileged shell. Fabric's
+            # sudo wrapper may otherwise elevate only the first kubectl process,
+            # leaving `kubectl apply` unable to read the root-owned k3s config.
+            command = _quote_command(["sh", "-c", pipeline])
             return self._run_task(
                 connection,
                 group=TaskGroup.KUBERNETES,

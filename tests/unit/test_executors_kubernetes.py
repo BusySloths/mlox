@@ -14,9 +14,11 @@ class _Connection:
 class _Runner(KubernetesMixin):
     def __init__(self) -> None:
         self.commands: list[str] = []
+        self.options: list[dict] = []
 
     def _run_task(self, connection, *, command, **kwargs):
         self.commands.append(command)
+        self.options.append(kwargs)
         return "configured"
 
 
@@ -42,4 +44,6 @@ def test_apply_tls_secret_keeps_pem_out_of_command_history() -> None:
     assert certificate not in history
     assert private_key not in history
     assert "kubectl create secret tls gateway-tls" in history
+    assert runner.commands[-2].startswith("sh -c ")
+    assert runner.options[-2]["sudo"] is True
     assert runner.commands[-1].startswith("rm -f ")

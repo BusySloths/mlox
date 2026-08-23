@@ -85,15 +85,11 @@ class _Executor:
         self.calls: list[tuple] = []
         self.files: dict[str, str] = {}
         self.apply_result = "configured"
-        self.namespace_result = "namespace configured"
         self.tls_result = "secret configured"
+        self.delete_result = "namespace deleted"
 
     def _record(self, name, *args, **kwargs):
         self.calls.append((name, args, kwargs))
-
-    def k8s_ensure_namespace(self, conn, namespace, **kwargs):
-        self._record("k8s_ensure_namespace", namespace, **kwargs)
-        return self.namespace_result
 
     def k8s_apply_tls_secret(self, conn, name, **kwargs):
         self._record("k8s_apply_tls_secret", name, **kwargs)
@@ -109,6 +105,13 @@ class _Executor:
     def k8s_apply_manifest(self, conn, path, **kwargs):
         self._record("k8s_apply_manifest", path, **kwargs)
         return self.apply_result
+
+    def k8s_delete_resource(self, conn, *args, **kwargs):
+        self._record("k8s_delete_resource", *args, **kwargs)
+        return self.delete_result
+
+    def fs_delete_dir(self, conn, path):
+        self._record("fs_delete_dir", path)
 
     def execute(self, conn, command, **kwargs):
         self._record("execute", command, **kwargs)
@@ -168,7 +171,7 @@ def test_renders_host_tls_ingress_without_pem(managed_gateway) -> None:
     assert tls["tls.key"] not in manifest
 
 
-def test_setup_resolves_secret_through_bound_lookup_and_applies_tls_first(
+def test_setup_uses_gateway_manifest_namespace_then_applies_tls_secret(
     managed_gateway,
 ) -> None:
     service, tls, manager, manager_service, lookup = managed_gateway
@@ -176,9 +179,9 @@ def test_setup_resolves_secret_through_bound_lookup_and_applies_tls_first(
     service.setup(SimpleNamespace(host="10.0.0.4"))
 
     call_names = [call[0] for call in service.exec.calls]
-    assert call_names.index("k8s_ensure_namespace") < call_names.index(
+    assert call_names.index("k8s_apply_manifest") < call_names.index(
         "k8s_apply_tls_secret"
-    ) < call_names.index("k8s_apply_manifest")
+    ) < call_names.index("execute")
     tls_call = next(call for call in service.exec.calls if call[0] == "k8s_apply_tls_secret")
     assert tls_call[2]["certificate"] == tls["tls.crt"]
     assert tls_call[2]["private_key"] == tls["tls.key"]
@@ -189,6 +192,27 @@ def test_setup_resolves_secret_through_bound_lookup_and_applies_tls_first(
     )
     assert tls["tls.crt"] not in service.exec.files[service.manifest_path]
     assert tls["tls.key"] not in service.exec.files[service.manifest_path]
+
+
+@pytest.mark.parametrize("failure", ["manifest", "tls-secret"])
+def test_setup_failure_rolls_back_dedicated_namespace(
+    managed_gateway, failure
+) -> None:
+    service, _, _, _, _ = managed_gateway
+    if failure == "manifest":
+        service.exec.apply_result = None
+    else:
+        service.exec.tls_result = None
+
+    with pytest.raises(RuntimeError, match="Failed to apply"):
+        service.setup(SimpleNamespace(host="10.0.0.4"))
+
+    delete_call = next(
+        call for call in service.exec.calls if call[0] == "k8s_delete_resource"
+    )
+    assert delete_call[1][:2] == ("namespace", service.namespace)
+    assert delete_call[2]["ignore_not_found"] is True
+    assert service.state == "un-initialized"
 
 
 def test_validation_failure_happens_before_cluster_mutation(managed_gateway) -> None:

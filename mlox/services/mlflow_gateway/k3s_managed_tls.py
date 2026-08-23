@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -14,6 +15,8 @@ from passlib.hash import apr_md5_crypt
 from mlox.service import AbstractSecretManagerService, ServiceCapability
 from mlox.services.mlflow_gateway.docker import _resolved_setting, _resolved_text
 from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,6 +32,7 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
         # Runtime-only: the hostname is loaded from the referenced secret and is
         # intentionally excluded from persisted service state.
         self._tls_hostname = ""
+        self._tls_material: tuple[str, str] | None = None
         self.tls_kubernetes_secret_name = f"mlflow-gateway-tls-{self.gateway_id}"
 
     def _load_and_validate_tls_material(self) -> tuple[str, str]:
@@ -105,14 +109,30 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
 
     def setup(self, conn) -> None:
         certificate, private_key = self._load_and_validate_tls_material()
+        self._tls_material = (certificate, private_key)
+        try:
+            super().setup(conn)
+            if self.state != "running":
+                raise RuntimeError("Failed to apply the MLflow Gateway manifest.")
+        except Exception:
+            try:
+                super().teardown(conn)
+            except Exception:
+                logger.exception(
+                    "Failed to roll back managed-TLS gateway namespace %s.",
+                    self.namespace,
+                )
+            raise
+        finally:
+            self._tls_material = None
 
-        if (
-            self.exec.k8s_ensure_namespace(
-                conn, self.namespace, kubeconfig=self.kubeconfig
-            )
-            is None
-        ):
-            raise RuntimeError("Failed to create the MLflow Gateway namespace.")
+        self.service_url = f"https://{self._tls_hostname}{self.ingress_path}"
+        self.service_urls["MLflow Gateway REST API"] = self.service_url
+
+    def _after_manifest_apply(self, conn) -> None:
+        if self._tls_material is None:
+            raise RuntimeError("TLS material was not prepared for gateway setup.")
+        certificate, private_key = self._tls_material
         if (
             self.exec.k8s_apply_tls_secret(
                 conn,
@@ -125,12 +145,6 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
             is None
         ):
             raise RuntimeError("Failed to apply the MLflow Gateway TLS secret.")
-
-        super().setup(conn)
-        if self.state != "running":
-            raise RuntimeError("Failed to apply the MLflow Gateway manifest.")
-        self.service_url = f"https://{self._tls_hostname}{self.ingress_path}"
-        self.service_urls["MLflow Gateway REST API"] = self.service_url
 
 
 def _valid_hostname(hostname: str) -> bool:
