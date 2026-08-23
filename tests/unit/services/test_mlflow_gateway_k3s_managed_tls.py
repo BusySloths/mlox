@@ -38,6 +38,7 @@ def _tls_material(hostname: str = "gateway.example.org") -> dict[str, str]:
         .sign(key, hashes.SHA256())
     )
     return {
+        "tls.hostname": hostname,
         "tls.crt": certificate.public_bytes(serialization.Encoding.PEM).decode(),
         "tls.key": key.private_bytes(
             serialization.Encoding.PEM,
@@ -139,7 +140,6 @@ def managed_gateway(tmp_path: Path):
         requirements_txt="pydantic==2.0.0",
         user="gateway-user",
         pw="gateway-password",
-        tls_hostname="gateway.example.org",
         tls_secret_manager_uuid="manager-uuid",
         tls_secret_name="gateway-tls",
     )
@@ -151,6 +151,7 @@ def managed_gateway(tmp_path: Path):
 def test_renders_host_tls_ingress_without_pem(managed_gateway) -> None:
     service, tls, _, _, _ = managed_gateway
 
+    service._load_and_validate_tls_material()
     manifest = service._render_gateway_manifest()
     documents = list(yaml.safe_load_all(manifest))
     ingress = next(item for item in documents if item.get("kind") == "Ingress")
@@ -192,9 +193,26 @@ def test_setup_resolves_secret_through_bound_lookup_and_applies_tls_first(
 
 def test_validation_failure_happens_before_cluster_mutation(managed_gateway) -> None:
     service, _, manager, _, _ = managed_gateway
-    manager.value = {"tls.crt": "not a certificate", "tls.key": "not a key"}
+    manager.value = {
+        "tls.hostname": "gateway.example.org",
+        "tls.crt": "not a certificate",
+        "tls.key": "not a key",
+    }
 
     with pytest.raises(ValueError, match="valid PEM"):
+        service.setup(SimpleNamespace(host="10.0.0.4"))
+
+    assert service.exec.calls == []
+
+
+@pytest.mark.parametrize("hostname", [None, "", "localhost", "bad host.example"])
+def test_missing_or_invalid_secret_hostname_happens_before_cluster_mutation(
+    managed_gateway, hostname
+) -> None:
+    service, tls, manager, _, _ = managed_gateway
+    manager.value = {**tls, "tls.hostname": hostname}
+
+    with pytest.raises(ValueError, match="valid tls.hostname"):
         service.setup(SimpleNamespace(host="10.0.0.4"))
 
     assert service.exec.calls == []
@@ -219,8 +237,7 @@ def test_rejects_mismatched_key_and_uncovered_hostname(managed_gateway) -> None:
         service.setup(SimpleNamespace(host="10.0.0.4"))
     assert service.exec.calls == []
 
-    manager.value = tls
-    service.tls_hostname = "other.example.org"
+    manager.value = {**tls, "tls.hostname": "other.example.org"}
     with pytest.raises(ValueError, match="does not cover"):
         service.setup(SimpleNamespace(host="10.0.0.4"))
     assert service.exec.calls == []
@@ -235,9 +252,9 @@ def test_persistence_round_trip_contains_references_only(managed_gateway) -> Non
     restored = dict_to_dataclass(payload)
 
     assert isinstance(restored, MLFlowGatewayManagedTlsK3sService)
-    assert restored.tls_hostname == "gateway.example.org"
     assert restored.tls_secret_manager_uuid == "manager-uuid"
     assert restored.tls_secret_name == "gateway-tls"
+    assert "tls_hostname" not in payload
     assert tls["tls.crt"] not in serialized
     assert tls["tls.key"] not in serialized
 
@@ -259,7 +276,6 @@ def test_catalog_instantiates_managed_tls_variant() -> None:
             "${MLOX_AUTO_USER}": "gateway-user",
             "${MLOX_AUTO_PW}": "gateway-password",
             "${MODEL_REGISTRY_UUID}": "registry-uuid",
-            "${TLS_HOSTNAME}": "gateway.example.org",
             "${TLS_SECRET_MANAGER_UUID}": "manager-uuid",
             "${TLS_SECRET_NAME}": "gateway-tls",
         }

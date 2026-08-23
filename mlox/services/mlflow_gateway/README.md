@@ -17,19 +17,20 @@ requirements, the maximum cached models, and the cache TTL.
 MLOX generates gateway credentials. Docker deployments also get an external
 port; k3s deployments use a generated URL path on the k3s Traefik endpoint.
 
-The managed-TLS k3s variant additionally selects a hostname and an existing
-MLOX secret-manager entry. The entry must contain the matching certificate and
-private key as one structured value:
+The managed-TLS k3s variant additionally selects an existing MLOX
+secret-manager entry. The entry must contain the hostname, matching
+certificate, and private key as one structured value:
 
 ```json
 {
-  "tls.crt": "-----BEGIN CERTIFICATE-----...",
-  "tls.key": "-----BEGIN PRIVATE KEY-----..."
+  "tls.hostname": "gateway.example.org",
+  "tls.crt": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+  "tls.key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 }
 ```
 
-Only the hostname, secret-manager service UUID, and secret name are persisted
-with the gateway. The PEM values are loaded and validated during setup.
+Only the secret-manager service UUID and secret name are persisted with the
+gateway. The hostname and PEM values are loaded and validated during setup.
 
 ## Usage
 

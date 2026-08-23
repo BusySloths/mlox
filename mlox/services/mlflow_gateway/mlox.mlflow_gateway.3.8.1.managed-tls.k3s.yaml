@@ -6,8 +6,8 @@ description_short: MLflow model gateway on k3s using secret-manager-backed TLS.
 description: Provides an authenticated HTTPS endpoint that loads MLflow pyfunc
   models dynamically from a configured MLflow registry. This distinct k3s
   variant uses the built-in Traefik ingress with a hostname certificate loaded
-  at setup time from an MLOX secret-manager service. Only the manager UUID,
-  secret name, and hostname are persisted by the service.
+  at setup time from an MLOX secret-manager service. Only the manager UUID and
+  secret name are persisted by the service.
 links:
   project: https://mlflow.org/
   news: https://mlflow.org/releases/
@@ -50,6 +50,5 @@ build:
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}
     registry_uuid: ${MODEL_REGISTRY_UUID}
-    tls_hostname: ${TLS_HOSTNAME}
     tls_secret_manager_uuid: ${TLS_SECRET_MANAGER_UUID}
     tls_secret_name: ${TLS_SECRET_NAME}

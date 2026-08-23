@@ -214,11 +214,11 @@ def mlflow_gateway_managed_tls(infra, bundle, config=None) -> TemplateFormSpec:
     return TemplateFormSpec(
         title="Add MLflow Gateway (managed TLS)",
         description=(
-            "Select a registry, hostname, and an existing structured TLS secret."
+            "Select a registry and an existing structured TLS secret containing "
+            "tls.hostname, tls.crt, and tls.key."
         ),
         fields=base.fields
         + [
-            TemplateFieldSpec("tls_hostname", "TLS hostname"),
             TemplateFieldSpec(
                 "tls_secret_ref",
                 "TLS secret (manager / name)",
@@ -348,7 +348,6 @@ def _materialize_gateway_managed_tls(
     manager_uuid, secret_name = json.loads(values["tls_secret_ref"])
     params.update(
         {
-            "${TLS_HOSTNAME}": values["tls_hostname"],
             "${TLS_SECRET_MANAGER_UUID}": manager_uuid,
             "${TLS_SECRET_NAME}": secret_name,
         }

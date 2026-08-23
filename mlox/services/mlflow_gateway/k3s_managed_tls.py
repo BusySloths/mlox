@@ -20,14 +20,15 @@ from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
 class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
     """Expose the gateway through k3s Traefik with externally managed TLS."""
 
-    tls_hostname: str = ""
     tls_secret_manager_uuid: str = ""
     tls_secret_name: str = ""
     tls_kubernetes_secret_name: str = field(init=False)
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        self.tls_hostname = self.tls_hostname.strip().rstrip(".").lower()
+        # Runtime-only: the hostname is loaded from the referenced secret and is
+        # intentionally excluded from persisted service state.
+        self._tls_hostname = ""
         self.tls_kubernetes_secret_name = f"mlflow-gateway-tls-{self.gateway_id}"
 
     def _load_and_validate_tls_material(self) -> tuple[str, str]:
@@ -35,8 +36,6 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
             raise ValueError("A TLS secret-manager service is required.")
         if not self.tls_secret_name:
             raise ValueError("A TLS secret name is required.")
-        if not _valid_hostname(self.tls_hostname):
-            raise ValueError("A valid TLS hostname is required.")
 
         manager_service = self.get_dependent_service(
             self.tls_secret_manager_uuid,
@@ -50,15 +49,24 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
         manager = manager_service.get_secret_manager(self._service_lookup)
         secret = manager.load_secret(self.tls_secret_name)
         if not isinstance(secret, dict):
-            raise ValueError("The TLS secret must be an object with tls.crt and tls.key.")
+            raise ValueError(
+                "The TLS secret must be an object with tls.hostname, tls.crt, and tls.key."
+            )
+        hostname = secret.get("tls.hostname")
         certificate = secret.get("tls.crt")
         private_key = secret.get("tls.key")
+        if not isinstance(hostname, str) or not _valid_hostname(
+            hostname.strip().rstrip(".").lower()
+        ):
+            raise ValueError("The TLS secret does not contain a valid tls.hostname.")
+        hostname = hostname.strip().rstrip(".").lower()
         if not isinstance(certificate, str) or not certificate.strip():
             raise ValueError("The TLS secret does not contain a non-empty tls.crt.")
         if not isinstance(private_key, str) or not private_key.strip():
             raise ValueError("The TLS secret does not contain a non-empty tls.key.")
 
-        _validate_certificate(certificate, private_key, self.tls_hostname)
+        _validate_certificate(certificate, private_key, hostname)
+        self._tls_hostname = hostname
         return certificate, private_key
 
     def _render_gateway_manifest(self) -> str:
@@ -90,7 +98,7 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
                 "cache_size": self.yaml_scalar(cache_size),
                 "cache_ttl": self.yaml_scalar(cache_ttl),
                 "service_name": self.service_name,
-                "tls_hostname": self.yaml_scalar(self.tls_hostname),
+                "tls_hostname": self.yaml_scalar(self._tls_hostname),
                 "tls_secret_name": self.tls_kubernetes_secret_name,
             },
         )
@@ -121,7 +129,7 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
         super().setup(conn)
         if self.state != "running":
             raise RuntimeError("Failed to apply the MLflow Gateway manifest.")
-        self.service_url = f"https://{self.tls_hostname}{self.ingress_path}"
+        self.service_url = f"https://{self._tls_hostname}{self.ingress_path}"
         self.service_urls["MLflow Gateway REST API"] = self.service_url
 
 

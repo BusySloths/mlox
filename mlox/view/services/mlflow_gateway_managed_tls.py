@@ -28,11 +28,6 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict | None:
         st.warning("No secret-manager service is available.")
         return None
 
-    hostname = st.text_input(
-        "TLS hostname",
-        placeholder="gateway.example.org",
-        key="mlflow_gateway_tls_hostname",
-    )
     manager_service = st.selectbox(
         "TLS secret manager",
         managers,
@@ -58,7 +53,6 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict | None:
 
     params.update(
         {
-            "${TLS_HOSTNAME}": hostname,
             "${TLS_SECRET_MANAGER_UUID}": manager_service.uuid,
             "${TLS_SECRET_NAME}": secret_name,
         }

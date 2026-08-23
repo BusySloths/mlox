@@ -111,14 +111,13 @@ def test_managed_tls_gateway_selects_secret_manager_reference() -> None:
             "requirements_txt": "",
             "cache_max_models": "10",
             "cache_ttl_days": "10",
-            "tls_hostname": "gateway.example.org",
             "tls_secret_ref": secret_field.options[0][1],
         },
         infra,
     )
 
     assert secret_field.options[0][0] == "OpenBao / gateway-tls"
-    assert params["${TLS_HOSTNAME}"] == "gateway.example.org"
+    assert all(field.name != "tls_hostname" for field in spec.fields)
     assert params["${TLS_SECRET_MANAGER_UUID}"] == "manager-1"
     assert params["${TLS_SECRET_NAME}"] == "gateway-tls"
 
