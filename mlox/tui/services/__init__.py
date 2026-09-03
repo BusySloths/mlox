@@ -23,6 +23,7 @@ _TUI_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "config_ids": (
             "mlflow-gateway-3.8.1-docker",
             "mlflow-gateway-3.8.1-k3s",
+            "mlflow-gateway-3.8.1-k3s-managed-tls",
         ),
         "function_names": ("settings",),
     },

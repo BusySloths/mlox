@@ -77,6 +77,7 @@ def test_mlflow_gateway_tui_settings_handlers_are_registered(monkeypatch):
     for config_id in (
         "mlflow-gateway-3.8.1-docker",
         "mlflow-gateway-3.8.1-k3s",
+        "mlflow-gateway-3.8.1-k3s-managed-tls",
     ):
         handler = get_handler(
             config_id=config_id,

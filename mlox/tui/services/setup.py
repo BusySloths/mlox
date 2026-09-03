@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from mlox.service import ServiceCapability
+from mlox.service import AbstractSecretManagerService, ServiceCapability
 from mlox.tui.template_forms import TemplateFieldSpec, TemplateFormSpec
 
 
@@ -208,6 +209,28 @@ def mlflow_gateway(infra, bundle, config=None) -> TemplateFormSpec:
     )
 
 
+def mlflow_gateway_managed_tls(infra, bundle, config=None) -> TemplateFormSpec:
+    base = mlflow_gateway(infra, bundle, config)
+    return TemplateFormSpec(
+        title="Add MLflow Gateway (managed TLS)",
+        description=(
+            "Select a registry and an existing structured TLS secret containing "
+            "tls.hostname, tls.crt, and tls.key."
+        ),
+        fields=base.fields
+        + [
+            TemplateFieldSpec(
+                "tls_secret_ref",
+                "TLS secret (manager / name)",
+                kind="select",
+                options=_tls_secret_reference_options(infra),
+            ),
+        ],
+        submit_label="Add Service",
+        materialize=_materialize_gateway_managed_tls,
+    )
+
+
 def otel(infra, bundle, config=None) -> TemplateFormSpec:
     return TemplateFormSpec(
         title="Add OpenTelemetry Collector",
@@ -316,6 +339,43 @@ def _materialize_gateway(values: dict[str, str], infra) -> dict[str, str]:
         "${GATEWAY_CACHE_TTL_DAYS}": values.get("cache_ttl_days", "10"),
         "${MODEL_REGISTRY_UUID}": values["registry_uuid"],
     }
+
+
+def _materialize_gateway_managed_tls(
+    values: dict[str, str], infra
+) -> dict[str, str]:
+    params = _materialize_gateway(values, infra)
+    manager_uuid, secret_name = json.loads(values["tls_secret_ref"])
+    params.update(
+        {
+            "${TLS_SECRET_MANAGER_UUID}": manager_uuid,
+            "${TLS_SECRET_NAME}": secret_name,
+        }
+    )
+    return params
+
+
+def _tls_secret_reference_options(infra) -> list[tuple[str, str]]:
+    options: list[tuple[str, str]] = []
+    for service in _iter_services(infra):
+        if not isinstance(service, AbstractSecretManagerService):
+            continue
+        service_uuid = getattr(service, "uuid", "")
+        if not isinstance(service_uuid, str) or not service_uuid:
+            continue
+        try:
+            manager = service.get_secret_manager(infra)
+            names = sorted(manager.list_secrets(keys_only=True))
+        except Exception:
+            continue
+        options.extend(
+            (
+                f"{service.name} / {name}",
+                json.dumps([service_uuid, str(name)]),
+            )
+            for name in names
+        )
+    return options
 
 
 def _model_registry_options(infra) -> list[tuple[str, str]]:
@@ -427,6 +487,7 @@ SETUP_HANDLERS = {
     "mlflow-3.8.1-docker": no_params,
     "mlflow-gateway-3.8.1-docker": mlflow_gateway,
     "mlflow-gateway-3.8.1-k3s": mlflow_gateway,
+    "mlflow-gateway-3.8.1-k3s-managed-tls": mlflow_gateway_managed_tls,
     "mlflow-mlserver-2.22.0-docker": mlflow_mlserver,
     "mlflow-mlserver-3.8.1-docker": mlflow_mlserver,
     "mlflow-mlserver-3.8.1-k3s": mlflow_mlserver,

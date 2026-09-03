@@ -97,6 +97,8 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
             self.state = "unknown"
             return
 
+        self._after_manifest_apply(conn)
+
         rollout = self.exec.execute(
             conn,
             self._kubectl(
@@ -118,6 +120,10 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
         self.service_urls["MLflow Gateway REST API"] = self.service_url
         self.service_ports["MLflow Gateway REST API"] = self.ingress_port
         self.state = "running"
+
+    def _after_manifest_apply(self, conn) -> None:
+        """Run variant-specific setup after the namespace manifest is applied."""
+        return None
 
     def spin_up(self, conn) -> bool:
         return True

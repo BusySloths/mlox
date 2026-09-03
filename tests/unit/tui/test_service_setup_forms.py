@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from mlox.service import ServiceCapability
+from mlox.service import AbstractSecretManagerService, ServiceCapability
 from mlox.tui.services import setup as service_setup
 
 
@@ -66,6 +66,60 @@ def test_mlflow_gateway_setup_spec_uses_registry_secrets() -> None:
     assert params["${TRACKING_PW}"] == "pw"
     assert params["${GATEWAY_REQUIREMENTS_TXT}"] == "numpy"
     assert params["${MODEL_REGISTRY_UUID}"] == "registry-1"
+
+
+def test_managed_tls_gateway_selects_secret_manager_reference() -> None:
+    class SecretManager:
+        def list_secrets(self, keys_only=False):
+            assert keys_only is True
+            return {"gateway-tls": None}
+
+    class SecretManagerService(AbstractSecretManagerService):
+        uuid = "manager-1"
+        name = "OpenBao"
+        capabilities = {ServiceCapability.SECRET_MANAGER}
+
+        def get_secret_manager(self, infra):
+            return SecretManager()
+
+    registry = SimpleNamespace(
+        uuid="registry-1",
+        name="MLflow",
+        capabilities={ServiceCapability.MODEL_REGISTRY},
+        get_secrets=lambda: {
+            "username": "mlflow",
+            "password": "pw",
+            "service_url": "https://mlflow.test",
+        },
+    )
+    manager_service = SecretManagerService()
+    services = [registry, manager_service]
+    infra = SimpleNamespace(
+        services=lambda: services,
+        get_service_by_uuid=lambda uuid: next(
+            (service for service in services if service.uuid == uuid), None
+        ),
+    )
+    spec = service_setup.mlflow_gateway_managed_tls(
+        infra, None, SimpleNamespace(name="Gateway TLS")
+    )
+    secret_field = next(field for field in spec.fields if field.name == "tls_secret_ref")
+
+    params = spec.params(
+        {
+            "registry_uuid": "registry-1",
+            "requirements_txt": "",
+            "cache_max_models": "10",
+            "cache_ttl_days": "10",
+            "tls_secret_ref": secret_field.options[0][1],
+        },
+        infra,
+    )
+
+    assert secret_field.options[0][0] == "OpenBao / gateway-tls"
+    assert all(field.name != "tls_hostname" for field in spec.fields)
+    assert params["${TLS_SECRET_MANAGER_UUID}"] == "manager-1"
+    assert params["${TLS_SECRET_NAME}"] == "gateway-tls"
 
 
 def test_gcp_setup_spec_exposes_missing_secret_manager_dependency() -> None:
@@ -134,6 +188,7 @@ def test_all_builtin_service_configs_have_tui_setup_handlers() -> None:
         "mlflow-3.8.1-docker",
         "mlflow-gateway-3.8.1-docker",
         "mlflow-gateway-3.8.1-k3s",
+        "mlflow-gateway-3.8.1-k3s-managed-tls",
         "mlflow-mlserver-2.22.0-docker",
         "mlflow-mlserver-3.8.1-docker",
         "mlflow-mlserver-3.8.1-k3s",
