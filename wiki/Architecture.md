@@ -21,13 +21,13 @@
 
 ## 1. Fast Orientation
 
-MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. It exposes **three user interfaces**:
+MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. Its primary interfaces are:
 
-| Interface | Entry Point |
-|-----------|------------|
-| **CLI** | [`mlox/cli/app.py`](https://github.com/BusySloths/mlox/blob/main/mlox/cli/app.py) + [`mlox/cli/commands/`](https://github.com/BusySloths/mlox/blob/main/mlox/cli/commands/) |
-| **TUI** (terminal UI) | [`mlox/tui/`](https://github.com/BusySloths/mlox/blob/main/mlox/tui/) |
-| **Web App** (Streamlit) | [`mlox/view/`](https://github.com/BusySloths/mlox/blob/main/mlox/view/) |
+| Interface | Entry Point | Status |
+|-----------|------------|--------|
+| **CLI** | [`mlox/cli/app.py`](https://github.com/BusySloths/mlox/blob/main/mlox/cli/app.py) + [`mlox/cli/commands/`](https://github.com/BusySloths/mlox/blob/main/mlox/cli/commands/) | Primary |
+| **TUI** (terminal UI) | [`mlox/tui/`](https://github.com/BusySloths/mlox/blob/main/mlox/tui/) | Primary |
+| **Web App** (Streamlit) | [`mlox/view/`](https://github.com/BusySloths/mlox/blob/main/mlox/view/) | Deprecated — moving to a plugin repo (see `docs/DOCTRINE.md`) |
 
 The shared architecture is centered on one public project workspace:
 
@@ -40,10 +40,10 @@ The shared architecture is centered on one public project workspace:
 | `Infrastructure` | [`mlox/infra.py`](https://github.com/BusySloths/mlox/blob/main/mlox/infra.py) | Project topology made of bundles, compute, and services |
 
 ```text
-CLI     TUI     Streamlit Web UI     Other UIs
-  \      |             |                /
-   \     |             |               /
-    +----+-------------+--------------+
+CLI     TUI                      Other UIs (via plugins)
+  \      |                          /
+   \     |                         /
+    +----+------------------------+
                     |
                     v
               `ProjectWorkspace`
@@ -84,9 +84,9 @@ Key tasks:
 |------|---------|
 | `task first:steps` | Bootstrap the dev environment (conda env `mlox-dev`, Python 3.12.5) |
 | `task dev:env:create` | Create the conda environment |
-| `task ui:streamlit` | Launch the Streamlit web UI |
 | `task ui:cli` | Launch the CLI |
 | `task ui:textual:terminal` | Launch the TUI |
+| `task ui:streamlit` | Launch the Streamlit web UI (deprecated) |
 | `task tests:unit:run` | Run unit tests (fast, no external deps) |
 | `task tests:integration:run` | Run integration tests (requires Multipass VMs) |
 | `task tests:integration:k8s` | Run Kubernetes integration tests (requires Multipass/k3s) |
@@ -130,7 +130,7 @@ mlox/
 ├── services/       # Deployable ML/AI services and integrations
 ├── tui/            # Textual terminal UI + TUI-specific UI handlers
 ├── ui/             # Frontend UI handler registry
-├── view/           # Streamlit web UI + Streamlit-specific UI handlers
+├── view/           # Streamlit web UI — deprecated (moving to plugin repo)
 ├── assets/         # Runtime templates and packaged assets
 ├── resources/      # Images and other static resources
 ├── infra.py        # Service/server graph
@@ -234,10 +234,11 @@ The intended control flow is:
 - internal persistence boundary (`SqlCipherRepository`)
 - topology root (`Infrastructure`)
 
-CLI commands open a `ProjectWorkspace` per invocation. TUI and Streamlit retain
-one workspace in runtime state. All three interfaces share the same use cases.
+CLI commands open a `ProjectWorkspace` per invocation. The TUI retains one
+workspace in runtime state. Both edit the same shared use cases. The Streamlit
+`view/` layer is deprecated and will move to a plugin repo (`docs/DOCTRINE.md`).
 
-For custom setup/settings panels, the ownership moved to the frontend packages. Built-in Streamlit and TUI handlers are bootstrapped into `mlox/ui/registry.py`, which keeps deployable configs UI-agnostic and creates a later extension point for plugin UI contributions.
+For custom setup/settings panels, the ownership moved to the frontend packages. Built-in TUI handlers (and, until extraction, Streamlit handlers) are bootstrapped into `mlox/ui/registry.py`, which keeps deployable configs UI-agnostic and creates a later extension point for plugin UI contributions.
 
 ### Executors Handle System Calls
 

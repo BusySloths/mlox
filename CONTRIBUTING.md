@@ -12,6 +12,12 @@ Thank you for considering contributing to `MLOX`. There are many ways to contrib
 
 This project is intended to be a community effort, and it won't be possible without your support and enthusiasm.
 
+> **Note:** The Streamlit web UI (`mlox/view/` and `mlox/app.py`) is deprecated and
+> moving to a plugin repo. PRs there are maintenance-only. Status, roadmap, and
+> decisions live in `docs/DOCTRINE.md` — update that file if your change affects
+> them. The service/server catalog is generated (`docs/SERVICES_CATALOG.md`); never
+> hand-edit it.
+
 ## Where to Start? 
 
 If you're new to open-source development, we recommend going through the [GitHub “issues” tab](https://github.com/busysloths/mlox/issues) to find items that interest you. Once you’ve found something interesting, the next step is to create your development environment.

@@ -1,19 +1,17 @@
 # MLOX Architecture
 
-This is the contributor-facing map of the current codebase.
+This is the contributor-facing map of the current codebase. For **status,
+roadmap, and binding decisions** (including the deprecated Streamlit UI), see
+`docs/DOCTRINE.md` — this file covers architecture only.
 
 ## Runtime Shape
 
-MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. It exposes three local interfaces:
-
-- CLI: `mlox/cli/`
-- TUI: `mlox/tui/`
-- Streamlit web UI: `mlox/view/`
+MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. It exposes CLI (`mlox/cli/`) and TUI (`mlox/tui/`) as its primary interfaces. The Streamlit web UI (`mlox/view/`) is **deprecated** and moving to a plugin repo — no new investment there (see `docs/DOCTRINE.md`).
 
 Those interfaces should stay thin. Shared behavior belongs in the application layer.
 
 ```text
-CLI / TUI / Streamlit
+CLI / TUI
         |
         v
 ProjectWorkspace
@@ -102,6 +100,8 @@ Rules for new service/server work:
 - Service capabilities are useful metadata and UI affordances but not yet a complete placement policy.
 - `Infrastructure` contains queries, serialization, and runtime hydration only.
 - UI handler plugin registration is not yet part of the documented external plugin API.
+
+These are tracked as roadmap items in `docs/DOCTRINE.md`.
 
 ## Development Commands
 

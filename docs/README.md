@@ -10,9 +10,10 @@ MLOX deploys and manages connected ML/AI infrastructure on your own servers, wit
 
 ## Architecture
 
+- `DOCTRINE.md`: **single point of truth** for status, roadmap, and binding decisions.
+- `SERVICES_CATALOG.md`: generated service/server catalog (do not hand-edit).
 - `ARCHITECTURE_HUMANS.md`: current architecture map for contributors.
 - `ARCHITECTURE_AGENTS.md`: focused notes for coding agents and high-risk areas.
-- `ARCHITECTURE_REFACTOR_PLAN_01.md`: current status of the architecture refactor.
 - `PLUGIN_CONFIGS.md`: external service/server config plugin contract.
 
 ## GitHub Process

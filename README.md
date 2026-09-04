@@ -28,11 +28,13 @@ ML/AI infrastructure is fragmented. Setup is painful, managed platforms are expe
 
 MLOX brings the infrastructure around your product into one connected system. It manages servers, sets up Docker and Kubernetes clusters, deploys open-source services, stores secrets, and wires dependencies across databases, workflows, experiment tracking, model serving, data services, and monitoring.
 
-Use the Web UI, TUI, or CLI to operate the same inspectable, configuration-driven core. MLOX is built for solopreneurs, startups, and small teams that want to focus on their product instead of assembling and maintaining infrastructure.
+Use the CLI or TUI to operate the same inspectable, configuration-driven core. MLOX is built for solopreneurs, startups, and small teams that want to focus on their product instead of assembling and maintaining infrastructure.
 
 It's for engineers who prefer thoughtful systems over chaos. Backed by open source. Powered by sloths.
 
 > **[State of the Union (Sept 2025)](https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing)** — a short slide overview of what MLOX is, what problem it solves, and where it's heading.
+>
+> **Status, roadmap, and decisions** — see [docs/DOCTRINE.md](docs/DOCTRINE.md), the single point of truth.
 
 ---
 
@@ -59,28 +61,20 @@ We welcome contributors, users, and honest feedback. If you hit something broken
 
 ## Services Catalog
 
-| Category | Services | Status |
-|----------|----------|--------|
-| ML Platforms | MLflow 2.x, MLflow 3.x, Airflow 2.x, Airflow 3.x | Functional |
-| Model Serving | MLflow MLServer, MLflow Gateway | Functional |
-| LLMs & Inference | LiteLLM, Ollama | Functional |
-| Vector & Feature Stores | Milvus, Feast | Functional |
-| Data & Streaming | PostgreSQL, Redis, MinIO, Kafka | Functional |
-| Observability | InfluxDB, OpenTelemetry | Functional |
-| Secrets & Access | OpenBao, Tiny Secret Manager, Registry 3 | Functional / Beta |
-| Kubernetes Add-ons | Kubernetes Dashboard, Headlamp, KubeApps | Experimental |
-| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | Functional |
-| Source Control | GitHub repository import | Beta |
-| Applications | Repository Docker Deploy | Beta |
+MLOX bundles a growing set of self-hosted services and connectors (MLflow,
+Airflow, Milvus, Feast, Kafka, LiteLLM, OpenBao, GCP, and more). The exhaustive,
+authoritative list — generated directly from the YAML plugin configs — lives in
+[**docs/SERVICES_CATALOG.md**](docs/SERVICES_CATALOG.md). Per-component maturity
+status is tracked in [docs/DOCTRINE.md](docs/DOCTRINE.md).
 
 ---
 
 ## Architecture in 30 Seconds
 
 ```text
-CLI     TUI     Streamlit Web UI
-  \      |             /
-   +------+------------+
+CLI     TUI
+  \      |
+   +-----+
           |
           v
       `ProjectWorkspace`
@@ -103,7 +97,8 @@ Encrypted project storage is selected initially, with no silent fallback when an
 external provider is unavailable. The project
 also records its active data source (`sqlcipher/self` initially), leaving a clean
 migration path to PostgreSQL. CLI commands open a workspace per invocation,
-while the TUI and Web UI retain one workspace in runtime state.
+while the TUI retains one workspace in runtime state. (The Streamlit web UI is
+deprecated — see [docs/DOCTRINE.md](docs/DOCTRINE.md).)
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 
@@ -125,11 +120,11 @@ git clone https://github.com/BusySloths/mlox.git && cd mlox
 # 3. Set up environment (creates conda env 'mlox-dev' with Python 3.12.5)
 task first:steps
 
-# 4. Launch the Web UI
-task ui:streamlit
-
-# 5. Or try the CLI
+# 4. Launch the CLI
 task ui:cli CLI_ARGS="--help"
+
+# 5. Or launch the TUI
+task ui:textual:terminal
 ```
 
 See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough including Docker and Kubernetes setup. See [Encrypted Project Files](docs/PROJECT_FILES.md) for creation, storage, backup, and legacy migration details.
@@ -149,10 +144,9 @@ mlox/
 │   ├── services/       # Deployable ML/AI services and integrations
 │   ├── tui/            # Textual terminal UI + TUI-specific UI handlers
 │   ├── ui/             # Frontend UI handler registry
-│   ├── view/           # Streamlit web UI + Streamlit-specific UI handlers
 │   ├── assets/         # Runtime templates and packaged assets
 │   ├── resources/      # Images and other static resources
-│   ├── project/        # Public workspace and internal SQLCipher persistence
+│   ├── view/           # Streamlit web UI — deprecated (moving to plugin repo)
 │   ├── infra.py        # Service/server graph
 │   ├── config.py       # YAML loading + plugin discovery + UI handler lookup
 │   └── executors.py    # Remote task executor layer used by services/servers
@@ -207,6 +201,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and [docs/WORKFLOW_QUI
 
 | Document | Description |
 |----------|-------------|
+| [Doctrine](docs/DOCTRINE.md) | Status, roadmap, and binding decisions (single point of truth) |
+| [Services Catalog](docs/SERVICES_CATALOG.md) | Generated service/server catalog |
 | [Installation Guide](docs/INSTALLATION.md) | Setup from scratch |
 | [Architecture (humans)](docs/ARCHITECTURE_HUMANS.md) | Codebase walkthrough |
 | [Architecture (agents)](docs/ARCHITECTURE_AGENTS.md) | High-risk areas and invariants |

@@ -1,6 +1,8 @@
 # Architecture Notes For Coding Agents
 
-Use this when changing core MLOX behavior.
+Use this when changing core MLOX behavior. For **status, roadmap, and binding
+decisions** (e.g. the deprecated Streamlit web UI), read `docs/DOCTRINE.md`
+first — this file covers code invariants only.
 
 ## Mental Model
 
@@ -12,7 +14,9 @@ MLOX is a configuration-driven system for managing a connected topology of ML/AI
 4. Internal `SqlCipherRepository` owns SQLCipher persistence.
 5. `ProjectWorkspace` is the only public project runtime and mutation boundary.
 6. Application use-cases accept `WorkspaceState` and never persist directly.
-7. CLI, TUI, and Streamlit should call `ProjectWorkspace` instead of mutating topology directly.
+7. CLI and TUI should call `ProjectWorkspace` instead of mutating topology directly.
+   (The Streamlit `mlox/view/` layer is deprecated — see `docs/DOCTRINE.md`; don't
+   invest there.)
 8. Remote/system commands should route through `mlox/executors.py` and `mlox/execution/*`.
 
 ## High-Risk Areas

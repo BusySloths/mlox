@@ -1,10 +1,20 @@
 import os
+import warnings
+
 import streamlit as st
 
 from typing import cast
 
 from mlox.project import ProjectWorkspace
 from mlox.infra import Infrastructure
+
+warnings.warn(
+    "The Streamlit web UI (mlox/app.py and mlox/view/) is deprecated and will be "
+    "moved to a separate plugin repository. The TUI and CLI are the supported "
+    "interfaces. See docs/DOCTRINE.md.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # --- Path setup ---
 # Get the absolute path to the directory containing this script (app.py)

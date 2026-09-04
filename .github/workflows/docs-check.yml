@@ -1,0 +1,26 @@
+name: Docs Governance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install doc-check dependencies
+        run: python -m pip install --quiet pyyaml
+
+      - name: Validate documentation sources of truth
+        run: python scripts/check_docs.py

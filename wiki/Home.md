@@ -16,7 +16,7 @@ ML/AI infrastructure is fragmented. Setup is painful, managed platforms are expe
 
 MLOX brings the infrastructure around your product into one connected system. It manages servers, sets up Docker and Kubernetes clusters, deploys open-source services, stores secrets, and wires dependencies across databases, workflows, experiment tracking, model serving, data services, and monitoring.
 
-Use the Web UI, TUI, or CLI to operate the same inspectable, configuration-driven core. MLOX is built for solopreneurs, startups, and small teams that want to focus on their product instead of assembling and maintaining infrastructure.
+Use the CLI or TUI to operate the same inspectable, configuration-driven core. MLOX is built for solopreneurs, startups, and small teams that want to focus on their product instead of assembling and maintaining infrastructure.
 
 It's for engineers who prefer thoughtful systems over chaos. Backed by open source. Powered by sloths.
 
@@ -50,29 +50,18 @@ It's for engineers who prefer thoughtful systems over chaos. Backed by open sour
 
 ## Services Catalog
 
-| Category | Services | Status |
-|----------|----------|--------|
-| ML Platforms | MLflow 2.x, MLflow 3.x, Airflow 2.x, Airflow 3.x | Functional |
-| Model Serving | MLflow MLServer, MLflow Gateway | Functional |
-| LLMs & Inference | LiteLLM, Ollama | Functional |
-| Vector & Feature Stores | Milvus, Feast | Functional |
-| Data & Streaming | PostgreSQL, Redis, MinIO, Kafka | Functional |
-| Observability | InfluxDB, OpenTelemetry | Functional |
-| Secrets & Access | OpenBao, Tiny Secret Manager, Registry 3 | Functional / Beta |
-| Kubernetes Add-ons | Kubernetes Dashboard, Headlamp, KubeApps | Experimental |
-| Cloud Integrations | GCP (BigQuery, Cloud Storage, Sheets, Secret Manager) | Functional |
-| Source Control | GitHub repository import | Beta |
-| Applications | Repository Docker Deploy | Beta |
+See the [Services Catalog](Services-Catalog) page — the exhaustive, authoritative
+list generated from the YAML plugin configs (36 service configs, 9 server configs).
 
 ---
 
 ## Architecture at a Glance
 
 ```text
-CLI     TUI     Streamlit Web UI     Other UIs
-  \      |             |                /
-   \     |             |               /
-    +----+-------------+--------------+
+CLI     TUI                      Other UIs (via plugins)
+  \      |                          /
+   \     |                         /
+    +----+------------------------+
                     |
                     v
              `ProjectWorkspace`
@@ -95,7 +84,7 @@ CLI     TUI     Streamlit Web UI     Other UIs
 `ProjectWorkspace` exposes the shared mutation and direct SDK API. It loads
 internal state containing metadata and `Infrastructure`, and commits both
 atomically to the encrypted project file. CLI commands open a workspace per
-invocation; the TUI and Web UI retain one in runtime state.
+invocation; the TUI retains one in runtime state.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 
@@ -114,11 +103,11 @@ git clone https://github.com/BusySloths/mlox.git && cd mlox
 # 3. Set up environment (creates conda env 'mlox-dev' with Python 3.12.5)
 task first:steps
 
-# 4. Launch the Web UI
-task ui:streamlit
-
-# 5. Or try the CLI
+# 4. Launch the CLI
 task ui:cli CLI_ARGS="--help"
+
+# 5. Or launch the TUI
+task ui:textual:terminal
 ```
 
 See the [Installation](Installation) wiki page or [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) for Docker and Kubernetes setup.
@@ -141,6 +130,7 @@ We welcome contributors, users, and honest feedback.
 
 | Document | Link |
 |----------|------|
+| Doctrine (status/roadmap/decisions) | [`docs/DOCTRINE.md`](https://github.com/BusySloths/mlox/blob/main/docs/DOCTRINE.md) |
 | Architecture (humans) | [Architecture](Architecture) wiki page · [`docs/ARCHITECTURE_HUMANS.md`](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE_HUMANS.md) |
 | Architecture (agents) | [`docs/ARCHITECTURE_AGENTS.md`](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE_AGENTS.md) |
 | Installation Guide | [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) |

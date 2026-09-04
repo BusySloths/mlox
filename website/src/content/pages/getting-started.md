@@ -17,7 +17,7 @@ steps:
   - title: "Create a Project"
     description: "Create one encrypted, portable MLOX project file"
     code: "mlox project new ./projects/demo"
-    note: "Set MLOX_PROJECT_PATH and MLOX_PROJECT_PASSWORD to open the same project from the Web UI, TUI, CLI, or SDK"
+    note: "Set MLOX_PROJECT_PATH and MLOX_PROJECT_PASSWORD to open the same project from the TUI, CLI, or SDK"
   - title: "Want the Big Picture?"
     description: "Check out our comprehensive guides"
     note: >
