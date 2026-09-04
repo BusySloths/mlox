@@ -136,7 +136,7 @@ We welcome contributors, users, and honest feedback.
 | Contributing Guide | [`CONTRIBUTING.md`](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) |
 | Plugin Guide | [`docs/PLUGIN_CONFIGS.md`](https://github.com/BusySloths/mlox/blob/main/docs/PLUGIN_CONFIGS.md) |
 | Project Files | [`docs/PROJECT_FILES.md`](https://github.com/BusySloths/mlox/blob/main/docs/PROJECT_FILES.md) |
-| API Docs | [busysloths.github.io/mlox/docs](https://busysloths.github.io/mlox/docs/mlox.html) |
+| API Docs | [busysloths.github.io/mlox/docs](https://busysloths.github.io/mlox/docs) |
 | Website | [mlox.org](https://mlox.org) |
 
 ---

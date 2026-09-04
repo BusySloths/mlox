@@ -204,7 +204,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, milestone, and PR workflow
 | [Project Files](docs/PROJECT_FILES.md) | Encrypted project files, backup, migration |
 | [Contributing Guide](CONTRIBUTING.md) | How to contribute |
 | [Plugin Guide](docs/PLUGIN_CONFIGS.md) | External service and server config plugins |
-| [API Docs](https://busysloths.github.io/mlox/mlox.html) | Generated Python API reference |
+| [API Docs](https://busysloths.github.io/mlox/docs) | Generated Python API reference |
 
 ---
 

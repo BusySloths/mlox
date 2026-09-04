@@ -27,6 +27,6 @@ Guides live in the repo and are linked from the sidebar:
 ### 🔗 External
 
 - [GitHub Repository](https://github.com/BusySloths/mlox)
-- [API Docs](https://busysloths.github.io/mlox/mlox.html)
+- [API Docs](https://busysloths.github.io/mlox/docs)
 - [PyPI Package](https://pypi.org/project/busysloths-mlox/)
 - [Discussions](https://github.com/BusySloths/mlox/discussions)
