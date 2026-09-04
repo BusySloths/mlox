@@ -20,7 +20,6 @@ conda activate mlox-dev
 Useful local commands:
 
 ```bash
-task ui:streamlit          # Streamlit web UI
 task ui:cli                # CLI help
 task ui:textual:terminal   # Textual TUI
 task tests:unit:run        # unit tests

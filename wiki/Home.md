@@ -26,12 +26,11 @@ It's for engineers who prefer thoughtful systems over chaos. Backed by open sour
 
 | Page | Description |
 |------|-------------|
-| [Architecture](Architecture) | Codebase walkthrough for human contributors |
-| [Installation](Installation) | Setup from scratch (local, Docker, Kubernetes) |
-| [Contributing](Contributing) | How to contribute to MLOX |
+| [Architecture](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE.md) | Codebase walkthrough |
+| [Installation](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) | Setup from scratch (local, Docker, Kubernetes) |
+| [Contributing](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) | How to contribute to MLOX |
 | [Troubleshooting](Troubleshooting) | Known setup and runtime issues with fixes and workarounds |
 | [Services Catalog](Services-Catalog) | All supported MLOps services |
-| [Plugin Guide](Plugin-Guide) | External service and server config plugins |
 
 ---
 
@@ -88,7 +87,7 @@ invocation; the TUI retains one in runtime state.
 
 Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
 
-→ Read the full [Architecture](Architecture) page for a deep dive.
+→ Read the full [Architecture guide](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE.md) for a deep dive.
 
 ---
 
@@ -110,7 +109,7 @@ task ui:cli CLI_ARGS="--help"
 task ui:textual:terminal
 ```
 
-See the [Installation](Installation) wiki page or [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) for Docker and Kubernetes setup.
+See [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) for Docker and Kubernetes setup.
 
 ---
 
@@ -131,12 +130,12 @@ We welcome contributors, users, and honest feedback.
 | Document | Link |
 |----------|------|
 | Doctrine (status/roadmap/decisions) | [`docs/DOCTRINE.md`](https://github.com/BusySloths/mlox/blob/main/docs/DOCTRINE.md) |
-| Architecture (humans) | [Architecture](Architecture) wiki page · [`docs/ARCHITECTURE_HUMANS.md`](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE_HUMANS.md) |
-| Architecture (agents) | [`docs/ARCHITECTURE_AGENTS.md`](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE_AGENTS.md) |
+| Services Catalog | [Services Catalog](Services-Catalog) wiki page |
+| Architecture | [`docs/ARCHITECTURE.md`](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE.md) |
 | Installation Guide | [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) |
 | Contributing Guide | [`CONTRIBUTING.md`](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) |
-| Workflow Quick Reference | [`docs/WORKFLOW_QUICK_REFERENCE.md`](https://github.com/BusySloths/mlox/blob/main/docs/WORKFLOW_QUICK_REFERENCE.md) |
 | Plugin Guide | [`docs/PLUGIN_CONFIGS.md`](https://github.com/BusySloths/mlox/blob/main/docs/PLUGIN_CONFIGS.md) |
+| Project Files | [`docs/PROJECT_FILES.md`](https://github.com/BusySloths/mlox/blob/main/docs/PROJECT_FILES.md) |
 | API Docs | [busysloths.github.io/mlox/docs](https://busysloths.github.io/mlox/docs/mlox.html) |
 | Website | [mlox.org](https://mlox.org) |
 

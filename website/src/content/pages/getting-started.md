@@ -23,7 +23,6 @@ steps:
     note: >
       For a more detailed guide, check out our
       <a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple underline font-semibold">Installation Guide</a>.
-      You can also view our
-      <a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple underline font-semibold">MLOX – State of the Union</a>
-      — a short slide overview of what MLOX is, what problem it solves, and where it's heading.
+      For status and direction, see the
+      <a href="https://github.com/BusySloths/mlox/blob/main/docs/DOCTRINE.md" target="_blank" rel="noopener noreferrer" class="text-accent-cyan hover:text-accent-purple underline font-semibold">Doctrine</a>
 ---

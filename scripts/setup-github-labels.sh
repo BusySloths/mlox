@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Create the small early-stage label set documented in docs/LABELS.md.
+# Create the small early-stage label set documented in CONTRIBUTING.md.
 # Requires GitHub CLI (gh) to be installed and authenticated.
 
 echo "Setting up MLOX GitHub labels..."
@@ -49,5 +49,5 @@ echo "Label setup complete."
 echo ""
 echo "Next steps:"
 echo "1. Review labels in repository settings."
-echo "2. Remove labels that are not listed in docs/LABELS.md if unused."
-echo "3. Keep docs/LABELS.md as the source of truth."
+echo "2. Remove labels that are not listed in CONTRIBUTING.md if unused."
+echo "3. Keep CONTRIBUTING.md as the source of truth."

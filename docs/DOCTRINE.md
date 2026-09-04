@@ -103,6 +103,13 @@ authoritative list.
   Open" items are the first entries in [Roadmap](#roadmap).
 - Hand-maintained service/per-version catalogs in README and `wiki/` are replaced
   by the generated `docs/SERVICES_CATALOG.md`.
+- Doc consolidation: the five process docs (`GITHUB_PROJECT.md`,
+  `PROJECT_PLANNING.md`, `LABELS.md`, `MILESTONE_TEMPLATE.md`,
+  `WORKFLOW_QUICK_REFERENCE.md`) merged into `CONTRIBUTING.md`;
+  `ARCHITECTURE_AGENTS.md` merged into `CLAUDE.md`; `ARCHITECTURE_HUMANS.md`
+  renamed to `ARCHITECTURE.md`; `docs/README.md`, `website/CONTENT_GUIDE.md`,
+  and the five wiki mirror pages removed; out-of-date State-of-the-Union
+  references purged (slides archived in `docs/slides/`).
 
 ---
 
@@ -112,9 +119,9 @@ authoritative list.
 |---------|----------|------|
 | Doctrine (status/roadmap/decisions) | `docs/DOCTRINE.md` | **Source of truth.** |
 | Service/service catalog | `mlox*/**/*.yaml` → `docs/SERVICES_CATALOG.md` | Generated, never hand-edited. |
-| Architecture (humans) | `docs/ARCHITECTURE_HUMANS.md` | Pure architecture; no status/roadmap. |
-| Architecture (agents) | `docs/ARCHITECTURE_AGENTS.md` | Agent invariants; no status/stats. |
-| Agent interpretation | `CLAUDE.md` | Interpretive notes; no volatile stats. |
+| Architecture (humans) | `docs/ARCHITECTURE.md` | Pure architecture; no status/roadmap. |
+| Agent invariants | `CLAUDE.md` | Agent interpretation + code invariants; no volatile stats. |
+| Contributor process | `CONTRIBUTING.md` | Issues, labels, milestones, PRs. |
 | Marketing/quickstart | `README.md` | Links only; no catalogs or status lists. |
 | GitHub Wiki | `wiki/` | Derived; catalog page is generated. |
 | Website | `website/` | Derived; links to doctrine + catalog. |

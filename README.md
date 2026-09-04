@@ -17,7 +17,6 @@
   <a href="https://qlty.sh/gh/BusySloths/projects/mlox" target="_blank"><img src="https://qlty.sh/gh/BusySloths/projects/mlox/coverage.svg" alt="Code Coverage" /></a>
   <a href="https://github.com/BusySloths/mlox/issues" target="_blank"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/busysloths/mlox"></a>
   <a href="https://github.com/BusySloths/mlox/discussions" target="_blank"><img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/busysloths/mlox"></a>
-  <a href="https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing"><img src="https://img.shields.io/badge/Slides-State_of_the_Union-9cf" alt="Slides: State of the Union" /></a>
 </p>
 
 ---
@@ -32,8 +31,6 @@ Use the CLI or TUI to operate the same inspectable, configuration-driven core. M
 
 It's for engineers who prefer thoughtful systems over chaos. Backed by open source. Powered by sloths.
 
-> **[State of the Union (Sept 2025)](https://drive.google.com/file/d/1Y368yXcaQt1dJ6riOCzI7-pSQBnJjyEP/view?usp=sharing)** — a short slide overview of what MLOX is, what problem it solves, and where it's heading.
->
 > **Status, roadmap, and decisions** — see [docs/DOCTRINE.md](docs/DOCTRINE.md), the single point of truth.
 
 ---
@@ -104,8 +101,7 @@ Service and server definitions remain inspectable and configuration-driven, whil
 
 For deeper reading:
 
-- [Architecture Guide (humans)](docs/ARCHITECTURE_HUMANS.md) — codebase walkthrough
-- [Architecture Guide (agents)](docs/ARCHITECTURE_AGENTS.md) — high-risk areas and invariants
+- [Architecture Guide](docs/ARCHITECTURE.md) — codebase walkthrough
 
 ---
 
@@ -190,10 +186,10 @@ task tests:integration:k8s      # Kubernetes integration tests (requires Multipa
 - [Bug reports](https://github.com/BusySloths/mlox/issues/new/choose)
 - [Documentation improvements](https://github.com/BusySloths/mlox/issues/new/choose)
 - [Feature requests](https://github.com/BusySloths/mlox/issues/new/choose)
-- [New service implementations](docs/ARCHITECTURE_HUMANS.md)
+- [New service implementations](docs/ARCHITECTURE.md)
 - [Examples and tutorials](examples/)
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and [docs/WORKFLOW_QUICK_REFERENCE.md](docs/WORKFLOW_QUICK_REFERENCE.md) for the lightweight issue, milestone, and PR workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, milestone, and PR workflow.
 
 ---
 
@@ -203,11 +199,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide and [docs/WORKFLOW_QUI
 |----------|-------------|
 | [Doctrine](docs/DOCTRINE.md) | Status, roadmap, and binding decisions (single point of truth) |
 | [Services Catalog](docs/SERVICES_CATALOG.md) | Generated service/server catalog |
+| [Architecture](docs/ARCHITECTURE.md) | Codebase walkthrough |
 | [Installation Guide](docs/INSTALLATION.md) | Setup from scratch |
-| [Architecture (humans)](docs/ARCHITECTURE_HUMANS.md) | Codebase walkthrough |
-| [Architecture (agents)](docs/ARCHITECTURE_AGENTS.md) | High-risk areas and invariants |
+| [Project Files](docs/PROJECT_FILES.md) | Encrypted project files, backup, migration |
 | [Contributing Guide](CONTRIBUTING.md) | How to contribute |
-| [Workflow Quick Reference](docs/WORKFLOW_QUICK_REFERENCE.md) | Issues, labels, milestones, PRs |
 | [Plugin Guide](docs/PLUGIN_CONFIGS.md) | External service and server config plugins |
 | [API Docs](https://busysloths.github.io/mlox/mlox.html) | Generated Python API reference |
 

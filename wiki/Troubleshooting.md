@@ -35,5 +35,5 @@ After upgrading to Docker Engine 29, older embedded Docker clients such as the o
 ## See Also
 
 - [Home](Home) — Project overview
-- [Installation](Installation) — Setup and test environment basics
-- [Contributing](Contributing) — How to improve the docs or report new issues
+- [Installation Guide](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md)
+- [Contributing Guide](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md)

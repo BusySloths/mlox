@@ -120,4 +120,4 @@ multipass shell <instance-name>
 ## See Also
 
 - [Troubleshooting](Troubleshooting) — Troubleshooting index
-- [Installation](Installation) — Multipass-based integration test setup
+- [Installation Guide](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md)

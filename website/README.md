@@ -8,10 +8,7 @@ This is the landing page for the MLOX project, built with Astro.
 website/
 ├── public/           # Static assets
 ├── src/
-│   ├── content/     # Markdown content files (editable)
-│   │   ├── hero.md
-│   │   ├── features.md
-│   │   └── getting-started.md
+│   ├── content/pages/# Page copy in Markdown with YAML frontmatter (hero, features, getting-started)
 │   ├── layouts/     # Layout components
 │   ├── pages/       # Page components
 │   └── components/  # Reusable components
@@ -22,13 +19,12 @@ website/
 
 ## 📝 Updating Content
 
-To update the landing page content, simply edit the markdown files in `src/content/`:
+To update the landing page copy, edit the Markdown files in `src/content/pages/`.
+Each file has frontmatter (metadata between `---`) and content below:
 
 - **hero.md** - Main hero section with tagline and CTA buttons
 - **features.md** - Features showcase section
 - **getting-started.md** - Quick start guide section
-
-Each markdown file has frontmatter (metadata between `---`) and content below.
 
 ## 🧞 Commands
 

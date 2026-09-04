@@ -135,4 +135,4 @@ Source: <https://github.com/traefik/traefik/issues/12253#issuecomment-3515555316
 ## See Also
 
 - [Troubleshooting](Troubleshooting) — Troubleshooting index
-- [Installation](Installation) — Local Docker setup basics
+- [Installation Guide](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md)
