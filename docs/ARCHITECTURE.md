@@ -1,12 +1,24 @@
 # MLOX Architecture
 
-This is the contributor-facing map of the current codebase. For **status,
-roadmap, and binding decisions** (including the deprecated Streamlit UI), see
-`docs/DOCTRINE.md` — this file covers architecture only.
+This is the **single entry point** into the MLOX codebase, for both humans and
+coding agents. Read `docs/DOCTRINE.md` for **status, roadmap, and binding
+decisions** (including the deprecated Streamlit UI). The generated service/server
+catalog lives in `docs/SERVICES_CATALOG.md`. This file covers **architecture and
+code invariants only** — do not restate doctrine or catalog facts here.
+
+> **Scope is broader than "MLOps tool".** Nothing in the plugin/config mechanism
+> is ML-specific — the same YAML + capability-ABC pattern could host groupware or
+> any self-hosted service. Read MLOX as a general self-hosted infrastructure
+> control plane that currently specializes in MLOps (closer in ambition to a
+> self-hosted PaaS like Railway/Coolify than to a narrow MLOps competitor).
+
+> **Do not invest in `mlox/view/` or `mlox/app.py`.** The Streamlit web UI is
+> being phased out into a plugin repo; the TUI and CLI are the primary
+> interfaces. Treat web-UI changes as maintenance-only. (ADR in `docs/DOCTRINE.md`.)
 
 ## Runtime Shape
 
-MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. It exposes CLI (`mlox/cli/`) and TUI (`mlox/tui/`) as its primary interfaces. The Streamlit web UI (`mlox/view/`) is **deprecated** and moving to a plugin repo — no new investment there (see `docs/DOCTRINE.md`).
+MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. It exposes CLI (`mlox/cli/`) and TUI (`mlox/tui/`) as its primary interfaces.
 
 Those interfaces should stay thin. Shared behavior belongs in the application layer.
 
@@ -29,6 +41,25 @@ Infrastructure -> Bundle = one server/compute + deployed services
 executors + backend adapters
 ```
 
+## Three-tier Model
+
+1. **Servers** — physical/VM hosts (`mlox/server.py`, `mlox/servers/`).
+2. **Backend** — how a server executes work: native, Docker, Kubernetes, local,
+   connector (capability mixins like `AbstractDockerServer`, `AbstractKubernetesServer`).
+3. **Services** — what runs on top (`mlox/service.py`, `mlox/services/*`; the count
+   changes over time — see the generated `docs/SERVICES_CATALOG.md`).
+
+A `Bundle` (`mlox/infra.py`) ties one server to its deployed services;
+`Infrastructure` is the full topology graph, queryable by capability/backend/tag.
+
+- **Plugin model:** every service/server is a YAML config (`mlox*.yaml` /
+  `mlox-server*.yaml`) declaring metadata, ports, capabilities, and
+  `build.class_name`. Third-party plugins register via `mlox.service_plugins` /
+  `mlox.server_plugins` entry points (see `docs/PLUGIN_CONFIGS.md`).
+- **Capability ABCs, not type-switch branching:** behavior comes from capability
+  ABCs (Docker, Kubernetes, Native, Firewall, Git, Health, ...) — a
+  service/server's abilities are determined by which mixins it implements.
+
 ## Important Modules
 
 - `mlox/project/state.py`: internal `WorkspaceState` for metadata and infrastructure.
@@ -38,7 +69,7 @@ executors + backend adapters
 - `mlox/project/workspace.py`: public `ProjectWorkspace` API and mutation boundary.
 - `mlox/config.py`: YAML and plugin config loading.
 - `mlox/executors.py` and `mlox/execution/`: command execution and backend helpers.
-- `mlox/ui/registry.py`: frontend handler lookup for Streamlit/TUI-specific setup panels.
+- `mlox/ui/registry.py`: frontend handler lookup for frontend-specific setup panels.
 
 ## Config Model
 
@@ -84,15 +115,67 @@ become active requirements.
 
 A bundle contains one compute/server and the services deployed onto it. Servers advertise capabilities such as `git`, `docker`, `kubernetes`, `firewall`, `health`, or native execution support. Services declare their intended capabilities in config, including `health` when they provide a richer live probe than the generic lifecycle state.
 
-Rules for new service/server work:
+- **Execution abstraction is not "SSH-only".** `mlox/execution/base.py`
+  (`TaskRunnerABC`, `ExecutionRecorder`) is execution-target-agnostic by design.
+  The current concrete implementation, `UbuntuTaskExecutor` (`mlox/executors.py`),
+  is Fabric/SSH-based, but the ABC boundary anticipates local and embedded
+  execution too — don't assume "execution == remote SSH".
+- **Secrets:** route access credentials/endpoints through `get_secret()`.
+- Route system operations through executors; never scatter shell calls in UI code.
 
-- Add or update the MLOX YAML config.
-- Keep deployment assets beside the service/server implementation.
-- Route remote/system work through executors instead of ad-hoc shell calls in UI code.
-- Route health checks through the application use cases so the reported state is normalized and persisted before the UI refreshes.
-- Expose access details through `get_secret()` when the service has credentials or endpoints.
+## High-Risk Areas
+
+Treat these as high blast-radius; check impact across CLI, TUI, saved project
+reload, and tests when changing them:
+
+- `mlox/config.py` — schema, YAML loading, plugin entry points, build class resolution.
+- `mlox/project/repository.py` — project loading, atomic persistence, secret storage.
+- `mlox/infra.py` — bundle/service topology, naming, port assignment, dependency lookup.
+- `mlox/project/workspace.py` — public API, commit, and rollback behavior.
+- `mlox/application/use_cases/` — setup/teardown and domain mutations.
+- `mlox/ui/registry.py` — frontend handler lookup.
+
+## Invariants
+
+### Config rules
+
+- Preserve existing YAML keys unless intentionally migrating them.
+- Keep plugin entry points working: `mlox.service_plugins` and `mlox.server_plugins`.
+- Verify both service and server config loading when changing config code.
+- Do not move frontend UI handler declarations into YAML.
+
+### State rules
+
+- `ProjectWorkspace` is the public mutation and explicit-commit boundary.
+- Successful application mutations commit once. Failed mutations reload workspace state.
+- `workspace.secrets` exposes the single selected provider. Unavailable external
+  providers must remain selected rather than falling back to embedded storage.
+- Block removal of the active secret-manager service or its server.
+- Metadata and infrastructure must be stored in one transaction.
+- Persisted objects must remain JSON-compatible.
+- Service dependencies should be stable by UUID, not by display name.
+
+### Infrastructure rules
+
+- A bundle is one compute/server plus attached services.
+- Effective ports may differ from YAML defaults because MLOX can remap ports to
+  avoid collisions.
+- Do not assume service capability metadata is complete enough for all placement
+  decisions.
+- Keep domain-like state changes separate from side-effectful setup work where practical.
+
+### Service/server authoring checklist
+
+- Provide a config under `mlox/services/**/mlox*.yaml` or `mlox/servers/**/mlox-server*.yaml`.
+- Point `build.class_name` to a concrete implementation class.
+- Keep compose files, manifests, scripts, and client helpers near the service/server.
+- Use executors for commands on target machines; don't scatter shell calls in UI code.
+- Route health checks through the application use cases so the reported state is
+  normalized and persisted before the UI refreshes.
+- Return credentials/endpoints from `get_secret()` where applicable.
 - Store service dependencies by UUID and resolve them through infrastructure/session helpers.
-- Keep Streamlit/TUI setup panels in frontend modules, registered through `mlox/ui/registry.py`.
+- Register custom frontend setup/settings handlers in frontend modules through
+  `mlox/ui/registry.py`.
 
 ## Current Limitations
 
@@ -103,21 +186,25 @@ Rules for new service/server work:
 
 These are tracked as roadmap items in `docs/DOCTRINE.md`.
 
-## Development Commands
+## Verification
 
-Use Task as the command index:
+Prefer focused checks first:
+
+```bash
+task tests:unit:run
+```
+
+For config changes also verify service/server loading with
+`tests/unit/test_service_configs.py`, `tests/unit/test_server_configs.py`, and
+`tests/unit/test_config_plugins.py`. Integration tests require Multipass
+(`task tests:integration:run`); `task tests:integration:k8s` runs only tests
+marked both `integration` and `kubernetes` (provisions a Multipass/k3s backend).
+
+Other useful tasks (see `task file` for the full index):
 
 ```bash
 task
 task first:steps
-task tests:unit:run
-task tests:integration:run
-task tests:integration:k8s
 task docker:up
 task docker:down
 ```
-
-Unit tests live in `tests/unit/`. Integration tests live in `tests/integration/`
-and require Multipass. Kubernetes integration tests are selected with
-`task tests:integration:k8s`, which runs tests marked with both `integration`
-and `kubernetes`.
