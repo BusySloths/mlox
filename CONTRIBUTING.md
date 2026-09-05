@@ -32,6 +32,8 @@ for something that interests you, then set up your dev environment:
 Planning is deliberately lightweight — the issue list is the backlog, pull
 requests are the review unit, and milestones appear only when preparing a release.
 There is **no GitHub Projects board**; don't require it for routine planning.
+The product roadmap lives in `docs/DOCTRINE.md`; issues are derived from roadmap
+entries when work on an item begins.
 
 ```text
 idea / bug report

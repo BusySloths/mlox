@@ -11,6 +11,17 @@ code invariants only** — do not restate doctrine or catalog facts here.
 > any self-hosted service. Read MLOX as a general self-hosted infrastructure
 > control plane that currently specializes in MLOps (closer in ambition to a
 > self-hosted PaaS like Railway/Coolify than to a narrow MLOps competitor).
+>
+> That said, MLOX is **deliberately opinionated**: the capability model is exactly
+> what lets it wire services together and manage them as one connected system.
+> The opinionation is a feature, not a limitation — a fully generic tool could
+> not connect a Feast feature store to its Postgres backend on its own.
+>
+> **Plugins are the extension path.** Capabilities beyond the core (groupware
+> being one example) do not need to live in the main repository — external
+> plugin packages ship their own service/server configs (see
+> `docs/PLUGIN_CONFIGS.md`). A thriving OSS community of service and server
+> plugins covering many domains is the explicit goal.
 
 > **Do not invest in `mlox/view/` or `mlox/app.py`.** The Streamlit web UI is
 > being phased out into a plugin repo; the TUI and CLI are the primary
@@ -21,6 +32,22 @@ code invariants only** — do not restate doctrine or catalog facts here.
 MLOX models the infrastructure around an ML/AI product as a connected topology of servers, services, secrets, and dependencies. It exposes CLI (`mlox/cli/`) and TUI (`mlox/tui/`) as its primary interfaces.
 
 Those interfaces should stay thin. Shared behavior belongs in the application layer.
+
+### Two usage modes: platform vs. client package
+
+MLOX is used in two distinct roles, and the architecture looks different from each side:
+
+- **Platform (control plane).** The CLI/TUI operate a `ProjectWorkspace` on the
+  user's machine: it manages servers, deploys services, wires dependencies, and
+  persists everything in the encrypted `project.mlox`. The full stack below
+  (workspace → state → infrastructure → executors) is exercised here.
+- **Client (`busysloths-mlox` PyPI package / SDK).** Client code wants to
+  *consume* a deployed service (e.g. Postgres, Feast) — not manage
+  infrastructure. Access works through the secret chain: a token/keyfile grants
+  access to the project's secret manager, the secret manager yields the access
+  details (endpoints, credentials) for the target service, and per-service
+  `client.py` helpers (e.g. `mlox/services/feast/client.py`) turn those details
+  into ready-to-use client objects. No `ProjectWorkspace` or executor is involved.
 
 ```text
 CLI / TUI
@@ -157,7 +184,9 @@ reload, and tests when changing them:
 
 ### Infrastructure rules
 
-- A bundle is one compute/server plus attached services.
+- A bundle is one compute/server plus attached services. The compute can be
+  virtual or effectively zero — e.g. the connector backend is a virtual server
+  for externally hosted services.
 - Effective ports may differ from YAML defaults because MLOX can remap ports to
   avoid collisions.
 - Do not assume service capability metadata is complete enough for all placement
@@ -196,11 +225,20 @@ task tests:unit:run
 
 For config changes also verify service/server loading with
 `tests/unit/test_service_configs.py`, `tests/unit/test_server_configs.py`, and
-`tests/unit/test_config_plugins.py`. Integration tests require Multipass
-(`task tests:integration:run`); `task tests:integration:k8s` runs only tests
-marked both `integration` and `kubernetes` (provisions a Multipass/k3s backend).
+`tests/unit/test_config_plugins.py`.
 
-Other useful tasks (see `task file` for the full index):
+**Integration tests** (`task tests:integration:run`) require Multipass VMs to be
+installed. They run much longer and are far more demanding than unit tests —
+they really install everything onto local Multipass VM environments. They are
+extremely useful for verifying that services actually install and become
+reachable, but they have known shortcomings: when an installation takes too
+long (no internet, or a slow connection), the tests fail. Making them more
+robust (timeouts, offline resilience) is planned future work — see the
+Tooling/CI roadmap item in `docs/DOCTRINE.md`. `task tests:integration:k8s`
+runs only tests marked both `integration` and `kubernetes` (provisions a
+Multipass/k3s backend).
+
+Other useful tasks (see `task --list` for the full index):
 
 ```bash
 task

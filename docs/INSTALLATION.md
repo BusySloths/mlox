@@ -60,7 +60,7 @@ that launches MLOX. Add the relevant host apps to **System Settings** ->
 - Multipass
 - Docker or Docker Desktop, if Docker-backed services are used
 - the terminal app that runs the Textual TUI, for example iTerm2 or Terminal.app
-- VS Code or another editor/IDE, if it launches Streamlit, tests, or the CLI
+- VS Code or another editor/IDE, if it launches the TUI, tests, or the CLI
 
 Quit and reopen the affected app after changing the setting. For macOS 26 local
 network issues, also see the Multipass troubleshooting guide in the wiki.

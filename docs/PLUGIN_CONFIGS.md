@@ -71,7 +71,7 @@ After installation, the config is included by normal loading paths such as:
 
 ## UI Handlers
 
-Plugin entry points currently cover config discovery only. Streamlit/TUI setup handlers are not declared in YAML and are not yet part of the documented external plugin API.
+Plugin entry points currently cover config discovery only. Frontend UI setup handlers (TUI, plus the deprecated Streamlit UI until its extraction) are not declared in YAML and are not yet part of the documented external plugin API.
 
 The built-in pattern is:
 
