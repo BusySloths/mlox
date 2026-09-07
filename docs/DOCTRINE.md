@@ -184,7 +184,19 @@ duplicate the list in both places.
       target server actually provides the capabilities a service requires
       (declared in YAML `capabilities`/`requirements`), and enforce them at
       runtime as the model matures. Today they are parsed but not enforced.
-3. **Engineering baseline** — keep the repository healthy as the codebase and
+3. **Community & adoption** — make MLOX easy to discover, learn, and trust.
+   1. **Tutorial / cookbook series.** Written, end-to-end guides for common
+      deployment stories: install → TUI → first deployed service, plus
+      per-service recipes (e.g. MLflow tracking, n8n). Durable and reviewable
+      with the docs pipeline; the basis for videos.
+   2. **Video / demo series.** Short, scripted walkthroughs — install to
+      first deployed service in minutes, then one per major service category
+      — derived from the tutorials so they stay in sync as the UI evolves.
+   3. **First-run program.** Keep structured first-run testing going: new
+      contributors exercise one install lane and one interface on a clean
+      machine and report friction. Findings feed back into docs, onboarding,
+      and error messages.
+4. **Engineering baseline** — keep the repository healthy as the codebase and
    the contributor base grow.
    1. **Tooling/CI baseline.** PR-gated lint + unit tests; adopt a formatter,
       type checker, and pre-commit. Make the Multipass-backed integration
