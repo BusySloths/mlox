@@ -133,58 +133,65 @@ dependency tree, giving developers and CI reproducible environments.
 
 Prioritized open direction (absorbed from the former
 `ARCHITECTURE_REFACTOR_PLAN_01.md` and README "planned" markers). This is the
-authoritative list.
+authoritative list. It is deliberately coarse-to-fine: general themes at the
+top, concrete items nested underneath.
 
 **How this relates to GitHub issues:** this roadmap is the deliberately
 lightweight replacement for a GitHub Projects board — planning truth lives here,
 versioned and reviewable with the code. GitHub **issues are derived from roadmap
-entries**: when the time comes to work on an item, open an issue for it, link it
-back to the entry, and track day-to-day progress there. The roadmap entry stays
-the source of truth; the issue is the execution unit. If this ever moves to
-GitHub Projects (or another tool), that tool becomes the linked source of truth
-and this section must point to it — never duplicate the list in both places.
+entries**: when the time comes to work on an item, open an issue for it and
+state in the issue body which roadmap entry it implements. The linkage is
+one-directional — the roadmap never lists issue numbers, so it never goes
+stale. The roadmap entry stays the source of truth; the issue is the execution
+unit. If this ever moves to GitHub Projects (or another tool), that tool
+becomes the linked source of truth and this section must point to it — never
+duplicate the list in both places.
 
-1. **Project sync (local-first + PostgreSQL snapshot).** MLOX projects remain
-   local, encrypted SQLCipher databases. A PostgreSQL instance acts as a sync
-   point: a computer publishes the newest state of a project there, and another
-   computer working on the same project pulls it and copies it into its local
-   SQLCipher DB. Deliberately lightweight — snapshot-based sync of a
-   local-first store, not a server-side runtime. (Behind the existing
-   data-source boundary: `sqlcipher/self` → optional `postgres` sync target.)
-   (Tracked as #92.)
-2. **Placement & requirement enforcement.** Verify at setup time that the
-   target server actually provides the capabilities a service requires
-   (declared in YAML `capabilities`/`requirements`), and enforce them at
-   runtime as the model matures. Today they are parsed but not enforced.
-3. **Catalog growth.** Deliberately grow the service/connector/server catalog —
-   it is the main compounding value of the platform. Candidate integrations:
-   1Password or Vault (secret managers), Prometheus + Grafana + Loki
-   (observability), Qdrant or Weaviate (vector databases), n8n or Temporal
-   (workflow automation), Supabase, ClickHouse, Ray.
-4. **Project notes / todo system.** Attach notes and tasks to each MLOX project
-   so everything needed to manage the infrastructure for a client lives in one
-   place. Natural home: project metadata in the workspace state; surfaced in
-   CLI/TUI. (Tracked as #93.)
-5. **Agent integration over project state.** An integration that gives an agent
-   read access to the current project info (topology, services, secrets
-   structure, health) so it can answer questions about the infra — a first step
-   toward an agentic MLOps team. Builds directly on the existing
-   config-driven topology model.
-6. **Tooling/CI baseline.** PR-gated lint + unit tests; adopt a formatter, type
-   checker, and pre-commit. Make the Multipass-backed integration tests more
-   robust (timeouts, offline resilience) — they are highly valuable but
-   currently fail when installs are slow.
-7. **Docs governance enforcement.** Keep every surface a derived view via
-   `scripts/check_docs.py`.
-8. **Multi-project support and RBAC-like access.** Make working with several
-   projects practical: suffixed environment variables
-   (`MLOX_PROJECT_PATH_<NAME>` / `MLOX_PROJECT_PASSWORD_<NAME>`), a project
-   dropdown on the TUI login screen, a runtime project switcher, and
-   zero-config discovery of `*.mlox` project files in the current directory
-   (tracked as #94). This is also the groundwork for RBAC-like access
-   control — per-user/per-role visibility of projects, servers, and services
-   once projects are shared across users via [Project
-   sync](#project-sync-local-first--postgresql-snapshot) (tracked as #92).
+1. **Project advancement** — deepen what a project is, and how people and
+   agents work with it.
+   1. **Project sync (local-first + PostgreSQL snapshot).** MLOX projects
+      remain local, encrypted SQLCipher databases. A PostgreSQL instance acts
+      as a sync point: a computer publishes the newest state of a project
+      there, and another computer working on the same project pulls it and
+      copies it into its local SQLCipher DB. Deliberately lightweight —
+      snapshot-based sync of a local-first store, not a server-side runtime.
+      (Behind the existing data-source boundary: `sqlcipher/self` → optional
+      `postgres` sync target.)
+   2. **Multi-project support and RBAC-like access.** Make working with
+      several projects practical: suffixed environment variables
+      (`MLOX_PROJECT_PATH_<NAME>` / `MLOX_PROJECT_PASSWORD_<NAME>`), a project
+      dropdown on the TUI login screen, a runtime project switcher, and
+      zero-config discovery of `*.mlox` project files in the current
+      directory. This is also the groundwork for RBAC-like access control —
+      per-user/per-role visibility of projects, servers, and services once
+      projects are shared across users via project sync.
+   3. **Project notes / todo system.** Attach notes and tasks to each MLOX
+      project so everything needed to manage the infrastructure for a client
+      lives in one place. Natural home: project metadata in the workspace
+      state; surfaced in CLI/TUI.
+   4. **Agent integration over project state.** An integration that gives an
+      agent read access to the current project info (topology, services,
+      secrets structure, health) so it can answer questions about the infra —
+      a first step toward an agentic MLOps team. Builds directly on the
+      existing config-driven topology model.
+2. **Catalog & placement** — grow what can be deployed, and deploy it well.
+   1. **Catalog growth.** Deliberately grow the service/connector/server
+      catalog — it is the main compounding value of the platform. Candidate
+      integrations: 1Password or Vault (secret managers), Prometheus + Grafana
+      + Loki (observability), Qdrant or Weaviate (vector databases), n8n or
+      Temporal (workflow automation), Supabase, ClickHouse, Ray.
+   2. **Placement & requirement enforcement.** Verify at setup time that the
+      target server actually provides the capabilities a service requires
+      (declared in YAML `capabilities`/`requirements`), and enforce them at
+      runtime as the model matures. Today they are parsed but not enforced.
+3. **Engineering baseline** — keep the repository healthy as the codebase and
+   the contributor base grow.
+   1. **Tooling/CI baseline.** PR-gated lint + unit tests; adopt a formatter,
+      type checker, and pre-commit. Make the Multipass-backed integration
+      tests more robust (timeouts, offline resilience) — they are highly
+      valuable but currently fail when installs are slow.
+   2. **Docs governance enforcement.** Keep every surface a derived view via
+      `scripts/check_docs.py`.
 
 ---
 
