@@ -1,0 +1,77 @@
+name: Deploy PyPI Package
+
+# Publish busysloths-mlox to PyPI, then verify the published package in a
+# clean environment (install it as an end user would and smoke-test the
+# entry points on both supported Python versions).
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Verify lockfile is in sync with pyproject.toml
+        run: uv lock --check
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Test setuptools-git-versioning
+        run: |
+          uv run python -m setuptools_git_versioning
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          uv run flake8 mlox/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+          uv run flake8 mlox/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Run Unit Tests
+        run: |
+          uv run task tests:unit:run
+          uv run python -m pytest -m "not integration" -v --cov=mlox --cov
+          uv run coverage report -m
+      - name: Prepare Distribution
+        run: |
+          uv run python -m build
+          uv run twine check --strict dist/*
+      - name: Deploy
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  verify:
+    needs: publish
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Wait for the new version to be available on PyPI
+        run: |
+          ok=0
+          for i in $(seq 1 12); do
+            if uv tool install --python ${{ matrix.python-version }} 'busysloths-mlox[tui]'; then
+              ok=1
+              break
+            fi
+            echo "Attempt $i: package not available on PyPI yet, retrying in 15s..."
+            sleep 15
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::Package did not become installable from PyPI within 3 minutes."
+            exit 1
+          fi
+
+      - name: Smoke test entry points
+        run: |
+          mlox --version
+          mlox --help

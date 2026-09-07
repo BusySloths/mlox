@@ -10,19 +10,18 @@ vars:
     lightweight developer CLI to keep common actions consistent and repeatable.
 
     Key tasks
-    - deps:lock             : compile base requirements from pyproject.toml
-    - deps:lock:all|dev|gcp : compile extras to requirements-<extra>.txt
+    - deps:lock             : regenerate uv.lock from pyproject.toml
+    - deps:upgrade          : upgrade all pins in uv.lock to the latest allowed versions
     - deps:install:tools    : install tools like Multipass for integration tests
     - tests:integration:run     : run integration tests (requires Multipass)
     - tests:integration:k8s     : run Kubernetes integration tests (requires Multipass/k3s)
     - tests:integration:cleanup : clean up test Multipass VMs
-    - docker:build        : build local Docker image
-    - project:new         : create an encrypted .mlox project
-    - project:migrate     : copy a legacy project into SQLCipher
+    - project:new           : create an encrypted .mlox project
+    - project:migrate       : copy a legacy project into SQLCipher
 
     Get started by following these steps:
     1) Install Task: https://taskfile.dev/installation
-    2) Install Tools:  task deps:install:tools
+    2) Set up the dev environment: task first:steps  (alias: task setup)
     3) Run integration tests: task tests:integration:run
     4) Clean up test VMs: task tests:integration:cleanup
 
@@ -32,13 +31,16 @@ tasks:
       - printf "%b\n" "{{.GREETING}}"
     silent: true
 
-  dev:lock:*:
-    desc: Generate requirements.txt from extras (dev, all, gcp) in pyproject.toml
-    vars:
-      EXTRA: "{{index .MATCH 0}}"
+  deps:lock:
+    desc: Regenerate uv.lock from pyproject.toml (run after dependency changes)
     cmds:
-      - '{{.PYTHON | default "python"}} -m pip install --upgrade pip-tools'
-      - '{{.PYTHON | default "python"}} -m piptools compile pyproject.toml --extra {{.EXTRA}} --output-file requirements.gen.{{.EXTRA}}.txt'
+      - uv lock
+      - uv lock --check
+
+  deps:upgrade:
+    desc: Upgrade all pins in uv.lock to the latest allowed versions
+    cmds:
+      - uv lock --upgrade
 
   deps:install:tools:
     desc: Install tools like Multipass for integration tests
@@ -60,55 +62,43 @@ tasks:
     desc: Lint Python sources with flake8
     cmds:
       - |
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('flake8') else 1)"; then \
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('flake8') else 1)"; then \
           printf '\n\033[1;31m✖ flake8 is not installed.\033[0m\n'; \
-          printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          printf 'Install dev deps first, e.g.: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - '{{.PYTHON | default "python"}} -m flake8 mlox tests --statistics --extend-ignore=E203,W503'
+      - 'uv run python -m flake8 mlox tests --statistics --extend-ignore=E203,W503'
 
   dev:env:create:
-    desc: Create a Conda dev environment with selected Python and install .[dev]
-    vars:
-      NAME: '{{.NAME | default "mlox-dev"}}'
-      PY: '{{.PY | default "3.12.5"}}'
+    desc: Create the uv dev environment from uv.lock and install .[dev]
     cmds:
       - |
-        if ! command -v conda >/dev/null 2>&1; then \
-          printf '\n\033[1;31m✖ Conda not found.\033[0m\n'; \
-          printf 'Please install Miniconda/Mamba and ensure `conda` is on PATH.\n\n'; \
+        if ! command -v uv >/dev/null 2>&1; then \
+          printf '\n\033[1;31m✖ uv not found.\033[0m\n'; \
+          printf 'Install it first: \033[1mcurl -LsSf https://astral.sh/uv/install.sh | sh\033[0m\n'; \
+          printf 'See https://docs.astral.sh/uv/getting-started/installation/ for alternatives.\n\n'; \
           exit 1; \
         fi
       - |
         set -euo pipefail
-        printf '\n\033[1;36m▶ Creating env\033[0m %s with Python %s\n' '{{.NAME}}' '{{.PY}}'
-        conda create -y -n '{{.NAME}}' python='{{.PY}}'
-        printf '\n\033[1;36m▶ Upgrading pip\033[0m in env %s\n' '{{.NAME}}'
-        conda run -n '{{.NAME}}' python -m pip install --upgrade pip
-        printf '\n\033[1;36m▶ Installing project (.[dev])\033[0m into env %s\n' '{{.NAME}}'
-        conda run -n '{{.NAME}}' python -m pip install -e .[dev]
-        printf '\n\033[1;36m▶ Installing multipass-sdk (needed for integration tests)\033[0from GitHub\033[0m into env %s\n' '{{.NAME}}'
-        conda run -n '{{.NAME}}' python -m pip install "multipass-sdk @ git+https://github.com/okyanusoz/multipass-sdk.git@main#egg=multipass-sdk"
+        printf '\n\033[1;36m▶ Syncing environment from uv.lock\033[0m\n'
+        uv sync --extra dev
+        printf '\n\033[1;36m▶ Installing multipass-sdk (needed for integration tests)\033[0m\n'
+        uv pip install "multipass-sdk @ git+https://github.com/okyanusoz/multipass-sdk.git@main"
         printf '\n\033[1;36m▶ Verifying CLI import\033[0m\n'
-        conda run -n '{{.NAME}}' python -c "import mlox.cli; print('mlox.cli OK')"
-        printf '\n\033[1;32m✓ Environment ready:\033[0m activate with: \033[1mconda activate {{.NAME}}\033[0m\n'
+        uv run python -c "import mlox.cli; print('mlox.cli OK')"
+        printf '\n\033[1;32m✓ Environment ready:\033[0m run commands with \033[1muv run <cmd>\033[0m — no activation needed\n'
 
   first:steps:
     aliases: [setup]
-    desc: One-time setup — create dev env and show activation steps
-    vars:
-      NAME: '{{.NAME | default "mlox-dev"}}'
-      PY: '{{.PY | default "3.12.5"}}'
+    desc: One-time setup — create the dev environment (uv) and show next steps
     cmds:
       - task: dev:env:create
-        vars:
-          NAME: "{{.NAME}}"
-          PY: "{{.PY}}"
       - |
         printf '\n\033[1;35m══════════════════════════════════════════════════════════\033[0m\n'
         printf '\033[1;35m   ✅ Next Steps\033[0m\n'
         printf '\033[1;35m══════════════════════════════════════════════════════════\033[0m\n'
-        printf 'Activate your new environment:\n\n  \033[1mconda activate {{.NAME}}\033[0m\n\n'
+        printf 'Run any command inside the environment with \033[1muv run\033[0m (no activation needed):\n\n  \033[1muv run mlox --help\033[0m\n\n'
         printf 'Run tests and linting (optional):\n\n  \033[1mtask tests:unit:run\033[0m\n  \033[1mtask dev:lint\033[0m\n\n'
         printf 'Start here anytime with:\n\n  \033[1mtask first:steps\033[0m  (alias: \033[1mtask setup\033[0m)\n\n'
 
@@ -117,24 +107,24 @@ tasks:
     desc: Run unit tests with coverage (excludes integration)
     cmds:
       - |
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') and importlib.util.find_spec('coverage') else 1)"; then \
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') and importlib.util.find_spec('coverage') else 1)"; then \
           printf '\n\033[1;31m✖ pytest/coverage not installed.\033[0m\n'; \
-          printf 'Install dev deps, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - '{{.PYTHON | default "python"}} -m pytest tests/unit/ --cov=mlox --cov-report=term-missing'
+      - 'uv run python -m pytest tests/unit/ --cov=mlox --cov-report=term-missing'
 
   tests:unit:run:
     silent: true
     desc: Run unit tests (excludes integration)
     cmds:
       - |
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
           printf '\n\033[1;31m✖ pytest not installed.\033[0m\n'; \
-          printf 'Install dev deps, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - '{{.PYTHON | default "python"}} -m pytest tests/unit/ -v'
+      - 'uv run python -m pytest tests/unit/ -v'
 
   tests:integration:run:
     silent: true
@@ -147,12 +137,12 @@ tasks:
           exit 1; \
         fi
       - |
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
           printf '\n\033[1;31m✖ pytest not installed.\033[0m\n'; \
-          printf 'Install dev deps, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - '{{.PYTHON | default "python"}} -m pytest -m integration --run-integration'
+      - 'uv run python -m pytest -m integration --run-integration'
 
   tests:integration:k8s:
     aliases: [tests:integration:kubernetes]
@@ -166,12 +156,12 @@ tasks:
           exit 1; \
         fi
       - |
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
           printf '\n\033[1;31m✖ pytest not installed.\033[0m\n'; \
-          printf 'Install dev deps, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - '{{.PYTHON | default "python"}} -m pytest tests/integration -m "integration and kubernetes" --run-integration'
+      - 'uv run python -m pytest tests/integration -m "integration and kubernetes" --run-integration'
 
   tests:integration:service:
     silent: true
@@ -182,16 +172,16 @@ tasks:
     cmds:
       - |
         {{if eq .VSCODE_DEBUG "true"}}
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('debugpy') else 1)"; then
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('debugpy') else 1)"; then
           printf '\n\033[1;31m✖ debugpy is not installed.\033[0m\n';
 
-          printf 'Please install it first: \033[1m{{.PYTHON | default "python"}} -m pip install debugpy\033[0m\n\n';
+          printf 'Please install it first: \033[1mtask first:steps\033[0m\n\n';
           exit 1;
         fi
         printf '\n\033[1;36m▶ Starting debugger. Waiting for VS Code to attach on port 5678...\033[0m\n'
-        {{.PYTHON | default "python"}} -m debugpy --listen 5678 --wait-for-client -m pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration
+        uv run python -m debugpy --listen 5678 --wait-for-client -m pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration
         {{else}}
-        pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration{{if eq .PDB "true"}} --pdb{{end}}
+        uv run pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration{{if eq .PDB "true"}} --pdb{{end}}
         {{end}}
     desc: Run integration tests for a specific service only (e.g. mlflow, airflow, etc.)
 
@@ -202,18 +192,6 @@ tasks:
       - multipass list | grep mlox-test- | cut -d' ' -f1 | xargs multipass delete $1 --purge
       - printf '\n\033[1;32m══════════ ✓ AFTER CLEANUP (Multipass VMs) ✓ ══════════\033[0m\n'; multipass list || true
     desc: Remove all Multipass VMs used for integration testing
-
-  docker:up:
-    cmds:
-      - docker compose up -d --build
-      - docker compose ps
-      - docker compose logs -f --tail=10
-    desc: Start MLOX UI locally with Docker Compose
-
-  docker:down:
-    cmds:
-      - docker compose down
-    desc: Stop MLOX UI
 
   vm:start:
     desc: Start one or more Multipass VMs with cloud-init
@@ -297,15 +275,15 @@ tasks:
   # UI helpers (local dev)
   # -----------------------
   ui:streamlit:
-    desc: Start the Streamlit UI (local)
+    desc: Start the Streamlit UI (local, deprecated)
     cmds:
       - |
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('streamlit') else 1)"; then \
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('streamlit') else 1)"; then \
           printf '\n\033[1;31m✖ streamlit is not installed.\033[0m\n'; \
-          printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - "streamlit run mlox/app.py"
+      - "uv run streamlit run mlox/app.py"
 
   ui:landing:
     desc: Start the astro landing page locally (dev server)
@@ -315,18 +293,18 @@ tasks:
   ui:cli:
     desc: Start the Typer CLI app
     cmds:
-      - "python -m mlox.cli {{.CLI_ARGS}}"
+      - "uv run python -m mlox.cli {{.CLI_ARGS}}"
 
   ui:textual:terminal:
     desc: Start the Textual TUI in the terminal
     cmds:
       - |
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('textual') else 1)"; then \
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('textual') else 1)"; then \
           printf '\n\033[1;31m✖ textual is not installed.\033[0m\n'; \
-          printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - "export MLOX_TUI=true; textual run --dev mlox/tui/app.py"
+      - "export MLOX_TUI=true; uv run textual run --dev mlox/tui/app.py"
       - "export MLOX_TUI=false"
 
   ui:textual:web:
@@ -335,12 +313,12 @@ tasks:
       MLOX_TUI: "true"
     cmds:
       - |
-        if ! {{.PYTHON | default "python"}} -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('textual') else 1)"; then \
+        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('textual') else 1)"; then \
           printf '\n\033[1;31m✖ textual is not installed.\033[0m\n'; \
-          printf 'Install dev deps first, e.g.: \033[1m{{.PYTHON | default "python"}} -m pip install -e .[dev]\033[0m\n\n'; \
+          printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - "export MLOX_TUI=true; textual serve --dev mlox/tui/app.py"
+      - "export MLOX_TUI=true; uv run textual serve --dev mlox/tui/app.py"
       - "export MLOX_TUI=false"
 
   project:new:
@@ -348,11 +326,11 @@ tasks:
     requires:
       vars: [NAME, PASSWORD]
     cmds:
-      - 'mlox project new "{{.NAME}}" --password "{{.PASSWORD}}"'
+      - 'uv run mlox project new "{{.NAME}}" --password "{{.PASSWORD}}"'
 
   project:migrate:
     desc: Copy a legacy .project into SQLCipher (SOURCE=... DESTINATION=... OLD_PASSWORD=... NEW_PASSWORD=...)
     requires:
       vars: [SOURCE, DESTINATION, OLD_PASSWORD, NEW_PASSWORD]
     cmds:
-      - 'python scripts/migrate_legacy_project.py "{{.SOURCE}}" "{{.DESTINATION}}" --legacy-password "{{.OLD_PASSWORD}}" --new-password "{{.NEW_PASSWORD}}"'
+      - 'uv run python scripts/migrate_legacy_project.py "{{.SOURCE}}" "{{.DESTINATION}}" --legacy-password "{{.OLD_PASSWORD}}" --new-password "{{.NEW_PASSWORD}}"'

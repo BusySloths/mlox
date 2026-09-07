@@ -2,7 +2,48 @@
 
 MLOX deploys and manages the servers, services, and integrations around your ML/AI product. It is a Python 3.11/3.12 project, and the repository uses [Task](https://taskfile.dev/installation/) as the main command runner.
 
-## From Source
+There are two supported paths, depending on who you are:
+
+- **Users** — install the published package with [uv](https://docs.astral.sh/uv/) and start using the CLI/TUI.
+- **Developers** — clone the repository and bootstrap a reproducible dev environment (also uv-based).
+
+> We deliberately keep this list short. Docker-based delivery was removed along
+> with the deprecated Streamlit web UI (see `docs/DOCTRINE.md`).
+
+## Users
+
+Install with [uv](https://docs.astral.sh/uv/) (recommended — works the same on
+macOS, Linux, and Windows):
+
+```bash
+uv tool install 'busysloths-mlox[tui]'
+```
+
+The `[tui]` extra pulls in the terminal UI; without it you get the CLI only.
+If you prefer pipx, the equivalent is:
+
+```bash
+pipx install 'busysloths-mlox[tui]'
+```
+
+Verify and upgrade:
+
+```bash
+mlox --help          # CLI
+mlox tui             # terminal UI
+uv tool upgrade busysloths-mlox
+```
+
+Then create your first encrypted project:
+
+```bash
+mlox project new ./projects/demo --password 'choose-a-strong-password'
+export MLOX_PROJECT_PATH="$PWD/projects/demo.mlox"
+export MLOX_PROJECT_PASSWORD='choose-a-strong-password'
+mlox tui
+```
+
+## Developers (from source)
 
 ```bash
 git clone https://github.com/BusySloths/mlox.git
@@ -11,41 +52,23 @@ task
 task first:steps
 ```
 
-The plain `task` command prints the command overview. `task first:steps` creates the development environment and installs the package with development extras. Activate the created environment before running local commands. With Conda, that is usually:
+The plain `task` command prints the command overview. `task first:steps` uses
+[uv](https://docs.astral.sh/uv/) to create the environment from `uv.lock`
+(reproducible on macOS, Linux, and Windows — no conda needed) and installs the
+package with development extras.
+
+There is nothing to activate: run commands through `uv run`, e.g.:
 
 ```bash
-conda activate mlox-dev
+uv run mlox --help
+uv run mlox tui             # Textual TUI
+task tests:unit:run         # unit tests (uses uv run internally)
+task dev:lint               # flake8
 ```
 
-Useful local commands:
-
-```bash
-task ui:cli                # CLI help
-task ui:textual:terminal   # Textual TUI
-task tests:unit:run        # unit tests
-```
-
-## Docker
-
-For the repository-local Docker Compose stack:
-
-```bash
-task docker:up
-task docker:down
-```
-
-You can also run the published image:
-
-```bash
-docker run -it --rm -p 8501:8501 drbusysloth/mlox:latest
-```
-
-To keep projects between runs, give the container a name and start it again later:
-
-```bash
-docker run -it --name mlox -p 8501:8501 drbusysloth/mlox:latest
-docker start -ai mlox
-```
+If you change dependencies in `pyproject.toml`, regenerate the lockfile with
+`task deps:lock` and commit both files together (CI enforces that
+`uv.lock` matches `pyproject.toml`).
 
 ## Integration Test VMs
 
@@ -99,7 +122,6 @@ task vm:purge
 ```
 
 Use `task vm:purge` carefully; it removes the local Multipass VMs created for MLOX testing.
-
 
 ## Create an encrypted project
 

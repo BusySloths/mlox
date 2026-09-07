@@ -243,6 +243,4 @@ Other useful tasks (see `task --list` for the full index):
 ```bash
 task
 task first:steps
-task docker:up
-task docker:down
 ```

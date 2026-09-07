@@ -113,7 +113,7 @@ For deeper reading:
 # 2. Clone
 git clone https://github.com/BusySloths/mlox.git && cd mlox
 
-# 3. Set up environment (creates conda env 'mlox-dev' with Python 3.12.5)
+# 3. Set up environment (creates a uv environment from uv.lock — no activation needed)
 task first:steps
 
 # 4. Launch the CLI

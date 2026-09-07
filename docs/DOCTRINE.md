@@ -89,6 +89,44 @@ Service capabilities in YAML describe intent and enable UI, but are **not yet**
 a complete placement/runtime enforcement model. `requirements` in YAML are
 parsed but not enforced at runtime. Planned; see Roadmap.
 
+### ADR: Installation — uv everywhere; Docker delivery removed
+
+**Date:** 2026-09 — **Status:** Accepted
+MLOX is installed and developed through [uv](https://docs.astral.sh/uv/) —
+deliberately the *only* documented path, because one opinionated option beats
+three drifting ones. uv behaves identically on macOS, Linux, and Windows.
+
+- **Users** install the published package: `uv tool install 'busysloths-mlox[tui]'`
+  (pipx works equivalently). One command puts `mlox` on PATH; upgrades are
+  `uv tool upgrade`. No clone, no environment management.
+- **Developers** bootstrap with `task first:steps`, which runs `uv sync` against
+  `uv.lock` — reproducible on every OS, no activation needed (commands run via
+  `uv run`). Conda is no longer a documented path.
+- **Docker delivery is removed** (`Dockerfile`, compose files, DockerHub
+  workflow): the image existed to serve the deprecated Streamlit web UI, and a
+  container is a poor fit for a client-side CLI/TUI that manages remote
+  infrastructure. If an image is ever needed again, rebuild it around the CLI
+  from a clean slate.
+
+### ADR: Dependency split — pyproject declares intent, uv.lock pins
+
+**Date:** 2026-09 — **Status:** Accepted
+`pyproject.toml` declares dependencies with permissive bounds (names/`>=`
+ranges, never `==`); `uv.lock` holds the exact resolved pins for the full
+dependency tree, giving developers and CI reproducible environments.
+
+- The lock is **repo-internal**: end-user installs from PyPI resolve fresh from
+  pyproject metadata and get only the base dependency set (extras are opt-in).
+  The lock is never shipped in the wheel.
+- Never hand-edit `uv.lock`. After changing pyproject dependencies, regenerate
+  with `task deps:lock` (or use `uv add`/`uv remove`, which update both) and
+  commit both files together.
+- **CI enforces the link**: `uv lock --check` fails when the lock is out of
+  sync with pyproject — the same generate-then-verify pattern used for the
+  services catalog.
+- Do not pin transitive dependencies in pyproject; that duplicates the lock's
+  job in a fragile, consumer-hostile way.
+
 ---
 
 ## Roadmap
@@ -156,6 +194,11 @@ and this section must point to it — never duplicate the list in both places.
   `website/CONTENT_GUIDE.md`, and the five wiki mirror pages removed;
   out-of-date State-of-the-Union references purged (slides archived in
   `docs/slides/`).
+- Install/dependency overhaul: conda-based dev setup replaced by uv
+  (`task first:steps` runs `uv sync` against `uv.lock`); Docker delivery
+  removed (image served the deprecated Streamlit UI); `pyproject.toml`
+  dependencies relaxed from `==` pins to ranges, with `uv.lock` as the pinned
+  tree and CI enforcing sync. See the installation and dependency ADRs above.
 
 ---
 

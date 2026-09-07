@@ -196,8 +196,6 @@ task dev:lint                 # flake8
 task tests:unit:run
 task tests:integration:run    # requires Multipass VMs
 task tests:integration:k8s    # Kubernetes integration (requires Multipass/k3s)
-task docker:up
-task docker:down
 task ui:cli CLI_ARGS="--help"
 task ui:textual:terminal
 ```

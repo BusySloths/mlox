@@ -13,7 +13,7 @@ steps:
   - title: "Run First Steps"
     description: "Mosey into the project and run the setup"
     code: "task first:steps"
-    note: "This unhurried command crafts a conda environment and gathers every dependency for you"
+    note: "This unhurried command creates a reproducible uv environment and gathers every dependency for you"
   - title: "Create a Project"
     description: "Create one encrypted, portable MLOX project file"
     code: "mlox project new ./projects/demo"

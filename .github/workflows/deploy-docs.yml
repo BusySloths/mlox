@@ -1,0 +1,120 @@
+name: Deploy Docs
+
+# Publishes the documentation surfaces:
+#   - GitHub Pages (Astro website + pdoc API docs under /docs):
+#       manually, or when a release is published
+#   - GitHub Wiki (synced from the wiki/ directory):
+#       on every push touching wiki/, or manually
+on:
+    push:
+        branches: [main]
+        paths:
+            - "wiki/**"
+    workflow_dispatch:
+    release:
+        types: [published]
+
+concurrency:
+    group: "docs-deploy"
+    cancel-in-progress: false
+
+jobs:
+    # ---------------------------------------------------------------
+    # GitHub Pages: website + API docs (manual or release)
+    # ---------------------------------------------------------------
+    pages:
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            pages: write
+            id-token: write
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+                  cache-dependency-path: website/package-lock.json
+
+            - name: Setup Pages
+              uses: actions/configure-pages@v4
+
+            - name: Install website dependencies
+              working-directory: ./website
+              run: npm ci
+
+            - name: Build website
+              working-directory: ./website
+              run: npm run build
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+
+            - name: Install Python dependencies
+              run: uv sync --extra dev
+
+            - name: Build pdoc documentation
+              run: |
+                  uv run pdoc mlox !mlox.view !mlox.assets !mlox.resources !mlox.stacks -o temp_docs/ --no-show-source --logo "https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox.png?raw=true"
+
+            - name: Combine website and docs
+              run: |
+                  # Mount the API docs under /docs on the website
+                  mkdir -p website/dist/docs
+                  cp -r temp_docs/* website/dist/docs/
+
+            - name: Upload artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: ./website/dist
+
+    deploy-pages:
+        needs: pages
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
+
+    # ---------------------------------------------------------------
+    # GitHub Wiki: rsync wiki/ into the wiki repo (push or manual)
+    # ---------------------------------------------------------------
+    wiki:
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Publish wiki pages
+              run: |
+                  git config --global user.name "github-actions[bot]"
+                  git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+                  # Clone the wiki repository.
+                  # NOTE: The GitHub Wiki must be initialised at least once via the
+                  # repository's Wiki tab before this workflow can push to it.
+                  if ! git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git" _wiki; then
+                    echo "::error::Failed to clone the wiki repository. Please initialise the wiki via the GitHub UI first."
+                    exit 1
+                  fi
+
+                  # Sync wiki/ directory contents into the cloned wiki repo.
+                  # --delete removes pages from the wiki that no longer exist in wiki/,
+                  # keeping the wiki/ directory the single source of truth.
+                  rsync -av --delete --exclude='.git' wiki/ _wiki/
+
+                  # Commit and push if there are changes
+                  cd _wiki
+                  git add .
+                  git diff --staged --quiet || git commit -m "docs: sync wiki from wiki/ directory [skip ci]"
+                  git push

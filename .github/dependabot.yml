@@ -1,0 +1,32 @@
+# GitHub Dependabot — automated dependency update PRs.
+#
+# Two ecosystems are watched:
+#   pip       : Python dependencies declared in pyproject.toml and pinned in uv.lock
+#   github-actions : versions of the actions used in .github/workflows/
+#
+# Groups minor/patch updates into a single PR to avoid PR noise; security
+# updates always arrive individually and are prioritized by GitHub.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    allow:
+      # The uv lockfile is the source of truth for resolved versions
+      dependency-type: "all"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
