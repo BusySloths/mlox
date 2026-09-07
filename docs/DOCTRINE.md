@@ -151,6 +151,7 @@ and this section must point to it — never duplicate the list in both places.
    SQLCipher DB. Deliberately lightweight — snapshot-based sync of a
    local-first store, not a server-side runtime. (Behind the existing
    data-source boundary: `sqlcipher/self` → optional `postgres` sync target.)
+   (Tracked as #92.)
 2. **Placement & requirement enforcement.** Verify at setup time that the
    target server actually provides the capabilities a service requires
    (declared in YAML `capabilities`/`requirements`), and enforce them at
@@ -163,7 +164,7 @@ and this section must point to it — never duplicate the list in both places.
 4. **Project notes / todo system.** Attach notes and tasks to each MLOX project
    so everything needed to manage the infrastructure for a client lives in one
    place. Natural home: project metadata in the workspace state; surfaced in
-   CLI/TUI.
+   CLI/TUI. (Tracked as #93.)
 5. **Agent integration over project state.** An integration that gives an agent
    read access to the current project info (topology, services, secrets
    structure, health) so it can answer questions about the infra — a first step
@@ -175,6 +176,15 @@ and this section must point to it — never duplicate the list in both places.
    currently fail when installs are slow.
 7. **Docs governance enforcement.** Keep every surface a derived view via
    `scripts/check_docs.py`.
+8. **Multi-project support and RBAC-like access.** Make working with several
+   projects practical: suffixed environment variables
+   (`MLOX_PROJECT_PATH_<NAME>` / `MLOX_PROJECT_PASSWORD_<NAME>`), a project
+   dropdown on the TUI login screen, a runtime project switcher, and
+   zero-config discovery of `*.mlox` project files in the current directory
+   (tracked as #94). This is also the groundwork for RBAC-like access
+   control — per-user/per-role visibility of projects, servers, and services
+   once projects are shared across users via [Project
+   sync](#project-sync-local-first--postgresql-snapshot) (tracked as #92).
 
 ---
 

@@ -82,6 +82,7 @@ maintainer does next. Prefer editing the issue title/body over adding more label
 | `priority:urgent` | Security, data loss, broken release, or maintainer-blocking issue |
 | `status:blocked` | Waiting on an external dependency or decision |
 | `status:needs-info` | Waiting on reporter details before work can start |
+| `status:wip` | Draft issue — scope not settled yet; don't pick up work from it |
 | `good first issue` | Small, well-scoped task for a new contributor |
 | `help wanted` | External contribution is welcome |
 
@@ -93,7 +94,9 @@ maintainer does next. Prefer editing the issue title/body over adding more label
   acceptance criteria instead of estimating.
 - **No routine status labels** (`needs-triage`, `in-progress`,
   `ready-for-review`) — open issues are the backlog, assignees show active work,
-  PR state shows review readiness.
+  PR state shows review readiness. The one exception is `status:wip`, which
+  marks a *draft* issue whose scope is not settled — a scope flag, not a work
+  state.
 - **No special-case labels** (`breaking-change`, `security`, `dependencies`) —
   put that context in the issue or PR body.
 
