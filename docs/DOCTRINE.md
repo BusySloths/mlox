@@ -184,7 +184,21 @@ duplicate the list in both places.
       target server actually provides the capabilities a service requires
       (declared in YAML `capabilities`/`requirements`), and enforce them at
       runtime as the model matures. Today they are parsed but not enforced.
-3. **Community & adoption** — make MLOX easy to discover, learn, and trust.
+3. **Security & trust** — earn and keep the trust of users running real
+   infrastructure on MLOX.
+   1. **Security policy and threat model.** A `SECURITY.md` with a
+      responsible-disclosure channel, and a written threat model for the trust
+      boundaries that matter here: encrypted project files, secret manager
+      keyfiles and credentials, SSH/remote execution against user servers, and
+      the PostgreSQL sync path once it exists.
+   2. **Secrets-handling audit.** Verify and enforce that credentials and
+      passwords never end up in logs, command output, rendered UI state, or
+      exported project data — redaction as a tested core invariant, not a
+      best effort.
+   3. **Release supply-chain hygiene.** Attested/signed PyPI releases
+      (provenance), pinned build and workflow dependencies, and a
+      reproducible release pipeline.
+4. **Community & adoption** — make MLOX easy to discover, learn, and trust.
    1. **Tutorial / cookbook series.** Written, end-to-end guides for common
       deployment stories: install → TUI → first deployed service, plus
       per-service recipes (e.g. MLflow tracking, n8n). Durable and reviewable
@@ -192,11 +206,17 @@ duplicate the list in both places.
    2. **Video / demo series.** Short, scripted walkthroughs — install to
       first deployed service in minutes, then one per major service category
       — derived from the tutorials so they stay in sync as the UI evolves.
-   3. **First-run program.** Keep structured first-run testing going: new
+   3. **API documentation quality.** The generated pdoc reference today is
+      raw output over thin docstrings. Invest in narrative docstrings for the
+      public surface (`ProjectWorkspace` first), per-use-case examples for the
+      client-SDK path (open project → provision → read credentials via the
+      secret manager), a curated landing/structure, and version-pinned API
+      docs for releases.
+   4. **First-run program.** Keep structured first-run testing going: new
       contributors exercise one install lane and one interface on a clean
       machine and report friction. Findings feed back into docs, onboarding,
       and error messages.
-4. **Engineering baseline** — keep the repository healthy as the codebase and
+5. **Engineering baseline** — keep the repository healthy as the codebase and
    the contributor base grow.
    1. **Tooling/CI baseline.** PR-gated lint + unit tests; adopt a formatter,
       type checker, and pre-commit. Make the Multipass-backed integration
