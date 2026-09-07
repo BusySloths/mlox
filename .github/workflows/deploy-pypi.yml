@@ -24,7 +24,9 @@ jobs:
         run: uv sync --extra dev
       - name: Test setuptools-git-versioning
         run: |
-          uv run python -m setuptools_git_versioning
+          # setuptools-git-versioning is a build dependency (pyproject build-system),
+          # not part of the dev environment — run it in an ephemeral env.
+          uv run --with setuptools-git-versioning python -m setuptools_git_versioning
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
