@@ -34,14 +34,9 @@ mlox tui             # terminal UI
 uv tool upgrade busysloths-mlox
 ```
 
-Then create your first encrypted project:
-
-```bash
-mlox project new ./projects/demo --password 'choose-a-strong-password'
-export MLOX_PROJECT_PATH="$PWD/projects/demo.mlox"
-export MLOX_PROJECT_PASSWORD='choose-a-strong-password'
-mlox tui
-```
+Launch the TUI and hit the **Create** button on the login screen to make your
+first encrypted project — no manual setup needed. The CLI (`mlox --help`) can
+operate the same project, as can the Python SDK.
 
 ## Developers (from source)
 
@@ -124,6 +119,9 @@ task vm:purge
 Use `task vm:purge` carefully; it removes the local Multipass VMs created for MLOX testing.
 
 ## Create an encrypted project
+
+The TUI's **Create** button does this interactively. For scripts and CI, use the
+CLI instead:
 
 ```bash
 mlox project new ./projects/demo --password 'choose-a-strong-password'

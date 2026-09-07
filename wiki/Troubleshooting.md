@@ -17,8 +17,8 @@ Multipass VMs may start successfully on macOS 26 but still be unreachable from T
 
 For Multipass server setup on macOS, also check **Privacy & Security** ->
 **Developer Tools**. Allow Multipass, Docker or Docker Desktop if used, and the
-app that launches MLOX, such as iTerm2 for the Textual TUI or VS Code for the
-Streamlit UI.
+app that launches MLOX, such as iTerm2 or Terminal.app for the Textual TUI, or
+VS Code for tests and the CLI.
 
 → Read the full guide: [VM / Multipass / macOS 26: Not Reachable After Spin Up](Troubleshooting-Multipass-OSX-26-Not-Reachable-After-Spin-Up)
 

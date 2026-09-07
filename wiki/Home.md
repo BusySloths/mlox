@@ -94,22 +94,20 @@ Service and server definitions remain inspectable and configuration-driven, whil
 ## Quickstart
 
 ```bash
-# 1. Install Task (https://taskfile.dev/installation/)
+# 1. Install uv (https://docs.astral.sh/uv/)
 
-# 2. Clone
-git clone https://github.com/BusySloths/mlox.git && cd mlox
+# 2. Install MLOX with the terminal UI included
+uv tool install 'busysloths-mlox[tui]'
 
-# 3. Set up environment (creates a uv environment from uv.lock — no activation needed)
-task first:steps
+# 3. Launch the TUI and hit the "Create" button on the login screen
+#    to make your first encrypted, portable project file
+mlox tui
 
-# 4. Launch the CLI
-task ui:cli CLI_ARGS="--help"
-
-# 5. Or launch the TUI
-task ui:textual:terminal
+# ... or explore the CLI
+mlox --help
 ```
 
-See [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) for Docker and Kubernetes setup.
+See [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) for a fuller walkthrough. Want to contribute? Install [Task](https://taskfile.dev/installation/), clone the repo, and run `task first:steps` — see [`CONTRIBUTING.md`](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md).
 
 ---
 

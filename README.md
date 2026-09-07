@@ -108,19 +108,17 @@ For deeper reading:
 ## Quickstart
 
 ```bash
-# 1. Install Task (https://taskfile.dev/installation/)
+# 1. Install uv (https://docs.astral.sh/uv/)
 
-# 2. Clone
-git clone https://github.com/BusySloths/mlox.git && cd mlox
+# 2. Install MLOX with the terminal UI included
+uv tool install 'busysloths-mlox[tui]'
 
-# 3. Set up environment (creates a uv environment from uv.lock — no activation needed)
-task first:steps
+# 3. Launch the TUI and hit the "Create" button on the login screen
+#    to make your first encrypted, portable project file
+mlox tui
 
-# 4. Launch the CLI
-task ui:cli CLI_ARGS="--help"
-
-# 5. Or launch the TUI
-task ui:textual:terminal
+# ... or explore the CLI
+mlox --help
 ```
 
 See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough including Docker and Kubernetes setup. See [Encrypted Project Files](docs/PROJECT_FILES.md) for creation, storage, backup, and legacy migration details.
@@ -166,10 +164,8 @@ mlox/
 # 1. Install Task (https://taskfile.dev/installation/)
 # 2. Clone the repo
 git clone https://github.com/BusySloths/mlox.git && cd mlox
-# 3. Set up the dev environment
+# 3. Set up the dev environment (uv-based, installs the package with dev extras)
 task first:steps
-# 4. Install dev dependencies
-pip install -e .[dev]
 ```
 
 ### Run Tests
