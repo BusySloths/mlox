@@ -385,6 +385,7 @@ dependencies = [
     { name = "paramiko" },
     { name = "passlib" },
     { name = "pyyaml" },
+    { name = "requests" },
     { name = "sqlcipher3" },
     { name = "typer" },
 ]
@@ -499,6 +500,7 @@ requires-dist = [
     { name = "pytest-sugar", marker = "extra == 'dev'", specifier = ">=1.1.1" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "redis", marker = "extra == 'dev'", specifier = ">=4.6" },
+    { name = "requests", specifier = ">=2.31" },
     { name = "sqlcipher3", specifier = ">=0.6.2" },
     { name = "streamlit", marker = "extra == 'dev'", specifier = ">=1.57.0" },
     { name = "streamlit-vis-timeline", marker = "extra == 'dev'", specifier = ">=0.3.0" },
