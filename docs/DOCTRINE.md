@@ -219,10 +219,14 @@ duplicate the list in both places.
 5. **Engineering baseline** — keep the repository healthy as the codebase and
    the contributor base grow.
    1. **Tooling/CI baseline.** PR-gated lint + unit tests; adopt a formatter,
-      type checker, and pre-commit. Make the Multipass-backed integration
-      tests more robust (timeouts, offline resilience) — they are highly
-      valuable but currently fail when installs are slow.
-   2. **Docs governance enforcement.** Keep every surface a derived view via
+      type checker, and pre-commit.
+   2. **Test suite depth and robustness.** Extend unit test coverage across
+      the core public surface (workspace, use cases, config/plugin loading)
+      and surface the numbers in CI so regressions are visible. Extend the
+      Multipass-backed integration suite to cover more of the service catalog,
+      and make it robust — timeouts, offline resilience, reliable cleanup.
+      It is highly valuable but currently fails when installs are slow.
+   3. **Docs governance enforcement.** Keep every surface a derived view via
       `scripts/check_docs.py`.
 
 ---
