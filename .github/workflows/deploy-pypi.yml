@@ -77,3 +77,10 @@ jobs:
         run: |
           mlox --version
           mlox --help
+
+      - name: Smoke test eager imports (CLI + TUI) against published package
+        run: |
+          # Catches undeclared runtime dependencies: installs the published
+          # package into a clean ephemeral env and imports the full eager
+          # import surface. Mirrors what a fresh `uv tool install` user gets.
+          uv run --no-project --with 'busysloths-mlox[tui]' python -c "import mlox.cli; import mlox.tui.app; print('eager imports OK')"
