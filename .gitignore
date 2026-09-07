@@ -118,7 +118,6 @@ env.bak/
 venv.bak/
 keyfile.json
 mise.toml
-uv.lock
 
 # Spyder project settings
 .spyderproject
