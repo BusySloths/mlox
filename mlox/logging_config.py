@@ -107,7 +107,7 @@ def configure_logging() -> None:
         logging.basicConfig(
             handlers=[TextualHandler(stderr=True, stdout=True)], level=logging.INFO
         )
-        logging.info("Textual logging configured")
+        logging.debug("Textual logging configured")
     elif os.environ.get("MLOX_TUI") == "true":
         logging.config.dictConfig(LOG_CONFIG)
         logging.warning(
@@ -115,4 +115,4 @@ def configure_logging() -> None:
         )
     else:
         logging.config.dictConfig(LOG_CONFIG)
-        logging.info("Logging configured")
+        logging.debug("Logging configured")

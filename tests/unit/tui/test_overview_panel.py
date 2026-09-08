@@ -16,7 +16,7 @@ from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 
 
 def _render_panel(renderable) -> str:
-    console = Console(file=io.StringIO(), record=True, width=120)
+    console = Console(file=io.StringIO(), record=True, width=120, height=40)
     console.print(renderable)
     return console.export_text()
 
