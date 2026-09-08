@@ -46,7 +46,7 @@ class DashboardServerInfoTestApp(App):
 def _render_text(renderable: object) -> str:
     if isinstance(renderable, str):
         return renderable
-    console = Console(file=io.StringIO(), record=True, width=140)
+    console = Console(file=io.StringIO(), record=True, width=140, height=40)
     console.print(renderable)
     return console.export_text()
 
