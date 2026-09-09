@@ -138,14 +138,15 @@ top, concrete items nested underneath.
 
 **How this relates to GitHub issues:** this roadmap is the deliberately
 lightweight replacement for a GitHub Projects board — planning truth lives here,
-versioned and reviewable with the code. GitHub **issues are derived from roadmap
-entries**: when the time comes to work on an item, open an issue for it and
-state in the issue body which roadmap entry it implements. The linkage is
-one-directional — the roadmap never lists issue numbers, so it never goes
-stale. The roadmap entry stays the source of truth; the issue is the execution
-unit. If this ever moves to GitHub Projects (or another tool), that tool
-becomes the linked source of truth and this section must point to it — never
-duplicate the list in both places.
+versioned and reviewable with the code. GitHub **issues are derived from
+roadmap items**: when the time comes to work on an item, open an issue, prefix
+its title with the roadmap item (`[Project advancement] …`), and start the body
+with a one-line `[ROADMAP_ITEM]` marker describing what the issue implements.
+The linkage is one-directional — the roadmap never lists issue numbers, so it
+never goes stale. The roadmap item stays the source of truth; the issue is the
+execution unit. If this ever moves to GitHub Projects (or another tool), that
+tool becomes the linked source of truth and this section must point to it —
+never duplicate the list in both places.
 
 1. **Project advancement** — deepen what a project is, and how people and
    agents work with it.

@@ -33,7 +33,7 @@ Planning is deliberately lightweight — the issue list is the backlog, pull
 requests are the review unit, and milestones appear only when preparing a release.
 There is **no GitHub Projects board**; don't require it for routine planning.
 The product roadmap lives in `docs/DOCTRINE.md`; issues are derived from roadmap
-entries when work on an item begins.
+items when work on an item begins (convention below).
 
 ```text
 idea / bug report
@@ -48,13 +48,23 @@ Use GitHub Issues for bugs, features, docs work, and maintenance tasks. Prefer
 small issues with a clear outcome. A good issue is understandable on its own —
 title and body carry the context, labels stay minimal.
 
-Recommended issue title format (the `[area]` is plain title text, not a label):
+Roadmap-derived issues follow a fixed convention. The title carries a bracket
+prefix naming the **roadmap item** the issue serves (plain title text, not a
+label), and the body starts with a one-line `[ROADMAP_ITEM]` marker describing
+what the issue implements:
 
 ```text
-[cli] Add service status output
-[docs] Refresh installation guide
-[redis] Fix secret output
+[Project advancement] Snapshot project state to PostgreSQL
+
+[ROADMAP_ITEM] Implements the project-sync direction of the
+"Project sync (local-first + PostgreSQL snapshot)" item in docs/DOCTRINE.md.
 ```
+
+The `[ROADMAP_ITEM]` text is a free-form description, not a verbatim entry
+title — several issues may serve the same roadmap item. The linkage stays
+one-directional: the roadmap never lists issues. Standalone issues (bug
+reports, community ideas not tied to the roadmap) carry no prefix and no
+marker.
 
 Good issues include: the problem or desired outcome, reproduction steps for bugs,
 the command/service/interface involved, and the smallest useful acceptance criteria.
@@ -82,7 +92,7 @@ maintainer does next. Prefer editing the issue title/body over adding more label
 | `priority:urgent` | Security, data loss, broken release, or maintainer-blocking issue |
 | `status:blocked` | Waiting on an external dependency or decision |
 | `status:needs-info` | Waiting on reporter details before work can start |
-| `status:wip` | Draft issue — scope not settled yet; don't pick up work from it |
+| `status:draft` | Draft issue — scope not settled yet; don't pick up work from it |
 | `good first issue` | Small, well-scoped task for a new contributor |
 | `help wanted` | External contribution is welcome |
 
@@ -94,7 +104,7 @@ maintainer does next. Prefer editing the issue title/body over adding more label
   acceptance criteria instead of estimating.
 - **No routine status labels** (`needs-triage`, `in-progress`,
   `ready-for-review`) — open issues are the backlog, assignees show active work,
-  PR state shows review readiness. The one exception is `status:wip`, which
+  PR state shows review readiness. The one exception is `status:draft`, which
   marks a *draft* issue whose scope is not settled — a scope flag, not a work
   state.
 - **No special-case labels** (`breaking-change`, `security`, `dependencies`) —
