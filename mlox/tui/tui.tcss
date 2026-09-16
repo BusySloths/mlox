@@ -131,6 +131,10 @@ Button {
   height: 3;
 }
 
+ProjectSwitchDialog {
+  align: center middle;
+}
+
 #project-switch-dialog {
   width: 72;
   height: auto;
@@ -153,6 +157,31 @@ Button {
 #project-switch-actions {
   height: 3;
   margin-top: 1;
+  align-horizontal: center;
+}
+
+#cancel-project-switch,
+#confirm-project-switch {
+  width: 20;
+}
+
+#cancel-project-switch {
+  background: #24406fff;
+  border: round #69b7ffff;
+}
+
+#cancel-project-switch:hover {
+  background: #305aa0ff;
+}
+
+#confirm-project-switch {
+  margin-left: 2;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+}
+
+#confirm-project-switch:hover {
+  background: #12ad65ff;
 }
 
 #project-switch-error {

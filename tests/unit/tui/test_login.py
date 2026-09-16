@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 from textual.app import App
-from textual.containers import Horizontal
-from textual.widgets import Select, Static
+from textual.containers import Container, Horizontal
+from textual.widgets import Button, Select, Static
 from mlox.application.result import OperationResult
 from mlox.application.use_cases.project import ProjectOption
 from mlox.tui.app import MLOXTextualApp
@@ -180,6 +181,45 @@ def test_runtime_project_switcher_returns_selected_credentials():
     assert asyncio.run(_select_runtime_project()) == [
         ("/projects/beta.mlox", "beta-pw")
     ]
+
+
+async def _runtime_project_switcher_layout():
+    class SwitcherLayoutTestApp(App):
+        CSS_PATH = str(Path(__file__).parents[3] / "mlox/tui/tui.tcss")
+
+        def on_mount(self):
+            self.push_screen(
+                ProjectSwitchDialog(
+                    [ProjectOption("alpha", "/projects/alpha.mlox", "alpha-pw")]
+                )
+            )
+
+    app = SwitcherLayoutTestApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        dialog = screen.query_one("#project-switch-dialog", Container)
+        cancel = screen.query_one("#cancel-project-switch", Button)
+        confirm = screen.query_one("#confirm-project-switch", Button)
+        return (
+            dialog.region.center,
+            screen.region.center,
+            confirm.region.x - cancel.region.right,
+            cancel.styles.background.hex,
+            confirm.styles.background.hex,
+        )
+
+
+def test_runtime_project_switcher_is_centered_with_distinct_actions():
+    dialog_center, screen_center, button_gap, cancel_bg, confirm_bg = asyncio.run(
+        _runtime_project_switcher_layout()
+    )
+
+    assert dialog_center[0] == screen_center[0]
+    assert abs(dialog_center[1] - screen_center[1]) <= 0.5
+    assert button_gap == 2
+    assert cancel_bg == "#24406F"
+    assert confirm_bg == "#0E9455"
 
 
 async def _loading_state_during_login() -> tuple[bool, bool, str, bool]:
