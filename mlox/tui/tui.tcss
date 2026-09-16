@@ -126,6 +126,40 @@ Button {
   margin-top: 1;
 }
 
+#project-select {
+  width: 68;
+  height: 3;
+}
+
+#project-switch-dialog {
+  width: 72;
+  height: auto;
+  padding: 1 2;
+  background: #0d2a24ff;
+  border: round #74d17aff;
+}
+
+#project-switch-title {
+  text-style: bold;
+  margin-bottom: 1;
+}
+
+#project-switch-select,
+#project-switch-password {
+  width: 66;
+  height: 3;
+}
+
+#project-switch-actions {
+  height: 3;
+  margin-top: 1;
+}
+
+#project-switch-error {
+  height: auto;
+  color: #ff6b6b;
+}
+
 #main-area {
   layout: horizontal;
   height: 1fr;

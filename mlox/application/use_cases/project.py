@@ -1,8 +1,71 @@
 from __future__ import annotations
 
+import os
+import re
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from mlox.application.result import OperationResult
+
+
+@dataclass(frozen=True)
+class ProjectOption:
+    """A project file discovered for interactive selection."""
+
+    name: str
+    path: str
+    password: str = field(default="", repr=False)
+
+
+def project_password_env_name(project_name: str) -> str:
+    """Return the password variable corresponding to a project filename stem."""
+
+    suffix = re.sub(r"[^A-Za-z0-9]+", "_", project_name).strip("_").upper()
+    return f"MLOX_PROJECT_PASSWORD_{suffix}"
+
+
+def discover_projects(
+    cwd: str | Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> list[ProjectOption]:
+    """Discover selectable projects without opening their encrypted contents."""
+
+    env = os.environ if environ is None else environ
+    root = Path.cwd() if cwd is None else Path(cwd)
+    projects: list[ProjectOption] = []
+    seen: set[Path] = set()
+
+    configured_path = env.get("MLOX_PROJECT_PATH") or env.get("MLOX_PROJECT_NAME")
+    if configured_path:
+        path = Path(configured_path).expanduser()
+        if not path.is_absolute():
+            path = root / path
+        path = path.resolve()
+        projects.append(
+            ProjectOption(
+                name=path.stem,
+                path=str(path),
+                password=env.get("MLOX_PROJECT_PASSWORD", ""),
+            )
+        )
+        seen.add(path)
+
+    for path in sorted(root.glob("*.mlox"), key=lambda item: item.name.casefold()):
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        projects.append(
+            ProjectOption(
+                name=path.stem,
+                path=str(resolved),
+                password=env.get(project_password_env_name(path.stem), ""),
+            )
+        )
+        seen.add(resolved)
+
+    return projects
 
 
 def create_project(project) -> OperationResult:
