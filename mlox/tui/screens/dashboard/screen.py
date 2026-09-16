@@ -52,6 +52,7 @@ from mlox.application.use_cases.servers import (
     setup_bundle,
 )
 from mlox.application.use_cases.project import (
+    discover_projects,
     reload_project_workspace,
     rename_bundle,
     rename_project_workspace,
@@ -70,6 +71,7 @@ from mlox.application.use_cases.services import (
     setup_service_in_workspace,
     teardown_service_in_workspace,
 )
+from mlox.tui.screens.project_switcher import ProjectSwitchDialog
 from mlox.tui.template_forms import (
     TemplateFormSpec,
     TemplateSetupDialog,
@@ -129,6 +131,7 @@ class DashboardScreen(Screen):
 
     BINDINGS = [
         ("l", "toggle_app_logs", "Logs"),
+        ("P", "switch_project", "Switch Project"),
         ("O", "open_terminal", "Open Terminal"),
         ("R", "reload_infrastructure", "Reload"),
         Binding("c", "copy_model_example", "Copy Curl", show=False, priority=True),
@@ -1274,6 +1277,43 @@ class DashboardScreen(Screen):
             exclusive=True,
             group="project-reload",
         )
+
+    async def action_switch_project(self) -> None:
+        projects = discover_projects()
+        await self.app.push_screen(
+            ProjectSwitchDialog(projects),
+            self._switch_project_from_dialog,
+        )
+
+    def _switch_project_from_dialog(
+        self, selection: tuple[str, str] | None
+    ) -> None:
+        if selection is None:
+            return
+        project, password = selection
+        self.notify(f"Opening project {project}...")
+
+        def switch_workspace() -> None:
+            login = getattr(self.app, "login", None)
+            success = bool(callable(login) and login(project, password))
+            self.app.call_from_thread(self._finish_project_switch, success, project)
+
+        self.app.run_worker(
+            switch_workspace,
+            thread=True,
+            exclusive=True,
+            group="project-switch",
+        )
+
+    def _finish_project_switch(self, success: bool, project: str) -> None:
+        if not success:
+            self.notify(
+                getattr(self.app, "login_error", None) or "Could not open project",
+                severity="error",
+            )
+            return
+        self.app.switch_screen(DashboardScreen())
+        self.app.notify(f"Switched to project {project}.")
 
     def _show_reload_error(self, message: str) -> None:
         self._set_project_reload_loading(False)

@@ -13,6 +13,17 @@ mlox server list
 
 Creation is explicit and refuses to overwrite a file. Opening a missing project never creates one. Keep the password outside source control; `.mlox` files and SQLite sidecars are ignored by the repository.
 
+## TUI project discovery
+
+The TUI lists every `*.mlox` file in its current directory. A project named
+`demo.mlox` uses `MLOX_PROJECT_PASSWORD_DEMO`; punctuation in the filename stem
+is converted to underscores, so `team-one.mlox` uses
+`MLOX_PROJECT_PASSWORD_TEAM_ONE`. Missing passwords can be entered manually.
+The existing unsuffixed `MLOX_PROJECT_PATH` and `MLOX_PROJECT_PASSWORD`
+variables remain supported for projects outside the current directory.
+
+Press `P` from the dashboard to switch to another discovered project.
+
 ## Python API
 
 Use `ProjectWorkspace` for application mutations:

@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 from textual.app import App
-from textual.containers import Horizontal
-from textual.widgets import Static
+from textual.containers import Container, Horizontal
+from textual.widgets import Button, Select, Static
 from mlox.application.result import OperationResult
+from mlox.application.use_cases.project import ProjectOption
 from mlox.tui.app import MLOXTextualApp
 from mlox.tui.screens.login import LoginScreen
+from mlox.tui.screens.project_switcher import ProjectSwitchDialog
 
 
 class LoginTestApp(App):
@@ -119,6 +122,106 @@ def test_open_normalizes_project_name():
     assert asyncio.run(_press_open_with_whitespace()) == [("demo", "pw", False)]
 
 
+async def _select_discovered_project(monkeypatch, tmp_path):
+    path = tmp_path / "demo.mlox"
+    path.touch()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MLOX_PROJECT_PASSWORD_DEMO", "demo-pw")
+    monkeypatch.delenv("MLOX_PROJECT_PATH", raising=False)
+    monkeypatch.delenv("MLOX_PROJECT_NAME", raising=False)
+    monkeypatch.delenv("MLOX_PROJECT_PASSWORD", raising=False)
+
+    app = LoginTestApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        screen.query_one("#project-select", Select).value = str(path.resolve())
+        await pilot.pause()
+        return (
+            screen.query_one("#project").value,
+            screen.query_one("#password").value,
+        )
+
+
+def test_selecting_discovered_project_fills_path_and_password(monkeypatch, tmp_path):
+    assert asyncio.run(_select_discovered_project(monkeypatch, tmp_path)) == (
+        str((tmp_path / "demo.mlox").resolve()),
+        "demo-pw",
+    )
+
+
+async def _select_runtime_project():
+    selected = []
+
+    class SwitcherTestApp(App):
+        def on_mount(self):
+            self.push_screen(
+                ProjectSwitchDialog(
+                    [
+                        ProjectOption("alpha", "/projects/alpha.mlox", "alpha-pw"),
+                        ProjectOption("beta", "/projects/beta.mlox", "beta-pw"),
+                    ]
+                ),
+                selected.append,
+            )
+
+    app = SwitcherTestApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.screen.query_one("#project-switch-select", Select).value = (
+            "/projects/beta.mlox"
+        )
+        await pilot.pause()
+        await pilot.click("#confirm-project-switch")
+        await pilot.pause()
+    return selected
+
+
+def test_runtime_project_switcher_returns_selected_credentials():
+    assert asyncio.run(_select_runtime_project()) == [
+        ("/projects/beta.mlox", "beta-pw")
+    ]
+
+
+async def _runtime_project_switcher_layout():
+    class SwitcherLayoutTestApp(App):
+        CSS_PATH = str(Path(__file__).parents[3] / "mlox/tui/tui.tcss")
+
+        def on_mount(self):
+            self.push_screen(
+                ProjectSwitchDialog(
+                    [ProjectOption("alpha", "/projects/alpha.mlox", "alpha-pw")]
+                )
+            )
+
+    app = SwitcherLayoutTestApp()
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        dialog = screen.query_one("#project-switch-dialog", Container)
+        cancel = screen.query_one("#cancel-project-switch", Button)
+        confirm = screen.query_one("#confirm-project-switch", Button)
+        return (
+            dialog.region.center,
+            screen.region.center,
+            confirm.region.x - cancel.region.right,
+            cancel.styles.background.hex,
+            confirm.styles.background.hex,
+        )
+
+
+def test_runtime_project_switcher_is_centered_with_distinct_actions():
+    dialog_center, screen_center, button_gap, cancel_bg, confirm_bg = asyncio.run(
+        _runtime_project_switcher_layout()
+    )
+
+    assert dialog_center[0] == screen_center[0]
+    assert abs(dialog_center[1] - screen_center[1]) <= 0.5
+    assert button_gap == 2
+    assert cancel_bg == "#24406F"
+    assert confirm_bg == "#0E9455"
+
+
 async def _loading_state_during_login() -> tuple[bool, bool, str, bool]:
     release = threading.Event()
 
@@ -192,3 +295,20 @@ def test_textual_app_login_reports_application_error(monkeypatch) -> None:
     assert app.login("demo.mlox", "wrong") is False
     assert app.workspace is None
     assert app.login_error == "Invalid project password"
+
+
+def test_textual_app_failed_switch_keeps_current_workspace(monkeypatch) -> None:
+    current_workspace = SimpleNamespace(name="current")
+    monkeypatch.setattr(
+        "mlox.tui.app.open_project_workspace",
+        lambda project, password, *, create=False: OperationResult(
+            False,
+            3,
+            "Invalid project password",
+        ),
+    )
+    app = MLOXTextualApp()
+    app.workspace = current_workspace
+
+    assert app.login("other.mlox", "wrong") is False
+    assert app.workspace is current_workspace

@@ -74,6 +74,51 @@ def test_project_open_workspace_uses_project_workspace():
     assert calls == [("open", "demo.mlox", "pw")]
 
 
+def test_project_discovery_uses_filename_password_variables(tmp_path):
+    alpha = tmp_path / "alpha.mlox"
+    team = tmp_path / "team-one.mlox"
+    alpha.touch()
+    team.touch()
+
+    projects = project.discover_projects(
+        tmp_path,
+        {
+            "MLOX_PROJECT_PASSWORD_ALPHA": "alpha-pw",
+            "MLOX_PROJECT_PASSWORD_TEAM_ONE": "team-pw",
+        },
+    )
+
+    assert [(item.name, item.path, item.password) for item in projects] == [
+        ("alpha", str(alpha.resolve()), "alpha-pw"),
+        ("team-one", str(team.resolve()), "team-pw"),
+    ]
+
+
+def test_project_discovery_keeps_projects_without_configured_password(tmp_path):
+    path = tmp_path / "manual.mlox"
+    path.touch()
+
+    projects = project.discover_projects(tmp_path, {})
+
+    assert projects == [project.ProjectOption("manual", str(path.resolve()))]
+
+
+def test_project_discovery_preserves_unsuffixed_configuration(tmp_path):
+    path = tmp_path / "outside" / "legacy.mlox"
+
+    projects = project.discover_projects(
+        tmp_path,
+        {
+            "MLOX_PROJECT_PATH": str(path),
+            "MLOX_PROJECT_PASSWORD": "legacy-pw",
+        },
+    )
+
+    assert projects == [
+        project.ProjectOption("legacy", str(path.resolve()), "legacy-pw")
+    ]
+
+
 def test_project_reload_workspace_reports_failures():
     workspace = SimpleNamespace(
         path="demo.mlox",

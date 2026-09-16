@@ -126,6 +126,69 @@ Button {
   margin-top: 1;
 }
 
+#project-select {
+  width: 68;
+  height: 3;
+}
+
+ProjectSwitchDialog {
+  align: center middle;
+}
+
+#project-switch-dialog {
+  width: 72;
+  height: auto;
+  padding: 1 2;
+  background: #0d2a24ff;
+  border: round #74d17aff;
+}
+
+#project-switch-title {
+  text-style: bold;
+  margin-bottom: 1;
+}
+
+#project-switch-select,
+#project-switch-password {
+  width: 66;
+  height: 3;
+}
+
+#project-switch-actions {
+  height: 3;
+  margin-top: 1;
+  align-horizontal: center;
+}
+
+#cancel-project-switch,
+#confirm-project-switch {
+  width: 20;
+}
+
+#cancel-project-switch {
+  background: #24406fff;
+  border: round #69b7ffff;
+}
+
+#cancel-project-switch:hover {
+  background: #305aa0ff;
+}
+
+#confirm-project-switch {
+  margin-left: 2;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+}
+
+#confirm-project-switch:hover {
+  background: #12ad65ff;
+}
+
+#project-switch-error {
+  height: auto;
+  color: #ff6b6b;
+}
+
 #main-area {
   layout: horizontal;
   height: 1fr;
