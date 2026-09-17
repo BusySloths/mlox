@@ -7,13 +7,155 @@ import argparse
 import getpass
 import os
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
+from pathlib import PureWindowsPath
 
 from mlox.project import ProjectWorkspace, resolve_project_path
-from mlox.project.asset_migration import (
-    apply_service_asset_migration,
-    plan_service_asset_migration,
+from mlox.service import service_asset_path
+
+
+SERVICE_ASSET_FIELDS = (
+    "template",
+    "dockerfile",
+    "start_script",
+    "config",
+    "serve_script",
+    "ollama_script",
+    "litellm_config",
 )
+
+LEGACY_SERVICE_ASSET_ALIASES = {
+    "kubeapps/kubeapps.yaml": "kubeapps/mlox.kubeapps.yaml",
+    "kubeflow/kubeflow.yaml": "kubeflow/mlox.kubeflow.yaml",
+    "tsm/mlox.github.yaml": "github/mlox.github.yaml",
+}
+
+
+@dataclass(frozen=True)
+class ServiceAssetChange:
+    service_name: str
+    service_uuid: str
+    field: str
+    old_value: str
+    new_value: str
+
+
+@dataclass(frozen=True)
+class ServiceAssetProblem:
+    service_name: str
+    service_uuid: str
+    field: str
+    value: str
+    message: str
+
+
+@dataclass(frozen=True)
+class ServiceAssetMigrationPlan:
+    changes: tuple[ServiceAssetChange, ...]
+    problems: tuple[ServiceAssetProblem, ...]
+
+
+def _is_absolute(reference: str) -> bool:
+    return Path(reference).is_absolute() or PureWindowsPath(reference).is_absolute()
+
+
+def _portable_reference(reference: str) -> str | None:
+    normalized = str(reference).replace("\\", "/")
+    marker = "/mlox/services/"
+    if marker in normalized:
+        relative = normalized.rsplit(marker, 1)[1]
+        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
+    if normalized.startswith("mlox/services/"):
+        relative = normalized[len("mlox/services/"):]
+        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
+    return None
+
+
+def plan_service_asset_migration(workspace) -> ServiceAssetMigrationPlan:
+    """Build and validate a non-mutating migration plan for one workspace."""
+
+    changes: list[ServiceAssetChange] = []
+    problems: list[ServiceAssetProblem] = []
+    for service in workspace.infrastructure.services():
+        service_name = str(getattr(service, "name", ""))
+        service_uuid = str(getattr(service, "uuid", ""))
+        for field_name in SERVICE_ASSET_FIELDS:
+            value = getattr(service, field_name, None)
+            if not isinstance(value, str) or not value:
+                continue
+            if not _is_absolute(value):
+                try:
+                    with service_asset_path(value):
+                        pass
+                except (FileNotFoundError, ValueError) as exc:
+                    problems.append(
+                        ServiceAssetProblem(
+                            service_name,
+                            service_uuid,
+                            field_name,
+                            value,
+                            str(exc),
+                        )
+                    )
+                continue
+            reference = _portable_reference(value)
+            if reference is None:
+                problems.append(
+                    ServiceAssetProblem(
+                        service_name,
+                        service_uuid,
+                        field_name,
+                        value,
+                        "Absolute path is not a recognized built-in mlox service asset.",
+                    )
+                )
+                continue
+            try:
+                with service_asset_path(reference):
+                    pass
+            except (FileNotFoundError, ValueError) as exc:
+                problems.append(
+                    ServiceAssetProblem(
+                        service_name,
+                        service_uuid,
+                        field_name,
+                        value,
+                        str(exc),
+                    )
+                )
+                continue
+            changes.append(
+                ServiceAssetChange(
+                    service_name,
+                    service_uuid,
+                    field_name,
+                    value,
+                    reference,
+                )
+            )
+    return ServiceAssetMigrationPlan(tuple(changes), tuple(problems))
+
+
+def apply_service_asset_migration(workspace, plan: ServiceAssetMigrationPlan) -> None:
+    """Apply a previously validated migration plan in memory."""
+
+    if plan.problems:
+        raise ValueError("Cannot migrate while unresolved service asset paths remain.")
+    services = {
+        str(getattr(service, "uuid", "")): service
+        for service in workspace.infrastructure.services()
+    }
+    for change in plan.changes:
+        service = services.get(change.service_uuid)
+        if service is None:
+            raise ValueError(f"Service disappeared during migration: {change.service_uuid}")
+        if getattr(service, change.field, None) != change.old_value:
+            raise ValueError(
+                f"Service asset changed during migration: {change.service_name}."
+                f"{change.field}"
+            )
+        setattr(service, change.field, change.new_value)
 
 
 def _print_plan(plan) -> None:

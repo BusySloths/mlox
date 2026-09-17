@@ -7,14 +7,14 @@ import pytest
 
 from mlox.infra import Bundle
 from mlox.project import ProjectWorkspace
-from mlox.project.asset_migration import (
+from scripts.migrate_project_asset_paths import (
+    _portable_reference,
     apply_service_asset_migration,
+    migrate_project_asset_paths,
     plan_service_asset_migration,
 )
-from mlox.service import portable_service_asset_reference
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 from mlox.services.airflow.docker import AirflowDockerService
-from scripts.migrate_project_asset_paths import migrate_project_asset_paths
 
 
 def _workspace_with_service(service):
@@ -70,7 +70,7 @@ def test_migration_reports_unknown_absolute_asset_without_changing_it():
 def test_migration_maps_historical_missing_asset_aliases(legacy_reference, expected):
     legacy_path = f"/opt/mlox/mlox/services/{legacy_reference}"
 
-    assert portable_service_asset_reference(legacy_path) == expected
+    assert _portable_reference(legacy_path) == expected
 
 
 def test_migration_script_backs_up_and_verifies_encrypted_project(tmp_path):

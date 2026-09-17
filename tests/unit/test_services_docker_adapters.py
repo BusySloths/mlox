@@ -32,7 +32,7 @@ from mlox.services.tsm.service import TSMService
 BASE = {
     "name": "svc",
     "service_config_id": "cfg",
-    "template": "/tmp/compose.yaml",
+    "template": "airflow/docker-compose-airflow-3.1.3.yaml",
     "target_path": "/tmp/stack",
 }
 
@@ -1349,29 +1349,15 @@ def test_airflow_set_workflow_secret_manager_env_upserts_env_and_restarts(conn):
         "_MLOX_SECRET_MANAGER_KEYFILE_PW=keyfile-password\n"
     )
     expose_calls = service.exec.calls[expose_call_start:]
-    assert (
-        "fs_copy",
-        (
-            service.template,
-            "/tmp/stack/docker-compose.yaml",
-        ),
-        {},
-    ) in expose_calls
+    copy_call = next(call for call in expose_calls if call[0] == "fs_copy")
+    assert copy_call[1][0].endswith(service.template)
+    assert copy_call[1][1] == "/tmp/stack/docker-compose.yaml"
     assert (
         "docker_up",
         ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),
         {},
     ) in expose_calls
-    assert expose_calls.index(
-        (
-            "fs_copy",
-            (
-                service.template,
-                "/tmp/stack/docker-compose.yaml",
-            ),
-            {},
-        )
-    ) < expose_calls.index(
+    assert expose_calls.index(copy_call) < expose_calls.index(
         (
             "docker_up",
             ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),

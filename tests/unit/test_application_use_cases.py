@@ -1375,7 +1375,7 @@ def test_web_ui_service_prefers_configured_url_label():
     service = _FakeWebUIService(
         name="ui",
         service_config_id="web-ui",
-        template="/tmp/template",
+        template="airflow/docker-compose-airflow-3.1.3.yaml",
         target_path="/tmp/target",
     )
     service.service_urls["API"] = "https://example.test/api"
@@ -1391,7 +1391,7 @@ def test_services_web_ui_login_value_resolves_requested_field():
     service = _FakeWebUIService(
         name="ui",
         service_config_id="web-ui",
-        template="/tmp/template",
+        template="airflow/docker-compose-airflow-3.1.3.yaml",
         target_path="/tmp/target",
     )
     service.ui_user = "admin"

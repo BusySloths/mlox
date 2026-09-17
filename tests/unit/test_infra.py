@@ -96,7 +96,7 @@ def make_service(name: str, config_id: str, uuid: str) -> DummyService:
     service = DummyService(
         name=name,
         service_config_id=config_id,
-        template="/tmp/template.yaml",
+        template="airflow/docker-compose-airflow-3.1.3.yaml",
         target_path="/tmp/service",
     )
     service.uuid = uuid
@@ -212,7 +212,6 @@ def test_infrastructure_lookup_helpers_find_services_bundles_and_servers():
     assert infra.get_server_by_uuid("missing") is None
 
 
-
 def test_kubernetes_and_backend_filters_only_return_matching_bundles():
     running_k8s_server = make_server(DummyServer, "10.0.0.1")
     running_k8s_server.backend = ["kubernetes"]
@@ -308,7 +307,7 @@ def test_from_dict_accepts_legacy_string_boolean_service_fields():
     service = GithubRepoService(
         name="Github:demo",
         service_config_id="github",
-        template="/tmp/github.yaml",
+        template="github/mlox.github.yaml",
         target_path="/repos",
         link="https://github.com/acme/demo",
         is_private=False,

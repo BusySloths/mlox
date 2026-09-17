@@ -50,51 +50,16 @@ from mlox.executors import UbuntuTaskExecutor
 
 logger = logging.getLogger(__name__)
 
-SERVICE_ASSET_FIELDS = (
-    "template",
-    "dockerfile",
-    "start_script",
-    "config",
-    "serve_script",
-    "ollama_script",
-    "litellm_config",
-)
-
-LEGACY_SERVICE_ASSET_ALIASES = {
-    "kubeapps/kubeapps.yaml": "kubeapps/mlox.kubeapps.yaml",
-    "kubeflow/kubeflow.yaml": "kubeflow/mlox.kubeflow.yaml",
-    "tsm/mlox.github.yaml": "github/mlox.github.yaml",
-}
-
-
-def is_absolute_service_asset_reference(reference: str) -> bool:
-    """Return whether a service asset contains a platform-specific absolute path."""
-
-    return Path(reference).is_absolute() or PureWindowsPath(reference).is_absolute()
-
-
-def portable_service_asset_reference(reference: str) -> str | None:
-    """Convert a legacy built-in asset path to its package-relative reference."""
-
-    normalized = str(reference).replace("\\", "/")
-    placeholder = "${MLOX_STACKS_PATH}/"
-    if normalized.startswith(placeholder):
-        relative = normalized[len(placeholder):]
-        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
-    marker = "/mlox/services/"
-    if marker in normalized:
-        relative = normalized.rsplit(marker, 1)[1]
-        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
-    if normalized.startswith("mlox/services/"):
-        relative = normalized[len("mlox/services/"):]
-        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
-    return None
-
 
 def _service_asset_resource(reference: str):
     normalized = str(reference).replace("\\", "/")
     relative = PurePosixPath(normalized)
-    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+    if (
+        relative.is_absolute()
+        or PureWindowsPath(reference).is_absolute()
+        or not relative.parts
+        or ".." in relative.parts
+    ):
         raise ValueError(f"Invalid service asset reference: {reference}")
     resource = resources.files("mlox.services").joinpath(*relative.parts)
     if not resource.is_file():
@@ -104,11 +69,8 @@ def _service_asset_resource(reference: str):
 
 @contextmanager
 def service_asset_path(reference: str):
-    """Yield a filesystem path for a built-in or explicit external asset."""
+    """Yield the local filesystem path for a portable packaged asset reference."""
 
-    if is_absolute_service_asset_reference(reference):
-        yield Path(reference)
-        return
     with resources.as_file(_service_asset_resource(reference)) as path:
         yield path
 
