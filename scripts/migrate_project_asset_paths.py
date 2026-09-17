@@ -62,13 +62,15 @@ def _is_absolute(reference: str) -> bool:
 
 def _portable_reference(reference: str) -> str | None:
     normalized = str(reference).replace("\\", "/")
-    marker = "/mlox/services/"
-    if marker in normalized:
-        relative = normalized.rsplit(marker, 1)[1]
-        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
-    if normalized.startswith("mlox/services/"):
-        relative = normalized[len("mlox/services/"):]
-        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
+    for asset_root in ("services", "stacks"):
+        marker = f"/mlox/{asset_root}/"
+        if marker in normalized:
+            relative = normalized.rsplit(marker, 1)[1]
+            return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
+        prefix = f"mlox/{asset_root}/"
+        if normalized.startswith(prefix):
+            relative = normalized[len(prefix):]
+            return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
     return None
 
 

@@ -73,6 +73,31 @@ def test_migration_maps_historical_missing_asset_aliases(legacy_reference, expec
     assert _portable_reference(legacy_path) == expected
 
 
+@pytest.mark.parametrize(
+    ("field_name", "legacy_reference"),
+    [
+        ("template", "redis/docker-compose-redis-8-bookworm.yaml"),
+        ("template", "tsm/mlox.tsm.yaml"),
+        ("template", "minio/docker-compose-minio.yaml"),
+        ("template", "kafka/docker-compose-kafka-3.7.0.yaml"),
+        ("template", "postgres/docker-compose-postgres-16.yaml"),
+        ("template", "feast/docker-compose-feast.yaml"),
+        ("dockerfile", "feast/Dockerfile"),
+    ],
+)
+def test_migration_maps_legacy_stacks_root(field_name, legacy_reference):
+    legacy_path = f"/Users/alice/Projects/mlox/mlox/stacks/{legacy_reference}"
+    service = SimpleNamespace(name="Legacy", uuid="legacy-1")
+    setattr(service, field_name, legacy_path)
+
+    plan = plan_service_asset_migration(_workspace_with_service(service))
+
+    assert not plan.problems
+    assert len(plan.changes) == 1
+    assert plan.changes[0].field == field_name
+    assert plan.changes[0].new_value == legacy_reference
+
+
 def test_migration_script_backs_up_and_verifies_encrypted_project(tmp_path):
     project_path = tmp_path / "portable.mlox"
     backup_path = tmp_path / "portable.before-assets.mlox"
