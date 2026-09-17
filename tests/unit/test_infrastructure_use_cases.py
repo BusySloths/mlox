@@ -87,7 +87,6 @@ def test_add_service_binds_lookup_and_attaches_service(monkeypatch):
         get_bundle_by_ip=lambda ip: bundle,
         list_service_names=lambda: [],
     )
-    monkeypatch.setattr(services, "get_stacks_path", lambda: "/stacks")
     monkeypatch.setattr(services, "generate_username", lambda: "auto-user")
     monkeypatch.setattr(services, "generate_pw", lambda: "auto-pw")
     monkeypatch.setattr(services, "auto_map_ports", lambda used, ports: {"http": 8080})

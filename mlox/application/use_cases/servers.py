@@ -198,10 +198,22 @@ def teardown_server(project: WorkspaceState, *, ip: str) -> OperationResult:
     bundle = infra.get_bundle_by_ip(ip)
     if not bundle:
         return OperationResult(False, 5, "Server not found in infrastructure.")
-    bundle.server.teardown()
+    teardown_error = None
+    try:
+        bundle.server.teardown()
+    except Exception as exc:
+        teardown_error = exc
+        logger.warning("Server %s teardown failed: %s", ip, exc)
     for service in bundle.services:
         service.clear_service_lookup()
     infra.bundles.remove(bundle)
+    if teardown_error is not None:
+        return OperationResult(
+            True,
+            0,
+            f"Server {ip} removed from infrastructure, but teardown failed: "
+            f"{teardown_error}",
+        )
     return OperationResult(True, 0, f"Server {ip} removed from infrastructure.")
 
 

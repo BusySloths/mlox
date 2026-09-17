@@ -807,6 +807,33 @@ def test_servers_remove_bundle_delegates_to_workspace():
     assert calls == ["1.2.3.4"]
 
 
+def test_servers_teardown_removes_bundle_when_remote_teardown_fails(caplog):
+    calls = []
+    service = SimpleNamespace(
+        clear_service_lookup=lambda: calls.append("clear_lookup")
+    )
+    server = SimpleNamespace(
+        ip="1.2.3.4",
+        teardown=lambda: (_ for _ in ()).throw(ConnectionError("server unavailable")),
+    )
+    bundle = SimpleNamespace(server=server, services=[service])
+    infra = SimpleNamespace(
+        bundles=[bundle],
+        get_bundle_by_ip=lambda ip: bundle if ip == server.ip else None,
+    )
+
+    result = servers.teardown_server(_project(infra), ip=server.ip)
+
+    assert result.success
+    assert result.message == (
+        "Server 1.2.3.4 removed from infrastructure, but teardown failed: "
+        "server unavailable"
+    )
+    assert calls == ["clear_lookup"]
+    assert infra.bundles == []
+    assert "Server 1.2.3.4 teardown failed: server unavailable" in caplog.text
+
+
 def test_servers_open_server_terminal_uses_launcher():
     launched = []
     server = SimpleNamespace(

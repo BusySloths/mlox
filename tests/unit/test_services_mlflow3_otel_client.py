@@ -9,7 +9,7 @@ from mlox.services.otel.client import OTelClient
 BASE = {
     "name": "svc",
     "service_config_id": "cfg",
-    "template": "/tmp/compose.yaml",
+    "template": "mlflow/docker-compose-mlflow-3.8.1.yaml",
     "target_path": "/tmp/stack",
 }
 
