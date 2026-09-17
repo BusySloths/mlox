@@ -136,11 +136,11 @@ class OtelDockerService(AbstractService, AbstractHealthService, AbstractMonitorS
         )
         self.exec.fs_set_permissions(conn, telemetry_file, "777", sudo=True)
 
-        self.exec.fs_copy(
+        self.copy_asset(
             conn, self.template, f"{self.target_path}/{self.target_docker_script}"
         )
         config_path = f"{self.target_path}/otel-collector-config.yaml"
-        self.exec.fs_copy(conn, self.config, config_path)
+        self.copy_asset(conn, self.config, config_path)
 
         exporter_list = self._pipeline_exporter_list()
         for placeholder in (

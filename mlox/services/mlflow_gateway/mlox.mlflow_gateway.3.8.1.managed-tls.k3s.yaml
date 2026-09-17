@@ -35,11 +35,11 @@ build:
   class_name: mlox.services.mlflow_gateway.k3s_managed_tls.MLFlowGatewayManagedTlsK3sService
   params:
     name: mlflow-gateway-3.8.1-managed-tls
-    template: ${MLOX_STACKS_PATH}/mlflow_gateway/mlox.mlflow_gateway.3.8.1.managed-tls.k3s.yaml
+    template: mlflow_gateway/mlox.mlflow_gateway.3.8.1.managed-tls.k3s.yaml
     target_path: ${MLOX_USER_HOME}/mlflow-gateway-3.8.1-k3s-managed-tls
-    dockerfile: ${MLOX_STACKS_PATH}/mlflow_gateway/dockerfile-mlflow-gateway-3.8.1
-    serve_script: ${MLOX_STACKS_PATH}/mlflow_gateway/serve.py
-    start_script: ${MLOX_STACKS_PATH}/mlflow_gateway/start_gateway.sh
+    dockerfile: mlflow_gateway/dockerfile-mlflow-gateway-3.8.1
+    serve_script: mlflow_gateway/serve.py
+    start_script: mlflow_gateway/start_gateway.sh
     port: ${MLOX_AUTO_PORT_REST}
     tracking_uri: ${TRACKING_URI}
     tracking_user: ${TRACKING_USER}

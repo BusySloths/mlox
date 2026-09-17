@@ -37,7 +37,7 @@ build:
   class_name: mlox.services.postgres.docker.PostgresDockerService
   params:
     name: postgres-16-bullseye
-    template: ${MLOX_STACKS_PATH}/postgres/docker-compose-postgres-16.yaml
+    template: postgres/docker-compose-postgres-16.yaml
     target_path: ${MLOX_USER_HOME}/postgres-16-bullseye
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}

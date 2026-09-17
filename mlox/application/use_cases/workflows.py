@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from mlox.application.result import OperationResult
@@ -14,6 +15,7 @@ from mlox.utils import generate_pw
 
 
 GITHUB_REPOSITORY_TEMPLATE_ID = "github-repo-0.1-beta-docker"
+logger = logging.getLogger(__name__)
 
 
 def describe_workflows(infra) -> OperationResult:
@@ -230,6 +232,7 @@ def expose_secret_manager_to_workflow_orchestrator(
     application_name = f"airflow-{orchestrator_id}"
     service = getattr(descriptor, "service", None)
     create_keyfile_manager = getattr(service, "create_keyfile_secret_manager", None)
+    application_credential_created = False
     if callable(create_keyfile_manager):
         try:
             manager = create_keyfile_manager(
@@ -240,6 +243,7 @@ def expose_secret_manager_to_workflow_orchestrator(
             credentials = getattr(service, "application_credentials", {}) or {}
             if application_name in credentials:
                 credentials[application_name]["keyfile_password"] = password
+            application_credential_created = True
         except Exception as exc:
             return OperationResult(
                 False,
@@ -260,12 +264,35 @@ def expose_secret_manager_to_workflow_orchestrator(
             "Selected orchestrator cannot expose secret-manager credentials.",
         )
 
-    with bundle.server.get_server_connection() as conn:
-        setter(
-            conn,
-            manager_uuid=manager_id,
-            encrypted_keyfile=keyfile,
-            keyfile_password=password,
+    previous_uuid = getattr(orchestrator, "workflow_secret_manager_uuid", None)
+    previous_env = dict(getattr(orchestrator, "workflow_secret_manager_env", {}) or {})
+    try:
+        with bundle.server.get_server_connection() as conn:
+            setter(
+                conn,
+                manager_uuid=manager_id,
+                encrypted_keyfile=keyfile,
+                keyfile_password=password,
+            )
+    except Exception:
+        logger.exception("Could not deploy workflow secret-manager configuration.")
+        if hasattr(orchestrator, "workflow_secret_manager_uuid"):
+            orchestrator.workflow_secret_manager_uuid = previous_uuid
+        if hasattr(orchestrator, "workflow_secret_manager_env"):
+            orchestrator.workflow_secret_manager_env = previous_env
+        revoke = getattr(service, "revoke_application_credential", None)
+        if application_credential_created and callable(revoke):
+            try:
+                revoke(application_name, getattr(workspace, "infrastructure", None))
+            except Exception:
+                logger.exception(
+                    "Could not roll back workflow application credential %s.",
+                    application_name,
+                )
+        return OperationResult(
+            False,
+            96,
+            "Could not deploy secret-manager configuration to the workflow service.",
         )
     commit = getattr(workspace, "commit", None)
     if callable(commit):

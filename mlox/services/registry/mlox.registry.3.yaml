@@ -38,7 +38,7 @@ build:
   class_name: mlox.services.registry.docker.RegistryDockerService
   params:
     name: registry-3
-    template: ${MLOX_STACKS_PATH}/registry/docker-compose-registry.yaml
+    template: registry/docker-compose-registry.yaml
     target_path: ${MLOX_USER_HOME}/registry-3
     username: ${MLOX_AUTO_USER}
     password: ${MLOX_AUTO_PW}

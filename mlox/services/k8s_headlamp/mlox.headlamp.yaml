@@ -34,5 +34,5 @@ build:
   class_name: mlox.services.k8s_headlamp.k8s.K8sHeadlampService
   params:
     name: headlamp
-    template: ${MLOX_STACKS_PATH}/k8s_headlamp/mlox.headlamp.yaml
+    template: k8s_headlamp/mlox.headlamp.yaml
     target_path: ${MLOX_USER_HOME}/headlamp

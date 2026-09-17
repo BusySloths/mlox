@@ -16,7 +16,9 @@ from mlox.service import (
     AbstractSecretManagerService,
     AbstractService,
     AbstractWebUIService,
+    SERVICE_ASSET_FIELDS,
     ServiceCapability,
+    portable_service_asset_reference,
 )
 from mlox.server import (
     AbstractConnectorServer,
@@ -344,6 +346,10 @@ class ServiceConfig:
             if self.build.params:
                 init_params.update(self.build.params)
             for key, value in init_params.items():
+                if key in SERVICE_ASSET_FIELDS and isinstance(value, str):
+                    portable_reference = portable_service_asset_reference(value)
+                    if portable_reference is not None:
+                        init_params[key] = value = portable_reference
                 for k in params.keys():
                     if k in value:
                         # Two cases:

@@ -100,7 +100,7 @@ class AirflowDockerService(
         # self.exec.fs_create_dir(conn, self.target_path + "/logs")
         # self.exec.fs_create_dir(conn, self.target_path + "/plugins")
 
-        self.exec.fs_copy(
+        self.copy_asset(
             conn, self.template, f"{self.target_path}/{self.target_docker_script}"
         )
         self.exec.tls_setup(conn, conn.host, self.target_path)
@@ -271,7 +271,7 @@ class AirflowDockerService(
     def _write_workflow_secret_manager_compose(self, conn) -> None:
         """Refresh compose file so existing stacks get env pass-through entries."""
 
-        self.exec.fs_copy(
+        self.copy_asset(
             conn,
             self.template,
             f"{self.target_path}/{self.target_docker_script}",

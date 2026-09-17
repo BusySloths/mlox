@@ -93,7 +93,7 @@ Reason: `mlflow models serve --enable-mlserver` launches MLServer as a standalon
 
 **`exec` on the final `mlflow models serve` is intentional.** It replaces the shell process with mlflow, making it PID 1 in the container. Docker stop signals go directly to mlflow/mlserver. Removing `exec` means the shell becomes PID 1 and signals may not propagate correctly.
 
-**`docker.py:setup()` copies `start_mlserver.sh` only when `start_script` is set** (line 76–81). The `mlox.mlserver.3.8.1.yaml` sets `start_script: ${MLOX_STACKS_PATH}/mlflow_mlserver/start_mlserver.sh`. If you rename `start_mlserver.sh`, update the yaml `params.start_script` key.
+**`docker.py:setup()` copies `start_mlserver.sh` only when `start_script` is set** (line 76–81). The `mlox.mlserver.3.8.1.yaml` sets `start_script: mlflow_mlserver/start_mlserver.sh`. If you rename `start_mlserver.sh`, update the yaml `params.start_script` key.
 
 **`__post_init__` name mangling:** The service name is prefixed with `{model}@` and `target_path` is suffixed with `-{port}`. These make multiple instances of the same model on different ports distinguishable in the infrastructure graph.
 

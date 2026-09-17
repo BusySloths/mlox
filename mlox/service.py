@@ -25,7 +25,10 @@ import string
 import inspect
 import logging
 import textwrap
+from contextlib import contextmanager
+from importlib import resources
 from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 from datetime import datetime
 from abc import ABC, abstractmethod
 from enum import StrEnum
@@ -46,6 +49,68 @@ from dataclasses import dataclass, field, asdict
 from mlox.executors import UbuntuTaskExecutor
 
 logger = logging.getLogger(__name__)
+
+SERVICE_ASSET_FIELDS = (
+    "template",
+    "dockerfile",
+    "start_script",
+    "config",
+    "serve_script",
+    "ollama_script",
+    "litellm_config",
+)
+
+LEGACY_SERVICE_ASSET_ALIASES = {
+    "kubeapps/kubeapps.yaml": "kubeapps/mlox.kubeapps.yaml",
+    "kubeflow/kubeflow.yaml": "kubeflow/mlox.kubeflow.yaml",
+    "tsm/mlox.github.yaml": "github/mlox.github.yaml",
+}
+
+
+def is_absolute_service_asset_reference(reference: str) -> bool:
+    """Return whether a service asset contains a platform-specific absolute path."""
+
+    return Path(reference).is_absolute() or PureWindowsPath(reference).is_absolute()
+
+
+def portable_service_asset_reference(reference: str) -> str | None:
+    """Convert a legacy built-in asset path to its package-relative reference."""
+
+    normalized = str(reference).replace("\\", "/")
+    placeholder = "${MLOX_STACKS_PATH}/"
+    if normalized.startswith(placeholder):
+        relative = normalized[len(placeholder):]
+        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
+    marker = "/mlox/services/"
+    if marker in normalized:
+        relative = normalized.rsplit(marker, 1)[1]
+        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
+    if normalized.startswith("mlox/services/"):
+        relative = normalized[len("mlox/services/"):]
+        return LEGACY_SERVICE_ASSET_ALIASES.get(relative, relative)
+    return None
+
+
+def _service_asset_resource(reference: str):
+    normalized = str(reference).replace("\\", "/")
+    relative = PurePosixPath(normalized)
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise ValueError(f"Invalid service asset reference: {reference}")
+    resource = resources.files("mlox.services").joinpath(*relative.parts)
+    if not resource.is_file():
+        raise FileNotFoundError(f"Service asset not found: {reference}")
+    return resource
+
+
+@contextmanager
+def service_asset_path(reference: str):
+    """Yield a filesystem path for a built-in or explicit external asset."""
+
+    if is_absolute_service_asset_reference(reference):
+        yield Path(reference)
+        return
+    with resources.as_file(_service_asset_resource(reference)) as path:
+        yield path
 
 
 class MloxTemplate(string.Template):
@@ -391,6 +456,23 @@ class AbstractService(ABC):
         """Return the directory containing the concrete service implementation."""
 
         return Path(inspect.getfile(type(self))).resolve().parent
+
+    def resolve_asset(self, reference: str):
+        """Resolve a persisted package-relative asset for local filesystem use."""
+
+        return service_asset_path(reference)
+
+    def copy_asset(self, conn, reference: str, remote_path: str) -> None:
+        """Upload a packaged local asset to a managed server."""
+
+        with self.resolve_asset(reference) as local_path:
+            self.exec.fs_copy(conn, str(local_path), remote_path)
+
+    def read_asset_text(self, reference: str, *, encoding: str = "utf-8") -> str:
+        """Read a packaged local asset without persisting its resolved path."""
+
+        with self.resolve_asset(reference) as local_path:
+            return local_path.read_text(encoding=encoding)
 
     def render_template(self, template_name: str, variables: Mapping[str, Any]) -> str:
         """Render a service-local template with explicit ``@variable`` values.

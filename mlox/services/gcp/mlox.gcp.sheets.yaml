@@ -37,7 +37,7 @@ build:
   class_name: mlox.services.gcp.sheet_service.GCPSpreadsheetsService
   params:
     name: gcp-sheets-0.1.0
-    template: ${MLOX_STACKS_PATH}/gcp/mlox.gcp.sheets.yaml
+    template: gcp/mlox.gcp.sheets.yaml
     target_path: ${MLOX_USER_HOME}/gcp_sheets
     secret_manager_uuid: ${SECRET_MANAGER_UUID}
     secret_name: ${SECRET_NAME}

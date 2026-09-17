@@ -6,7 +6,6 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -74,7 +73,7 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
         return certificate, private_key
 
     def _render_gateway_manifest(self) -> str:
-        serve_script = Path(self.serve_script).read_text(encoding="utf-8")
+        serve_script = self.read_asset_text(self.serve_script)
         requirements = _resolved_text(self.requirements_txt)
         cache_size = _resolved_setting(self.cache_max_models, "10")
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")

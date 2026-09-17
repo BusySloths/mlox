@@ -39,8 +39,8 @@ build:
   class_name: mlox.services.mlflow_mlserver.k3s.MLFlowMLServerK3sService
   params:
     name: mlflow-mlserver-3.8.1
-    template: ${MLOX_STACKS_PATH}/mlflow_mlserver/mlox.mlserver.3.8.1.k3s.yaml
-    dockerfile: ${MLOX_STACKS_PATH}/mlflow_mlserver/dockerfile-mlflow-mlserver-3.8.1
+    template: mlflow_mlserver/mlox.mlserver.3.8.1.k3s.yaml
+    dockerfile: mlflow_mlserver/dockerfile-mlflow-mlserver-3.8.1
     target_path: ${MLOX_USER_HOME}/mlflow-mlserver-3.8.1-k3s
     port: ${MLOX_AUTO_PORT_REST}
     model: ${MODEL_NAME}

@@ -31,7 +31,7 @@ build:
   class_name: mlox.services.repo_deploy.service.RepoDeployDockerService
   params:
     name: RepoDeploy:${REPO_DEPLOY_NAME}@${MLOX_SERVER_IP}
-    template: ${MLOX_STACKS_PATH}/repo_deploy/mlox.repo_deploy.0.1.yaml
+    template: repo_deploy/mlox.repo_deploy.0.1.yaml
     target_path: ${MLOX_USER_HOME}
     repo_uuid: ${REPO_DEPLOY_REPO_UUID}
     compose_file: ${REPO_DEPLOY_COMPOSE_FILE}

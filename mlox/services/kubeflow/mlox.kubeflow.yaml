@@ -35,5 +35,5 @@ build:
   class_name: mlox.services.kubeflow.k8s.KubeflowService
   params:
     name: kubeflow
-    template: ${MLOX_STACKS_PATH}/kubeflow/kubeflow.yaml
+    template: kubeflow/mlox.kubeflow.yaml
     target_path: ${MLOX_USER_HOME}/kubeflow-1.10.1

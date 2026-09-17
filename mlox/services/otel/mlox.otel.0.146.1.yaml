@@ -43,9 +43,9 @@ build:
   class_name: mlox.services.otel.docker.OtelDockerService
   params:
     name: otel-0.146.1
-    template: ${MLOX_STACKS_PATH}/otel/docker-compose-otel-0.146.1.yaml
+    template: otel/docker-compose-otel-0.146.1.yaml
     target_path: ${MLOX_USER_HOME}/otel-0.146.1
-    config: ${MLOX_STACKS_PATH}/otel/otel-collector-config-0.146.1.yaml
+    config: otel/otel-collector-config-0.146.1.yaml
     relic_endpoint: ${MLOX_RELIC_ENDPOINT}
     relic_key: ${MLOX_RELIC_KEY}
     grafana_cloud_endpoint: ${MLOX_GRAFANA_CLOUD_ENDPOINT}

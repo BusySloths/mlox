@@ -40,7 +40,7 @@ class RegistryDockerService(AbstractService):
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
 
-        self.exec.fs_copy(
+        self.copy_asset(
             conn, self.template, f"{self.target_path}/{self.target_docker_script}"
         )
 

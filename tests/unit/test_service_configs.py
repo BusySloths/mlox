@@ -10,7 +10,12 @@ from mlox.config import (
     load_config,
     load_all_service_configs,
 )
-from mlox.service import AbstractService
+from mlox.service import (
+    SERVICE_ASSET_FIELDS,
+    AbstractService,
+    is_absolute_service_asset_reference,
+    service_asset_path,
+)
 from mlox.infra import Infrastructure, Bundle
 from mlox.ui.registry import clear_handlers, register
 
@@ -176,7 +181,7 @@ class TestServiceConfig:
         service = config.instantiate_service(params)
 
         assert isinstance(service, DummyService)
-        assert service.template == "/stacks/dummy/template.yaml"
+        assert service.template == "dummy/template.yaml"
         assert service.port == "9090"
 
     def test_load_all_service_configs(
@@ -238,6 +243,22 @@ class TestServiceConfig:
         assert configs[0].name == "TestService"
         assert "Error parsing YAML file" in caplog.text
         assert "mlox.invalid.v1.yaml" in caplog.text
+
+
+def test_builtin_service_asset_references_are_portable_and_exist():
+    for config in load_all_service_configs():
+        for field_name in SERVICE_ASSET_FIELDS:
+            value = (config.build.params or {}).get(field_name)
+            if not isinstance(value, str) or not value:
+                continue
+            assert not is_absolute_service_asset_reference(value), (
+                config.id,
+                field_name,
+                value,
+            )
+            assert "${MLOX_STACKS_PATH}" not in value
+            with service_asset_path(value) as path:
+                assert path.is_file(), (config.id, field_name, value)
 
 
 def test_service_capabilities_fall_back_from_groups(service_config_data):
