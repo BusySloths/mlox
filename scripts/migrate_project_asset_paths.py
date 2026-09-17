@@ -1,5 +1,33 @@
 #!/usr/bin/env python3
-"""Convert persisted local service asset paths to portable package references."""
+"""One-time migration for projects affected by MLOX issue #97.
+
+Issue: https://github.com/BusySloths/mlox/issues/97
+
+Older projects may contain absolute paths to built-in service assets from either
+the historical ``mlox/stacks`` layout or the current ``mlox/services`` layout.
+Those paths bind the encrypted project to the machine where a service was added.
+This script replaces recognized absolute paths with portable references relative
+to the installed ``mlox.services`` package.
+
+Current MLOX code assumes all persisted built-in asset references are already
+relative. Legacy recognition and conversion intentionally live only in this
+script.
+
+Preview a project without writing:
+
+    uv run scripts/migrate_project_asset_paths.py PROJECT.mlox --dry-run
+
+Apply the migration with a required, non-existing backup path:
+
+    uv run scripts/migrate_project_asset_paths.py PROJECT.mlox \\
+        --backup PROJECT.before-assets.mlox
+
+The password is read from ``--password``, ``MLOX_PROJECT_PASSWORD``, or an
+interactive prompt. Prefer the prompt so the password is not stored in shell
+history. Unknown custom paths or missing packaged assets block all writes. After
+committing, the script reopens and verifies the encrypted project; if that fails,
+it restores the original project from the backup.
+"""
 
 from __future__ import annotations
 
@@ -211,7 +239,10 @@ def migrate_project_asset_paths(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("project", help="Encrypted .mlox project file")
     parser.add_argument("--password", help="Project password (defaults to env or prompt)")
     parser.add_argument("--backup", help="Required non-existing backup path for mutation")

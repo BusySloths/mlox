@@ -24,25 +24,6 @@ variables remain supported for projects outside the current directory.
 
 Press `P` from the dashboard to switch to another discovered project.
 
-## Migrate service asset paths
-
-Projects created before service assets became package-relative can contain the
-absolute path of the machine where a service was added. Preview and migrate
-those fields with:
-
-```bash
-python scripts/migrate_project_asset_paths.py ./projects/demo.mlox \
-  --dry-run
-python scripts/migrate_project_asset_paths.py ./projects/demo.mlox \
-  --backup ./projects/demo.before-assets.mlox
-```
-
-The password comes from `--password`, `MLOX_PROJECT_PASSWORD`, or a secure
-prompt. A write requires a new backup path. Unknown custom absolute paths block
-the migration instead of being changed, and the script reopens and verifies the
-encrypted project after committing. If verification fails, it restores the
-backup.
-
 ## Python API
 
 Use `ProjectWorkspace` for application mutations:
