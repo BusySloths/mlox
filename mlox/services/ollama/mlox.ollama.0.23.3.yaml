@@ -34,9 +34,9 @@ build:
   class_name: mlox.services.ollama.docker.OllamaDockerService
   params:
     name: ollama-0.23.3
-    template: ${MLOX_STACKS_PATH}/ollama/docker-compose-ollama-0.23.3.yaml
+    template: ollama/docker-compose-ollama-0.23.3.yaml
     target_path: ${MLOX_USER_HOME}/ollama-0.23.3
-    ollama_script: ${MLOX_STACKS_PATH}/ollama/entrypoint.sh
+    ollama_script: ollama/entrypoint.sh
     port: ${MLOX_AUTO_PORT_REST}
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}

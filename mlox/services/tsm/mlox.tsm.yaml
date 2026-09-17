@@ -36,7 +36,7 @@ build:
   class_name: mlox.services.tsm.service.TSMService
   params:
     name: tsm
-    template: ${MLOX_STACKS_PATH}/tsm/mlox.tsm.yaml
+    template: tsm/mlox.tsm.yaml
     target_path: ${MLOX_USER_HOME}/.secrets
     pw: ${MLOX_AUTO_PW}
     server_uuid: ${MLOX_SERVER_UUID}

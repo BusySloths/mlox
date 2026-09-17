@@ -121,9 +121,7 @@ class _Executor:
 
 
 @pytest.fixture
-def managed_gateway(tmp_path: Path):
-    serve_script = tmp_path / "serve.py"
-    serve_script.write_text("print('gateway')\n", encoding="utf-8")
+def managed_gateway():
     tls = _tls_material()
     manager = _SecretManager(tls)
     manager_service = _SecretManagerService("manager-uuid", manager)
@@ -131,11 +129,11 @@ def managed_gateway(tmp_path: Path):
     service = MLFlowGatewayManagedTlsK3sService(
         name="MLflow Gateway TLS",
         service_config_id="mlflow-gateway-3.8.1-k3s-managed-tls",
-        template="unused",
+        template="mlflow_gateway/mlox.mlflow_gateway.3.8.1.managed-tls.k3s.yaml",
         target_path="/tmp/mlflow-gateway-tls",
-        dockerfile="unused",
-        serve_script=str(serve_script),
-        start_script="unused",
+        dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+        serve_script="mlflow_gateway/serve.py",
+        start_script="mlflow_gateway/start_gateway.sh",
         port=30433,
         tracking_uri="https://mlflow.example.test",
         tracking_user="tracking-user",

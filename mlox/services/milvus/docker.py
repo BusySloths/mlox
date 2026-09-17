@@ -58,10 +58,12 @@ class MilvusDockerService(AbstractService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
+        template = self.resolve_asset(self.template)
         self.exec.fs_copy(
-            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+            conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
-        self.exec.fs_copy(conn, self.config, f"{self.target_path}/milvus.yaml")
+        config = self.resolve_asset(self.config)
+        self.exec.fs_copy(conn, str(config), f"{self.target_path}/milvus.yaml")
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"

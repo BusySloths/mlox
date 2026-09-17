@@ -34,7 +34,7 @@ build:
   class_name: mlox.services.openbao.docker.OpenBaoDockerService
   params:
     name: openbao
-    template: ${MLOX_STACKS_PATH}/openbao/docker-compose-openbao.yaml
+    template: openbao/docker-compose-openbao.yaml
     target_path: ${MLOX_USER_HOME}/openbao-2.5.4
     port: ${MLOX_AUTO_PORT_API}
     mount_path: secret

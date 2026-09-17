@@ -39,7 +39,7 @@ build:
   class_name: mlox.services.mlflow.docker.MLFlowDockerService
   params:
     name: mlflow-2.22.0
-    template: ${MLOX_STACKS_PATH}/mlflow/docker-compose-mlflow-2.22.0.yaml
+    template: mlflow/docker-compose-mlflow-2.22.0.yaml
     target_path: ${MLOX_USER_HOME}/mlflow-2.22.0
     ui_user: ${MLOX_AUTO_USER}
     ui_pw: ${MLOX_AUTO_PW}

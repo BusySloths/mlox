@@ -2,7 +2,6 @@ import logging
 import re
 import shlex
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from passlib.hash import apr_md5_crypt
 
@@ -47,7 +46,8 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
         return re.sub(r"[^a-z0-9-]", "-", self.uuid[:8].lower()).strip("-")
 
     def _render_gateway_manifest(self) -> str:
-        serve_script = Path(self.serve_script).read_text(encoding="utf-8")
+        serve_script_path = self.resolve_asset(self.serve_script)
+        serve_script = serve_script_path.read_text(encoding="utf-8")
         requirements = _resolved_text(self.requirements_txt)
         cache_size = _resolved_setting(self.cache_max_models, "10")
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")

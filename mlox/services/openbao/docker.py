@@ -92,8 +92,9 @@ class OpenBaoDockerService(
     # ------------------------------------------------------------------
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
+        template = self.resolve_asset(self.template)
         self.exec.fs_copy(
-            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+            conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
         data_path = f"{self.target_path}/data"
         logs_path = f"{self.target_path}/logs"

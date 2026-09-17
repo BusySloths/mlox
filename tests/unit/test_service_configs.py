@@ -3,6 +3,7 @@ import yaml
 import os
 import importlib
 from importlib import metadata as importlib_metadata
+from pathlib import Path, PureWindowsPath
 
 from mlox.config import (
     ServiceConfig,
@@ -10,7 +11,11 @@ from mlox.config import (
     load_config,
     load_all_service_configs,
 )
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractService,
+    service_asset_path,
+)
+from scripts.migrate_project_asset_paths import SERVICE_ASSET_FIELDS
 from mlox.infra import Infrastructure, Bundle
 from mlox.ui.registry import clear_handlers, register
 
@@ -133,7 +138,7 @@ def service_config_data():
             "class_name": "dummy.services.DummyService",
             "params": {
                 "name": "TestService",
-                "template": "${MLOX_STACKS_PATH}/dummy/template.yaml",
+                "template": "dummy/template.yaml",
                 "target_path": "/opt/${MLOX_USER}/app",
                 "port": "${MLOX_AUTO_PORT_HTTP}",
                 "custom_param": "build_value",
@@ -169,14 +174,13 @@ class TestServiceConfig:
         assert config.name == "TestService"
 
         params = {
-            "${MLOX_STACKS_PATH}": "/stacks",
             "${MLOX_USER}": "testuser",
             "${MLOX_AUTO_PORT_HTTP}": "9090",
         }
         service = config.instantiate_service(params)
 
         assert isinstance(service, DummyService)
-        assert service.template == "/stacks/dummy/template.yaml"
+        assert service.template == "dummy/template.yaml"
         assert service.port == "9090"
 
     def test_load_all_service_configs(
@@ -238,6 +242,33 @@ class TestServiceConfig:
         assert configs[0].name == "TestService"
         assert "Error parsing YAML file" in caplog.text
         assert "mlox.invalid.v1.yaml" in caplog.text
+
+
+def test_builtin_service_asset_references_are_portable_and_exist():
+    for config in load_all_service_configs():
+        for field_name in SERVICE_ASSET_FIELDS:
+            value = (config.build.params or {}).get(field_name)
+            if not isinstance(value, str) or not value:
+                continue
+            assert not (
+                Path(value).is_absolute() or PureWindowsPath(value).is_absolute()
+            ), (
+                config.id,
+                field_name,
+                value,
+            )
+            assert "${MLOX_STACKS_PATH}" not in value
+            path = service_asset_path(value)
+            assert path.is_file(), (config.id, field_name, value)
+
+
+@pytest.mark.parametrize(
+    "reference",
+    ["/opt/mlox/services/airflow/compose.yaml", r"C:\mlox\airflow\compose.yaml"],
+)
+def test_runtime_asset_resolver_rejects_absolute_paths(reference):
+    with pytest.raises(ValueError, match="Invalid service asset reference"):
+        service_asset_path(reference)
 
 
 def test_service_capabilities_fall_back_from_groups(service_config_data):

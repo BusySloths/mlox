@@ -42,7 +42,7 @@ build:
   class_name: mlox.services.gcp.storage_service.GCPStorageService
   params:
     name: gcp-storage-0.1.0
-    template: ${MLOX_STACKS_PATH}/gcp/mlox.gcp.storage.yaml
+    template: gcp/mlox.gcp.storage.yaml
     target_path: ${MLOX_USER_HOME}/gcp_storage
     secret_manager_uuid: ${SECRET_MANAGER_UUID}
     secret_name: ${SECRET_NAME}

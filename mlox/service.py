@@ -25,7 +25,9 @@ import string
 import inspect
 import logging
 import textwrap
+from importlib import resources
 from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 from datetime import datetime
 from abc import ABC, abstractmethod
 from enum import StrEnum
@@ -46,6 +48,30 @@ from dataclasses import dataclass, field, asdict
 from mlox.executors import UbuntuTaskExecutor
 
 logger = logging.getLogger(__name__)
+
+
+def _service_asset_resource(reference: str) -> Path:
+    normalized = str(reference).replace("\\", "/")
+    relative = PurePosixPath(normalized)
+    if (
+        relative.is_absolute()
+        or PureWindowsPath(reference).is_absolute()
+        or not relative.parts
+        or ".." in relative.parts
+    ):
+        raise ValueError(f"Invalid service asset reference: {reference}")
+    resource = resources.files("mlox.services").joinpath(*relative.parts)
+    if not resource.is_file():
+        raise FileNotFoundError(f"Service asset not found: {reference}")
+    if not isinstance(resource, Path):
+        raise RuntimeError("MLOX service assets must be installed on the filesystem.")
+    return resource
+
+
+def service_asset_path(reference: str) -> Path:
+    """Return the local path for a portable packaged asset reference."""
+
+    return _service_asset_resource(reference)
 
 
 class MloxTemplate(string.Template):
@@ -391,6 +417,11 @@ class AbstractService(ABC):
         """Return the directory containing the concrete service implementation."""
 
         return Path(inspect.getfile(type(self))).resolve().parent
+
+    def resolve_asset(self, reference: str) -> Path:
+        """Resolve a persisted package-relative asset for local filesystem use."""
+
+        return service_asset_path(reference)
 
     def render_template(self, template_name: str, variables: Mapping[str, Any]) -> str:
         """Render a service-local template with explicit ``@variable`` values.

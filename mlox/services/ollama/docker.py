@@ -46,11 +46,15 @@ class OllamaDockerService(AbstractService, AbstractModelServerService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
+        template = self.resolve_asset(self.template)
         self.exec.fs_copy(
-            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+            conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
         if self.ollama_script:
-            self.exec.fs_copy(conn, self.ollama_script, f"{self.target_path}/entrypoint.sh")
+            ollama_script = self.resolve_asset(self.ollama_script)
+            self.exec.fs_copy(
+                conn, str(ollama_script), f"{self.target_path}/entrypoint.sh"
+            )
 
         self._generate_htpasswd_entry()
 

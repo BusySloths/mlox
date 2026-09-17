@@ -40,7 +40,7 @@ build:
   class_name: mlox.services.minio.docker.MinioDockerService
   params:
     name: minio-release-2025-07-23
-    template: ${MLOX_STACKS_PATH}/minio/docker-compose-minio.yaml
+    template: minio/docker-compose-minio.yaml
     target_path: ${MLOX_USER_HOME}/minio-release-2025-07-23
     root_user: ${MLOX_AUTO_USER}
     root_password: ${MLOX_AUTO_PW}

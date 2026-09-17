@@ -70,18 +70,22 @@ class MLFlowGatewayDockerService(
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
+        template = self.resolve_asset(self.template)
         self.exec.fs_copy(
-            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+            conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
+        dockerfile = self.resolve_asset(self.dockerfile)
         self.exec.fs_copy(
             conn,
-            self.dockerfile,
+            str(dockerfile),
             f"{self.target_path}/{os.path.basename(self.dockerfile)}",
         )
-        self.exec.fs_copy(conn, self.serve_script, f"{self.target_path}/serve.py")
+        serve_script = self.resolve_asset(self.serve_script)
+        self.exec.fs_copy(conn, str(serve_script), f"{self.target_path}/serve.py")
+        start_script = self.resolve_asset(self.start_script)
         self.exec.fs_copy(
             conn,
-            self.start_script,
+            str(start_script),
             f"{self.target_path}/{os.path.basename(self.start_script)}",
         )
         self.exec.fs_write_file(

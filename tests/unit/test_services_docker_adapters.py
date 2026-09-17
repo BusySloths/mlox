@@ -32,7 +32,7 @@ from mlox.services.tsm.service import TSMService
 BASE = {
     "name": "svc",
     "service_config_id": "cfg",
-    "template": "/tmp/compose.yaml",
+    "template": "airflow/docker-compose-airflow-3.1.3.yaml",
     "target_path": "/tmp/stack",
 }
 
@@ -246,7 +246,13 @@ def test_milvus_setup_and_hash_helper(conn):
     assert entry.startswith("alice:{SHA}")
 
     service = _set_exec(
-        MilvusDockerService(**BASE, config="milvus.yaml", user="mu", pw="mpw", port="19530"),
+        MilvusDockerService(
+            **BASE,
+            config="milvus/milvus.yaml",
+            user="mu",
+            pw="mpw",
+            port="19530",
+        ),
         FakeExec(),
     )
     service.setup(conn)
@@ -555,7 +561,7 @@ def test_otel_setup_check_and_read_telemetry(conn):
             relic_key="nr-key",
             grafana_cloud_endpoint="https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
             grafana_cloud_key="Basic abc123",
-            config="otel.yaml",
+            config="otel/otel-collector-config-0.146.1.yaml",
             port_grpc="4317",
             port_http="4318",
             port_health="13133",
@@ -615,7 +621,7 @@ def test_otel_setup_without_relic_keeps_local_exporters(conn):
             **BASE,
             relic_endpoint="",
             relic_key="",
-            config="otel.yaml",
+            config="otel/otel-collector-config-0.146.1.yaml",
             port_grpc="4317",
             port_http="4318",
             port_health="13133",
@@ -657,7 +663,7 @@ def test_otel_setup_with_grafana_cloud_only(conn):
             relic_key="",
             grafana_cloud_endpoint="https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
             grafana_cloud_key="Basic abc123",
-            config="otel.yaml",
+            config="otel/otel-collector-config-0.146.1.yaml",
             port_grpc="4317",
             port_http="4318",
             port_health="13133",
@@ -697,7 +703,7 @@ def test_otel_check_falls_back_to_underscored_name(conn):
             **BASE,
             relic_endpoint="",
             relic_key="",
-            config="otel.yaml",
+            config="otel/otel-collector-config-0.146.1.yaml",
             port_grpc="4317",
             port_http="4318",
             port_health="13133",
@@ -717,7 +723,7 @@ def test_otel_setup_normalizes_encoded_grafana_auth_header(conn):
             relic_key="",
             grafana_cloud_endpoint="https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
             grafana_cloud_key='"Basic%20abc123=="',
-            config="otel.yaml",
+            config="otel/otel-collector-config-0.146.1.yaml",
             port_grpc="4317",
             port_http="4318",
             port_health="13133",
@@ -855,7 +861,7 @@ def test_mlflow_mlserver_setup_check_and_is_model(conn):
     service = _set_exec(
         MLFlowMLServerDockerService(
             **BASE,
-            dockerfile="Dockerfile",
+            dockerfile="mlflow_mlserver/dockerfile-mlflow-mlserver-3.8.1",
             port="8080",
             model="my-model/1",
             tracking_uri="https://tracking.example",
@@ -890,7 +896,7 @@ def test_mlflow_mlserver_setup_check_and_is_model(conn):
 def test_mlflow_mlserver_example_uses_dataframe_split_for_dataframe_artifacts():
     service = MLFlowMLServerDockerService(
         **BASE,
-        dockerfile="Dockerfile",
+        dockerfile="mlflow_mlserver/dockerfile-mlflow-mlserver-3.8.1",
         port="6433",
         model="Demo/13",
         tracking_uri="https://tracking.example",
@@ -921,9 +927,9 @@ def test_mlflow_mlserver_example_uses_dataframe_split_for_dataframe_artifacts():
 def test_mlflow_gateway_example_uses_dataframe_split_for_dataframe_artifacts():
     service = MLFlowGatewayDockerService(
         **BASE,
-        dockerfile="Dockerfile",
-        serve_script="serve.py",
-        start_script="start_gateway.sh",
+        dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+        serve_script="mlflow_gateway/serve.py",
+        start_script="mlflow_gateway/start_gateway.sh",
         port="6436",
         tracking_uri="https://tracking.example",
         tracking_user="u",
@@ -956,9 +962,9 @@ def test_mlflow_gateway_example_uses_dataframe_split_for_dataframe_artifacts():
 def test_mlflow_gateway_example_unwraps_data_only_artifacts_for_input_data():
     service = MLFlowGatewayDockerService(
         **BASE,
-        dockerfile="Dockerfile",
-        serve_script="serve.py",
-        start_script="start_gateway.sh",
+        dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+        serve_script="mlflow_gateway/serve.py",
+        start_script="mlflow_gateway/start_gateway.sh",
         port="6436",
         tracking_uri="https://tracking.example",
         tracking_user="u",
@@ -986,9 +992,9 @@ def test_mlflow_gateway_setup_check_and_is_model(conn):
     service = _set_exec(
         MLFlowGatewayDockerService(
             **BASE,
-            dockerfile="Dockerfile",
-            serve_script="serve.py",
-            start_script="start_gateway.sh",
+            dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+            serve_script="mlflow_gateway/serve.py",
+            start_script="mlflow_gateway/start_gateway.sh",
             port="8081",
             tracking_uri="https://tracking.example",
             tracking_user="u",
@@ -1034,9 +1040,9 @@ def test_mlflow_gateway_setup_ignores_unresolved_requirements_placeholder(conn):
     service = _set_exec(
         MLFlowGatewayDockerService(
             **BASE,
-            dockerfile="Dockerfile",
-            serve_script="serve.py",
-            start_script="start_gateway.sh",
+            dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+            serve_script="mlflow_gateway/serve.py",
+            start_script="mlflow_gateway/start_gateway.sh",
             port="8082",
             tracking_uri="https://tracking.example",
             tracking_user="u",
@@ -1062,7 +1068,7 @@ def test_ollama_setup_check_and_secrets(conn):
             port="11434",
             user="api",
             pw="pw",
-            ollama_script="entrypoint.sh",
+            ollama_script="ollama/entrypoint.sh",
             ollama_models=["llama3", "llama3", "qwen2.5:0.5b"],
             keep_alive="12h",
         ),
@@ -1343,29 +1349,15 @@ def test_airflow_set_workflow_secret_manager_env_upserts_env_and_restarts(conn):
         "_MLOX_SECRET_MANAGER_KEYFILE_PW=keyfile-password\n"
     )
     expose_calls = service.exec.calls[expose_call_start:]
-    assert (
-        "fs_copy",
-        (
-            service.template,
-            "/tmp/stack/docker-compose.yaml",
-        ),
-        {},
-    ) in expose_calls
+    copy_call = next(call for call in expose_calls if call[0] == "fs_copy")
+    assert copy_call[1][0].endswith(service.template)
+    assert copy_call[1][1] == "/tmp/stack/docker-compose.yaml"
     assert (
         "docker_up",
         ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),
         {},
     ) in expose_calls
-    assert expose_calls.index(
-        (
-            "fs_copy",
-            (
-                service.template,
-                "/tmp/stack/docker-compose.yaml",
-            ),
-            {},
-        )
-    ) < expose_calls.index(
+    assert expose_calls.index(copy_call) < expose_calls.index(
         (
             "docker_up",
             ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),
@@ -1391,8 +1383,8 @@ def test_litellm_setup_config_and_check_states(conn):
     service = _set_exec(
         LiteLLMDockerService(
             **BASE,
-            ollama_script="entrypoint.sh",
-            litellm_config="litellm.yaml",
+            ollama_script="litellm/entrypoint.sh",
+            litellm_config="litellm/litellm-config.yaml",
             ui_user="litellm",
             ui_pw="pw",
             ui_port="8000",

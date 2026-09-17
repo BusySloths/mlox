@@ -42,7 +42,7 @@ build:
   class_name: mlox.services.kafka.docker.KafkaDockerService
   params:
     name: kafka-4.1.0
-    template: ${MLOX_STACKS_PATH}/kafka/docker-compose-kafka-4.1.0.yaml
+    template: kafka/docker-compose-kafka-4.1.0.yaml
     target_path: ${MLOX_USER_HOME}/kafka-4.1.0
     ssl_password: ${MLOX_AUTO_PW}
     ssl_port: ${MLOX_AUTO_PORT_SERVICE}

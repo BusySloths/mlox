@@ -38,5 +38,5 @@ build:
   class_name: mlox.services.kubeapps.k8s.KubeAppsService
   params:
     name: kubeapps
-    template: ${MLOX_STACKS_PATH}/kubeapps/kubeapps.yaml
+    template: kubeapps/mlox.kubeapps.yaml
     target_path: ${MLOX_USER_HOME}/kubeapps

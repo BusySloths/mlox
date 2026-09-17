@@ -34,7 +34,10 @@ class K8sDashboardService(AbstractService, AbstractWebUIService):
     def setup(self, conn) -> None:
         logger.info("🔧 Installing K8s Dashboard")
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_copy(conn, self.template, f"{self.target_path}/service_account.yaml")
+        template = self.resolve_asset(self.template)
+        self.exec.fs_copy(
+            conn, str(template), f"{self.target_path}/service_account.yaml"
+        )
         # self.exec.tls_setup(conn, conn.host, self.target_path)
 
         kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"

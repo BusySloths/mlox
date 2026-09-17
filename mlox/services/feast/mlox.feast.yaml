@@ -46,8 +46,8 @@ build:
   class_name: mlox.services.feast.docker.FeastDockerService
   params:
     name: feast-0.54.0
-    template: ${MLOX_STACKS_PATH}/feast/docker-compose-feast.yaml
-    dockerfile: ${MLOX_STACKS_PATH}/feast/Dockerfile
+    template: feast/docker-compose-feast.yaml
+    dockerfile: feast/Dockerfile
     target_path: ${MLOX_USER_HOME}/feast-0.54.0
     registry_port: ${MLOX_AUTO_PORT_REGISTRY}
     project_name: ${FEAST_PROJECT_NAME}

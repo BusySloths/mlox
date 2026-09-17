@@ -37,7 +37,7 @@ build:
   class_name: mlox.services.influx.docker.InfluxDockerService
   params:
     name: influx-1.11.8
-    template: ${MLOX_STACKS_PATH}/influx/docker-compose-influx-1.11.8.yaml
+    template: influx/docker-compose-influx-1.11.8.yaml
     target_path: ${MLOX_USER_HOME}/influx-1.11.8
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}

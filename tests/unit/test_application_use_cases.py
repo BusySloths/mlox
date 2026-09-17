@@ -1375,7 +1375,7 @@ def test_web_ui_service_prefers_configured_url_label():
     service = _FakeWebUIService(
         name="ui",
         service_config_id="web-ui",
-        template="/tmp/template",
+        template="airflow/docker-compose-airflow-3.1.3.yaml",
         target_path="/tmp/target",
     )
     service.service_urls["API"] = "https://example.test/api"
@@ -1391,7 +1391,7 @@ def test_services_web_ui_login_value_resolves_requested_field():
     service = _FakeWebUIService(
         name="ui",
         service_config_id="web-ui",
-        template="/tmp/template",
+        template="airflow/docker-compose-airflow-3.1.3.yaml",
         target_path="/tmp/target",
     )
     service.ui_user = "admin"
@@ -1769,6 +1769,74 @@ def test_workflows_expose_secret_manager_persists_orchestrator_env():
         "MLOX_SECRET_MANAGER_KEYFILE": "hidden",
         "MLOX_SECRET_MANAGER_KEYFILE_PW": "hidden",
     }
+
+
+def test_workflows_expose_secret_manager_handles_deployment_failure(monkeypatch):
+    captured = {}
+
+    class OpenBaoService:
+        application_credentials = {"airflow-airflow-1": {}}
+
+        def create_keyfile_secret_manager(self, infra, *, application_name, period):
+            return object()
+
+        def revoke_application_credential(self, application_name, infra):
+            captured["revoked"] = application_name
+
+    orchestrator = SimpleNamespace(
+        uuid="airflow-1",
+        name="Airflow",
+        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+        workflow_secret_manager_uuid="old-manager",
+        workflow_secret_manager_env={"OLD": "value"},
+    )
+
+    def fail_to_deploy(conn, **kwargs):
+        orchestrator.workflow_secret_manager_uuid = kwargs["manager_uuid"]
+        orchestrator.workflow_secret_manager_env = {
+            "MLOX_SECRET_MANAGER_KEYFILE": kwargs["encrypted_keyfile"],
+            "MLOX_SECRET_MANAGER_KEYFILE_PW": kwargs["keyfile_password"],
+        }
+        raise FileNotFoundError("/Users/alice/mlox/services/airflow/compose.yaml")
+
+    orchestrator.set_workflow_secret_manager_env = fail_to_deploy
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: _Connection()),
+        services=[orchestrator],
+    )
+    service = OpenBaoService()
+    descriptor = SimpleNamespace(
+        id="manager-1",
+        name="OpenBao",
+        is_available=True,
+        supports_keyfile_export=True,
+        manager=object(),
+        service=service,
+    )
+    workspace = SimpleNamespace(
+        infrastructure=SimpleNamespace(bundles=[bundle]),
+        probe_secret_manager=lambda manager_id: descriptor,
+        commit=lambda: captured.update({"committed": True}),
+    )
+    monkeypatch.setattr(workflows, "generate_pw", lambda length: "do-not-leak-pw")
+    monkeypatch.setattr(
+        workflows,
+        "get_encrypted_access_keyfile",
+        lambda manager, password: "do-not-leak-keyfile",
+    )
+
+    result = workflows.expose_secret_manager_to_workflow_orchestrator(
+        workspace,
+        "airflow-1",
+        "manager-1",
+    )
+
+    assert not result.success
+    assert result.code == 96
+    assert "do-not-leak" not in result.message
+    assert orchestrator.workflow_secret_manager_uuid == "old-manager"
+    assert orchestrator.workflow_secret_manager_env == {"OLD": "value"}
+    assert captured == {"revoked": "airflow-airflow-1"}
 
 
 def test_workflows_secret_manager_options_filter_to_keyfile_exportable():

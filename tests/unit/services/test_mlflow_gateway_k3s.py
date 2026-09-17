@@ -57,19 +57,15 @@ class FakeExecutor:
 
 
 @pytest.fixture
-def gateway(tmp_path: Path) -> MLFlowGatewayK3sService:
-    serve_script = tmp_path / "serve.py"
-    serve_script.write_text(
-        "from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8"
-    )
+def gateway() -> MLFlowGatewayK3sService:
     service = MLFlowGatewayK3sService(
         name="MLflow Gateway",
         service_config_id="mlflow-gateway-3.8.1-k3s",
-        template="/tmp/mlflow-gateway-k3s.yaml",
+        template="mlflow_gateway/mlox.mlflow_gateway.3.8.1.k3s.yaml",
         target_path="/tmp/mlflow-gateway",
-        dockerfile="/tmp/Dockerfile",
-        serve_script=str(serve_script),
-        start_script="/tmp/start_gateway.sh",
+        dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+        serve_script="mlflow_gateway/serve.py",
+        start_script="mlflow_gateway/start_gateway.sh",
         port=30433,
         tracking_uri="https://mlflow.example:5043",
         tracking_user="tracking-user",
@@ -134,19 +130,15 @@ def test_renders_ingress_with_path_middlewares(
     ) in manifest
 
 
-def test_multiple_gateways_get_distinct_kubernetes_identities(tmp_path: Path) -> None:
-    serve_script = tmp_path / "serve.py"
-    serve_script.write_text(
-        "from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8"
-    )
+def test_multiple_gateways_get_distinct_kubernetes_identities() -> None:
     common = {
         "name": "MLflow Gateway",
         "service_config_id": "mlflow-gateway-3.8.1-k3s",
-        "template": "/tmp/mlflow-gateway-k3s.yaml",
+        "template": "mlflow_gateway/mlox.mlflow_gateway.3.8.1.k3s.yaml",
         "target_path": "/tmp/mlflow-gateway",
-        "dockerfile": "/tmp/Dockerfile",
-        "serve_script": str(serve_script),
-        "start_script": "/tmp/start_gateway.sh",
+        "dockerfile": "mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+        "serve_script": "mlflow_gateway/serve.py",
+        "start_script": "mlflow_gateway/start_gateway.sh",
         "port": 30433,
         "tracking_uri": "https://mlflow.example:5043",
         "tracking_user": "tracking-user",

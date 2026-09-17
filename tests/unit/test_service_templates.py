@@ -210,17 +210,15 @@ def test_headlamp_templates_render_expected_resources() -> None:
     assert "@" not in rendered
 
 
-def test_mlflow_gateway_k3s_templates_render_expected_resources(tmp_path) -> None:
-    serve_script = tmp_path / "serve.py"
-    serve_script.write_text("print('gateway')\n", encoding="utf-8")
+def test_mlflow_gateway_k3s_templates_render_expected_resources() -> None:
     service = MLFlowGatewayK3sService(
         name="MLflow Gateway",
         service_config_id="mlflow-gateway-3.8.1-k3s",
-        template="unused",
+        template="mlflow_gateway/mlox.mlflow_gateway.3.8.1.k3s.yaml",
         target_path="/tmp/mlflow-gateway",
-        dockerfile="unused",
-        serve_script=str(serve_script),
-        start_script="unused",
+        dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+        serve_script="mlflow_gateway/serve.py",
+        start_script="mlflow_gateway/start_gateway.sh",
         port=30433,
         tracking_uri="https://mlflow.example.test",
         tracking_user="user",
@@ -235,9 +233,17 @@ def test_mlflow_gateway_k3s_templates_render_expected_resources(tmp_path) -> Non
     assert "kind: Deployment" in manifest
     assert "kind: Middleware" in manifest
     assert "kind: Ingress" in manifest
-    assert "print('gateway')" in manifest
+    assert "from fastapi import" in manifest
     assert "pydantic==2.0.0" in manifest
     assert f"namespace: {service.namespace}" in manifest
     assert f'path: "{service.ingress_path}"' in manifest
     assert "mlflow-gateway-auth" in manifest
-    assert "@" not in manifest.replace("@kubernetescrd", "")
+    for placeholder in (
+        "@namespace",
+        "@serve_script_block",
+        "@requirements_block",
+        "@deployment_name",
+        "@container_port",
+        "@ingress_path",
+    ):
+        assert placeholder not in manifest

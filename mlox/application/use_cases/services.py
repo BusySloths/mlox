@@ -4,7 +4,7 @@ import webbrowser
 from typing import Any, Dict, List, Optional
 
 from mlox.application.result import OperationResult
-from mlox.config import get_stacks_path, load_all_service_configs
+from mlox.config import load_all_service_configs
 from mlox.project.state import WorkspaceState
 from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
 from mlox.utils import auto_map_ports, generate_pw, generate_username
@@ -292,7 +292,6 @@ def add_service(
     if service is None:
         values.update(
             {
-                "${MLOX_STACKS_PATH}": get_stacks_path(),
                 "${MLOX_USER}": bundle.server.mlox_user.name,
                 "${MLOX_USER_HOME}": bundle.server.mlox_user.home,
                 "${MLOX_AUTO_USER}": generate_username(),
