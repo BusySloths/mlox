@@ -60,8 +60,9 @@ class KafkaDockerService(AbstractService, AbstractHealthService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
-        self.copy_asset(
-            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        template = self.resolve_asset(self.template)
+        self.exec.fs_copy(
+            conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
 
         # Generate self-signed TLS assets for the broker

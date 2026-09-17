@@ -72,10 +72,14 @@ class LiteLLMDockerService(
     def setup(self, conn) -> None:
         # copy files to target
         self.exec.fs_create_dir(conn, self.target_path)
-        self.copy_asset(
-            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        template = self.resolve_asset(self.template)
+        self.exec.fs_copy(
+            conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
-        self.copy_asset(conn, self.ollama_script, f"{self.target_path}/entrypoint.sh")
+        ollama_script = self.resolve_asset(self.ollama_script)
+        self.exec.fs_copy(
+            conn, str(ollama_script), f"{self.target_path}/entrypoint.sh"
+        )
         self.write_litellm_config(conn, self.ollama_models, self.openai_key)
         self.exec.tls_setup(conn, conn.host, self.target_path)
 

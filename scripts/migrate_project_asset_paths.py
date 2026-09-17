@@ -86,8 +86,7 @@ def plan_service_asset_migration(workspace) -> ServiceAssetMigrationPlan:
                 continue
             if not _is_absolute(value):
                 try:
-                    with service_asset_path(value):
-                        pass
+                    service_asset_path(value)
                 except (FileNotFoundError, ValueError) as exc:
                     problems.append(
                         ServiceAssetProblem(
@@ -112,8 +111,7 @@ def plan_service_asset_migration(workspace) -> ServiceAssetMigrationPlan:
                 )
                 continue
             try:
-                with service_asset_path(reference):
-                    pass
+                service_asset_path(reference)
             except (FileNotFoundError, ValueError) as exc:
                 problems.append(
                     ServiceAssetProblem(

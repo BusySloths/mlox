@@ -69,8 +69,9 @@ class MLFlowDockerService(
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
-        self.copy_asset(
-            conn, self.template, f"{self.target_path}/{self.target_docker_script}"
+        template = self.resolve_asset(self.template)
+        self.exec.fs_copy(
+            conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_create_empty_file(conn, env_path)

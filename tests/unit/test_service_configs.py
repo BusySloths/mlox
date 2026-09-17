@@ -258,8 +258,8 @@ def test_builtin_service_asset_references_are_portable_and_exist():
                 value,
             )
             assert "${MLOX_STACKS_PATH}" not in value
-            with service_asset_path(value) as path:
-                assert path.is_file(), (config.id, field_name, value)
+            path = service_asset_path(value)
+            assert path.is_file(), (config.id, field_name, value)
 
 
 @pytest.mark.parametrize(
@@ -268,8 +268,7 @@ def test_builtin_service_asset_references_are_portable_and_exist():
 )
 def test_runtime_asset_resolver_rejects_absolute_paths(reference):
     with pytest.raises(ValueError, match="Invalid service asset reference"):
-        with service_asset_path(reference):
-            pass
+        service_asset_path(reference)
 
 
 def test_service_capabilities_fall_back_from_groups(service_config_data):
