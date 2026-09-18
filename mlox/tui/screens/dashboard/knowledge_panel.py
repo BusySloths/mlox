@@ -152,7 +152,7 @@ class EditEntryScreen(ModalScreen[Optional[str]]):
             yield Label(
                 f"Edit: {self._title}  (ctrl+s to save)", id="kb-dialog-title"
             )
-            yield TextArea(self._body, id="kb-edit-area", language="markdown")
+            yield TextArea(self._body, id="kb-edit-area")
             with Horizontal(id="kb-dialog-actions"):
                 yield Button("Cancel", id="kb-edit-cancel")
                 yield Button("Save", id="kb-edit-confirm")
@@ -400,6 +400,18 @@ class KnowledgePanel(Container):
         if row_idx is not None:
             self.table.cursor_coordinate = (row_idx, 0)
 
+    def _current_entry(self) -> Optional[Entry]:
+        """Selected entry, falling back to the row under the table cursor."""
+        entry = self._entry_by_id(self._selected_entry_id)
+        if entry is not None:
+            return entry
+        table = self.table
+        try:
+            row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+        except Exception:
+            return None
+        return self._entry_by_id(str(row_key.value or ""))
+
     # ------------------------------------------------------------------
     # Board handling
     # ------------------------------------------------------------------
@@ -558,7 +570,7 @@ class KnowledgePanel(Container):
         except Exception:
             return
         entry = self._entry_by_id(str(row_key.value or ""))
-        if entry is not None and entry.kind != "board":
+        if entry is not None:
             self._selected_entry_id = entry.id
             self._show_viewer(entry)
 
@@ -586,7 +598,7 @@ class KnowledgePanel(Container):
 
     @on(Button.Pressed, "#kb-edit-entry")
     def handle_edit_entry(self, _: Button.Pressed) -> None:
-        entry = self._entry_by_id(self._selected_entry_id)
+        entry = self._current_entry()
         if entry is None:
             self.app.notify("Select an entry first.", severity="warning")
             return
@@ -608,7 +620,7 @@ class KnowledgePanel(Container):
 
     @on(Button.Pressed, "#kb-rename-entry")
     def handle_rename_entry(self, _: Button.Pressed) -> None:
-        entry = self._entry_by_id(self._selected_entry_id)
+        entry = self._current_entry()
         if entry is None:
             self.app.notify("Select an entry first.", severity="warning")
             return
@@ -637,7 +649,7 @@ class KnowledgePanel(Container):
 
     @on(Button.Pressed, "#kb-delete-entry")
     def handle_delete_entry(self, _: Button.Pressed) -> None:
-        entry = self._entry_by_id(self._selected_entry_id)
+        entry = self._current_entry()
         if entry is None:
             self.app.notify("Select an entry first.", severity="warning")
             return

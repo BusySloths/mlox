@@ -176,6 +176,33 @@ def test_rename_rewrites_links(tmp_path) -> None:
     asyncio.run(run())
 
 
+def test_edit_works_from_highlighted_board_row(tmp_path) -> None:
+    workspace = _make_workspace(tmp_path)
+    app = DashboardTestApp(workspace)
+
+    async def run():
+        async with app.run_test() as pilot:
+            panel = app.query_one(KnowledgePanel)
+            await _wait_until(lambda: panel.table.row_count == 1, "seed", pilot)
+            board_entry = workspace.find_entry_by_title("Board")
+            panel._create_entry("note", "Second")
+            await pilot.pause()
+
+            # No explicit selection: Edit/Rename/Delete fall back to the row
+            # under the table cursor (e.g. a row that was only highlighted).
+            panel._selected_entry_id = None
+            panel.table.cursor_coordinate = (0, 0)
+            assert panel._current_entry().id == board_entry.id
+            panel._save_entry_body(board_entry, "## Open\n\n- [ ] edited\n")
+            await pilot.pause()
+            assert workspace.get_entry(board_entry.id).body_md.endswith(
+                "- [ ] edited\n"
+            )
+            assert panel._selected_entry_id == board_entry.id
+
+    asyncio.run(run())
+
+
 def test_delete_entry_removes_it(tmp_path) -> None:
     workspace = _make_workspace(tmp_path)
     app = DashboardTestApp(workspace)
