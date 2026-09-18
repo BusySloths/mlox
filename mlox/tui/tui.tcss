@@ -279,9 +279,171 @@ ProjectSwitchDialog {
 #monitor-tab,
 #models-tab,
 #workflow-tab,
+#knowledge-tab,
 #service-templates-tab,
 #service-tui-tab {
   height: 1fr;
+}
+
+#knowledge-panel {
+  height: 1fr;
+  width: 1fr;
+  layout: vertical;
+}
+
+#kb-search {
+  height: 3;
+  margin-bottom: 1;
+}
+
+#kb-view-tabs {
+  height: 1fr;
+}
+
+#kb-board-pane,
+#kb-entries-pane {
+  height: 1fr;
+  layout: vertical;
+  padding: 1 0 0 0;
+}
+
+#kb-board {
+  height: 1fr;
+  width: 1fr;
+  layout: horizontal;
+}
+
+.kb-column {
+  width: 1fr;
+  min-width: 18;
+  height: 1fr;
+  margin-right: 1;
+  padding: 1;
+  border: round #35635bff;
+  background: #10211fff;
+}
+
+#kb-board-actions,
+#kb-entry-actions {
+  height: 3;
+  margin-bottom: 1;
+}
+
+#kb-board-actions Button,
+#kb-entry-actions Button {
+  width: auto;
+  min-width: 12;
+  margin-right: 1;
+}
+
+#kb-new-card,
+#kb-new-entry {
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#kb-entries-layout {
+  height: 1fr;
+  width: 1fr;
+}
+
+#kb-entry-table {
+  width: 2fr;
+  height: 1fr;
+  margin-right: 1;
+  border: round #1bd6f3ff;
+}
+
+#kb-viewer {
+  width: 3fr;
+  height: 1fr;
+  layout: vertical;
+  border: round #35635bff;
+  padding: 0 1;
+}
+
+#kb-viewer-scroll {
+  height: 1fr;
+}
+
+#kb-backlinks {
+  height: auto;
+  color: #a6c9bdff;
+}
+
+#kb-status {
+  height: auto;
+  color: #94a3b8;
+}
+
+KBBoard:focus {
+  border: round #1bd6f3ff;
+}
+
+NewCardDialog,
+NewEntryDialog,
+ConfirmDeleteDialog,
+EditEntryScreen {
+  align: center middle;
+}
+
+#kb-dialog {
+  width: 64;
+  height: auto;
+  padding: 1 2;
+  background: #0d2a24ff;
+  border: round #74d17aff;
+}
+
+#kb-dialog-title {
+  text-style: bold;
+  color: #e6edf7;
+  margin-bottom: 1;
+}
+
+#kb-dialog-actions {
+  height: auto;
+  margin-top: 1;
+  align-horizontal: right;
+}
+
+#kb-card-cancel,
+#kb-entry-cancel,
+#kb-delete-cancel,
+#kb-edit-cancel {
+  width: auto;
+}
+
+#kb-card-confirm,
+#kb-entry-confirm,
+#kb-rename-confirm {
+  width: auto;
+  margin-left: 1;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#kb-delete-confirm {
+  width: auto;
+  margin-left: 1;
+  background: #9d2222;
+  border: round #ff8a8a;
+  color: #ffffff;
+}
+
+#kb-edit-screen {
+  width: 100;
+  height: 32;
+  padding: 1 2;
+  background: #0d2a24ff;
+  border: round #74d17aff;
+}
+
+#kb-edit-area {
+  height: 1fr;
+  border: round #35635bff;
 }
 
 #overview-scroll,

@@ -133,6 +133,15 @@ The active provider is persisted as either `embedded` or a secret-manager servic
 UUID. Unavailable external providers remain selected; there is no automatic
 fallback. Provider changes copy and verify secrets before the pointer is committed.
 
+The project knowledge base stores titled markdown entries (kinds: `note`, `faq`,
+`wiki`, `todo`, `board`, `template`) in the encrypted `entries` table (schema
+version 3). Boards are a convention over markdown: `## Column` subheaders name
+the lanes and `- [ ]` checkbox lines are the cards, and entries reference each
+other via `[[Title]]` wiki-links. `mlox/project/entries.py` holds the dataclass,
+the pure markdown board/link helpers, and per-kind templates; the TUI knowledge
+panel (dashboard tab) reads and writes entries through thin `ProjectWorkspace`
+pass-throughs — there is deliberately no use-case layer or CLI surface yet.
+
 SQLModel is intentionally deferred. The infrastructure graph remains behavior-heavy
 and polymorphic, while the JSON snapshot is still authoritative. Reconsider separate
 SQLModel persistence records when partial queries, concurrent updates, or PostgreSQL

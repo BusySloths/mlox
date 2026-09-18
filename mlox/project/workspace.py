@@ -17,6 +17,7 @@ from mlox.config import (
     load_service_config_by_id,
 )
 from mlox.infra import Infrastructure
+from mlox.project.entries import Entry
 from mlox.project.repository import SqlCipherRepository
 from mlox.project.secrets import (
     EmbeddedSecretManager,
@@ -168,6 +169,25 @@ class ProjectWorkspace:
         self._state = self._repository.load()
         self._secrets = self._resolve_secret_manager()
         return self
+
+    # ------------------------------------------------------------------
+    # Knowledge-base entries (thin persistence pass-throughs)
+    # ------------------------------------------------------------------
+
+    def list_entries(self, kind: str | None = None) -> list[Entry]:
+        return self._repository.list_entries(kind)
+
+    def get_entry(self, entry_id: str) -> Entry | None:
+        return self._repository.get_entry(entry_id)
+
+    def find_entry_by_title(self, title: str, kind: str | None = None) -> Entry | None:
+        return self._repository.find_entry_by_title(title, kind)
+
+    def save_entry(self, entry: Entry) -> Entry:
+        return self._repository.save_entry(entry)
+
+    def delete_entry(self, entry_id: str) -> None:
+        self._repository.delete_entry(entry_id)
 
     def _resolve_secret_manager(self) -> AbstractSecretManager:
         if self._state.secret_manager_kind == "embedded":

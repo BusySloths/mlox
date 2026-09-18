@@ -19,14 +19,29 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 from uuid import uuid4
 
 from mlox.infra import Infrastructure
+from mlox.project.entries import Entry
 
 if TYPE_CHECKING:
     from mlox.config import ServiceConfig
 
 PROJECT_SUFFIX = ".mlox"
 PROJECT_FORMAT_VERSION = 1
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 PLAINTEXT_TEST_ENV = "MLOX_ALLOW_PLAINTEXT_SQLITE"
+
+ENTRIES_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS entries (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body_md TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_entries_project ON entries(project_id);
+CREATE INDEX IF NOT EXISTS idx_entries_kind ON entries(project_id, kind);
+"""
 
 
 class ProjectStorageError(RuntimeError):
@@ -201,7 +216,7 @@ class SqlCipherRepository:
                 key_salt TEXT,
                 key_check TEXT
             );
-            INSERT INTO schema_info VALUES (1, 2, CURRENT_TIMESTAMP, NULL, NULL);
+            INSERT INTO schema_info VALUES (1, 3, CURRENT_TIMESTAMP, NULL, NULL);
 
             CREATE TABLE projects (
                 id TEXT PRIMARY KEY,
@@ -272,6 +287,7 @@ class SqlCipherRepository:
             CREATE INDEX idx_services_bundle ON services(bundle_id);
             """
         )
+        conn.executescript(ENTRIES_SCHEMA_SQL)
 
     @staticmethod
     def _upgrade_schema(conn: Any, current_version: int) -> None:
@@ -283,9 +299,13 @@ class SqlCipherRepository:
             conn.execute(
                 "ALTER TABLE projects ADD COLUMN active_secret_manager_service_uuid TEXT"
             )
+        if current_version < 3:
+            conn.executescript(ENTRIES_SCHEMA_SQL)
+        if current_version < SCHEMA_VERSION:
             conn.execute(
-                "UPDATE schema_info SET schema_version=2, applied_at=CURRENT_TIMESTAMP "
-                "WHERE singleton=1"
+                "UPDATE schema_info SET schema_version=?, applied_at=CURRENT_TIMESTAMP "
+                "WHERE singleton=1",
+                (SCHEMA_VERSION,),
             )
 
     def project_id(self, conn: Any | None = None) -> str:
@@ -441,6 +461,86 @@ class SqlCipherRepository:
                 "SELECT name,value_json FROM secrets WHERE project_id=? ORDER BY name", (pid,)
             ).fetchall()
         return {row[0]: None if keys_only else json.loads(row[1]) for row in rows}
+
+    def save_entry(self, entry: Entry) -> Entry:
+        """Insert a new entry or update an existing one; returns the entry."""
+        now = utcnow()
+        with self.connection() as conn:
+            pid = self.project_id(conn)
+            if entry.id:
+                conn.execute(
+                    "UPDATE entries SET kind=?, title=?, body_md=?, updated_at=? "
+                    "WHERE id=? AND project_id=?",
+                    (entry.kind, entry.title, entry.body_md, now, entry.id, pid),
+                )
+            else:
+                entry.id = str(uuid4())
+                conn.execute(
+                    "INSERT INTO entries "
+                    "(id, project_id, kind, title, body_md, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (entry.id, pid, entry.kind, entry.title, entry.body_md, now, now),
+                )
+                entry.created_at = now
+            entry.updated_at = now
+        return entry
+
+    def get_entry(self, entry_id: str) -> Entry | None:
+        with self.connection() as conn:
+            pid = self.project_id(conn)
+            row = conn.execute(
+                "SELECT id, kind, title, body_md, created_at, updated_at FROM entries "
+                "WHERE id=? AND project_id=?",
+                (entry_id, pid),
+            ).fetchone()
+        if row is None:
+            return None
+        return Entry(
+            id=row[0], kind=row[1], title=row[2], body_md=row[3],
+            created_at=row[4], updated_at=row[5],
+        )
+
+    def list_entries(self, kind: str | None = None) -> list[Entry]:
+        with self.connection() as conn:
+            pid = self.project_id(conn)
+            if kind is None:
+                rows = conn.execute(
+                    "SELECT id, kind, title, body_md, created_at, updated_at FROM entries "
+                    "WHERE project_id=? ORDER BY created_at, id",
+                    (pid,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, kind, title, body_md, created_at, updated_at FROM entries "
+                    "WHERE project_id=? AND kind=? ORDER BY created_at, id",
+                    (pid, kind),
+                ).fetchall()
+        return [
+            Entry(
+                id=row[0], kind=row[1], title=row[2], body_md=row[3],
+                created_at=row[4], updated_at=row[5],
+            )
+            for row in rows
+        ]
+
+    def find_entry_by_title(self, title: str, kind: str | None = None) -> Entry | None:
+        """First entry whose title matches (exact, then case-insensitive)."""
+        entries = self.list_entries(kind)
+        wanted = title.strip().casefold()
+        for entry in entries:
+            if entry.title == title:
+                return entry
+        for entry in entries:
+            if entry.title.strip().casefold() == wanted:
+                return entry
+        return None
+
+    def delete_entry(self, entry_id: str) -> None:
+        with self.connection() as conn:
+            pid = self.project_id(conn)
+            conn.execute(
+                "DELETE FROM entries WHERE id=? AND project_id=?", (entry_id, pid)
+            )
 
     def record_legacy_import(self, source_path: str, source_sha256: str, resources: int, secrets: int) -> None:
         with self.connection() as conn:

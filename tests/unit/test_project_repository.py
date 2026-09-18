@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from mlox.infra import Infrastructure
+from mlox.project.entries import Entry
 from mlox.project.repository import SqlCipherRepository, resolve_project_path
 
 
@@ -56,7 +57,7 @@ def test_project_repository_is_not_plain_json(tmp_path):
     assert not store.path.read_bytes().startswith(b"{")
     # In unit tests this is SQLite, but production rejects this driver unless explicitly enabled.
     with sqlite3.connect(store.path) as conn:
-        assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (2,)
+        assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (3,)
 
 
 def test_version_one_schema_is_upgraded_with_embedded_secret_manager_default():
@@ -90,4 +91,66 @@ def test_version_one_schema_is_upgraded_with_embedded_secret_manager_default():
     ).fetchone()
     assert {"active_secret_manager_kind", "active_secret_manager_service_uuid"} <= columns
     assert pointer == ("embedded", None)
-    assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (2,)
+    assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (3,)
+
+
+def test_schema_version_two_is_upgraded_with_entries_table():
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE schema_info (
+            singleton INTEGER PRIMARY KEY,
+            schema_version INTEGER NOT NULL,
+            applied_at TEXT NOT NULL,
+            key_salt TEXT,
+            key_check TEXT
+        );
+        INSERT INTO schema_info VALUES (1, 2, CURRENT_TIMESTAMP, NULL, NULL);
+        CREATE TABLE projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            active_secret_manager_kind TEXT NOT NULL DEFAULT 'embedded',
+            active_secret_manager_service_uuid TEXT
+        );
+        INSERT INTO projects VALUES ('project-id', 'demo', 'embedded', NULL);
+        """
+    )
+
+    SqlCipherRepository._upgrade_schema(conn, 2)
+
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "entries" in tables
+    assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (3,)
+
+
+def test_entries_crud_round_trip(tmp_path):
+    store = SqlCipherRepository.create(tmp_path / "demo", "pw")
+
+    board = store.save_entry(
+        Entry(kind="board", title="Board", body_md="## Open\n\n## Doing\n\n## Done\n")
+    )
+    note = store.save_entry(Entry(kind="note", title="Why k3s", body_md="because"))
+    assert board.id and note.id
+    assert board.created_at and board.updated_at
+
+    fetched = store.get_entry(board.id)
+    assert fetched is not None
+    assert fetched.kind == "board"
+    assert fetched.title == "Board"
+
+    board.title = "Main Board"
+    store.save_entry(board)
+    updated = store.get_entry(board.id)
+    assert updated.title == "Main Board"
+    assert updated.created_at == board.created_at
+
+    assert [e.title for e in store.list_entries()] == ["Main Board", "Why k3s"]
+    assert [e.kind for e in store.list_entries(kind="note")] == ["note"]
+    assert store.list_entries(kind="wiki") == []
+
+    assert store.find_entry_by_title("main board").id == board.id
+    assert store.find_entry_by_title("missing") is None
+
+    store.delete_entry(note.id)
+    assert store.get_entry(note.id) is None
+    assert [e.title for e in store.list_entries()] == ["Main Board"]
