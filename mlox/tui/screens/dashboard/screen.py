@@ -25,6 +25,7 @@ from .bundle_tags import EditBundleTagsDialog, RenameBundleDialog
 from .database_panel import DatabasePanel
 from .firewall_panel import FirewallPanel
 from .history_panel import HistoryPanel
+from .knowledge_panel import KnowledgePanel
 from .log_panel import LogPanel
 from .model import SelectionChanged, SelectionInfo, is_bundle_initialized
 from .models_panel import ModelsPanel
@@ -81,6 +82,7 @@ from mlox.tui.template_forms import (
 
 FIREWALL_TAB_ID = "firewall-tab"
 DATABASES_TAB_ID = "databases-tab"
+KNOWLEDGE_TAB_ID = "knowledge-tab"
 MONITOR_TAB_ID = "monitor-tab"
 MODELS_TAB_ID = "models-tab"
 WORKFLOW_TAB_ID = "workflow-tab"
@@ -184,6 +186,8 @@ class DashboardScreen(Screen):
                                     yield ServerInfoPanel(id="selection-server-info")
                                     yield ServerActions(id="selection-server-actions")
                                     yield ServiceActions(id="selection-service-actions")
+                            with TabPane("Knowledge", id=KNOWLEDGE_TAB_ID):
+                                yield KnowledgePanel(id="knowledge-panel")
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")

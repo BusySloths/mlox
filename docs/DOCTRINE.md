@@ -166,10 +166,13 @@ never duplicate the list in both places.
       directory. This is also the groundwork for RBAC-like access control —
       per-user/per-role visibility of projects, servers, and services once
       projects are shared across users via project sync.
-   3. **Project notes / todo system.** Attach notes and tasks to each MLOX
-      project so everything needed to manage the infrastructure for a client
-      lives in one place. Natural home: project metadata in the workspace
-      state; surfaced in CLI/TUI.
+   3. **Project knowledge base.** ✅ Shipped: notes, todos, wiki pages, FAQ
+      entries, and markdown kanban boards attached to each project —
+      encrypted in the project file, TUI-first, markdown as the source of
+      truth (boards are `##` lanes with `- [ ]` cards; entries link via
+      `[[wiki-links]]`). Follow-ups: named markdown templates
+      (`template <kind> <name>`), Obsidian export/import, and the agent/LLM
+      chat surface on top of the search field.
    4. **Agent integration over project state.** An integration that gives an
       agent read access to the current project info (topology, services,
       secrets structure, health) so it can answer questions about the infra —
