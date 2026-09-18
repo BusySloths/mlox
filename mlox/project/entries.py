@@ -15,6 +15,29 @@ from typing import Iterable, Optional
 
 ENTRY_KINDS = ("note", "faq", "wiki", "todo", "board", "template")
 TEMPLATE_ENTRY_KIND = "template"
+KIND_CYCLE = ("note", "faq", "wiki", "todo", "board")
+
+LANE_COLORS = {
+    "blocked": "#ff6b6b",
+    "block": "#ff6b6b",
+    "todo": "#8fe388",
+    "to do": "#8fe388",
+    "backlog": "#8fe388",
+    "open": "#8fe388",
+    "idea": "#8fe388",
+    "ideas": "#8fe388",
+    "doing": "#f4e223",
+    "in progress": "#f4e223",
+    "progress": "#f4e223",
+    "review": "#f4e223",
+    "test": "#f4e223",
+    "testing": "#f4e223",
+    "done": "#69b7ff",
+    "completed": "#69b7ff",
+    "closed": "#69b7ff",
+    "shipped": "#69b7ff",
+}
+DEFAULT_LANE_COLOR = "#35635b"
 
 BOARD_HEADER_RE = re.compile(r"^##\s+(?P<name>.+?)\s*$")
 BOARD_ITEM_RE = re.compile(r"^(?P<indent>\s*)-\s+\[(?P<check>[ xX])\]\s?(?P<text>.*)$")
@@ -55,6 +78,20 @@ class BoardColumn:
 
 def is_valid_kind(kind: str) -> bool:
     return kind in ENTRY_KINDS
+
+
+def next_kind(kind: str) -> str:
+    """Next kind in the type cycle (space key); unknown kinds start at note."""
+    try:
+        index = KIND_CYCLE.index(kind)
+    except ValueError:
+        return KIND_CYCLE[0]
+    return KIND_CYCLE[(index + 1) % len(KIND_CYCLE)]
+
+
+def lane_color(name: str) -> str:
+    """Presentation color for a board column, matched by (casefold) name."""
+    return LANE_COLORS.get(name.strip().casefold(), DEFAULT_LANE_COLOR)
 
 
 def item_line_text(item: BoardItem, checked: bool | None = None) -> str:

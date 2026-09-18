@@ -19,8 +19,6 @@ from textual.widgets import (
     Select,
     Static,
     TextArea,
-    TabbedContent,
-    TabPane,
 )
 
 from mlox.project.entries import (
@@ -30,16 +28,16 @@ from mlox.project.entries import (
     default_template,
     extract_links,
     find_template_body,
+    lane_color,
     linkify_item,
     move_item,
+    next_kind,
     parse_board,
     remove_item,
     rewrite_links,
     toggle_item,
 )
 
-KB_BOARD_TAB = "kb-board-tab"
-KB_ENTRIES_TAB = "kb-entries-tab"
 BOARD_ENTRY_TITLE = "Board"
 
 
@@ -220,6 +218,7 @@ class KBBoard(Horizontal, can_focus=True):
         self.remove_children()
         widgets = []
         for col_idx, column in enumerate(self._columns):
+            color = lane_color(column.name)
             text = Text()
             if not column.items:
                 text.append("(empty)", style="dim italic")
@@ -227,12 +226,13 @@ class KBBoard(Horizontal, can_focus=True):
                 marker = "✓ " if item.checked else "· "
                 selected = (col_idx, item_idx) == self.selection
                 if selected:
-                    style = "black on #8fe388" if item.checked else "black on #69b7ff"
+                    style = f"black bold on {color}"
                 else:
                     style = "dim" if item.checked else ""
                 text.append(marker + item.text + "\n", style=style)
             widget = Static(text, classes="kb-column")
-            widget.border_title = column.name
+            widget.border_title = Text(column.name, style=f"bold {color}")
+            widget.styles.border = ("round", color)
             widgets.append(widget)
         if widgets:
             self.mount(*widgets)
@@ -294,30 +294,27 @@ class KBBoard(Horizontal, can_focus=True):
 
 
 class KnowledgePanel(Container):
-    """Project knowledge base: board view, entries browser, and search."""
+    """Project knowledge base: entry list with a type-aware viewer."""
+
+    BINDINGS = [Binding("space", "cycle_kind", "Change type")]
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="Search knowledge base…", id="kb-search")
-        with TabbedContent(id="kb-view-tabs"):
-            with TabPane("Board", id=KB_BOARD_TAB):
-                with Vertical(id="kb-board-pane"):
-                    with Horizontal(id="kb-board-actions"):
-                        yield Button("New Card", id="kb-new-card")
-                        yield Button("Edit Markdown", id="kb-edit-board")
-                    yield KBBoard(self, id="kb-board")
-            with TabPane("Entries", id=KB_ENTRIES_TAB):
-                with Vertical(id="kb-entries-pane"):
-                    with Horizontal(id="kb-entry-actions"):
-                        yield Button("New", id="kb-new-entry")
-                        yield Button("Edit", id="kb-edit-entry")
-                        yield Button("Rename", id="kb-rename-entry")
-                        yield Button("Delete", id="kb-delete-entry")
-                    with Horizontal(id="kb-entries-layout"):
-                        yield DataTable(id="kb-entry-table")
-                        with Vertical(id="kb-viewer"):
-                            with VerticalScroll(id="kb-viewer-scroll"):
-                                yield Markdown(id="kb-viewer-markdown")
-                            yield Static("", id="kb-backlinks")
+        with Horizontal(id="kb-entry-actions"):
+            yield Button("New", id="kb-new-entry")
+            yield Button("Edit", id="kb-edit-entry")
+            yield Button("Rename", id="kb-rename-entry")
+            yield Button("Delete", id="kb-delete-entry")
+        with Horizontal(id="kb-board-actions"):
+            yield Button("New Card", id="kb-new-card")
+            yield Button("Edit Markdown", id="kb-edit-board")
+        with Horizontal(id="kb-entries-layout"):
+            yield DataTable(id="kb-entry-table")
+            with Vertical(id="kb-viewer"):
+                with VerticalScroll(id="kb-viewer-scroll"):
+                    yield Markdown(id="kb-viewer-markdown")
+                yield KBBoard(self, id="kb-board")
+                yield Static("", id="kb-backlinks")
         yield Static("", id="kb-status")
 
     # ------------------------------------------------------------------
@@ -344,7 +341,9 @@ class KnowledgePanel(Container):
         return getattr(self.app, "workspace", None)
 
     def on_mount(self) -> None:
-        self.table.add_columns("Kind", "Title", "Updated")
+        self.table.add_columns("Kind", "Title")
+        self.query_one("#kb-board-actions").display = False
+        self.board.display = False
         self.reload_entries()
 
     def reload_entries(self) -> None:
@@ -367,7 +366,7 @@ class KnowledgePanel(Container):
                 )
                 self._entries = [seeded]
         self._refresh_table()
-        self._load_board(self._first_board())
+        self._show_entry(self._first_board())
 
     def _first_board(self) -> Optional[Entry]:
         boards = [entry for entry in self._entries if entry.kind == "board"]
@@ -392,7 +391,7 @@ class KnowledgePanel(Container):
             ):
                 continue
             self._row_index[entry.id] = table.row_count
-            table.add_row(entry.kind, entry.title, entry.updated_at[:10], key=entry.id)
+            table.add_row(entry.kind, entry.title, key=entry.id)
         self.status.update(f"{len(self._entries)} entries in project knowledge base.")
 
     def _select_table_row(self, entry_id: str) -> None:
@@ -411,6 +410,85 @@ class KnowledgePanel(Container):
         except Exception:
             return None
         return self._entry_by_id(str(row_key.value or ""))
+
+    # ------------------------------------------------------------------
+    # Entry display (type-aware right-hand side)
+    # ------------------------------------------------------------------
+
+    def _show_entry(self, entry: Optional[Entry]) -> None:
+        if entry is None:
+            self.board.display = False
+            self.query_one("#kb-viewer-scroll").display = False
+            self.query_one("#kb-backlinks").display = False
+            self.query_one("#kb-board-actions").display = False
+            self.viewer.update("")
+            self.query_one("#kb-backlinks", Static).update("")
+            return
+        self._selected_entry_id = entry.id
+        is_board = entry.kind == "board"
+        self.query_one("#kb-board-actions").display = is_board
+        self.board.display = is_board
+        self.query_one("#kb-viewer-scroll").display = not is_board
+        self.query_one("#kb-backlinks").display = not is_board
+        if is_board:
+            self._load_board(entry)
+        else:
+            self.viewer.update(entry.body_md)
+            self._update_backlinks(entry)
+
+    def _update_backlinks(self, entry: Entry) -> None:
+        wanted = entry.title.strip().casefold()
+        backlinks = []
+        for other in self._entries:
+            if other.id == entry.id:
+                continue
+            for target in extract_links(other.body_md):
+                if target.strip().casefold() == wanted:
+                    backlinks.append(other.title)
+                    break
+        self.query_one("#kb-backlinks", Static).update(
+            "Referenced by: " + ", ".join(backlinks) if backlinks else ""
+        )
+
+    def open_entry_by_title(self, title: str) -> None:
+        workspace = self._workspace()
+        find = getattr(workspace, "find_entry_by_title", None)
+        entry = find(title) if callable(find) else None
+        if entry is None:
+            self.app.notify(f"No entry titled '{title}'.", severity="warning")
+            return
+        self._show_entry(entry)
+        self._select_table_row(entry.id)
+
+    # ------------------------------------------------------------------
+    # Type cycling
+    # ------------------------------------------------------------------
+
+    def action_cycle_kind(self) -> None:
+        entry = self._current_entry()
+        if entry is None:
+            self.app.notify("Select an entry first.", severity="warning")
+            return
+        entry.kind = next_kind(entry.kind)
+        if entry.kind == "board":
+            has_content = any(
+                line.strip() and not line.lstrip().startswith("#")
+                for line in entry.body_md.splitlines()
+            )
+            if not has_content:
+                # Bare template stub: start a real board layout.
+                entry.body_md = default_template("board", entry.title)
+            elif not parse_board(entry.body_md):
+                # Real content without lanes: keep it, add the lanes below.
+                entry.body_md = (
+                    entry.body_md.rstrip() + "\n\n" + default_template("board", entry.title)
+                )
+        self._workspace().save_entry(entry)
+        self._entries = list(self._workspace().list_entries())
+        self._refresh_table()
+        self._show_entry(entry)
+        self._select_table_row(entry.id)
+        self.app.notify(f"Type: {entry.kind}")
 
     # ------------------------------------------------------------------
     # Board handling
@@ -524,44 +602,17 @@ class KnowledgePanel(Container):
         self._refresh_table()
         return entry
 
-    def open_entry_by_title(self, title: str) -> None:
-        workspace = self._workspace()
-        find = getattr(workspace, "find_entry_by_title", None)
-        entry = find(title) if callable(find) else None
-        if entry is None:
-            self.app.notify(f"No entry titled '{title}'.", severity="warning")
-            return
-        self._selected_entry_id = entry.id
-        self._show_viewer(entry)
+    def _create_and_show(self, kind: str, title: str) -> None:
+        entry = self._create_entry(kind, title)
+        self._refresh_table()
+        self._show_entry(entry)
         self._select_table_row(entry.id)
-        self.query_one("#kb-view-tabs", TabbedContent).active = KB_ENTRIES_TAB
-
-    def _show_viewer(self, entry: Entry) -> None:
-        self.viewer.update(entry.body_md)
-        wanted = entry.title.strip().casefold()
-        backlinks = []
-        for other in self._entries:
-            if other.id == entry.id:
-                continue
-            for target in extract_links(other.body_md):
-                if target.strip().casefold() == wanted:
-                    backlinks.append(other.title)
-                    break
-        self.query_one("#kb-backlinks", Static).update(
-            "Referenced by: " + ", ".join(backlinks) if backlinks else ""
-        )
 
     @on(DataTable.RowSelected, "#kb-entry-table")
     def handle_row_selected(self, event: DataTable.RowSelected) -> None:
         entry = self._entry_by_id(str(event.row_key.value or ""))
-        if entry is None:
-            return
-        self._selected_entry_id = entry.id
-        if entry.kind == "board":
-            self._load_board(entry)
-            self.query_one("#kb-view-tabs", TabbedContent).active = KB_BOARD_TAB
-            return
-        self._show_viewer(entry)
+        if entry is not None:
+            self._show_entry(entry)
 
     @on(DataTable.CellHighlighted, "#kb-entry-table")
     def handle_cell_highlighted(self, event: DataTable.CellHighlighted) -> None:
@@ -571,8 +622,7 @@ class KnowledgePanel(Container):
             return
         entry = self._entry_by_id(str(row_key.value or ""))
         if entry is not None:
-            self._selected_entry_id = entry.id
-            self._show_viewer(entry)
+            self._show_entry(entry)
 
     @on(Input.Changed, "#kb-search")
     def handle_search_changed(self, _: Input.Changed) -> None:
@@ -582,19 +632,8 @@ class KnowledgePanel(Container):
     def handle_new_entry(self, _: Button.Pressed) -> None:
         self.app.push_screen(
             NewEntryDialog(),
-            lambda result: result and self._open_created_entry(*result),
+            lambda result: result and self._create_and_show(*result),
         )
-
-    def _open_created_entry(self, kind: str, title: str) -> None:
-        entry = self._create_entry(kind, title)
-        self._selected_entry_id = entry.id
-        self._refresh_table()
-        if entry.kind == "board":
-            self._load_board(entry)
-            self.query_one("#kb-view-tabs", TabbedContent).active = KB_BOARD_TAB
-            return
-        self._show_viewer(entry)
-        self._select_table_row(entry.id)
 
     @on(Button.Pressed, "#kb-edit-entry")
     def handle_edit_entry(self, _: Button.Pressed) -> None:
@@ -613,10 +652,7 @@ class KnowledgePanel(Container):
         workspace.save_entry(entry)
         self._entries = list(workspace.list_entries())
         self._refresh_table()
-        if entry.kind == "board":
-            self._load_board(entry)
-        else:
-            self._show_viewer(entry)
+        self._show_entry(entry)
 
     @on(Button.Pressed, "#kb-rename-entry")
     def handle_rename_entry(self, _: Button.Pressed) -> None:
@@ -643,8 +679,8 @@ class KnowledgePanel(Container):
         workspace.save_entry(entry)
         self._entries = list(workspace.list_entries())
         self._refresh_table()
-        self._load_board(self._first_board())
-        self._show_viewer(entry)
+        self._show_entry(entry)
+        self._select_table_row(entry.id)
         self.app.notify(f"Renamed to '{new_title}' (links updated).")
 
     @on(Button.Pressed, "#kb-delete-entry")
@@ -661,8 +697,7 @@ class KnowledgePanel(Container):
     def _delete_entry(self, entry: Entry) -> None:
         self._workspace().delete_entry(entry.id)
         self._selected_entry_id = None
-        self.viewer.update("")
-        self.query_one("#kb-backlinks", Static).update("")
+        self._show_entry(None)
         self.reload_entries()
 
     @on(Button.Pressed, "#kb-new-card")

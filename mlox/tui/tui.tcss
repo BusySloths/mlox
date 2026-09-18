@@ -296,18 +296,17 @@ ProjectSwitchDialog {
   margin-bottom: 1;
 }
 
-#kb-view-tabs {
-  height: 1fr;
+#kb-search {
+  height: 3;
+  margin-bottom: 1;
 }
 
-#kb-board-pane,
-#kb-entries-pane {
-  height: 1fr;
-  layout: vertical;
-  padding: 1 0 0 0;
+#kb-board-actions {
+  display: none;
 }
 
 #kb-board {
+  display: none;
   height: 1fr;
   width: 1fr;
   layout: horizontal;
@@ -349,7 +348,7 @@ ProjectSwitchDialog {
 }
 
 #kb-entry-table {
-  width: 2fr;
+  width: 1fr;
   height: 1fr;
   margin-right: 1;
   border: round #1bd6f3ff;
