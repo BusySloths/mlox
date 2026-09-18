@@ -301,10 +301,6 @@ ProjectSwitchDialog {
   margin-bottom: 1;
 }
 
-#kb-board-actions {
-  display: none;
-}
-
 #kb-board {
   display: none;
   height: 1fr;
@@ -322,20 +318,29 @@ ProjectSwitchDialog {
   background: #10211fff;
 }
 
-#kb-board-actions,
 #kb-entry-actions {
   height: 3;
   margin-bottom: 1;
 }
 
-#kb-board-actions Button,
 #kb-entry-actions Button {
   width: auto;
   min-width: 12;
   margin-right: 1;
 }
 
-#kb-new-card,
+#kb-actions-spacer {
+  width: 1fr;
+}
+
+#kb-new-card {
+  display: none;
+  margin-right: 0;
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
 #kb-new-entry {
   background: #0e9455ff;
   border: round #8fe388ff;
@@ -371,13 +376,14 @@ ProjectSwitchDialog {
   color: #a6c9bdff;
 }
 
-#kb-status {
+#kb-help {
   height: auto;
   color: #94a3b8;
 }
 
-KBBoard:focus {
-  border: round #1bd6f3ff;
+#kb-status {
+  height: auto;
+  color: #94a3b8;
 }
 
 NewCardDialog,

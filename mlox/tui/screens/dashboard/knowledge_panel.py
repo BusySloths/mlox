@@ -305,9 +305,8 @@ class KnowledgePanel(Container):
             yield Button("Edit", id="kb-edit-entry")
             yield Button("Rename", id="kb-rename-entry")
             yield Button("Delete", id="kb-delete-entry")
-        with Horizontal(id="kb-board-actions"):
+            yield Static("", id="kb-actions-spacer")
             yield Button("New Card", id="kb-new-card")
-            yield Button("Edit Markdown", id="kb-edit-board")
         with Horizontal(id="kb-entries-layout"):
             yield DataTable(id="kb-entry-table")
             with Vertical(id="kb-viewer"):
@@ -315,6 +314,12 @@ class KnowledgePanel(Container):
                     yield Markdown(id="kb-viewer-markdown")
                 yield KBBoard(self, id="kb-board")
                 yield Static("", id="kb-backlinks")
+        yield Static(
+            "space: change type · board: h/j/k/l or arrows move · space: toggle "
+            "card · H/L: move card · enter: open/link · n: new · d: delete · "
+            "e: edit raw",
+            id="kb-help",
+        )
         yield Static("", id="kb-status")
 
     # ------------------------------------------------------------------
@@ -342,7 +347,7 @@ class KnowledgePanel(Container):
 
     def on_mount(self) -> None:
         self.table.add_columns("Kind", "Title")
-        self.query_one("#kb-board-actions").display = False
+        self.query_one("#kb-new-card").display = False
         self.board.display = False
         self.reload_entries()
 
@@ -420,13 +425,13 @@ class KnowledgePanel(Container):
             self.board.display = False
             self.query_one("#kb-viewer-scroll").display = False
             self.query_one("#kb-backlinks").display = False
-            self.query_one("#kb-board-actions").display = False
+            self.query_one("#kb-new-card").display = False
             self.viewer.update("")
             self.query_one("#kb-backlinks", Static).update("")
             return
         self._selected_entry_id = entry.id
         is_board = entry.kind == "board"
-        self.query_one("#kb-board-actions").display = is_board
+        self.query_one("#kb-new-card").display = is_board
         self.board.display = is_board
         self.query_one("#kb-viewer-scroll").display = not is_board
         self.query_one("#kb-backlinks").display = not is_board
@@ -703,7 +708,3 @@ class KnowledgePanel(Container):
     @on(Button.Pressed, "#kb-new-card")
     def handle_new_card(self, _: Button.Pressed) -> None:
         self.board.action_new_card()
-
-    @on(Button.Pressed, "#kb-edit-board")
-    def handle_edit_board(self, _: Button.Pressed) -> None:
-        self.board.action_edit_markdown()

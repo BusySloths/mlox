@@ -234,7 +234,7 @@ def test_space_cycles_kind(tmp_path) -> None:
             assert workspace.get_entry(note.id).body_md.startswith("## Open")
             # ... and the right-hand side switched to the board view.
             assert panel.board.display
-            assert panel.query_one("#kb-board-actions").display
+            assert panel.query_one("#kb-new-card").display
 
             panel.action_cycle_kind()  # wraps back to note
             assert workspace.get_entry(note.id).kind == "note"
