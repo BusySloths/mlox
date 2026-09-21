@@ -52,10 +52,15 @@ Use `reload()` to discard uncommitted in-memory metadata changes.
 ## Results
 
 Application methods return `OperationResult`, containing `success`, `code`,
-`message`, and optional `data`. Result payloads are currently dictionaries whose
-shape depends on the operation. Typed payload contracts are the next API-hardening
-step; callers should prefer documented keys and avoid depending on live internal
-objects found in legacy payloads.
+`message`, and optional `data`. `OperationResult` is generic, and public server,
+service, model, and configuration operations declare `TypedDict` payload contracts
+from `mlox.application.payloads`. Runtime payloads remain dictionaries for backward
+compatibility.
+
+Some mutation results still contain live `Bundle`, `AbstractServer`, or
+`AbstractService` references for existing UI callers. Those contracts are explicitly
+marked as internal payloads. External adapters must serialize stable fields rather
+than returning these objects directly.
 
 ## Compatibility
 

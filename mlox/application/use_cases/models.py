@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 import requests
 import urllib3
 
+from mlox.application.payloads import ListModelsData, ModelExampleData, ServiceData
 from mlox.application.result import OperationResult
 from mlox.project.state import WorkspaceState
 
@@ -52,7 +53,7 @@ def describe_model_operations(infra) -> OperationResult:
 def build_model_example(
     endpoint: dict[str, Any],
     model: dict[str, Any] | None = None,
-) -> OperationResult:
+) -> OperationResult[ModelExampleData]:
     """Build one concrete serving example for a selected endpoint/model."""
 
     service = endpoint.get("service_ref")
@@ -102,7 +103,7 @@ def list_models(
     project: WorkspaceState,
     *,
     registry_name: Optional[str] = None,
-) -> OperationResult:
+) -> OperationResult[ListModelsData]:
     model_servers = project.infrastructure.filter_by_group("model-server")
     registries = project.infrastructure.filter_by_group("model-registry")
     if not registries:
@@ -117,7 +118,7 @@ def list_models(
                 f"Registry service '{registry_name}' not found in the project.",
             )
 
-    models = []
+    models: list[dict[str, Any]] = []
     for registry in registries:
         for model in registry.list_models():
             is_deployed = False
@@ -185,7 +186,7 @@ def deploy_model(
     model_version: str,
     server_ip: str,
     template_id: str,
-) -> OperationResult:
+) -> OperationResult[ServiceData]:
     target_bundle = project.infrastructure.get_bundle_by_ip(server_ip)
     if not target_bundle:
         return OperationResult(False, 14, f"Server {server_ip} not found in infrastructure.")

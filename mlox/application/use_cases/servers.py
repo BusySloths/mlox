@@ -4,6 +4,15 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from mlox.application.payloads import (
+    BundleData,
+    ConfigSummary,
+    ListConfigsData,
+    ListServersData,
+    ServerHealthData,
+    ServerOperationData,
+    ServerSummary,
+)
 from mlox.application.result import OperationResult
 from mlox.config import load_all_server_configs
 from mlox.infra import Bundle
@@ -19,8 +28,8 @@ from mlox.utils import dataclass_to_dict
 logger = logging.getLogger(__name__)
 
 
-def list_servers(project: WorkspaceState) -> OperationResult:
-    payload = [
+def list_servers(project: WorkspaceState) -> OperationResult[ListServersData]:
+    payload: list[ServerSummary] = [
         {
             "ip": bundle.server.ip,
             "state": getattr(bundle.server, "state", "unknown"),
@@ -46,7 +55,7 @@ def add_server(
     root_user: str,
     root_password: str,
     extra_params: Optional[Dict[str, str]] = None,
-) -> OperationResult:
+) -> OperationResult[BundleData]:
     config = load_server_config(template_path)
     if config is None:
         return OperationResult(False, 3, "Server template not found.")
@@ -75,7 +84,7 @@ def add_server(
     return OperationResult(True, 0, f"Added server {ip}.", {"bundle": bundle})
 
 
-def setup_server(project: WorkspaceState, *, ip: str) -> OperationResult:
+def setup_server(project: WorkspaceState, *, ip: str) -> OperationResult[ServerOperationData]:
     bundle = project.infrastructure.get_bundle_by_ip(ip)
     if not bundle:
         return OperationResult(False, 5, "Server not found in infrastructure.")
@@ -193,7 +202,7 @@ def _runtime_backend_status(server, ip: str) -> OperationResult:
     )
 
 
-def teardown_server(project: WorkspaceState, *, ip: str) -> OperationResult:
+def teardown_server(project: WorkspaceState, *, ip: str) -> OperationResult[None]:
     infra = project.infrastructure
     bundle = infra.get_bundle_by_ip(ip)
     if not bundle:
@@ -224,7 +233,7 @@ def save_server_key(
     *,
     ip: str,
     output_path: str,
-) -> OperationResult:
+) -> OperationResult[None]:
     bundle = project.infrastructure.get_bundle_by_ip(ip)
     if not bundle:
         return OperationResult(False, 5, "Server not found in infrastructure.")
@@ -232,8 +241,10 @@ def save_server_key(
     return OperationResult(True, 0, f"Saved key for {ip} to {output_path}.")
 
 
-def list_server_configs(list_configs) -> OperationResult:
-    payload = [{"id": cfg.id, "path": cfg.path} for cfg in list_configs()]
+def list_server_configs(list_configs) -> OperationResult[ListConfigsData]:
+    payload: list[ConfigSummary] = [
+        {"id": cfg.id, "path": cfg.path} for cfg in list_configs()
+    ]
     message = "No server configs found." if not payload else "Server configs retrieved."
     return OperationResult(True, 0, message, {"configs": payload})
 
@@ -449,7 +460,9 @@ def server_has_health(server) -> bool:
     return False
 
 
-def check_server_health(server, *, no_cache: bool = True) -> OperationResult:
+def check_server_health(
+    server, *, no_cache: bool = True
+) -> OperationResult[ServerHealthData]:
     """Run a server health check and update the server state from the response."""
 
     if not server:

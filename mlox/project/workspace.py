@@ -5,8 +5,20 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, Dict, Mapping, Optional
+from typing import Any, Callable, Dict, Mapping, Optional, TypeVar
 
+from mlox.application.payloads import (
+    BundleData,
+    ListConfigsData,
+    ListModelsData,
+    ListServersData,
+    ListServicesData,
+    ServerHealthData,
+    ServerOperationData,
+    ServiceData,
+    ServiceHealthData,
+    ServiceLogsData,
+)
 from mlox.application.result import OperationResult
 from mlox.application.use_cases import models, project, servers, services
 from mlox.config import (
@@ -31,6 +43,7 @@ from mlox.service import AbstractSecretManagerService, AbstractService
 from mlox.utils import save_to_json
 
 DEFAULT_MLSERVER_TEMPLATE_ID = "mlflow-mlserver-3.8.1-docker"
+T = TypeVar("T")
 
 
 class ProjectWorkspace:
@@ -426,7 +439,7 @@ class ProjectWorkspace:
         kind: str,
         service_uuid: str | None,
         migrate: bool,
-    ) -> OperationResult:
+    ) -> OperationResult[None]:
         if not target.is_working():
             return OperationResult(False, 16, "The selected secret manager is unavailable.")
         if (
@@ -465,7 +478,7 @@ class ProjectWorkspace:
         service_uuid: str,
         *,
         migrate: bool = True,
-    ) -> OperationResult:
+    ) -> OperationResult[None]:
         """Select a service-backed secret manager and optionally migrate secrets."""
 
         service = self.infrastructure.get_service_by_uuid(service_uuid)
@@ -486,7 +499,7 @@ class ProjectWorkspace:
         self,
         *,
         migrate: bool = True,
-    ) -> OperationResult:
+    ) -> OperationResult[None]:
         """Select embedded project storage and optionally migrate secrets."""
 
         return self._switch_secret_manager(
@@ -509,7 +522,9 @@ class ProjectWorkspace:
             if name != "MLOX_CONFIG_INFRASTRUCTURE":
                 self.secrets.save_secret(name, value)
 
-    def _mutate(self, operation: Callable[[], OperationResult]) -> OperationResult:
+    def _mutate(
+        self, operation: Callable[[], OperationResult[T]]
+    ) -> OperationResult[T]:
         try:
             result = operation()
             if not result.success:
@@ -527,7 +542,7 @@ class ProjectWorkspace:
         service_dir, candidate = os.path.split(path)
         return load_config(stacks, service_dir, candidate)
 
-    def project_created(self) -> OperationResult:
+    def project_created(self) -> OperationResult[dict[str, "ProjectWorkspace"]]:
         """Return the standard successful result for a newly created workspace."""
 
         result = project.create_project(self._state)
@@ -535,7 +550,7 @@ class ProjectWorkspace:
             result.data = {"workspace": self}
         return result
 
-    def list_servers(self) -> OperationResult:
+    def list_servers(self) -> OperationResult[ListServersData]:
         """List servers registered in the project infrastructure."""
 
         return servers.list_servers(self._state)
@@ -549,7 +564,7 @@ class ProjectWorkspace:
         root_user: str,
         root_password: str,
         extra_params: Optional[Dict[str, str]] = None,
-    ) -> OperationResult:
+    ) -> OperationResult[BundleData]:
         """Instantiate, validate, and persist a server from a template path."""
 
         return self._mutate(
@@ -569,7 +584,7 @@ class ProjectWorkspace:
         self,
         config: ServiceConfig,
         params: Dict[str, str],
-    ) -> OperationResult:
+    ) -> OperationResult[BundleData]:
         """Add a server from an already loaded configuration.
 
         This frontend integration helper preserves the same mutation boundary as
@@ -589,12 +604,12 @@ class ProjectWorkspace:
             )
         )
 
-    def setup_server(self, *, ip: str) -> OperationResult:
+    def setup_server(self, *, ip: str) -> OperationResult[ServerOperationData]:
         """Set up a registered server and persist its resulting state."""
 
         return self._mutate(lambda: servers.setup_server(self._state, ip=ip))
 
-    def check_server_health(self, *, ip: str) -> OperationResult:
+    def check_server_health(self, *, ip: str) -> OperationResult[ServerHealthData]:
         """Check a registered server's health and persist its normalized state."""
 
         bundle = self.infrastructure.get_bundle_by_ip(ip)
@@ -604,7 +619,7 @@ class ProjectWorkspace:
             lambda: servers.check_server_health(bundle.server),
         )
 
-    def teardown_server(self, *, ip: str) -> OperationResult:
+    def teardown_server(self, *, ip: str) -> OperationResult[None]:
         """Tear down a server and remove its bundle from the project.
 
         Removal is rejected when the bundle hosts the active secret manager.
@@ -624,7 +639,9 @@ class ProjectWorkspace:
             )
         return self._mutate(lambda: servers.teardown_server(self._state, ip=ip))
 
-    def save_server_key(self, *, ip: str, output_path: str) -> OperationResult:
+    def save_server_key(
+        self, *, ip: str, output_path: str
+    ) -> OperationResult[None]:
         """Export a server key to an encrypted file at ``output_path``."""
 
         return servers.save_server_key(
@@ -635,7 +652,7 @@ class ProjectWorkspace:
             output_path=output_path,
         )
 
-    def list_services(self) -> OperationResult:
+    def list_services(self) -> OperationResult[ListServicesData]:
         """List services across all project server bundles."""
 
         return services.list_services(self._state)
@@ -646,7 +663,7 @@ class ProjectWorkspace:
         server_ip: str,
         template_id: str,
         params: Optional[Dict[str, str]] = None,
-    ) -> OperationResult:
+    ) -> OperationResult[ServiceData]:
         """Instantiate and persist a service on a registered server."""
 
         return self._mutate(
@@ -666,7 +683,7 @@ class ProjectWorkspace:
         server_ip: str,
         params: Optional[Dict[str, str]] = None,
         service: AbstractService | None = None,
-    ) -> OperationResult:
+    ) -> OperationResult[ServiceData]:
         """Add a service from an already loaded configuration.
 
         This frontend integration helper supports pre-built service instances;
@@ -684,19 +701,19 @@ class ProjectWorkspace:
             )
         )
 
-    def setup_service(self, *, name: str) -> OperationResult:
+    def setup_service(self, *, name: str) -> OperationResult[ServiceData]:
         """Set up and start a registered service."""
 
         return self._mutate(lambda: services.setup_service(self._state, name=name))
 
-    def check_service_health(self, *, name: str) -> OperationResult:
+    def check_service_health(self, *, name: str) -> OperationResult[ServiceHealthData]:
         """Check a service's health and persist its normalized state."""
 
         return self._mutate(
             lambda: services.check_service_health(self._state, name=name)
         )
 
-    def teardown_service(self, *, name: str) -> OperationResult:
+    def teardown_service(self, *, name: str) -> OperationResult[ServiceData]:
         """Tear down and remove a service from the project.
 
         Removal is rejected when the service is the active secret manager.
@@ -714,22 +731,24 @@ class ProjectWorkspace:
             )
         return self._mutate(lambda: services.teardown_service(self._state, name=name))
 
-    def start_service(self, *, name: str) -> OperationResult:
+    def start_service(self, *, name: str) -> OperationResult[ServiceData]:
         """Start a previously configured service and persist its state."""
 
         return self._mutate(lambda: services.start_service(self._state, name=name))
 
-    def restart_service(self, *, name: str) -> OperationResult:
+    def restart_service(self, *, name: str) -> OperationResult[ServiceData]:
         """Restart or repair an initialized service and persist its state."""
 
         return self._mutate(lambda: services.restart_service(self._state, name=name))
 
-    def stop_service(self, *, name: str) -> OperationResult:
+    def stop_service(self, *, name: str) -> OperationResult[ServiceData]:
         """Stop an initialized service and persist its state."""
 
         return self._mutate(lambda: services.stop_service(self._state, name=name))
 
-    def rename_service(self, *, name: str, new_name: str) -> OperationResult:
+    def rename_service(
+        self, *, name: str, new_name: str
+    ) -> OperationResult[ServiceData]:
         """Rename a service while preserving its stable UUID."""
 
         return self._mutate(
@@ -746,7 +765,7 @@ class ProjectWorkspace:
         name: str,
         label: Optional[str] = None,
         tail: int = 200,
-    ) -> OperationResult:
+    ) -> OperationResult[ServiceLogsData]:
         """Return recent logs for a service or one of its log labels."""
 
         return services.service_logs(
@@ -760,7 +779,7 @@ class ProjectWorkspace:
         self,
         *,
         registry_name: Optional[str] = None,
-    ) -> OperationResult:
+    ) -> OperationResult[ListModelsData]:
         """List models, optionally restricted to one registry service."""
 
         return models.list_models(self._state, registry_name=registry_name)
@@ -773,7 +792,7 @@ class ProjectWorkspace:
         model_version: str,
         server_ip: str,
         template_id: str = DEFAULT_MLSERVER_TEMPLATE_ID,
-    ) -> OperationResult:
+    ) -> OperationResult[ServiceData]:
         """Deploy a registered model as a model-serving service."""
 
         return self._mutate(
@@ -794,13 +813,13 @@ class ProjectWorkspace:
         )
 
     @staticmethod
-    def list_server_configs() -> OperationResult:
+    def list_server_configs() -> OperationResult[ListConfigsData]:
         """List available server configuration templates."""
 
         return servers.list_server_configs(load_all_server_configs)
 
     @staticmethod
-    def list_service_configs() -> OperationResult:
+    def list_service_configs() -> OperationResult[ListConfigsData]:
         """List available service configuration templates."""
 
         return services.list_service_configs(load_all_service_configs)
