@@ -62,6 +62,25 @@ Some mutation results still contain live `Bundle`, `AbstractServer`, or
 marked as internal payloads. External adapters must serialize stable fields rather
 than returning these objects directly.
 
+## CLI exposure
+
+The CLI exposes a deliberate subset of this API through the command manifest in
+`mlox/cli/specifications.py`. The generator reads parameter types and defaults from
+the selected `ProjectWorkspace` method, while the manifest retains interface-only
+decisions such as command names, arguments versus options, aliases, input
+transforms, help text, and result renderers.
+
+Adding a straightforward CLI command therefore requires:
+
+1. a typed `ProjectWorkspace` method returning `OperationResult`;
+2. an explicit `WorkspaceCommand` entry in the appropriate manifest; and
+3. a renderer that converts its result payload to terminal output.
+
+Manifest entries are validated against workspace signatures when the CLI is
+imported. Methods are never exposed merely because they exist. Commands that parse
+compound values, coordinate several operations, or need custom output flow should
+remain handwritten adapters; model deployment is the current example.
+
 ## Compatibility
 
 Within a release line, supported method names, parameters, parameter kinds, and
