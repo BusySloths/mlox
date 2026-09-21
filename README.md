@@ -102,6 +102,7 @@ Service and server definitions remain inspectable and configuration-driven, whil
 For deeper reading:
 
 - [Architecture Guide](docs/ARCHITECTURE.md) — codebase walkthrough
+- [Python API](docs/PYTHON_API.md) — supported workspace SDK contract
 
 ---
 
