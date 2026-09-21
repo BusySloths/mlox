@@ -1,13 +1,17 @@
+"""Model CLI commands, combining generated queries with a deployment adapter."""
+
 from __future__ import annotations
 
 from typing import Optional
 
 import typer
 
-from mlox.project import ProjectWorkspace
 from mlox.cli.common import handle_result
 from mlox.cli.context import resolve_credentials
-from mlox.cli.rendering.table import render_table
+from mlox.cli.generation import register_workspace_commands
+from mlox.cli.specifications.model import MODEL_COMMANDS
+from mlox.project import ProjectWorkspace
+
 
 model_app = typer.Typer(help="Manage ML models")
 
@@ -16,67 +20,15 @@ def _parse_model_identifier(model: str) -> tuple[str, str, str]:
     parts = model.split(":")
     if len(parts) != 3:
         typer.echo(
-            "[ERROR] Model identifier must be in the format <registry_name>:<model_name>:<version>.",
+            "[ERROR] Model identifier must be in the format "
+            "<registry_name>:<model_name>:<version>.",
             err=True,
         )
         raise typer.Exit(code=1)
     return parts[0], parts[1], parts[2]
 
 
-@model_app.command("list")
-def model_list(
-    project: Optional[str] = typer.Argument(None, help="Project name"),
-    password: Optional[str] = typer.Option(
-        None,
-        "--password",
-        help="Password for the project",
-        show_default=False,
-    ),
-    registry: Optional[str] = typer.Option(
-        None,
-        "--registry",
-        "-r",
-        help="Name or ID of the model registry service to use.",
-    ),
-) -> None:
-    """List registered models from the configured MLflow registry."""
-
-    resolved_project, resolved_password = resolve_credentials(project, password)
-    result = handle_result(
-        ProjectWorkspace.open(resolved_project, resolved_password).list_models(
-            registry_name=registry,
-        )
-    )
-    models = result.data.get("models", []) if result.data else []
-    if not models:
-        typer.echo(result.message)
-        return
-
-    rows = [
-        [
-            model.get("registry_name", "-"),
-            "x" if model.get("is_deployed", False) else "-",
-            model.get("Model", "-"),
-            model.get("Stage", "-"),
-            model.get("Version", "-"),
-            model.get("Description", "-"),
-            f"{model.get('registry_name', '-')}:{model.get('Model', '-')}:{model.get('Version', '-')}",
-        ]
-        for model in models
-    ]
-    render_table(
-        [
-            "Registry",
-            "Deployed",
-            "Model",
-            "Stage",
-            "Version",
-            "Description",
-            "Deploy Key",
-        ],
-        rows,
-        title="Models",
-    )
+GENERATED_MODEL_COMMANDS = register_workspace_commands(model_app, MODEL_COMMANDS)
 
 
 @model_app.command("deploy")
@@ -92,7 +44,10 @@ def model_deploy(
         ...,
         "--name",
         "-n",
-        help="Registered model to deploy with format <registry_name>:<model_name>:<version>",
+        help=(
+            "Registered model to deploy with format "
+            "<registry_name>:<model_name>:<version>"
+        ),
     ),
     target: str = typer.Option(
         ...,

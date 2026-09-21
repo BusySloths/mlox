@@ -5,11 +5,24 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, Dict, Mapping, Optional
+from typing import Any, Callable, Dict, Mapping, Optional, TypeVar
 
+from mlox.application.payloads import (
+    BundleData,
+    ListConfigsData,
+    ListModelsData,
+    ListServersData,
+    ListServicesData,
+    ServerHealthData,
+    ServerOperationData,
+    ServiceData,
+    ServiceHealthData,
+    ServiceLogsData,
+)
 from mlox.application.result import OperationResult
 from mlox.application.use_cases import models, project, servers, services
 from mlox.config import (
+    ServiceConfig,
     get_stacks_path,
     load_all_server_configs,
     load_all_service_configs,
@@ -26,10 +39,11 @@ from mlox.project.secrets import (
 )
 from mlox.project.state import WorkspaceState
 from mlox.secret_manager import AbstractSecretManager
-from mlox.service import AbstractSecretManagerService
+from mlox.service import AbstractSecretManagerService, AbstractService
 from mlox.utils import save_to_json
 
 DEFAULT_MLSERVER_TEMPLATE_ID = "mlflow-mlserver-3.8.1-docker"
+T = TypeVar("T")
 
 
 class ProjectWorkspace:
@@ -47,6 +61,8 @@ class ProjectWorkspace:
 
     @property
     def name(self) -> str:
+        """Return the project display name."""
+
         return self._state.name
 
     @name.setter
@@ -55,6 +71,8 @@ class ProjectWorkspace:
 
     @property
     def descr(self) -> str:
+        """Return the project description."""
+
         return self._state.descr
 
     @descr.setter
@@ -63,6 +81,8 @@ class ProjectWorkspace:
 
     @property
     def version(self) -> str:
+        """Return the persisted project schema version."""
+
         return self._state.version
 
     @version.setter
@@ -71,58 +91,86 @@ class ProjectWorkspace:
 
     @property
     def infrastructure(self) -> Infrastructure:
+        """Return the live infrastructure graph for this workspace."""
+
         return self._state.infrastructure
 
     @property
     def id(self) -> str:
+        """Return the stable project identifier."""
+
         return self._state.id
 
     @property
     def created_at(self) -> str:
+        """Return the project creation timestamp."""
+
         return self._state.created_at
 
     @property
     def last_opened_at(self) -> str:
+        """Return the timestamp of the most recent persisted workspace update."""
+
         return self._state.last_opened_at
 
     @property
     def data_source_id(self) -> str:
+        """Return the configured project data-source identifier."""
+
         return self._state.data_source_id
 
     @property
     def data_source_kind(self) -> str:
+        """Return the configured project data-source implementation kind."""
+
         return self._state.data_source_kind
 
     @property
     def data_source_location(self) -> str:
+        """Return the configured project data-source location."""
+
         return self._state.data_source_location
 
     @property
     def data_source_config(self) -> Mapping[str, Any]:
+        """Return a read-only view of the project data-source configuration."""
+
         return MappingProxyType(self._state.data_source_config)
 
     @property
     def path(self) -> Path:
+        """Return the resolved path of the encrypted project file."""
+
         return self._repository.path
 
     @property
     def secrets(self) -> AbstractSecretManager:
+        """Return the active project secret manager."""
+
         return self._secrets
 
     @property
     def secret_manager_kind(self) -> str:
+        """Return the persisted secret-manager selection kind."""
+
         return self._state.secret_manager_kind
 
     @property
     def secret_manager_service_uuid(self) -> str | None:
+        """Return the selected service secret-manager UUID, when applicable."""
+
         return self._state.secret_manager_service_uuid
 
     @property
     def secret_manager_status(self) -> str:
+        """Return ``available`` when the selected secret manager is working."""
+
         return "available" if self.secrets.is_working() else "unavailable"
 
     @property
     def active_secret_manager_name(self) -> str:
+        """Return a user-facing name for the selected secret manager."""
+
         if self.secret_manager_kind == "embedded":
             return "Embedded Project Storage"
         service_uuid = self.secret_manager_service_uuid
@@ -141,6 +189,8 @@ class ProjectWorkspace:
         path: str,
         password: str,
     ) -> "ProjectWorkspace":
+        """Open an existing encrypted project file."""
+
         repository = SqlCipherRepository(path, password).open()
         return cls(repository, repository.load())
 
@@ -150,11 +200,15 @@ class ProjectWorkspace:
         path: str,
         password: str,
     ) -> "ProjectWorkspace":
+        """Create and open a new encrypted project file."""
+
         repository = SqlCipherRepository.create(path, password)
         return cls(repository, repository.load())
 
     @classmethod
     def can_open(cls, path: str, password: str) -> bool:
+        """Return whether an existing project can be opened with ``password``."""
+
         try:
             SqlCipherRepository(path, password).open()
             return True
@@ -162,10 +216,14 @@ class ProjectWorkspace:
             return False
 
     def commit(self) -> None:
+        """Atomically persist the current metadata and infrastructure state."""
+
         self._state.touch()
         self._repository.save(self._state)
 
     def reload(self) -> "ProjectWorkspace":
+        """Discard in-memory changes and reload the persisted project state."""
+
         self._state = self._repository.load()
         self._secrets = self._resolve_secret_manager()
         return self
@@ -175,18 +233,28 @@ class ProjectWorkspace:
     # ------------------------------------------------------------------
 
     def list_entries(self, kind: str | None = None) -> list[Entry]:
+        """List knowledge-base entries, optionally filtered by kind."""
+
         return self._repository.list_entries(kind)
 
     def get_entry(self, entry_id: str) -> Entry | None:
+        """Return a knowledge-base entry by identifier, or ``None``."""
+
         return self._repository.get_entry(entry_id)
 
     def find_entry_by_title(self, title: str, kind: str | None = None) -> Entry | None:
+        """Find a knowledge-base entry by title and optional kind."""
+
         return self._repository.find_entry_by_title(title, kind)
 
     def save_entry(self, entry: Entry) -> Entry:
+        """Create or update a knowledge-base entry and return the saved value."""
+
         return self._repository.save_entry(entry)
 
     def delete_entry(self, entry_id: str) -> None:
+        """Delete a knowledge-base entry by identifier."""
+
         self._repository.delete_entry(entry_id)
 
     def _resolve_secret_manager(self) -> AbstractSecretManager:
@@ -220,6 +288,8 @@ class ProjectWorkspace:
             )
 
     def list_secret_managers(self) -> list[SecretManagerDescriptor]:
+        """Describe embedded and service-backed secret managers in the project."""
+
         descriptors = [
             SecretManagerDescriptor(
                 id="embedded",
@@ -285,6 +355,8 @@ class ProjectWorkspace:
         return descriptors
 
     def probe_secret_manager(self, manager_id: str) -> SecretManagerDescriptor:
+        """Probe one secret manager and return its current availability."""
+
         if manager_id == "embedded":
             descriptor = SecretManagerDescriptor(
                 id="embedded",
@@ -367,7 +439,7 @@ class ProjectWorkspace:
         kind: str,
         service_uuid: str | None,
         migrate: bool,
-    ) -> OperationResult:
+    ) -> OperationResult[None]:
         if not target.is_working():
             return OperationResult(False, 16, "The selected secret manager is unavailable.")
         if (
@@ -406,7 +478,9 @@ class ProjectWorkspace:
         service_uuid: str,
         *,
         migrate: bool = True,
-    ) -> OperationResult:
+    ) -> OperationResult[None]:
+        """Select a service-backed secret manager and optionally migrate secrets."""
+
         service = self.infrastructure.get_service_by_uuid(service_uuid)
         if not isinstance(service, AbstractSecretManagerService):
             return OperationResult(False, 8, "Secret-manager service not found.")
@@ -425,7 +499,9 @@ class ProjectWorkspace:
         self,
         *,
         migrate: bool = True,
-    ) -> OperationResult:
+    ) -> OperationResult[None]:
+        """Select embedded project storage and optionally migrate secrets."""
+
         return self._switch_secret_manager(
             self._embedded_secrets,
             kind="embedded",
@@ -434,13 +510,21 @@ class ProjectWorkspace:
         )
 
     def import_secrets(self, manager: AbstractSecretManager | None) -> None:
+        """Import non-infrastructure secrets from another secret manager.
+
+        This is an integration helper used while loading or migrating projects;
+        callers normally use :attr:`secrets` or the secret-manager selection methods.
+        """
+
         if manager is None or isinstance(manager, EmbeddedSecretManager):
             return
         for name, value in manager.list_secrets(keys_only=False).items():
             if name != "MLOX_CONFIG_INFRASTRUCTURE":
                 self.secrets.save_secret(name, value)
 
-    def _mutate(self, operation: Callable[[], OperationResult]) -> OperationResult:
+    def _mutate(
+        self, operation: Callable[[], OperationResult[T]]
+    ) -> OperationResult[T]:
         try:
             result = operation()
             if not result.success:
@@ -453,18 +537,22 @@ class ProjectWorkspace:
             return OperationResult(False, 1, f"Operation failed: {exc}")
 
     @staticmethod
-    def _load_config_from_path(path: str):
+    def _load_config_from_path(path: str) -> ServiceConfig | None:
         stacks = get_stacks_path()
         service_dir, candidate = os.path.split(path)
         return load_config(stacks, service_dir, candidate)
 
-    def project_created(self) -> OperationResult:
+    def project_created(self) -> OperationResult[dict[str, "ProjectWorkspace"]]:
+        """Return the standard successful result for a newly created workspace."""
+
         result = project.create_project(self._state)
         if result.success:
             result.data = {"workspace": self}
         return result
 
-    def list_servers(self) -> OperationResult:
+    def list_servers(self) -> OperationResult[ListServersData]:
+        """List servers registered in the project infrastructure."""
+
         return servers.list_servers(self._state)
 
     def add_server(
@@ -476,7 +564,9 @@ class ProjectWorkspace:
         root_user: str,
         root_password: str,
         extra_params: Optional[Dict[str, str]] = None,
-    ) -> OperationResult:
+    ) -> OperationResult[BundleData]:
+        """Instantiate, validate, and persist a server from a template path."""
+
         return self._mutate(
             lambda: servers.add_server(
                 self._state,
@@ -492,9 +582,15 @@ class ProjectWorkspace:
 
     def add_server_from_config(
         self,
-        config: Any,
+        config: ServiceConfig,
         params: Dict[str, str],
-    ) -> OperationResult:
+    ) -> OperationResult[BundleData]:
+        """Add a server from an already loaded configuration.
+
+        This frontend integration helper preserves the same mutation boundary as
+        :meth:`add_server`; SDK callers should normally use :meth:`add_server`.
+        """
+
         return self._mutate(
             lambda: servers.add_server(
                 self._state,
@@ -508,10 +604,14 @@ class ProjectWorkspace:
             )
         )
 
-    def setup_server(self, *, ip: str) -> OperationResult:
+    def setup_server(self, *, ip: str) -> OperationResult[ServerOperationData]:
+        """Set up a registered server and persist its resulting state."""
+
         return self._mutate(lambda: servers.setup_server(self._state, ip=ip))
 
-    def check_server_health(self, *, ip: str) -> OperationResult:
+    def check_server_health(self, *, ip: str) -> OperationResult[ServerHealthData]:
+        """Check a registered server's health and persist its normalized state."""
+
         bundle = self.infrastructure.get_bundle_by_ip(ip)
         if not bundle:
             return OperationResult(False, 5, "Server not found in infrastructure.")
@@ -519,7 +619,14 @@ class ProjectWorkspace:
             lambda: servers.check_server_health(bundle.server),
         )
 
-    def teardown_server(self, *, ip: str) -> OperationResult:
+    def teardown_server(self, *, ip: str) -> OperationResult[None]:
+        """Tear down a server and remove its bundle from the project.
+
+        Removal is rejected when the bundle hosts the active secret manager.
+        Remote teardown is best effort; a failed remote teardown is reported while
+        the obsolete local bundle is still removed.
+        """
+
         bundle = self.infrastructure.get_bundle_by_ip(ip)
         active_uuid = self.secret_manager_service_uuid
         if bundle and active_uuid and any(
@@ -532,7 +639,11 @@ class ProjectWorkspace:
             )
         return self._mutate(lambda: servers.teardown_server(self._state, ip=ip))
 
-    def save_server_key(self, *, ip: str, output_path: str) -> OperationResult:
+    def save_server_key(
+        self, *, ip: str, output_path: str
+    ) -> OperationResult[None]:
+        """Export a server key to an encrypted file at ``output_path``."""
+
         return servers.save_server_key(
             self._state,
             save_to_json,
@@ -541,7 +652,9 @@ class ProjectWorkspace:
             output_path=output_path,
         )
 
-    def list_services(self) -> OperationResult:
+    def list_services(self) -> OperationResult[ListServicesData]:
+        """List services across all project server bundles."""
+
         return services.list_services(self._state)
 
     def add_service(
@@ -550,7 +663,9 @@ class ProjectWorkspace:
         server_ip: str,
         template_id: str,
         params: Optional[Dict[str, str]] = None,
-    ) -> OperationResult:
+    ) -> OperationResult[ServiceData]:
+        """Instantiate and persist a service on a registered server."""
+
         return self._mutate(
             lambda: services.add_service(
                 self._state,
@@ -563,12 +678,18 @@ class ProjectWorkspace:
 
     def add_service_from_config(
         self,
-        config: Any,
+        config: ServiceConfig,
         *,
         server_ip: str,
         params: Optional[Dict[str, str]] = None,
-        service=None,
-    ) -> OperationResult:
+        service: AbstractService | None = None,
+    ) -> OperationResult[ServiceData]:
+        """Add a service from an already loaded configuration.
+
+        This frontend integration helper supports pre-built service instances;
+        SDK callers should normally use :meth:`add_service`.
+        """
+
         return self._mutate(
             lambda: services.add_service(
                 self._state,
@@ -580,15 +701,24 @@ class ProjectWorkspace:
             )
         )
 
-    def setup_service(self, *, name: str) -> OperationResult:
+    def setup_service(self, *, name: str) -> OperationResult[ServiceData]:
+        """Set up and start a registered service."""
+
         return self._mutate(lambda: services.setup_service(self._state, name=name))
 
-    def check_service_health(self, *, name: str) -> OperationResult:
+    def check_service_health(self, *, name: str) -> OperationResult[ServiceHealthData]:
+        """Check a service's health and persist its normalized state."""
+
         return self._mutate(
             lambda: services.check_service_health(self._state, name=name)
         )
 
-    def teardown_service(self, *, name: str) -> OperationResult:
+    def teardown_service(self, *, name: str) -> OperationResult[ServiceData]:
+        """Tear down and remove a service from the project.
+
+        Removal is rejected when the service is the active secret manager.
+        """
+
         service = self.infrastructure.get_service(name)
         if (
             service is not None
@@ -601,16 +731,26 @@ class ProjectWorkspace:
             )
         return self._mutate(lambda: services.teardown_service(self._state, name=name))
 
-    def start_service(self, *, name: str) -> OperationResult:
+    def start_service(self, *, name: str) -> OperationResult[ServiceData]:
+        """Start a previously configured service and persist its state."""
+
         return self._mutate(lambda: services.start_service(self._state, name=name))
 
-    def restart_service(self, *, name: str) -> OperationResult:
+    def restart_service(self, *, name: str) -> OperationResult[ServiceData]:
+        """Restart or repair an initialized service and persist its state."""
+
         return self._mutate(lambda: services.restart_service(self._state, name=name))
 
-    def stop_service(self, *, name: str) -> OperationResult:
+    def stop_service(self, *, name: str) -> OperationResult[ServiceData]:
+        """Stop an initialized service and persist its state."""
+
         return self._mutate(lambda: services.stop_service(self._state, name=name))
 
-    def rename_service(self, *, name: str, new_name: str) -> OperationResult:
+    def rename_service(
+        self, *, name: str, new_name: str
+    ) -> OperationResult[ServiceData]:
+        """Rename a service while preserving its stable UUID."""
+
         return self._mutate(
             lambda: services.rename_service(
                 self._state,
@@ -625,7 +765,9 @@ class ProjectWorkspace:
         name: str,
         label: Optional[str] = None,
         tail: int = 200,
-    ) -> OperationResult:
+    ) -> OperationResult[ServiceLogsData]:
+        """Return recent logs for a service or one of its log labels."""
+
         return services.service_logs(
             self._state,
             name=name,
@@ -637,7 +779,9 @@ class ProjectWorkspace:
         self,
         *,
         registry_name: Optional[str] = None,
-    ) -> OperationResult:
+    ) -> OperationResult[ListModelsData]:
+        """List models, optionally restricted to one registry service."""
+
         return models.list_models(self._state, registry_name=registry_name)
 
     def deploy_model(
@@ -648,7 +792,9 @@ class ProjectWorkspace:
         model_version: str,
         server_ip: str,
         template_id: str = DEFAULT_MLSERVER_TEMPLATE_ID,
-    ) -> OperationResult:
+    ) -> OperationResult[ServiceData]:
+        """Deploy a registered model as a model-serving service."""
+
         return self._mutate(
             lambda: models.deploy_model(
                 self._state,
@@ -667,9 +813,13 @@ class ProjectWorkspace:
         )
 
     @staticmethod
-    def list_server_configs() -> OperationResult:
+    def list_server_configs() -> OperationResult[ListConfigsData]:
+        """List available server configuration templates."""
+
         return servers.list_server_configs(load_all_server_configs)
 
     @staticmethod
-    def list_service_configs() -> OperationResult:
+    def list_service_configs() -> OperationResult[ListConfigsData]:
+        """List available service configuration templates."""
+
         return services.list_service_configs(load_all_service_configs)

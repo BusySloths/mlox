@@ -136,6 +136,20 @@ def test_server_add_success(monkeypatch):
     assert kwargs["extra_params"]["CUSTOM"] == "value"
 
 
+def test_server_setup_maps_positional_ip(monkeypatch):
+    operation_result = OperationResult(True, 0, "Server setup complete.")
+    mock_setup = _patch_application(monkeypatch, "setup_server", operation_result)
+
+    result = runner.invoke(
+        cli.app,
+        ["server", "setup", "proj", "1.2.3.4", "--password", "pw"],
+    )
+
+    assert result.exit_code == 0
+    assert "Server setup complete." in result.stdout
+    mock_setup.assert_called_once_with(ip="1.2.3.4")
+
+
 def test_service_list_no_services(monkeypatch):
     operation_result = OperationResult(True, 0, "No services found.", {"services": []})
     _patch_application(monkeypatch, "list_services", operation_result)
@@ -169,6 +183,34 @@ def test_service_list_outputs(monkeypatch):
     assert "| svc" in result.stdout
     assert "svc-template" in result.stdout
     assert "1.1.1.1" in result.stdout
+
+
+def test_service_logs_infers_optional_values_and_defaults(monkeypatch):
+    operation_result = OperationResult(True, 0, "Logs retrieved.", {"logs": "line"})
+    mock_logs = _patch_application(monkeypatch, "service_logs", operation_result)
+
+    result = runner.invoke(
+        cli.app,
+        ["service", "logs", "proj", "api", "--password", "pw"],
+    )
+
+    assert result.exit_code == 0
+    assert "line" in result.stdout
+    mock_logs.assert_called_once_with(name="api", label=None, tail=200)
+
+
+def test_model_list_maps_registry_alias(monkeypatch):
+    operation_result = OperationResult(True, 0, "No models found.", {"models": []})
+    mock_list = _patch_application(monkeypatch, "list_models", operation_result)
+
+    result = runner.invoke(
+        cli.app,
+        ["model", "list", "proj", "-r", "registry", "--password", "pw"],
+    )
+
+    assert result.exit_code == 0
+    assert "No models found." in result.stdout
+    mock_list.assert_called_once_with(registry_name="registry")
 
 
 def test_server_configs_list_no_configs(monkeypatch):

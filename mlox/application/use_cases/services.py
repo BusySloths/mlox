@@ -3,6 +3,15 @@ from __future__ import annotations
 import webbrowser
 from typing import Any, Dict, List, Optional
 
+from mlox.application.payloads import (
+    ConfigSummary,
+    ListConfigsData,
+    ListServicesData,
+    ServiceData,
+    ServiceHealthData,
+    ServiceLogsData,
+    ServiceSummary,
+)
 from mlox.application.result import OperationResult
 from mlox.config import load_all_service_configs
 from mlox.project.state import WorkspaceState
@@ -50,7 +59,9 @@ def service_can_restart(service: object | None) -> bool:
     return getattr(type(service), "restart", None) is not AbstractService.restart
 
 
-def check_service_health(project: WorkspaceState, *, name: str) -> OperationResult:
+def check_service_health(
+    project: WorkspaceState, *, name: str
+) -> OperationResult[ServiceHealthData]:
     """Run a service health check and persist the service state."""
 
     infra = project.infrastructure
@@ -240,8 +251,8 @@ def open_service_web_ui(
     return OperationResult(True, 0, f"Opened service web UI: {url}", {"url": url})
 
 
-def list_services(project: WorkspaceState) -> OperationResult:
-    payload: List[Dict[str, Any]] = []
+def list_services(project: WorkspaceState) -> OperationResult[ListServicesData]:
+    payload: list[ServiceSummary] = []
     for bundle in project.infrastructure.bundles:
         for service in bundle.services:
             payload.append(
@@ -279,7 +290,7 @@ def add_service(
     template_id: str,
     params: Optional[Dict[str, str]] = None,
     service: AbstractService | None = None,
-) -> OperationResult:
+) -> OperationResult[ServiceData]:
     config = load_service_config(template_id)
     if not config:
         return OperationResult(False, 6, "Service template not found.")
@@ -334,7 +345,7 @@ def add_service(
     )
 
 
-def setup_service(project: WorkspaceState, *, name: str) -> OperationResult:
+def setup_service(project: WorkspaceState, *, name: str) -> OperationResult[ServiceData]:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -348,7 +359,7 @@ def setup_service(project: WorkspaceState, *, name: str) -> OperationResult:
     return OperationResult(True, 0, f"Service {name} set up.", {"service": service})
 
 
-def teardown_service(project: WorkspaceState, *, name: str) -> OperationResult:
+def teardown_service(project: WorkspaceState, *, name: str) -> OperationResult[ServiceData]:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -365,7 +376,7 @@ def teardown_service(project: WorkspaceState, *, name: str) -> OperationResult:
     return OperationResult(True, 0, f"Service {name} removed.", {"service": service})
 
 
-def start_service(project: WorkspaceState, *, name: str) -> OperationResult:
+def start_service(project: WorkspaceState, *, name: str) -> OperationResult[ServiceData]:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -378,7 +389,7 @@ def start_service(project: WorkspaceState, *, name: str) -> OperationResult:
     return OperationResult(True, 0, f"Service {name} started.", {"service": service})
 
 
-def restart_service(project: WorkspaceState, *, name: str) -> OperationResult:
+def restart_service(project: WorkspaceState, *, name: str) -> OperationResult[ServiceData]:
     """Restart or repair an initialized service using its current configuration."""
 
     infra = project.infrastructure
@@ -402,7 +413,7 @@ def restart_service(project: WorkspaceState, *, name: str) -> OperationResult:
     )
 
 
-def stop_service(project: WorkspaceState, *, name: str) -> OperationResult:
+def stop_service(project: WorkspaceState, *, name: str) -> OperationResult[ServiceData]:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -452,7 +463,9 @@ def _service_has_compose_restart(service: object) -> bool:
     )
 
 
-def rename_service(project: WorkspaceState, *, name: str, new_name: str) -> OperationResult:
+def rename_service(
+    project: WorkspaceState, *, name: str, new_name: str
+) -> OperationResult[ServiceData]:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -477,7 +490,7 @@ def service_logs(
     name: str,
     label: Optional[str] = None,
     tail: int = 200,
-) -> OperationResult:
+) -> OperationResult[ServiceLogsData]:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
@@ -509,8 +522,10 @@ def _service_log_labels(service: object) -> List[str]:
     return list((getattr(service, "compose_service_names", {}) or {}).keys())
 
 
-def list_service_configs(list_configs) -> OperationResult:
-    payload = [{"id": cfg.id, "path": cfg.path} for cfg in list_configs()]
+def list_service_configs(list_configs) -> OperationResult[ListConfigsData]:
+    payload: list[ConfigSummary] = [
+        {"id": cfg.id, "path": cfg.path} for cfg in list_configs()
+    ]
     message = "No service configs found." if not payload else "Service configs retrieved."
     return OperationResult(True, 0, message, {"configs": payload})
 
