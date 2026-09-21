@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from mlox.cli.generation import register_workspace_commands
-from mlox.cli.specifications import SERVICE_COMMANDS, SERVICE_CONFIG_COMMANDS
+from mlox.cli.specifications.service import SERVICE_COMMANDS, SERVICE_CONFIG_COMMANDS
 
 
 service_app = typer.Typer(help="Manage services running on servers")

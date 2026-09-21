@@ -94,8 +94,11 @@ A `Bundle` (`mlox/infra.py`) ties one server to its deployed services;
 - `mlox/infra.py`: topology model containing bundles, servers, and services.
 - `mlox/application/use_cases/`: project-based server, service, and model actions.
 - `mlox/project/workspace.py`: public `ProjectWorkspace` API and mutation boundary.
-- `mlox/cli/specifications.py`: explicit allowlist and CLI metadata for generated
-  workspace commands; `mlox/cli/generation.py` validates and registers them.
+- `mlox/cli/specifications/`: domain-specific, declarative CLI contracts and the
+  aggregate discovery surface. These are command recipes, not infrastructure YAML
+  templates.
+- `mlox/cli/commands/`: executable Typer group wiring and handwritten adapters;
+  `mlox/cli/generation.py` validates and registers declared workspace commands.
 - `mlox/config.py`: YAML and plugin config loading.
 - `mlox/executors.py` and `mlox/execution/`: command execution and backend helpers.
 - `mlox/ui/registry.py`: frontend handler lookup for frontend-specific setup panels.
@@ -188,6 +191,8 @@ reload, and tests when changing them:
 - CLI generation must remain allowlisted. Infer types and defaults from
   `ProjectWorkspace`, but keep CLI naming, aliases, transforms, and rendering in
   the CLI layer; retain handwritten adapters for orchestration-heavy commands.
+- Keep declarative command contracts grouped by domain under `cli/specifications/`;
+  matching modules under `cli/commands/` own executable Typer registration.
 - Successful application mutations commit once. Failed mutations reload workspace state.
 - `workspace.secrets` exposes the single selected provider. Unavailable external
   providers must remain selected rather than falling back to embedded storage.

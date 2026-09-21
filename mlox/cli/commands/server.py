@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from mlox.cli.generation import register_workspace_commands
-from mlox.cli.specifications import SERVER_COMMANDS, SERVER_CONFIG_COMMANDS
+from mlox.cli.specifications.server import SERVER_COMMANDS, SERVER_CONFIG_COMMANDS
 
 
 server_app = typer.Typer(help="Manage servers in the project infrastructure")

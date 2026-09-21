@@ -12,7 +12,7 @@ from mlox.cli.generation import (
     validate_workspace_command,
 )
 from mlox.cli.rendering.results import render_message
-from mlox.cli.specifications import SERVER_COMMANDS
+from mlox.cli.specifications.server import SERVER_COMMANDS
 
 
 def _server_command(name: str) -> WorkspaceCommand:

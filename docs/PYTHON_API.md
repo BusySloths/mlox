@@ -64,11 +64,19 @@ than returning these objects directly.
 
 ## CLI exposure
 
-The CLI exposes a deliberate subset of this API through the command manifest in
-`mlox/cli/specifications.py`. The generator reads parameter types and defaults from
-the selected `ProjectWorkspace` method, while the manifest retains interface-only
-decisions such as command names, arguments versus options, aliases, input
-transforms, help text, and result renderers.
+The CLI exposes a deliberate subset of this API through domain manifests under
+`mlox/cli/specifications/`. A specification module such as
+`specifications/server.py` is a declarative CLI contract: it selects workspace
+methods and describes command names, arguments versus options, aliases, input
+transforms, help text, and result renderers. It is analogous to a reusable command
+recipe, not to an MLOX server or service YAML template.
+
+The matching module under `mlox/cli/commands/` is the executable Typer wiring. For
+example, `commands/server.py` creates the server command group and registers the
+recipes from `specifications/server.py`. The shared generator reads parameter types
+and defaults from the selected `ProjectWorkspace` methods. The aggregate
+`specifications` package re-exports every domain manifest for future discovery by
+documentation or agent adapters.
 
 Adding a straightforward CLI command therefore requires:
 

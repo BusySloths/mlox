@@ -9,7 +9,7 @@ import typer
 from mlox.cli.common import handle_result
 from mlox.cli.context import resolve_credentials
 from mlox.cli.generation import register_workspace_commands
-from mlox.cli.specifications import MODEL_COMMANDS
+from mlox.cli.specifications.model import MODEL_COMMANDS
 from mlox.project import ProjectWorkspace
 
 
