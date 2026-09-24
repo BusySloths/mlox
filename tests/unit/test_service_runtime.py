@@ -208,8 +208,8 @@ def test_secret_manager_and_telemetry_bindings_are_independent_and_reversible():
 
     assert service.secret_manager_uuid == secret_provider.uuid
     assert service.telemetry_uuid == telemetry_provider.uuid
-    assert service.get_bound_secret_manager() is service.get_bound_secret_manager()
-    assert secret_provider.calls == 1
+    assert service.get_bound_secret_manager() is not service.get_bound_secret_manager()
+    assert secret_provider.calls == 3
     assert service.get_bound_telemetry_secrets()["collector_url"].endswith("4317")
 
     service.unbind_telemetry(conn=object())

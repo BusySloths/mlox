@@ -101,6 +101,12 @@ class MLFlowGatewayDockerService(
         )
         serve_script = self.resolve_asset(self.serve_script)
         self.exec.fs_copy(conn, str(serve_script), f"{self.target_path}/serve.py")
+        otel_client = self.resolve_asset("otel/client.py")
+        self.exec.fs_copy(
+            conn,
+            str(otel_client),
+            f"{self.target_path}/otel_client.py",
+        )
         start_script = self.resolve_asset(self.start_script)
         self.exec.fs_copy(
             conn,
@@ -144,7 +150,7 @@ class MLFlowGatewayDockerService(
         )
 
         if self.secret_manager_uuid:
-            manager = self.get_bound_secret_manager(refresh=True)
+            manager = self.get_bound_secret_manager()
             if manager is not None:
                 self._apply_secret_manager_binding(
                     conn,

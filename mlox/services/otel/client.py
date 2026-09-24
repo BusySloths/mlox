@@ -1,13 +1,15 @@
 import grpc  # type: ignore
 import logging
+import os
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Dict, Any, Mapping, Optional
 
 # WORK IN PROGRESS: OTel client API is still being refined.
 
-from opentelemetry import metrics, trace
+from opentelemetry import metrics, propagate, trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
@@ -18,6 +20,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.trace import SpanKind, Status, StatusCode
 
 
 class OTelClient:
@@ -59,6 +62,42 @@ class OTelClient:
         self._setup_tracing()
         self._setup_logs()
 
+    @classmethod
+    def from_env(
+        cls,
+        environ: Mapping[str, str] | None = None,
+        *,
+        resource_attrs: Optional[Dict[str, Any]] = None,
+    ) -> "OTelClient | None":
+        """Build a client from standard OTLP environment variables if configured."""
+
+        env = os.environ if environ is None else environ
+        endpoint = env.get("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip()
+        if not endpoint:
+            return None
+        protocol = env.get("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").strip().lower()
+        if protocol not in {"grpc", "otlp_grpc"}:
+            raise ValueError(f"Unsupported OTLP protocol for OTelClient: {protocol!r}")
+        insecure = env.get("OTEL_EXPORTER_OTLP_INSECURE", "false").strip().lower()
+        insecure_tls = insecure in {"1", "true", "yes", "on"}
+        certificate_path = env.get("OTEL_EXPORTER_OTLP_CERTIFICATE", "").strip()
+        trusted_certs = None
+        if certificate_path:
+            try:
+                trusted_certs = Path(certificate_path).read_bytes()
+            except OSError as exc:
+                raise ValueError(
+                    f"Could not read OTLP certificate {certificate_path!r}: {exc}"
+                ) from exc
+        return cls(
+            otel_secret={
+                "collector_url": endpoint,
+                "trusted_certs": trusted_certs,
+                "insecure_tls": insecure_tls,
+            },
+            resource_attrs=resource_attrs,
+        )
+
     def _exporter_kwargs(self) -> Dict[str, Any]:
         kwargs: Dict[str, Any] = {
             "endpoint": self.collector_url,
@@ -82,6 +121,12 @@ class OTelClient:
         self.logger.setLevel(logging.INFO)
         self.logger.addHandler(self.logging_handler)
         self.logger.propagate = False
+
+    def attach_logging_handler(self, logger: logging.Logger) -> None:
+        """Export records from an existing application logger via OTLP."""
+
+        if self.logging_handler not in logger.handlers:
+            logger.addHandler(self.logging_handler)
 
     def _setup_metrics(self):
         self.metric_exporter = OTLPMetricExporter(**self._exporter_kwargs())
@@ -145,13 +190,54 @@ class OTelClient:
 
     @contextmanager
     def span(
-        self, name: str, attributes: Optional[Dict[str, Any]] = None
+        self,
+        name: str,
+        attributes: Optional[Dict[str, Any]] = None,
+        *,
+        context: Any = None,
+        kind: str | None = None,
     ) -> Iterator[Any]:
-        with self.tracer.start_as_current_span(name) as span:
+        kwargs: Dict[str, Any] = {}
+        if context is not None:
+            kwargs["context"] = context
+        if kind is not None:
+            kinds = {
+                "client": SpanKind.CLIENT,
+                "consumer": SpanKind.CONSUMER,
+                "internal": SpanKind.INTERNAL,
+                "producer": SpanKind.PRODUCER,
+                "server": SpanKind.SERVER,
+            }
+            try:
+                kwargs["kind"] = kinds[kind.lower()]
+            except KeyError as exc:
+                raise ValueError(f"Unsupported span kind: {kind!r}") from exc
+        with self.tracer.start_as_current_span(name, **kwargs) as span:
             if attributes:
                 for k, v in attributes.items():
                     span.set_attribute(k, v)
             yield span
+
+    @staticmethod
+    def extract_context(carrier: Mapping[str, Any]) -> Any:
+        """Extract W3C trace context from an incoming header-like mapping."""
+
+        return propagate.extract(carrier)
+
+    @staticmethod
+    def current_trace_id() -> str:
+        """Return the active trace ID as a 32-character hexadecimal string."""
+
+        span_context = trace.get_current_span().get_span_context()
+        if not span_context.is_valid:
+            return ""
+        return format(span_context.trace_id, "032x")
+
+    @staticmethod
+    def mark_span_error(span: Any) -> None:
+        """Mark a span as failed without exposing OTel SDK types to callers."""
+
+        span.set_status(Status(StatusCode.ERROR))
 
     def send_span(self, name: str, attributes: Optional[Dict[str, Any]] = None):
         with self.span(name, attributes):

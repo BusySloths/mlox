@@ -406,8 +406,6 @@ class AbstractService(ABC):
         # Runtime-only lookup context. Intentionally not a dataclass field so it is
         # excluded from persistence and debug snapshots based on dataclass export.
         self._service_lookup: ServiceLookup | None = None
-        self._secret_manager_cache: AbstractSecretManager | None = None
-        self._secret_manager_cache_uuid: str | None = None
 
     def set_task_executor(self, exec: UbuntuTaskExecutor) -> None:
         logger.info(
@@ -417,35 +415,20 @@ class AbstractService(ABC):
 
     def bind_service_lookup(self, lookup: ServiceLookup) -> None:
         self._service_lookup = lookup
-        self._clear_secret_manager_cache()
 
     def clear_service_lookup(self) -> None:
         self._service_lookup = None
-        self._clear_secret_manager_cache()
 
-    def _clear_secret_manager_cache(self) -> None:
-        self._secret_manager_cache = None
-        self._secret_manager_cache_uuid = None
-
-    def get_bound_secret_manager(
-        self, *, refresh: bool = False
-    ) -> "AbstractSecretManager | None":
+    def get_bound_secret_manager(self) -> "AbstractSecretManager | None":
         """Return the client for this service's configured secret manager.
 
-        The provider UUID is persistent project state.  The resolved client is
-        process-local and deliberately excluded from dataclass persistence.
+        The provider UUID is persistent project state. The client is resolved from
+        the provider for each call and is never retained by the consumer service.
         """
 
         manager_uuid = self.secret_manager_uuid
         if manager_uuid is None:
-            self._clear_secret_manager_cache()
             return None
-        if (
-            not refresh
-            and getattr(self, "_secret_manager_cache", None) is not None
-            and getattr(self, "_secret_manager_cache_uuid", None) == manager_uuid
-        ):
-            return self._secret_manager_cache
 
         provider = self.get_dependent_service(
             manager_uuid,
@@ -462,8 +445,6 @@ class AbstractService(ABC):
             raise RuntimeError(
                 f"Secret-manager service {manager_uuid!r} is unavailable."
             )
-        self._secret_manager_cache = manager
-        self._secret_manager_cache_uuid = manager_uuid
         return manager
 
     def get_bound_telemetry_secrets(self) -> Dict[str, Any] | None:
@@ -494,16 +475,14 @@ class AbstractService(ABC):
             raise ValueError("Secret-manager UUID must not be empty.")
         previous_uuid = self.secret_manager_uuid
         self.secret_manager_uuid = manager_uuid
-        self._clear_secret_manager_cache()
         try:
-            manager = self.get_bound_secret_manager(refresh=True)
+            manager = self.get_bound_secret_manager()
             if self.state != "un-initialized":
                 self._apply_secret_manager_binding(
                     conn, manager_uuid=manager_uuid, manager=manager
                 )
         except Exception:
             self.secret_manager_uuid = previous_uuid
-            self._clear_secret_manager_cache()
             raise
 
     def unbind_secret_manager(self, conn) -> None:
@@ -514,7 +493,6 @@ class AbstractService(ABC):
         if self.state != "un-initialized":
             self._remove_secret_manager_binding(conn)
         self.secret_manager_uuid = None
-        self._clear_secret_manager_cache()
 
     def bind_telemetry(self, telemetry_uuid: str, conn) -> None:
         """Bind an observability provider and expose its client connection."""

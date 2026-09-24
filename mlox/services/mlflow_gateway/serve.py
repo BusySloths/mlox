@@ -10,18 +10,13 @@ import numpy as np
 import pandas as pd
 
 from contextvars import ContextVar
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from opentelemetry import propagate, trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.trace import SpanKind, Status, StatusCode
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -30,6 +25,11 @@ from prometheus_client import (
     generate_latest,
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+try:
+    from otel_client import OTelClient
+except ImportError:  # Imported as part of the MLOX source package in tests/dev.
+    from mlox.services.otel.client import OTelClient
 
 SYS_PATH = list(sys.path)
 
@@ -109,25 +109,29 @@ MODEL_LOAD_DURATION = Histogram(
 )
 
 
-def _configure_tracer():
-    """Configure OTLP tracing only when a collector endpoint is bound."""
-
-    if not os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip():
-        return trace.get_tracer("mlox.mlflow_gateway")
-    provider = TracerProvider(resource=Resource.create())
-    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
-    trace.set_tracer_provider(provider)
-    return provider.get_tracer("mlox.mlflow_gateway")
+TELEMETRY_CLIENT = OTelClient.from_env()
+if TELEMETRY_CLIENT is not None:
+    TELEMETRY_CLIENT.attach_logging_handler(logger)
 
 
-TRACER = _configure_tracer()
+@contextmanager
+def _telemetry_span(name: str, attributes=None, *, context=None, kind=None):
+    if TELEMETRY_CLIENT is None:
+        yield None
+        return
+    with TELEMETRY_CLIENT.span(
+        name,
+        attributes,
+        context=context,
+        kind=kind,
+    ) as span:
+        yield span
 
 
 def _current_trace_id() -> str:
-    span_context = trace.get_current_span().get_span_context()
-    if not span_context.is_valid:
+    if TELEMETRY_CLIENT is None:
         return ""
-    return format(span_context.trace_id, "032x")
+    return TELEMETRY_CLIENT.current_trace_id()
 
 
 def _env_int(name: str, default: int) -> int:
@@ -207,13 +211,21 @@ async def observe_http_request(request: Request, call_next):
     started = time.perf_counter()
     status_code = 500
     HTTP_REQUESTS_IN_PROGRESS.labels(request.method).inc()
-    parent_context = propagate.extract(request.headers)
-    with TRACER.start_as_current_span(
-        "http.request", context=parent_context, kind=SpanKind.SERVER
+    parent_context = (
+        TELEMETRY_CLIENT.extract_context(request.headers)
+        if TELEMETRY_CLIENT is not None
+        else None
+    )
+    with _telemetry_span(
+        "http.request",
+        {
+            "http.request.method": request.method,
+            "url.path": request.url.path,
+            "mlox.request.id": request_id,
+        },
+        context=parent_context,
+        kind="server",
     ) as span:
-        span.set_attribute("http.request.method", request.method)
-        span.set_attribute("url.path", request.url.path)
-        span.set_attribute("mlox.request.id", request_id)
         try:
             response = await call_next(request)
             status_code = response.status_code
@@ -226,10 +238,11 @@ async def observe_http_request(request: Request, call_next):
             route = request.scope.get("route")
             route_path = getattr(route, "path", "unmatched")
             duration = time.perf_counter() - started
-            span.set_attribute("http.route", route_path)
-            span.set_attribute("http.response.status_code", status_code)
-            if status_code >= 500:
-                span.set_status(Status(StatusCode.ERROR))
+            if span is not None:
+                span.set_attribute("http.route", route_path)
+                span.set_attribute("http.response.status_code", status_code)
+                if status_code >= 500 and TELEMETRY_CLIENT is not None:
+                    TELEMETRY_CLIENT.mark_span_error(span)
             HTTP_REQUESTS.labels(request.method, route_path, str(status_code)).inc()
             HTTP_REQUEST_DURATION.labels(request.method, route_path).observe(duration)
             HTTP_REQUESTS_IN_PROGRESS.labels(request.method).dec()
@@ -540,19 +553,20 @@ def _predict(data: PredictionRequest):
 
 @app.post("/prod/predict")
 def predict(data: PredictionRequest):
-    with TRACER.start_as_current_span("model.predict", kind=SpanKind.INTERNAL) as span:
-        span.set_attribute("mlox.model.name", data.registry_model_name)
-        if data.registry_model_version is not None:
-            span.set_attribute(
-                "mlox.model.requested_version", str(data.registry_model_version)
-            )
-        if data.registry_model_alias is not None:
-            span.set_attribute("mlox.model.requested_alias", data.registry_model_alias)
+    attributes = {"mlox.model.name": data.registry_model_name}
+    if data.registry_model_version is not None:
+        attributes["mlox.model.requested_version"] = str(data.registry_model_version)
+    if data.registry_model_alias is not None:
+        attributes["mlox.model.requested_alias"] = data.registry_model_alias
+    with _telemetry_span("model.predict", attributes, kind="internal") as span:
         response = _predict(data)
         resolved = response["model"]
-        span.set_attribute("mlox.model.version", resolved["resolved_model_version"])
-        span.set_attribute("mlox.model.uri", resolved["resolved_model_uri"])
-        span.set_attribute("mlox.model.cache_hit", response["is_cached_model"])
+        if span is not None:
+            span.set_attribute(
+                "mlox.model.version", resolved["resolved_model_version"]
+            )
+            span.set_attribute("mlox.model.uri", resolved["resolved_model_uri"])
+            span.set_attribute("mlox.model.cache_hit", response["is_cached_model"])
         return response
 
 
@@ -628,7 +642,10 @@ if __name__ == "__main__":
 curl -X POST http://localhost:8080/prod/predict \
      -H "Content-Type: application/json" \
      -d '{
-           "input_data": [["2024-04-15"]], "params": {"my_param": true}, "registry_model_version": 2, "registry_model_name": "Test"
+           "input_data": [["2024-04-15"]],
+           "params": {"my_param": true},
+           "registry_model_version": 2,
+           "registry_model_name": "Test"
          }'
 """
 
@@ -636,6 +653,9 @@ curl -X POST http://localhost:8080/prod/predict \
 curl -X POST http://localhost:8080/prod/predict \
     -H "Content-Type: application/json" \
     -d '{
-        "input_data": [[1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0]], "params": {"my_param": true}, "registry_model_version": 1, "registry_model_name": "Test"
+        "input_data": [[1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0]],
+        "params": {"my_param": true},
+        "registry_model_version": 1,
+        "registry_model_name": "Test"
         }'
 """

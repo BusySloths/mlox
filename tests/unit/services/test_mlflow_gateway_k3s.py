@@ -6,7 +6,7 @@ import yaml
 
 from mlox.config import load_all_service_configs
 from mlox.executors import TaskGroup
-from mlox.service import ServiceCapability
+from mlox.service import BindingNotSupportedError, ServiceCapability
 from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
 from mlox.view.services import _STREAMLIT_SERVICE_BINDINGS
 
@@ -85,6 +85,9 @@ def test_renders_gateway_manifest(gateway: MLFlowGatewayK3sService) -> None:
 
     assert "kind: ConfigMap" in manifest
     assert "from fastapi import FastAPI" in manifest
+    assert "class OTelClient:" in manifest
+    assert "mountPath: /app/otel_client.py" in manifest
+    assert '"opentelemetry-sdk==1.33.1"' in manifest
     assert "xgboost==2.1.0" in manifest
     assert "kind: Secret" in manifest
     assert "name: mlflow-gateway-basic-auth" in manifest
@@ -111,6 +114,17 @@ def test_renders_gateway_manifest(gateway: MLFlowGatewayK3sService) -> None:
     assert 'router.tls: "true"' in manifest
     assert "@kubernetescrd" in manifest
     assert len(list(yaml.safe_load_all(manifest))) == 9
+
+
+def test_runtime_provider_bindings_fail_explicitly_on_kubernetes(
+    gateway: MLFlowGatewayK3sService,
+) -> None:
+    with pytest.raises(BindingNotSupportedError, match="Kubernetes backend"):
+        gateway._apply_telemetry_binding(
+            None,
+            telemetry_uuid="otel-1",
+            connection={"collector_url": "https://otel.example:4317"},
+        )
 
 
 def test_renders_ingress_with_path_middlewares(

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from passlib.hash import apr_md5_crypt
 
 from mlox.executors import TaskGroup
+from mlox.service import BindingNotSupportedError
 from mlox.services.mlflow_gateway.docker import (
     MLFlowGatewayDockerService,
     _resolved_setting,
@@ -46,36 +47,69 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
         return re.sub(r"[^a-z0-9-]", "-", self.uuid[:8].lower()).strip("-")
 
     def _render_gateway_manifest(self) -> str:
+        return self.render_template(
+            "gateway-manifest.yaml.tmpl",
+            self._gateway_manifest_variables(),
+        )
+
+    def _gateway_manifest_variables(self) -> dict[str, object]:
+        """Return variables shared by the standard and managed-TLS manifests."""
+
         serve_script_path = self.resolve_asset(self.serve_script)
         serve_script = serve_script_path.read_text(encoding="utf-8")
+        otel_client_script = self.resolve_asset("otel/client.py").read_text(
+            encoding="utf-8"
+        )
         requirements = _resolved_text(self.requirements_txt)
         cache_size = _resolved_setting(self.cache_max_models, "10")
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")
         password_hash = apr_md5_crypt.hash(self.pw)
 
-        return self.render_template(
-            "gateway-manifest.yaml.tmpl",
-            {
-                "namespace": self.namespace,
-                "serve_script_block": self.indent_block(serve_script, 4),
-                "requirements_block": self.indent_block(requirements, 4),
-                "gateway_user": self.yaml_scalar(self.user),
-                "gateway_password": self.yaml_scalar(self.pw),
-                "basic_auth_secret": self.basic_auth_secret,
-                "basic_auth_user": self.yaml_scalar(f"{self.user}:{password_hash}"),
-                "basic_auth_middleware": self.basic_auth_middleware,
-                "strip_prefix_middleware": self.strip_prefix_middleware,
-                "ingress_name": self.ingress_name,
-                "ingress_path": self.yaml_scalar(self.ingress_path),
-                "tracking_uri": self.yaml_scalar(self.tracking_uri),
-                "tracking_user": self.yaml_scalar(self.tracking_user),
-                "tracking_password": self.yaml_scalar(self.tracking_pw),
-                "deployment_name": self.deployment_name,
-                "container_port": self.container_port,
-                "cache_size": self.yaml_scalar(cache_size),
-                "cache_ttl": self.yaml_scalar(cache_ttl),
-                "service_name": self.service_name,
-            },
+        return {
+            "namespace": self.namespace,
+            "serve_script_block": self.indent_block(serve_script, 4),
+            "otel_client_script_block": self.indent_block(otel_client_script, 4),
+            "requirements_block": self.indent_block(requirements, 4),
+            "gateway_user": self.yaml_scalar(self.user),
+            "gateway_password": self.yaml_scalar(self.pw),
+            "basic_auth_secret": self.basic_auth_secret,
+            "basic_auth_user": self.yaml_scalar(f"{self.user}:{password_hash}"),
+            "basic_auth_middleware": self.basic_auth_middleware,
+            "strip_prefix_middleware": self.strip_prefix_middleware,
+            "ingress_name": self.ingress_name,
+            "ingress_path": self.yaml_scalar(self.ingress_path),
+            "tracking_uri": self.yaml_scalar(self.tracking_uri),
+            "tracking_user": self.yaml_scalar(self.tracking_user),
+            "tracking_password": self.yaml_scalar(self.tracking_pw),
+            "deployment_name": self.deployment_name,
+            "container_port": self.container_port,
+            "cache_size": self.yaml_scalar(cache_size),
+            "cache_ttl": self.yaml_scalar(cache_ttl),
+            "service_name": self.service_name,
+        }
+
+    def _apply_secret_manager_binding(self, conn, **kwargs) -> None:
+        raise BindingNotSupportedError(
+            "Runtime secret-manager bindings are not implemented for the "
+            "MLflow Gateway Kubernetes backend."
+        )
+
+    def _remove_secret_manager_binding(self, conn) -> None:
+        raise BindingNotSupportedError(
+            "Runtime secret-manager bindings are not implemented for the "
+            "MLflow Gateway Kubernetes backend."
+        )
+
+    def _apply_telemetry_binding(self, conn, **kwargs) -> None:
+        raise BindingNotSupportedError(
+            "Runtime telemetry bindings are not implemented for the "
+            "MLflow Gateway Kubernetes backend."
+        )
+
+    def _remove_telemetry_binding(self, conn) -> None:
+        raise BindingNotSupportedError(
+            "Runtime telemetry bindings are not implemented for the "
+            "MLflow Gateway Kubernetes backend."
         )
 
     def _kubectl(self, arguments: str) -> str:

@@ -346,4 +346,4 @@ def test_service_provider_bindings_survive_infrastructure_round_trip():
     restored_service = restored.bundles[0].services[0]
     assert restored_service.secret_manager_uuid == "secret-provider-uuid"
     assert restored_service.telemetry_uuid == "telemetry-provider-uuid"
-    assert restored_service._secret_manager_cache is None
+    assert not hasattr(restored_service, "_secret_manager_cache")

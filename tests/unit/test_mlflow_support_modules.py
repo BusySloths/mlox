@@ -19,6 +19,7 @@ from prometheus_client import generate_latest
 
 from mlox.services.mlflow import mlops
 from mlox.services.mlflow_gateway import serve
+from mlox.services.otel.client import OTelClient
 
 
 class _Span:
@@ -40,6 +41,12 @@ def _cm_span():
 @contextmanager
 def _cm_empty():
     yield object()
+
+
+def _test_telemetry_client(provider: TracerProvider) -> OTelClient:
+    client = object.__new__(OTelClient)
+    client.tracer = provider.get_tracer("mlox.mlflow_gateway.test")
+    return client
 
 
 class _TrackedModel(mlops.DeployableModel):
@@ -327,7 +334,7 @@ def test_serve_propagates_trace_context_and_records_http_span(monkeypatch):
     provider = TracerProvider(sampler=ALWAYS_ON)
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     monkeypatch.setattr(
-        serve, "TRACER", provider.get_tracer("mlox.mlflow_gateway.test")
+        serve, "TELEMETRY_CLIENT", _test_telemetry_client(provider)
     )
     trace_id = "0af7651916cd43dd8448eb211c80319c"
     client = TestClient(serve.app)
@@ -352,7 +359,7 @@ def test_serve_prediction_span_contains_resolved_model_identity(monkeypatch):
     provider = TracerProvider(sampler=ALWAYS_ON)
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     monkeypatch.setattr(
-        serve, "TRACER", provider.get_tracer("mlox.mlflow_gateway.test")
+        serve, "TELEMETRY_CLIENT", _test_telemetry_client(provider)
     )
     monkeypatch.setattr(
         serve,

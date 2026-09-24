@@ -1037,6 +1037,10 @@ def test_mlflow_gateway_setup_check_and_is_model(conn):
     assert service.is_model("registry:my-model:1") is True
     assert service.is_model("registry:my-model") is False
     assert service.is_model("my-model/1") is False
+    assert any(
+        call[0] == "fs_copy" and call[1][1].endswith("/otel_client.py")
+        for call in service.exec.calls
+    )
 
 
 def test_mlflow_gateway_can_bind_and_unbind_telemetry(conn):

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
+
+import pytest
 
 from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
 from mlox.services.otel.client import OTelClient
@@ -425,3 +428,56 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
     assert client.metric_exporter.kwargs["endpoint"] == "https://collector.example:4317"
     assert client.metric_exporter.kwargs["credentials"] == "ssl-creds"
     assert client.metric_exporter.kwargs["insecure"] is False
+
+
+def test_otel_client_from_env_reads_standard_grpc_configuration(
+    monkeypatch, tmp_path
+):
+    certificate = tmp_path / "otel-ca.pem"
+    certificate.write_bytes(b"certificate-data")
+    captured = {}
+
+    def fake_init(self, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(OTelClient, "__init__", fake_init)
+
+    client = OTelClient.from_env(
+        {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector:4317",
+            "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+            "OTEL_EXPORTER_OTLP_CERTIFICATE": str(certificate),
+            "OTEL_EXPORTER_OTLP_INSECURE": "false",
+        },
+        resource_attrs={"service.name": "gateway"},
+    )
+
+    assert isinstance(client, OTelClient)
+    assert captured == {
+        "otel_secret": {
+            "collector_url": "https://collector:4317",
+            "trusted_certs": b"certificate-data",
+            "insecure_tls": False,
+        },
+        "resource_attrs": {"service.name": "gateway"},
+    }
+    assert OTelClient.from_env({}) is None
+    with pytest.raises(ValueError, match="Unsupported OTLP protocol"):
+        OTelClient.from_env(
+            {
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector:4318",
+                "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+            }
+        )
+
+
+def test_otel_client_attaches_application_logger_only_once():
+    client = object.__new__(OTelClient)
+    client.logging_handler = logging.NullHandler()
+    application_logger = logging.getLogger("test.otel.application")
+    application_logger.handlers.clear()
+
+    client.attach_logging_handler(application_logger)
+    client.attach_logging_handler(application_logger)
+
+    assert application_logger.handlers == [client.logging_handler]
