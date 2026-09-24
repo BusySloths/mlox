@@ -1070,6 +1070,51 @@ def test_services_restart_service_requires_restart_hook_for_legacy_objects():
     assert result.message == "Selected service cannot be restarted."
 
 
+def test_services_binding_use_cases_dispatch_to_runtime_service_methods():
+    calls = []
+    service = SimpleNamespace(
+        name="gateway",
+        bind_secret_manager=lambda uuid, conn: calls.append(
+            ("bind-secret-manager", uuid, conn)
+        ),
+        unbind_secret_manager=lambda conn: calls.append(
+            ("unbind-secret-manager", conn)
+        ),
+        bind_telemetry=lambda uuid, conn: calls.append(
+            ("bind-telemetry", uuid, conn)
+        ),
+        unbind_telemetry=lambda conn: calls.append(("unbind-telemetry", conn)),
+    )
+    connection = _Connection()
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: connection)
+    )
+    infrastructure = SimpleNamespace(
+        get_service=lambda name: service if name == "gateway" else None,
+        get_bundle_by_service=lambda current: bundle if current is service else None,
+    )
+    current = _project(infrastructure)
+
+    results = [
+        services.bind_service_secret_manager(
+            current, name="gateway", manager_uuid="secret-1"
+        ),
+        services.bind_service_telemetry(
+            current, name="gateway", telemetry_uuid="otel-1"
+        ),
+        services.unbind_service_telemetry(current, name="gateway"),
+        services.unbind_service_secret_manager(current, name="gateway"),
+    ]
+
+    assert all(result.success for result in results)
+    assert calls == [
+        ("bind-secret-manager", "secret-1", connection),
+        ("bind-telemetry", "otel-1", connection),
+        ("unbind-telemetry", connection),
+        ("unbind-secret-manager", connection),
+    ]
+
+
 def test_services_check_health_updates_state_from_payload():
     service = SimpleNamespace(
         name="svc",

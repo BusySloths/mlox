@@ -323,3 +323,27 @@ def test_from_dict_accepts_legacy_string_boolean_service_fields():
     restored_service = restored.bundles[0].services[0]
     assert isinstance(restored_service, GithubRepoService)
     assert restored_service.is_private is True
+
+
+def test_service_provider_bindings_survive_infrastructure_round_trip():
+    server = make_server(DummyServer, "10.0.0.1")
+    service = GithubRepoService(
+        name="Github:demo",
+        service_config_id="github",
+        template="github/mlox.github.yaml",
+        target_path="/repos",
+        link="https://github.com/acme/demo",
+        is_private=False,
+        secret_manager_uuid="secret-provider-uuid",
+        telemetry_uuid="telemetry-provider-uuid",
+    )
+    bundle = Bundle(name="repo-bundle", server=server)
+    bundle.services = [service]
+    infra = make_infra(bundles=[bundle])
+
+    restored = Infrastructure.from_dict(infra.to_dict(), configs=[])
+
+    restored_service = restored.bundles[0].services[0]
+    assert restored_service.secret_manager_uuid == "secret-provider-uuid"
+    assert restored_service.telemetry_uuid == "telemetry-provider-uuid"
+    assert restored_service._secret_manager_cache is None

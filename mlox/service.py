@@ -373,12 +373,18 @@ class ServiceLookup(Protocol):
     def get_service_by_name(self, service_name: str) -> Optional["AbstractService"]: ...
 
 
+class BindingNotSupportedError(RuntimeError):
+    """Raised when a service backend cannot expose a runtime binding yet."""
+
+
 @dataclass
 class AbstractService(ABC):
     name: str
     service_config_id: str
     template: str
     target_path: str
+    secret_manager_uuid: str | None = field(default=None, kw_only=True)
+    telemetry_uuid: str | None = field(default=None, kw_only=True)
     uuid: str = field(default_factory=lambda: uuid.uuid4().hex, init=False)
 
     target_docker_script: str = field(default="docker-compose.yaml", init=False)
@@ -400,6 +406,8 @@ class AbstractService(ABC):
         # Runtime-only lookup context. Intentionally not a dataclass field so it is
         # excluded from persistence and debug snapshots based on dataclass export.
         self._service_lookup: ServiceLookup | None = None
+        self._secret_manager_cache: AbstractSecretManager | None = None
+        self._secret_manager_cache_uuid: str | None = None
 
     def set_task_executor(self, exec: UbuntuTaskExecutor) -> None:
         logger.info(
@@ -409,9 +417,165 @@ class AbstractService(ABC):
 
     def bind_service_lookup(self, lookup: ServiceLookup) -> None:
         self._service_lookup = lookup
+        self._clear_secret_manager_cache()
 
     def clear_service_lookup(self) -> None:
         self._service_lookup = None
+        self._clear_secret_manager_cache()
+
+    def _clear_secret_manager_cache(self) -> None:
+        self._secret_manager_cache = None
+        self._secret_manager_cache_uuid = None
+
+    def get_bound_secret_manager(
+        self, *, refresh: bool = False
+    ) -> "AbstractSecretManager | None":
+        """Return the client for this service's configured secret manager.
+
+        The provider UUID is persistent project state.  The resolved client is
+        process-local and deliberately excluded from dataclass persistence.
+        """
+
+        manager_uuid = self.secret_manager_uuid
+        if manager_uuid is None:
+            self._clear_secret_manager_cache()
+            return None
+        if (
+            not refresh
+            and getattr(self, "_secret_manager_cache", None) is not None
+            and getattr(self, "_secret_manager_cache_uuid", None) == manager_uuid
+        ):
+            return self._secret_manager_cache
+
+        provider = self.get_dependent_service(
+            manager_uuid,
+            required_type=AbstractSecretManagerService,
+            required_capabilities={ServiceCapability.SECRET_MANAGER},
+        )
+        if provider is None:
+            raise ValueError(f"Secret-manager service {manager_uuid!r} was not found.")
+
+        # Infrastructure is the normal ServiceLookup implementation and is the
+        # context expected by existing secret-manager provider adapters.
+        manager = provider.get_secret_manager(self._service_lookup)  # type: ignore[arg-type]
+        if manager is None or not manager.is_working():
+            raise RuntimeError(
+                f"Secret-manager service {manager_uuid!r} is unavailable."
+            )
+        self._secret_manager_cache = manager
+        self._secret_manager_cache_uuid = manager_uuid
+        return manager
+
+    def get_bound_telemetry_secrets(self) -> Dict[str, Any] | None:
+        """Return the client connection exported by the bound telemetry service."""
+
+        telemetry_uuid = self.telemetry_uuid
+        if telemetry_uuid is None:
+            return None
+        provider = self.get_dependent_service(
+            telemetry_uuid,
+            required_capabilities={ServiceCapability.OBSERVABILITY},
+        )
+        if provider is None:
+            raise ValueError(f"Telemetry service {telemetry_uuid!r} was not found.")
+        connection = (provider.get_secrets() or {}).get("otel_client_connection")
+        if not isinstance(connection, dict):
+            raise ValueError(
+                f"Telemetry service {telemetry_uuid!r} does not expose "
+                "'otel_client_connection'."
+            )
+        return connection
+
+    def bind_secret_manager(self, manager_uuid: str, conn) -> None:
+        """Bind a secret-manager provider and expose it to the running service."""
+
+        manager_uuid = str(manager_uuid).strip()
+        if not manager_uuid:
+            raise ValueError("Secret-manager UUID must not be empty.")
+        previous_uuid = self.secret_manager_uuid
+        self.secret_manager_uuid = manager_uuid
+        self._clear_secret_manager_cache()
+        try:
+            manager = self.get_bound_secret_manager(refresh=True)
+            if self.state != "un-initialized":
+                self._apply_secret_manager_binding(
+                    conn, manager_uuid=manager_uuid, manager=manager
+                )
+        except Exception:
+            self.secret_manager_uuid = previous_uuid
+            self._clear_secret_manager_cache()
+            raise
+
+    def unbind_secret_manager(self, conn) -> None:
+        """Remove this service's secret-manager access configuration."""
+
+        if self.secret_manager_uuid is None:
+            return
+        if self.state != "un-initialized":
+            self._remove_secret_manager_binding(conn)
+        self.secret_manager_uuid = None
+        self._clear_secret_manager_cache()
+
+    def bind_telemetry(self, telemetry_uuid: str, conn) -> None:
+        """Bind an observability provider and expose its client connection."""
+
+        telemetry_uuid = str(telemetry_uuid).strip()
+        if not telemetry_uuid:
+            raise ValueError("Telemetry UUID must not be empty.")
+        previous_uuid = self.telemetry_uuid
+        self.telemetry_uuid = telemetry_uuid
+        try:
+            connection = self.get_bound_telemetry_secrets()
+            if self.state != "un-initialized":
+                self._apply_telemetry_binding(
+                    conn,
+                    telemetry_uuid=telemetry_uuid,
+                    connection=connection or {},
+                )
+        except Exception:
+            self.telemetry_uuid = previous_uuid
+            raise
+
+    def unbind_telemetry(self, conn) -> None:
+        """Remove this service's telemetry exporter configuration."""
+
+        if self.telemetry_uuid is None:
+            return
+        if self.state != "un-initialized":
+            self._remove_telemetry_binding(conn)
+        self.telemetry_uuid = None
+
+    def _apply_secret_manager_binding(
+        self,
+        conn,
+        *,
+        manager_uuid: str,
+        manager: "AbstractSecretManager",
+    ) -> None:
+        raise BindingNotSupportedError(
+            f"{type(self).__name__} does not support secret-manager bindings."
+        )
+
+    def _remove_secret_manager_binding(self, conn) -> None:
+        raise BindingNotSupportedError(
+            f"{type(self).__name__} does not support secret-manager bindings."
+        )
+
+    def _apply_telemetry_binding(
+        self,
+        conn,
+        *,
+        telemetry_uuid: str,
+        connection: Dict[str, Any],
+    ) -> None:
+        raise BindingNotSupportedError(
+            f"{type(self).__name__} does not support telemetry bindings."
+        )
+
+    def _remove_telemetry_binding(self, conn) -> None:
+        raise BindingNotSupportedError(
+            f"{type(self).__name__} does not support telemetry bindings."
+        )
 
     def service_dir(self) -> Path:
         """Return the directory containing the concrete service implementation."""

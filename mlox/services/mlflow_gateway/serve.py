@@ -16,6 +16,12 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry import propagate, trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import SpanKind, Status, StatusCode
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -38,6 +44,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_CACHE_MAX_MODELS = 10
 DEFAULT_CACHE_TTL_DAYS = 10.0
 REQUEST_ID_HEADER = "X-Request-ID"
+TRACE_ID_HEADER = "X-Trace-ID"
 request_id_context: ContextVar[str] = ContextVar("request_id", default="")
 model_first_request_keys: set[tuple[str, str]] = set()
 model_first_request_lock = threading.Lock()
@@ -100,6 +107,27 @@ MODEL_LOAD_DURATION = Histogram(
     "mlox_gateway_model_load_duration_seconds",
     "MLflow model load duration in seconds.",
 )
+
+
+def _configure_tracer():
+    """Configure OTLP tracing only when a collector endpoint is bound."""
+
+    if not os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "").strip():
+        return trace.get_tracer("mlox.mlflow_gateway")
+    provider = TracerProvider(resource=Resource.create())
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    trace.set_tracer_provider(provider)
+    return provider.get_tracer("mlox.mlflow_gateway")
+
+
+TRACER = _configure_tracer()
+
+
+def _current_trace_id() -> str:
+    span_context = trace.get_current_span().get_span_context()
+    if not span_context.is_valid:
+        return ""
+    return format(span_context.trace_id, "032x")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -179,31 +207,46 @@ async def observe_http_request(request: Request, call_next):
     started = time.perf_counter()
     status_code = 500
     HTTP_REQUESTS_IN_PROGRESS.labels(request.method).inc()
-    try:
-        response = await call_next(request)
-        status_code = response.status_code
-        response.headers[REQUEST_ID_HEADER] = request_id
-        return response
-    finally:
-        route = request.scope.get("route")
-        route_path = getattr(route, "path", "unmatched")
-        duration = time.perf_counter() - started
-        HTTP_REQUESTS.labels(request.method, route_path, str(status_code)).inc()
-        HTTP_REQUEST_DURATION.labels(request.method, route_path).observe(duration)
-        HTTP_REQUESTS_IN_PROGRESS.labels(request.method).dec()
-        logger.info(
-            json.dumps(
-                {
-                    "event": "http_request",
-                    "request_id": request_id,
-                    "method": request.method,
-                    "route": route_path,
-                    "status": status_code,
-                    "duration_sec": round(duration, 6),
-                }
+    parent_context = propagate.extract(request.headers)
+    with TRACER.start_as_current_span(
+        "http.request", context=parent_context, kind=SpanKind.SERVER
+    ) as span:
+        span.set_attribute("http.request.method", request.method)
+        span.set_attribute("url.path", request.url.path)
+        span.set_attribute("mlox.request.id", request_id)
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers[REQUEST_ID_HEADER] = request_id
+            trace_id = _current_trace_id()
+            if trace_id:
+                response.headers[TRACE_ID_HEADER] = trace_id
+            return response
+        finally:
+            route = request.scope.get("route")
+            route_path = getattr(route, "path", "unmatched")
+            duration = time.perf_counter() - started
+            span.set_attribute("http.route", route_path)
+            span.set_attribute("http.response.status_code", status_code)
+            if status_code >= 500:
+                span.set_status(Status(StatusCode.ERROR))
+            HTTP_REQUESTS.labels(request.method, route_path, str(status_code)).inc()
+            HTTP_REQUEST_DURATION.labels(request.method, route_path).observe(duration)
+            HTTP_REQUESTS_IN_PROGRESS.labels(request.method).dec()
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "http_request",
+                        "request_id": request_id,
+                        "trace_id": _current_trace_id(),
+                        "method": request.method,
+                        "route": route_path,
+                        "status": status_code,
+                        "duration_sec": round(duration, 6),
+                    }
+                )
             )
-        )
-        request_id_context.reset(token)
+            request_id_context.reset(token)
 
 
 @app.get("/metrics", include_in_schema=False)
@@ -437,8 +480,7 @@ def runandget(data: PredictionRequest):
     return parsed, is_cached_model, resolved_model
 
 
-@app.post("/prod/predict")
-def predict(data: PredictionRequest):
+def _predict(data: PredictionRequest):
     started = time.perf_counter()
     model_name = data.registry_model_name
     model_version = "unresolved"
@@ -463,6 +505,7 @@ def predict(data: PredictionRequest):
                 {
                     "event": "prediction",
                     "request_id": request_id_context.get(),
+                    "trace_id": _current_trace_id(),
                     "model": model_name,
                     "version": model_version,
                     "model_cache_hit": is_cached_model,
@@ -493,6 +536,24 @@ def predict(data: PredictionRequest):
         PREDICTION_DURATION.labels(model_name, model_version).observe(
             time.perf_counter() - started
         )
+
+
+@app.post("/prod/predict")
+def predict(data: PredictionRequest):
+    with TRACER.start_as_current_span("model.predict", kind=SpanKind.INTERNAL) as span:
+        span.set_attribute("mlox.model.name", data.registry_model_name)
+        if data.registry_model_version is not None:
+            span.set_attribute(
+                "mlox.model.requested_version", str(data.registry_model_version)
+            )
+        if data.registry_model_alias is not None:
+            span.set_attribute("mlox.model.requested_alias", data.registry_model_alias)
+        response = _predict(data)
+        resolved = response["model"]
+        span.set_attribute("mlox.model.version", resolved["resolved_model_version"])
+        span.set_attribute("mlox.model.uri", resolved["resolved_model_uri"])
+        span.set_attribute("mlox.model.cache_hit", response["is_cached_model"])
+        return response
 
 
 @app.get("/model/{model_name}/list")

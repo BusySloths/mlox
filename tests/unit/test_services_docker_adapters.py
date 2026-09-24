@@ -99,6 +99,9 @@ class FakeExec:
     def docker_up(self, conn, compose_path, env_path):
         self._record("docker_up", compose_path, env_path)
 
+    def docker_restart(self, conn, compose_path, env_path):
+        self._record("docker_restart", compose_path, env_path)
+
     def docker_down(self, conn, *args, **kwargs):
         self._record("docker_down", *args, **kwargs)
 
@@ -1034,6 +1037,58 @@ def test_mlflow_gateway_setup_check_and_is_model(conn):
     assert service.is_model("registry:my-model:1") is True
     assert service.is_model("registry:my-model") is False
     assert service.is_model("my-model/1") is False
+
+
+def test_mlflow_gateway_can_bind_and_unbind_telemetry(conn):
+    service = _set_exec(
+        MLFlowGatewayDockerService(
+            **BASE,
+            dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+            serve_script="mlflow_gateway/serve.py",
+            start_script="mlflow_gateway/start_gateway.sh",
+            port="8083",
+            tracking_uri="https://tracking.example",
+            tracking_user="u",
+            tracking_pw="p",
+        ),
+        FakeExec(),
+    )
+    telemetry = SimpleNamespace(
+        uuid="otel-1",
+        capabilities={"observability"},
+        get_secrets=lambda: {
+            "otel_client_connection": {
+                "collector_url": "https://otel.example:4317",
+                "protocol": "otlp_grpc",
+                "trusted_certs": "CERTIFICATE",
+                "insecure_tls": False,
+            }
+        },
+    )
+    lookup = SimpleNamespace(
+        get_service_by_uuid=lambda uuid: telemetry if uuid == telemetry.uuid else None,
+        get_service_by_name=lambda name: None,
+    )
+    service.bind_service_lookup(lookup)
+    service.state = "running"
+    env_path = "/tmp/stack-8083/service.env"
+    service.exec.files[env_path] = "MLFLOW_GATEWAY_PORT=8083\n"
+
+    service.bind_telemetry(telemetry.uuid, conn)
+
+    env = service.exec.files[env_path]
+    assert service.telemetry_uuid == telemetry.uuid
+    assert "MLFLOW_GATEWAY_PORT=8083" in env
+    assert "OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.example:4317" in env
+    assert "OTEL_EXPORTER_OTLP_PROTOCOL=grpc" in env
+    assert service.exec.files["/tmp/stack-8083/otel-ca.pem"] == "CERTIFICATE"
+    assert any(call[0] == "docker_restart" for call in service.exec.calls)
+
+    service.unbind_telemetry(conn)
+
+    assert service.telemetry_uuid is None
+    assert "OTEL_EXPORTER_" not in service.exec.files[env_path]
+    assert "OTEL_RESOURCE_ATTRIBUTES" not in service.exec.files[env_path]
 
 
 def test_mlflow_gateway_setup_ignores_unresolved_requirements_placeholder(conn):

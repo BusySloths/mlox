@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from mlox.service import (
     AbstractHealthService,
+    AbstractSecretManagerService,
     AbstractService,
     ServiceCapability,
     service_health_payload,
 )
+from mlox.secret_manager import AbstractSecretManager
 
 
 class _Exec:
@@ -64,6 +68,71 @@ class _Service(AbstractService):
         return {}
 
 
+class _SecretManager(AbstractSecretManager):
+    def is_working(self):
+        return True
+
+    def list_secrets(self, keys_only=False):
+        return {}
+
+    def save_secret(self, name, my_secret):
+        return None
+
+    def load_secret(self, name):
+        return None
+
+    @classmethod
+    def instantiate_secret_manager(cls, info):
+        return cls()
+
+    def get_access_secrets(self):
+        return {}
+
+
+@dataclass
+class _SecretProvider(_Service, AbstractSecretManagerService):
+    capabilities = {ServiceCapability.SECRET_MANAGER}
+    calls: int = 0
+
+    def get_secret_manager(self, infra):
+        self.calls += 1
+        return _SecretManager()
+
+
+@dataclass
+class _TelemetryProvider(_Service):
+    capabilities = {ServiceCapability.OBSERVABILITY}
+
+    def get_secrets(self):
+        return {
+            "otel_client_connection": {
+                "collector_url": "https://otel.example:4317",
+                "protocol": "otlp_grpc",
+            }
+        }
+
+
+@dataclass
+class _BindingService(_Service):
+    applied: list = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.applied = []
+
+    def _apply_secret_manager_binding(self, conn, *, manager_uuid, manager):
+        self.applied.append(("bind-secret-manager", manager_uuid))
+
+    def _remove_secret_manager_binding(self, conn):
+        self.applied.append(("unbind-secret-manager",))
+
+    def _apply_telemetry_binding(self, conn, *, telemetry_uuid, connection):
+        self.applied.append(("bind-telemetry", telemetry_uuid, connection))
+
+    def _remove_telemetry_binding(self, conn):
+        self.applied.append(("unbind-telemetry",))
+
+
 def _svc():
     svc = _Service(
         name="svc", service_config_id="cfg", template="t", target_path="/tmp/svc"
@@ -98,6 +167,93 @@ def test_get_dependent_service_can_require_type_and_capabilities():
     assert service.get_dependent_service(
         dependency.uuid, required_capabilities={ServiceCapability.DATABASE}
     ) is None
+
+
+def test_secret_manager_and_telemetry_bindings_are_independent_and_reversible():
+    service = _BindingService(
+        name="consumer",
+        service_config_id="cfg",
+        template="t",
+        target_path="/tmp/consumer",
+    )
+    secret_provider = _SecretProvider(
+        name="secrets",
+        service_config_id="secrets",
+        template="t",
+        target_path="/tmp/secrets",
+    )
+    telemetry_provider = _TelemetryProvider(
+        name="telemetry",
+        service_config_id="telemetry",
+        template="t",
+        target_path="/tmp/telemetry",
+    )
+    providers = {
+        secret_provider.uuid: secret_provider,
+        telemetry_provider.uuid: telemetry_provider,
+    }
+    lookup = type(
+        "Lookup",
+        (),
+        {
+            "get_service_by_uuid": lambda self, uuid: providers.get(uuid),
+            "get_service_by_name": lambda self, name: None,
+        },
+    )()
+    service.bind_service_lookup(lookup)
+    service.state = "running"
+
+    service.bind_secret_manager(secret_provider.uuid, conn=object())
+    service.bind_telemetry(telemetry_provider.uuid, conn=object())
+
+    assert service.secret_manager_uuid == secret_provider.uuid
+    assert service.telemetry_uuid == telemetry_provider.uuid
+    assert service.get_bound_secret_manager() is service.get_bound_secret_manager()
+    assert secret_provider.calls == 1
+    assert service.get_bound_telemetry_secrets()["collector_url"].endswith("4317")
+
+    service.unbind_telemetry(conn=object())
+    assert service.telemetry_uuid is None
+    assert service.secret_manager_uuid == secret_provider.uuid
+
+    service.unbind_secret_manager(conn=object())
+    assert service.secret_manager_uuid is None
+    assert service.applied[-2:] == [
+        ("unbind-telemetry",),
+        ("unbind-secret-manager",),
+    ]
+
+
+def test_failed_live_binding_restores_previous_provider_uuid():
+    service = _Service(
+        name="consumer",
+        service_config_id="cfg",
+        template="t",
+        target_path="/tmp/consumer",
+        telemetry_uuid="previous-telemetry",
+    )
+    telemetry_provider = _TelemetryProvider(
+        name="telemetry",
+        service_config_id="telemetry",
+        template="t",
+        target_path="/tmp/telemetry",
+    )
+    service.bind_service_lookup(
+        type(
+            "Lookup",
+            (),
+            {
+                "get_service_by_uuid": lambda self, uuid: telemetry_provider,
+                "get_service_by_name": lambda self, name: None,
+            },
+        )()
+    )
+    service.state = "running"
+
+    with pytest.raises(RuntimeError, match="does not support telemetry bindings"):
+        service.bind_telemetry(telemetry_provider.uuid, conn=object())
+
+    assert service.telemetry_uuid == "previous-telemetry"
 
 
 def test_compose_up_restart_and_down_update_state():

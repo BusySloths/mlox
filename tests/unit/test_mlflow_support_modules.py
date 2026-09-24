@@ -9,6 +9,12 @@ import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+    InMemorySpanExporter,
+)
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from prometheus_client import generate_latest
 
 from mlox.services.mlflow import mlops
@@ -314,6 +320,66 @@ def test_serve_exposes_prometheus_metrics_and_request_ids():
     assert "mlox_gateway_http_requests_total" in metrics_response.text
     assert "mlox_gateway_http_request_duration_seconds" in metrics_response.text
     assert "mlox_gateway_model_cache_entries" in metrics_response.text
+
+
+def test_serve_propagates_trace_context_and_records_http_span(monkeypatch):
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(sampler=ALWAYS_ON)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(
+        serve, "TRACER", provider.get_tracer("mlox.mlflow_gateway.test")
+    )
+    trace_id = "0af7651916cd43dd8448eb211c80319c"
+    client = TestClient(serve.app)
+
+    response = client.get(
+        "/health",
+        headers={
+            "traceparent": f"00-{trace_id}-b7ad6b7169203331-01",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers[serve.TRACE_ID_HEADER] == trace_id
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert format(spans[0].context.trace_id, "032x") == trace_id
+    assert spans[0].attributes["http.route"] == "/health"
+
+
+def test_serve_prediction_span_contains_resolved_model_identity(monkeypatch):
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(sampler=ALWAYS_ON)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(
+        serve, "TRACER", provider.get_tracer("mlox.mlflow_gateway.test")
+    )
+    monkeypatch.setattr(
+        serve,
+        "_predict",
+        lambda _data: {
+            "data": [{"prediction": 1}],
+            "is_cached_model": True,
+            "model": {
+                "resolved_model_version": "7",
+                "resolved_model_uri": "models:/Demo/7",
+            },
+        },
+    )
+    request = serve.PredictionRequest(
+        input_data=[[1.0]],
+        registry_model_name="Demo",
+        registry_model_alias="champion",
+    )
+
+    serve.predict(request)
+
+    span = exporter.get_finished_spans()[0]
+    assert span.name == "model.predict"
+    assert span.attributes["mlox.model.name"] == "Demo"
+    assert span.attributes["mlox.model.requested_alias"] == "champion"
+    assert span.attributes["mlox.model.version"] == "7"
+    assert span.attributes["mlox.model.cache_hit"] is True
 
 
 def test_serve_records_prediction_and_model_cache_metrics(monkeypatch):

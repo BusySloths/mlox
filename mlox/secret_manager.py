@@ -283,7 +283,7 @@ def load_secret_manager_from_keyfile(
     try:
         # Part I: Load and decrypt the keyfile
         keyfile_data = load_from_json(encrypted_access_keyfile, keyfile_pw)
-        logging.warning(f"Loaded keyfile data: {keyfile_data}")
+        logging.info("Loaded secret-manager access configuration from keyfile.")
     except Exception as e:
         logging.error(
             f"Error loading secret manager access secret '{encrypted_access_keyfile}': {e}"
@@ -316,7 +316,7 @@ def load_secret_manager_from_env(
 
     try:
         keyfile_data = decrypt_dict(encrypted_access_keyfile, keyfile_pw)
-        logging.warning(f"Loaded keyfile data from environment: {keyfile_data}")
+        logging.info("Loaded secret-manager access configuration from environment.")
     except Exception as e:
         logging.error(
             "Error loading secret manager access secret from environment '%s': %s",
