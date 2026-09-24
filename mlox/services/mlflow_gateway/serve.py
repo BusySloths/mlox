@@ -26,10 +26,7 @@ from prometheus_client import (
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-try:
-    from otel_client import OTelClient
-except ImportError:  # Imported as part of the MLOX source package in tests/dev.
-    from mlox.services.otel.client import OTelClient
+from mlox.services.otel.client import OTelClient
 
 SYS_PATH = list(sys.path)
 

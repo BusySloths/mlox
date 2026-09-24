@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir \
     "fastapi==0.115.0" \
     "uvicorn[standard]==0.30.6" \
     "prometheus-client==0.21.1" \
+    "busysloths-mlox" \
     "opentelemetry-api==1.33.1" \
     "opentelemetry-sdk==1.33.1" \
     "opentelemetry-exporter-otlp-proto-grpc==1.33.1" \
@@ -22,7 +23,6 @@ RUN pip install --no-cache-dir \
     "numpy>=1.26"
 
 COPY serve.py /app/serve.py
-COPY otel_client.py /app/otel_client.py
 COPY gateway-requirements.txt /app/gateway-requirements.txt
 COPY start_gateway.sh /app/start_gateway.sh
 

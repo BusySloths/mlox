@@ -11,8 +11,6 @@ metadata:
 data:
   serve.py: |-
 @serve_script_block
-  otel_client.py: |-
-@otel_client_script_block
   gateway-requirements.txt: |-
 @requirements_block
 ---
@@ -68,6 +66,7 @@ spec:
                 "fastapi==0.115.0" \
                 "uvicorn[standard]==0.30.6" \
                 "prometheus-client==0.21.1" \
+                "busysloths-mlox" \
                 "opentelemetry-api==1.33.1" \
                 "opentelemetry-sdk==1.33.1" \
                 "opentelemetry-exporter-otlp-proto-grpc==1.33.1" \
@@ -129,10 +128,6 @@ spec:
             - name: gateway-code
               mountPath: /app/serve.py
               subPath: serve.py
-              readOnly: true
-            - name: gateway-code
-              mountPath: /app/otel_client.py
-              subPath: otel_client.py
               readOnly: true
             - name: gateway-code
               mountPath: /app/gateway-requirements.txt

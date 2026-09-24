@@ -57,9 +57,6 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
 
         serve_script_path = self.resolve_asset(self.serve_script)
         serve_script = serve_script_path.read_text(encoding="utf-8")
-        otel_client_script = self.resolve_asset("otel/client.py").read_text(
-            encoding="utf-8"
-        )
         requirements = _resolved_text(self.requirements_txt)
         cache_size = _resolved_setting(self.cache_max_models, "10")
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")
@@ -68,7 +65,6 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
         return {
             "namespace": self.namespace,
             "serve_script_block": self.indent_block(serve_script, 4),
-            "otel_client_script_block": self.indent_block(otel_client_script, 4),
             "requirements_block": self.indent_block(requirements, 4),
             "gateway_user": self.yaml_scalar(self.user),
             "gateway_password": self.yaml_scalar(self.pw),
