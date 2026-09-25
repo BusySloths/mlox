@@ -1,14 +1,17 @@
 from tests.integration.helpers import add_service, remove_service
+import logging
 import pytest
 
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
+from mlox.secret_manager import load_secret_manager_from_env
 from mlox.services.openbao.client import OpenBaoSecretManager
 from mlox.utils import generate_password
 
 from tests.integration.conftest import wait_for_service_ready
 
 pytestmark = pytest.mark.integration
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
@@ -84,6 +87,27 @@ def test_openbao_secret_roundtrip(install_openbao_service):
     assert creds.get("address", "").startswith("https://")
     assert creds.get("verify_tls") is False
     assert service.compose_service_names["OpenBao"].endswith("_openbao")
+
+
+def test_openbao_scoped_runtime_binding_roundtrip_and_revoke(
+    install_openbao_service,
+):
+    _infra, _bundle, service = install_openbao_service
+    binding_id = "integration-runtime-consumer"
+    application = f"runtime-{binding_id}"
+
+    environment = service.get_scoped_secret_manager_env_binding(binding_id)
+    try:
+        scoped_manager = load_secret_manager_from_env(environ=environment)
+        assert isinstance(scoped_manager, OpenBaoSecretManager)
+        assert application in service.application_credentials
+
+        scoped_manager.save_secret("scoped-runtime-secret", {"bound": True})
+        assert scoped_manager.load_secret("scoped-runtime-secret") == {"bound": True}
+    finally:
+        service.revoke_scoped_secret_manager_env_binding(binding_id)
+
+    assert application not in service.application_credentials
 
 
 def test_openbao_restart_preserves_raft_data(install_openbao_service):

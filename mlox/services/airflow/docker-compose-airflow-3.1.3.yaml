@@ -62,6 +62,8 @@ x-airflow-common: &airflow-common
   # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
   image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.1.3}
+  env_file:
+    - ./service.env
   # build: .
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
@@ -105,8 +107,6 @@ x-airflow-common: &airflow-common
     AIRFLOW__LOGGING__LOG_SERVER_PORT: ${_AIRFLOW_LOG_PORT:-8793}
 
     AIRFLOW__API__WORKERS: 1
-    MLOX_SECRET_MANAGER_KEYFILE: ${_MLOX_SECRET_MANAGER_KEYFILE:-}
-    MLOX_SECRET_MANAGER_KEYFILE_PW: ${_MLOX_SECRET_MANAGER_KEYFILE_PW:-}
   volumes:
     - ${_AIRFLOW_SSL_FILE_PATH:-.}:/opt/airflow/ssl
     - ${_AIRFLOW_DAGS_FILE_PATH:-.}:/opt/airflow/dags

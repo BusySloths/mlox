@@ -217,6 +217,10 @@ def test_secret_manager_and_telemetry_bindings_are_independent_and_reversible():
     service.state = "running"
 
     service.bind_secret_manager(secret_provider.uuid, conn=object())
+    first_secret_binding = service.applied[-1]
+    service.bind_secret_manager(secret_provider.uuid, conn=object())
+    assert service.applied[-1] == first_secret_binding
+    assert service.applied.count(first_secret_binding) == 1
     service.bind_telemetry(telemetry_provider.uuid, conn=object())
 
     assert service.secret_manager_uuid == secret_provider.uuid

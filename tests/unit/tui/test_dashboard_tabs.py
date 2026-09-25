@@ -562,10 +562,13 @@ async def _workflow_secret_manager_modal_selection() -> tuple[str, bool]:
         uuid="airflow-1",
         name="Airflow",
         path_dags="/airflow/dags",
-        workflow_secret_manager_uuid="manager-1",
+        secret_manager_uuid="manager-1",
         service_config_id="airflow",
         state="running",
-        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
+        capabilities={
+            ServiceCapability.WORKFLOW_ORCHESTRATOR,
+            ServiceCapability.SECRET_MANAGER_BINDING,
+        },
         service_urls={"Airflow UI": "https://example.test:8080"},
         list_workflows=lambda: [],
     )
@@ -584,7 +587,7 @@ async def _workflow_secret_manager_modal_selection() -> tuple[str, bool]:
         is_available=True,
         supports_keyfile_export=True,
         manager=SimpleNamespace(),
-        service=None,
+        service=SimpleNamespace(capabilities={ServiceCapability.SECRET_MANAGER}),
     )
     app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
     app.workspace.list_secret_managers = lambda: descriptors

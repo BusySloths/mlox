@@ -174,6 +174,25 @@ class AbstractSecretManagerService(ABC):
     def get_secret_manager_env_binding(self) -> Dict[str, str]:
         """Return the environment required to use this secret manager."""
 
+        manager = self.get_secret_manager(getattr(self, "_service_lookup", None))
+        return self._build_secret_manager_env_binding(manager)
+
+    def get_scoped_secret_manager_env_binding(
+        self, binding_id: str
+    ) -> Dict[str, str]:
+        """Return binding-specific access when supported by the provider."""
+
+        return self.get_secret_manager_env_binding()
+
+    def revoke_scoped_secret_manager_env_binding(self, binding_id: str) -> None:
+        """Revoke binding-specific access when supported by the provider."""
+
+    @staticmethod
+    def _build_secret_manager_env_binding(
+        manager: "AbstractSecretManager",
+    ) -> Dict[str, str]:
+        """Encode a secret-manager client as the standard MLOX environment."""
+
         from mlox.secret_manager import (
             SECRET_MANAGER_KEYFILE_ENV,
             SECRET_MANAGER_KEYFILE_PW_ENV,
@@ -181,7 +200,6 @@ class AbstractSecretManagerService(ABC):
         )
 
         password = secrets.token_urlsafe(32)
-        manager = self.get_secret_manager(getattr(self, "_service_lookup", None))
         return {
             SECRET_MANAGER_KEYFILE_ENV: get_encrypted_access_keyfile(
                 manager, password
@@ -416,12 +434,9 @@ class AbstractSecretManagerBindingService(ABC):
     }
     secret_manager_uuid: str | None = None
 
-    def get_bound_secret_manager_env_binding(self) -> Dict[str, str] | None:
-        """Return the environment exported by the configured provider."""
-
-        manager_uuid = self.secret_manager_uuid
-        if manager_uuid is None:
-            return None
+    def _get_secret_manager_provider(
+        self, manager_uuid: str
+    ) -> AbstractSecretManagerService:
         provider = self.get_dependent_service(  # type: ignore[attr-defined]
             manager_uuid,
             required_type=AbstractSecretManagerService,
@@ -429,7 +444,17 @@ class AbstractSecretManagerBindingService(ABC):
         )
         if provider is None:
             raise ValueError(f"Secret-manager service {manager_uuid!r} was not found.")
-        environment = provider.get_secret_manager_env_binding()  # type: ignore[attr-defined]
+        return provider
+
+    def get_bound_secret_manager_env_binding(self) -> Dict[str, str] | None:
+        """Return the environment exported by the configured provider."""
+
+        manager_uuid = self.secret_manager_uuid
+        if manager_uuid is None:
+            return None
+        provider = self._get_secret_manager_provider(manager_uuid)
+        binding_id = str(getattr(self, "uuid", "") or "")
+        environment = provider.get_scoped_secret_manager_env_binding(binding_id)
         if not isinstance(environment, dict):
             raise TypeError("Secret-manager environment binding must be a dictionary.")
         return {str(key): str(value) for key, value in environment.items()}
@@ -441,26 +466,55 @@ class AbstractSecretManagerBindingService(ABC):
         if not manager_uuid:
             raise ValueError("Secret-manager UUID must not be empty.")
         previous_uuid = self.secret_manager_uuid
+        if manager_uuid == previous_uuid:
+            return
         self.secret_manager_uuid = manager_uuid
         try:
-            environment = self.get_bound_secret_manager_env_binding()
             if self.state != "un-initialized":  # type: ignore[attr-defined]
+                environment = self.get_bound_secret_manager_env_binding()
                 self._apply_secret_manager_binding(
                     conn,
                     manager_uuid=manager_uuid,
                     environment=environment or {},
                 )
         except Exception:
+            try:
+                provider = self._get_secret_manager_provider(manager_uuid)
+                provider.revoke_scoped_secret_manager_env_binding(
+                    str(getattr(self, "uuid", "") or "")
+                )
+            except Exception:
+                logger.warning(
+                    "Could not roll back secret-manager credential for %s.",
+                    manager_uuid,
+                    exc_info=True,
+                )
             self.secret_manager_uuid = previous_uuid
             raise
+        if previous_uuid and previous_uuid != manager_uuid:
+            try:
+                previous_provider = self._get_secret_manager_provider(previous_uuid)
+                previous_provider.revoke_scoped_secret_manager_env_binding(
+                    str(getattr(self, "uuid", "") or "")
+                )
+            except Exception:
+                logger.warning(
+                    "Could not revoke the previous secret-manager credential for %s.",
+                    previous_uuid,
+                    exc_info=True,
+                )
 
     def unbind_secret_manager(self, conn) -> None:
         """Remove this service's secret-manager access configuration."""
 
         if self.secret_manager_uuid is None:
             return
+        provider = self._get_secret_manager_provider(self.secret_manager_uuid)
         if self.state != "un-initialized":  # type: ignore[attr-defined]
             self._remove_secret_manager_binding(conn)
+        provider.revoke_scoped_secret_manager_env_binding(
+            str(getattr(self, "uuid", "") or "")
+        )
         self.secret_manager_uuid = None
 
     @abstractmethod
