@@ -13,8 +13,10 @@ from mlox.service import (
     AbstractModelServerService,
     AbstractMonitorService,
     AbstractRepositoryService,
+    AbstractSecretManagerBindingService,
     AbstractSecretManagerService,
     AbstractService,
+    AbstractTelemetryBindingService,
     AbstractWebUIService,
     ServiceCapability,
 )
@@ -54,10 +56,12 @@ SERVICE_CAPABILITY_ABCS = {
     ServiceCapability.HEALTH.value: AbstractHealthService,
     ServiceCapability.WEB_UI.value: AbstractWebUIService,
     ServiceCapability.SECRET_MANAGER.value: AbstractSecretManagerService,
+    ServiceCapability.SECRET_MANAGER_BINDING.value: AbstractSecretManagerBindingService,
     ServiceCapability.REPOSITORY.value: AbstractRepositoryService,
     ServiceCapability.MODEL_REGISTRY.value: AbstractModelRegistryService,
     ServiceCapability.MODEL_SERVER.value: AbstractModelServerService,
     ServiceCapability.MONITOR.value: AbstractMonitorService,
+    ServiceCapability.TELEMETRY_BINDING.value: AbstractTelemetryBindingService,
 }
 
 SERVICE_GROUP_ALIASES = {
@@ -65,12 +69,14 @@ SERVICE_GROUP_ALIASES = {
     "web_ui": ServiceCapability.WEB_UI.value,
     "web-ui": ServiceCapability.WEB_UI.value,
     "secret_manager": ServiceCapability.SECRET_MANAGER.value,
+    "secret_manager_binding": ServiceCapability.SECRET_MANAGER_BINDING.value,
     "repository": ServiceCapability.REPOSITORY.value,
     "git": ServiceCapability.REPOSITORY.value,
     "model_registry": ServiceCapability.MODEL_REGISTRY.value,
     "model_server": ServiceCapability.MODEL_SERVER.value,
     "monitor": ServiceCapability.MONITOR.value,
     "observability": ServiceCapability.OBSERVABILITY.value,
+    "telemetry_binding": ServiceCapability.TELEMETRY_BINDING.value,
     "data_warehouse": ServiceCapability.DATA_WAREHOUSE.value,
     "object_storage": ServiceCapability.OBJECT_STORAGE.value,
     "spreadsheet": ServiceCapability.SPREADSHEET.value,

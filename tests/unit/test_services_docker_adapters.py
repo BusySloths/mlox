@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from urllib.error import HTTPError
 
+from mlox.service import ServiceCapability
 from mlox.services.airflow.docker import AirflowDockerService
 from mlox.services.influx.docker import InfluxDockerService
 from mlox.services.kafka.docker import KafkaDockerService, _generate_cluster_id
@@ -1069,6 +1070,8 @@ def test_mlflow_gateway_can_bind_and_unbind_telemetry(conn):
             }
         },
     )
+    assert ServiceCapability.SECRET_MANAGER_BINDING in service.capabilities
+    assert ServiceCapability.TELEMETRY_BINDING in service.capabilities
     lookup = SimpleNamespace(
         get_service_by_uuid=lambda uuid: telemetry if uuid == telemetry.uuid else None,
         get_service_by_name=lambda name: None,

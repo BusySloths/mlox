@@ -28,7 +28,10 @@ from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.project_actions import ProjectActions
 from mlox.tui.screens.dashboard.repository_panel import RepositoryPanel
 from mlox.tui.screens.dashboard.server_actions import ServerActions
-from mlox.tui.screens.dashboard.service_actions import ServiceActions
+from mlox.tui.screens.dashboard.service_actions import (
+    ServiceActions,
+    runtime_provider_options,
+)
 from mlox.tui.screens.dashboard.secret_manager_panel import SecretManagerPanel
 from mlox.tui.screens.dashboard.template_panel import TemplatePanel
 from mlox.tui.screens.dashboard.tree import InfraTree
@@ -1426,6 +1429,15 @@ async def _service_restart_button_display_for(service: object) -> bool:
         return app.query_one("#restart-service", Button).display
 
 
+async def _runtime_providers_button_display_for(service: object) -> bool:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="service", service=service))
+        await pilot.pause()
+        return app.query_one("#configure-runtime-providers", Button).display
+
+
 class _NonComposeService(AbstractService):
     def setup(self, conn):
         pass
@@ -1498,6 +1510,116 @@ def test_service_actions_show_restart_button_only_for_initialized_services() -> 
     assert asyncio.run(_service_restart_button_display_for(initialized)) is True
     assert asyncio.run(_service_restart_button_display_for(uninitialized)) is False
     assert asyncio.run(_service_restart_button_display_for(non_compose)) is False
+
+
+def test_service_actions_show_runtime_providers_only_for_consumers() -> None:
+    telemetry_consumer = SimpleNamespace(
+        name="gateway",
+        capabilities={ServiceCapability.TELEMETRY_BINDING},
+    )
+    plain_service = SimpleNamespace(name="api", capabilities=set())
+
+    assert asyncio.run(_runtime_providers_button_display_for(telemetry_consumer)) is True
+    assert asyncio.run(_runtime_providers_button_display_for(plain_service)) is False
+
+
+def test_runtime_provider_options_filter_providers_and_exclude_consumer() -> None:
+    secret_manager = SimpleNamespace(
+        name="Vault",
+        uuid="secret-1",
+        capabilities={ServiceCapability.SECRET_MANAGER},
+    )
+    telemetry = SimpleNamespace(
+        name="OTel",
+        uuid="otel-1",
+        capabilities={ServiceCapability.OBSERVABILITY},
+    )
+    consumer = SimpleNamespace(
+        name="Gateway",
+        uuid="gateway-1",
+        capabilities={
+            ServiceCapability.SECRET_MANAGER,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
+    )
+    infrastructure = SimpleNamespace(
+        bundles=[SimpleNamespace(services=[telemetry, consumer, secret_manager])]
+    )
+
+    assert runtime_provider_options(
+        infrastructure,
+        ServiceCapability.SECRET_MANAGER,
+        consumer_uuid="gateway-1",
+    ) == [("Vault", "secret-1")]
+    assert runtime_provider_options(
+        infrastructure,
+        ServiceCapability.OBSERVABILITY,
+        consumer_uuid="gateway-1",
+    ) == [("OTel", "otel-1")]
+
+
+async def _apply_runtime_provider_changes() -> tuple[list[tuple], object]:
+    app = DashboardTestApp()
+    calls = []
+    service = SimpleNamespace(
+        name="Gateway",
+        uuid="gateway-1",
+        state="running",
+        secret_manager_uuid="secret-old",
+        telemetry_uuid="otel-old",
+        capabilities={
+            ServiceCapability.SECRET_MANAGER_BINDING,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
+    )
+    bundle = SimpleNamespace(
+        name="dev",
+        server=SimpleNamespace(ip="10.0.0.5", backend=["docker"]),
+        services=[service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    def bind_secret_manager(*, name, manager_uuid):
+        calls.append(("bind-secret-manager", name, manager_uuid))
+        service.secret_manager_uuid = manager_uuid
+        return OperationResult(True, 0, "bound")
+
+    def unbind_telemetry(*, name):
+        calls.append(("unbind-telemetry", name))
+        service.telemetry_uuid = None
+        return OperationResult(True, 0, "unbound")
+
+    app.workspace.bind_service_secret_manager = bind_secret_manager
+    app.workspace.unbind_service_telemetry = unbind_telemetry
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        selection = SelectionInfo(type="service", bundle=bundle, service=service)
+        screen._apply_selection(selection)
+        screen._apply_runtime_provider_selection(
+            selection,
+            {
+                "secret_manager_uuid": "secret-new",
+                "telemetry_uuid": None,
+            },
+        )
+        deadline = time.monotonic() + 2
+        while len(calls) < 2:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for provider updates.")
+            await pilot.pause(0.05)
+    return calls, service
+
+
+def test_runtime_provider_action_uses_workspace_bind_and_unbind() -> None:
+    calls, service = asyncio.run(_apply_runtime_provider_changes())
+
+    assert calls == [
+        ("bind-secret-manager", "Gateway", "secret-new"),
+        ("unbind-telemetry", "Gateway"),
+    ]
+    assert service.secret_manager_uuid == "secret-new"
+    assert service.telemetry_uuid is None
 
 
 def test_service_actions_hide_web_ui_for_uninitialized_services() -> None:

@@ -6,7 +6,7 @@ import yaml
 
 from mlox.config import load_all_service_configs
 from mlox.executors import TaskGroup
-from mlox.service import BindingNotSupportedError, ServiceCapability
+from mlox.service import ServiceCapability
 from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
 from mlox.view.services import _STREAMLIT_SERVICE_BINDINGS
 
@@ -117,15 +117,13 @@ def test_renders_gateway_manifest(gateway: MLFlowGatewayK3sService) -> None:
     assert len(list(yaml.safe_load_all(manifest))) == 9
 
 
-def test_runtime_provider_bindings_fail_explicitly_on_kubernetes(
+def test_runtime_provider_bindings_are_not_advertised_on_kubernetes(
     gateway: MLFlowGatewayK3sService,
 ) -> None:
-    with pytest.raises(BindingNotSupportedError, match="Kubernetes backend"):
-        gateway._apply_telemetry_binding(
-            None,
-            telemetry_uuid="otel-1",
-            connection={"collector_url": "https://otel.example:4317"},
-        )
+    assert ServiceCapability.SECRET_MANAGER_BINDING not in gateway.capabilities
+    assert ServiceCapability.TELEMETRY_BINDING not in gateway.capabilities
+    assert not hasattr(gateway, "secret_manager_uuid")
+    assert not hasattr(gateway, "telemetry_uuid")
 
 
 def test_renders_ingress_with_path_middlewares(

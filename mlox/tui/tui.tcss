@@ -1879,6 +1879,7 @@ RemoveServiceDialog {
 }
 
 #rename-service-dialog,
+#runtime-providers-dialog,
 #remove-service-dialog {
   width: 60;
   height: auto;
@@ -1907,6 +1908,26 @@ RemoveServiceDialog {
   color: #e6edf7;
 }
 
+#runtime-providers-title {
+  color: #e6edf7;
+}
+
+#runtime-providers-description {
+  height: auto;
+  color: #a6c9bdff;
+  margin-bottom: 1;
+}
+
+.runtime-provider-label {
+  height: 1;
+  margin-top: 1;
+}
+
+#runtime-secret-manager,
+#runtime-telemetry {
+  width: 1fr;
+}
+
 #remove-service-title {
   color: #ffd7d7;
 }
@@ -1924,24 +1945,34 @@ RemoveServiceDialog {
 }
 
 #rename-service-actions,
+#runtime-providers-actions,
 #remove-service-actions {
   height: auto;
   align-horizontal: right;
 }
 
 #cancel-service-rename,
+#cancel-runtime-providers,
 #cancel-remove-service,
 #confirm-service-rename,
+#confirm-runtime-providers,
 #confirm-remove-service {
   width: auto;
 }
 
 #confirm-service-rename,
+#confirm-runtime-providers,
 #confirm-remove-service {
   margin-left: 1;
 }
 
 #confirm-service-rename {
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#confirm-runtime-providers {
   background: #0e9455ff;
   border: round #8fe388ff;
   color: #ffffff;

@@ -424,6 +424,7 @@ def bind_service_secret_manager(
         provider_uuid=manager_uuid,
         bind_method="bind_secret_manager",
         label="secret manager",
+        capability=ServiceCapability.SECRET_MANAGER_BINDING,
     )
 
 
@@ -437,6 +438,7 @@ def unbind_service_secret_manager(
         name=name,
         unbind_method="unbind_secret_manager",
         label="secret manager",
+        capability=ServiceCapability.SECRET_MANAGER_BINDING,
     )
 
 
@@ -451,6 +453,7 @@ def bind_service_telemetry(
         provider_uuid=telemetry_uuid,
         bind_method="bind_telemetry",
         label="telemetry",
+        capability=ServiceCapability.TELEMETRY_BINDING,
     )
 
 
@@ -464,6 +467,7 @@ def unbind_service_telemetry(
         name=name,
         unbind_method="unbind_telemetry",
         label="telemetry",
+        capability=ServiceCapability.TELEMETRY_BINDING,
     )
 
 
@@ -474,11 +478,14 @@ def _change_service_binding(
     provider_uuid: str,
     bind_method: str,
     label: str,
+    capability: ServiceCapability,
 ) -> OperationResult[ServiceData]:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
         return OperationResult(False, 63, "Service not found in infrastructure.")
+    if capability.value not in _service_capability_names(service):
+        return OperationResult(False, 65, f"Service cannot bind {label}.")
     bundle = infra.get_bundle_by_service(service)
     if not bundle:
         return OperationResult(False, 64, "Could not find server bundle for service.")
@@ -504,11 +511,14 @@ def _remove_service_binding(
     name: str,
     unbind_method: str,
     label: str,
+    capability: ServiceCapability,
 ) -> OperationResult[ServiceData]:
     infra = project.infrastructure
     service = infra.get_service(name)
     if not service:
         return OperationResult(False, 63, "Service not found in infrastructure.")
+    if capability.value not in _service_capability_names(service):
+        return OperationResult(False, 67, f"Service cannot unbind {label}.")
     bundle = infra.get_bundle_by_service(service)
     if not bundle:
         return OperationResult(False, 64, "Could not find server bundle for service.")

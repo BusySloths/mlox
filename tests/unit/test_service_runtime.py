@@ -6,8 +6,10 @@ import pytest
 
 from mlox.service import (
     AbstractHealthService,
+    AbstractSecretManagerBindingService,
     AbstractSecretManagerService,
     AbstractService,
+    AbstractTelemetryBindingService,
     ServiceCapability,
     service_health_payload,
 )
@@ -113,7 +115,15 @@ class _TelemetryProvider(_Service):
 
 
 @dataclass
-class _BindingService(_Service):
+class _BindingService(
+    AbstractSecretManagerBindingService,
+    AbstractTelemetryBindingService,
+    _Service,
+):
+    capabilities = {
+        ServiceCapability.SECRET_MANAGER_BINDING,
+        ServiceCapability.TELEMETRY_BINDING,
+    }
     applied: list = None
 
     def __post_init__(self):
@@ -225,7 +235,7 @@ def test_secret_manager_and_telemetry_bindings_are_independent_and_reversible():
 
 
 def test_failed_live_binding_restores_previous_provider_uuid():
-    service = _Service(
+    service = _BindingService(
         name="consumer",
         service_config_id="cfg",
         template="t",
@@ -250,7 +260,12 @@ def test_failed_live_binding_restores_previous_provider_uuid():
     )
     service.state = "running"
 
-    with pytest.raises(RuntimeError, match="does not support telemetry bindings"):
+    def fail_binding(conn, *, telemetry_uuid, connection):
+        raise RuntimeError("telemetry update failed")
+
+    service._apply_telemetry_binding = fail_binding
+
+    with pytest.raises(RuntimeError, match="telemetry update failed"):
         service.bind_telemetry(telemetry_provider.uuid, conn=object())
 
     assert service.telemetry_uuid == "previous-telemetry"
@@ -318,6 +333,10 @@ def test_health_capability_is_optional_for_services():
     assert ServiceCapability.HEALTH.value == "health"
     assert ServiceCapability.HEALTH not in getattr(svc, "capabilities", set())
     assert not hasattr(svc, "get_health")
+    assert not hasattr(svc, "secret_manager_uuid")
+    assert not hasattr(svc, "telemetry_uuid")
+    assert not hasattr(svc, "bind_secret_manager")
+    assert not hasattr(svc, "bind_telemetry")
 
 
 @dataclass

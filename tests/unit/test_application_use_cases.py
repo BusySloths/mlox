@@ -1074,6 +1074,10 @@ def test_services_binding_use_cases_dispatch_to_runtime_service_methods():
     calls = []
     service = SimpleNamespace(
         name="gateway",
+        capabilities={
+            ServiceCapability.SECRET_MANAGER_BINDING,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
         bind_secret_manager=lambda uuid, conn: calls.append(
             ("bind-secret-manager", uuid, conn)
         ),
@@ -1113,6 +1117,30 @@ def test_services_binding_use_cases_dispatch_to_runtime_service_methods():
         ("unbind-telemetry", connection),
         ("unbind-secret-manager", connection),
     ]
+
+
+def test_services_binding_use_cases_reject_unadvertised_bindings():
+    service = SimpleNamespace(
+        name="plain-service",
+        capabilities=set(),
+        bind_telemetry=lambda uuid, conn: None,
+    )
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: _Connection())
+    )
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service,
+            get_bundle_by_service=lambda value: bundle,
+        )
+    )
+
+    result = services.bind_service_telemetry(
+        current, name="plain-service", telemetry_uuid="otel-1"
+    )
+
+    assert not result.success
+    assert result.message == "Service cannot bind telemetry."
 
 
 def test_services_check_health_updates_state_from_payload():

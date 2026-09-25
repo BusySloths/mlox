@@ -6,9 +6,8 @@ from dataclasses import dataclass, field
 from passlib.hash import apr_md5_crypt
 
 from mlox.executors import TaskGroup
-from mlox.service import BindingNotSupportedError
-from mlox.services.mlflow_gateway.docker import (
-    MLFlowGatewayDockerService,
+from mlox.services.mlflow_gateway.base import (
+    MLFlowGatewayService,
     _resolved_setting,
     _resolved_text,
 )
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
+class MLFlowGatewayK3sService(MLFlowGatewayService):
     kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
     container_port: int = 8080
     ingress_port: int = 443
@@ -83,30 +82,6 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
             "cache_ttl": self.yaml_scalar(cache_ttl),
             "service_name": self.service_name,
         }
-
-    def _apply_secret_manager_binding(self, conn, **kwargs) -> None:
-        raise BindingNotSupportedError(
-            "Runtime secret-manager bindings are not implemented for the "
-            "MLflow Gateway Kubernetes backend."
-        )
-
-    def _remove_secret_manager_binding(self, conn) -> None:
-        raise BindingNotSupportedError(
-            "Runtime secret-manager bindings are not implemented for the "
-            "MLflow Gateway Kubernetes backend."
-        )
-
-    def _apply_telemetry_binding(self, conn, **kwargs) -> None:
-        raise BindingNotSupportedError(
-            "Runtime telemetry bindings are not implemented for the "
-            "MLflow Gateway Kubernetes backend."
-        )
-
-    def _remove_telemetry_binding(self, conn) -> None:
-        raise BindingNotSupportedError(
-            "Runtime telemetry bindings are not implemented for the "
-            "MLflow Gateway Kubernetes backend."
-        )
 
     def _kubectl(self, arguments: str) -> str:
         return f"kubectl --kubeconfig {shlex.quote(self.kubeconfig)} {arguments}"

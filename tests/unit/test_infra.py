@@ -3,7 +3,12 @@ from types import SimpleNamespace
 from typing import Any, ClassVar
 
 from mlox.infra import Bundle, Infrastructure
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractSecretManagerBindingService,
+    AbstractService,
+    AbstractTelemetryBindingService,
+    ServiceCapability,
+)
 from mlox.server import AbstractServer, ServerCapability
 from mlox.services.github.service import GithubRepoService
 
@@ -90,6 +95,30 @@ class DummyService(AbstractService):
 
     def get_secrets(self) -> dict[str, dict]:
         return {}
+
+
+@dataclass
+class BoundDummyService(
+    AbstractSecretManagerBindingService,
+    AbstractTelemetryBindingService,
+    DummyService,
+):
+    capabilities = {
+        ServiceCapability.SECRET_MANAGER_BINDING,
+        ServiceCapability.TELEMETRY_BINDING,
+    }
+
+    def _apply_secret_manager_binding(self, conn, **kwargs) -> None:
+        pass
+
+    def _remove_secret_manager_binding(self, conn) -> None:
+        pass
+
+    def _apply_telemetry_binding(self, conn, **kwargs) -> None:
+        pass
+
+    def _remove_telemetry_binding(self, conn) -> None:
+        pass
 
 
 def make_service(name: str, config_id: str, uuid: str) -> DummyService:
@@ -327,13 +356,11 @@ def test_from_dict_accepts_legacy_string_boolean_service_fields():
 
 def test_service_provider_bindings_survive_infrastructure_round_trip():
     server = make_server(DummyServer, "10.0.0.1")
-    service = GithubRepoService(
-        name="Github:demo",
-        service_config_id="github",
-        template="github/mlox.github.yaml",
-        target_path="/repos",
-        link="https://github.com/acme/demo",
-        is_private=False,
+    service = BoundDummyService(
+        name="consumer",
+        service_config_id="consumer",
+        template="consumer.yaml",
+        target_path="/consumer",
         secret_manager_uuid="secret-provider-uuid",
         telemetry_uuid="telemetry-provider-uuid",
     )

@@ -26,6 +26,8 @@ capabilities:
   service:
   - model_server
   - health
+  - secret_manager_binding
+  - telemetry_binding
   backend:
   - docker
 ports:
