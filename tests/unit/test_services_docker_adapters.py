@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from urllib.error import HTTPError
 
+from mlox.service import AbstractSecretManagerService, ServiceCapability
 from mlox.services.airflow.docker import AirflowDockerService
 from mlox.services.influx.docker import InfluxDockerService
 from mlox.services.kafka.docker import KafkaDockerService, _generate_cluster_id
@@ -98,6 +99,9 @@ class FakeExec:
 
     def docker_up(self, conn, compose_path, env_path):
         self._record("docker_up", compose_path, env_path)
+
+    def docker_restart(self, conn, compose_path, env_path):
+        self._record("docker_restart", compose_path, env_path)
 
     def docker_down(self, conn, *args, **kwargs):
         self._record("docker_down", *args, **kwargs)
@@ -504,6 +508,68 @@ def test_openbao_create_keyfile_secret_manager_uses_fresh_scoped_token(monkeypat
     assert credential["period"] == "2160h"
 
 
+def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
+    service = OpenBaoDockerService(
+        **BASE,
+        port="8200",
+        mount_path="kv",
+        root_token="root",
+    )
+    captured = {}
+    scoped_manager = object()
+    shared_manager = object()
+
+    def create_keyfile_manager(infra, *, application_name, period):
+        captured["created"] = (infra, application_name, period)
+        service.application_credentials[application_name] = {"accessor": "accessor"}
+        return scoped_manager
+
+    def revoke(application_name, infra):
+        captured["revoked"] = (application_name, infra)
+        service.application_credentials.pop(application_name)
+
+    consumer = SimpleNamespace(uuid="consumer-1", name="Airflow Worker")
+    lookup = SimpleNamespace(
+        get_service_by_uuid=lambda service_uuid: consumer
+        if service_uuid == consumer.uuid
+        else None
+    )
+    service.bind_service_lookup(lookup)
+    monkeypatch.setattr(service, "get_secret_manager", lambda infra: shared_manager)
+    monkeypatch.setattr(service, "create_keyfile_secret_manager", create_keyfile_manager)
+    monkeypatch.setattr(
+        service,
+        "_build_secret_manager_env_binding",
+        lambda manager: {"PROVIDER_ENV": "value"},
+    )
+    monkeypatch.setattr(service, "revoke_application_credential", revoke)
+
+    assert service.get_secret_manager_env_binding() == {"PROVIDER_ENV": "value"}
+    assert "created" not in captured
+    assert service.get_secret_manager_env_binding("consumer-1") == {
+        "PROVIDER_ENV": "value"
+    }
+    application = "runtime-Airflow-Worker-consumer"
+    assert captured["created"] == (lookup, application, "7d")
+    assert service.get_secret_manager_binding_label("consumer-1") == application
+    assert service.application_credentials[application]["binding_id"] == "consumer-1"
+    assert service.application_credentials[application]["consumer_name"] == (
+        "Airflow Worker"
+    )
+
+    consumer.name = "Renamed Airflow"
+    service.get_secret_manager_env_binding("consumer-1")
+    assert captured["created"] == (lookup, application, "7d")
+    assert service.get_secret_manager_binding_label("consumer-1") == application
+
+    service.revoke_secret_manager_env_binding()
+    assert application in service.application_credentials
+    service.revoke_secret_manager_env_binding("consumer-1")
+
+    assert captured["revoked"] == (application, lookup)
+    assert service.application_credentials == {}
+
+
 def test_openbao_health_wait_requires_real_status(conn, monkeypatch):
     service = _set_exec(
         OpenBaoDockerService(**BASE, port="8200", mount_path="kv"),
@@ -576,6 +642,10 @@ def test_otel_setup_check_and_read_telemetry(conn):
     assert secrets["otel_client_connection"]["trusted_certs"] == "CERT"
     assert secrets["otel_client_connection"]["insecure_tls"] is False
     assert secrets["otel_client_connection"]["protocol"] == "otlp_grpc"
+    binding = service.get_telemetry_env_binding()
+    assert binding["OTEL_EXPORTER_OTLP_ENDPOINT"] == "https://example.test:4317"
+    assert binding["OTEL_EXPORTER_OTLP_PROTOCOL"] == "grpc"
+    assert binding["MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64"] == "Q0VSVA=="
 
     replacements = [
         call
@@ -1034,6 +1104,67 @@ def test_mlflow_gateway_setup_check_and_is_model(conn):
     assert service.is_model("registry:my-model:1") is True
     assert service.is_model("registry:my-model") is False
     assert service.is_model("my-model/1") is False
+    assert not any(
+        call[0] == "fs_copy" and call[1][1].endswith("/otel_client.py")
+        for call in service.exec.calls
+    )
+
+
+def test_mlflow_gateway_can_bind_and_unbind_telemetry(conn):
+    service = _set_exec(
+        MLFlowGatewayDockerService(
+            **BASE,
+            dockerfile="mlflow_gateway/dockerfile-mlflow-gateway-3.8.1",
+            serve_script="mlflow_gateway/serve.py",
+            start_script="mlflow_gateway/start_gateway.sh",
+            port="8083",
+            tracking_uri="https://tracking.example",
+            tracking_user="u",
+            tracking_pw="p",
+        ),
+        FakeExec(),
+    )
+    from mlox.service import AbstractObservabilityService
+
+    class TelemetryProvider(AbstractObservabilityService):
+        uuid = "otel-1"
+        capabilities = {ServiceCapability.OBSERVABILITY}
+
+        def get_telemetry_env_binding(self):
+            return {
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317",
+                "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+                "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64": "Q0VSVElGSUNBVEU=",
+            }
+
+    telemetry = TelemetryProvider()
+    assert ServiceCapability.SECRET_MANAGER_BINDING in service.capabilities
+    assert ServiceCapability.TELEMETRY_BINDING in service.capabilities
+    lookup = SimpleNamespace(
+        get_service_by_uuid=lambda uuid: telemetry if uuid == telemetry.uuid else None,
+        get_service_by_name=lambda name: None,
+    )
+    service.bind_service_lookup(lookup)
+    service.state = "running"
+    env_path = "/tmp/stack-8083/service.env"
+    service.exec.files[env_path] = "MLFLOW_GATEWAY_PORT=8083\n"
+
+    service.bind_telemetry(telemetry.uuid, conn)
+
+    env = service.exec.files[env_path]
+    assert service.telemetry_uuid == telemetry.uuid
+    assert "MLFLOW_GATEWAY_PORT=8083" in env
+    assert "OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.example:4317" in env
+    assert "OTEL_EXPORTER_OTLP_PROTOCOL=grpc" in env
+    assert "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64=Q0VSVElGSUNBVEU=" in env
+    assert "/tmp/stack-8083/otel-ca.pem" not in service.exec.files
+    assert any(call[0] == "docker_restart" for call in service.exec.calls)
+
+    service.unbind_telemetry(conn)
+
+    assert service.telemetry_uuid is None
+    assert "OTEL_EXPORTER_" not in service.exec.files[env_path]
+    assert "OTEL_RESOURCE_ATTRIBUTES" not in service.exec.files[env_path]
 
 
 def test_mlflow_gateway_setup_ignores_unresolved_requirements_placeholder(conn):
@@ -1310,7 +1441,27 @@ def test_airflow_list_workflows_falls_back_to_v1_basic_auth(conn, monkeypatch):
     ]
 
 
-def test_airflow_set_workflow_secret_manager_env_upserts_env_and_restarts(conn):
+def test_airflow_secret_manager_binding_updates_env_restarts_and_revokes(conn):
+    class SecretManagerProvider(AbstractSecretManagerService):
+        uuid = "manager-1"
+        capabilities = {ServiceCapability.SECRET_MANAGER}
+
+        def __init__(self):
+            self.revoked = []
+
+        def get_secret_manager(self, infra):
+            raise AssertionError("The provider-specific environment should be used.")
+
+        def get_secret_manager_env_binding(self, binding_id=None):
+            return {
+                "CUSTOM_SECRET_ENDPOINT": "https://secrets.test",
+                "CUSTOM_SECRET_TOKEN": f"token-for-{binding_id}",
+            }
+
+        def revoke_secret_manager_env_binding(self, binding_id=None):
+            self.revoked.append(binding_id)
+
+    provider = SecretManagerProvider()
     service = _set_exec(
         AirflowDockerService(
             **BASE,
@@ -1322,48 +1473,45 @@ def test_airflow_set_workflow_secret_manager_env_upserts_env_and_restarts(conn):
         ),
         FakeExec(),
     )
+    lookup = SimpleNamespace(
+        get_service_by_uuid=lambda service_uuid: provider
+        if service_uuid == provider.uuid
+        else None,
+        get_service_by_name=lambda service_name: None,
+    )
+    service.bind_service_lookup(lookup)
     service.setup(conn)
+    service.state = "running"
     env_path = "/tmp/stack/service.env"
     service.exec.files[env_path] = (
         "_AIRFLOW_OUT_PORT=8080\n"
-        "_MLOX_SECRET_MANAGER_KEYFILE=old\n"
-        "_MLOX_SECRET_MANAGER_KEYFILE_PW=old\n"
+        "UNRELATED=value\n"
     )
     expose_call_start = len(service.exec.calls)
 
-    service.set_workflow_secret_manager_env(
-        conn,
-        manager_uuid="manager-1",
-        encrypted_keyfile="encrypted-keyfile",
-        keyfile_password="keyfile-password",
-    )
+    service.bind_secret_manager("manager-1", conn)
 
-    assert service.workflow_secret_manager_uuid == "manager-1"
-    assert service.workflow_secret_manager_env == {
-        "MLOX_SECRET_MANAGER_KEYFILE": "encrypted-keyfile",
-        "MLOX_SECRET_MANAGER_KEYFILE_PW": "keyfile-password",
-    }
+    assert service.secret_manager_uuid == "manager-1"
     assert service.exec.files[env_path] == (
         "_AIRFLOW_OUT_PORT=8080\n"
-        "_MLOX_SECRET_MANAGER_KEYFILE=encrypted-keyfile\n"
-        "_MLOX_SECRET_MANAGER_KEYFILE_PW=keyfile-password\n"
+        "UNRELATED=value\n"
+        "# mlox:secret-manager:begin\n"
+        "CUSTOM_SECRET_ENDPOINT=https://secrets.test\n"
+        f"CUSTOM_SECRET_TOKEN=token-for-{service.uuid}\n"
+        "# mlox:secret-manager:end\n"
     )
     expose_calls = service.exec.calls[expose_call_start:]
-    copy_call = next(call for call in expose_calls if call[0] == "fs_copy")
-    assert copy_call[1][0].endswith(service.template)
-    assert copy_call[1][1] == "/tmp/stack/docker-compose.yaml"
     assert (
         "docker_up",
         ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),
         {},
     ) in expose_calls
-    assert expose_calls.index(copy_call) < expose_calls.index(
-        (
-            "docker_up",
-            ("/tmp/stack/docker-compose.yaml", "/tmp/stack/service.env"),
-            {},
-        )
-    )
+
+    service.unbind_secret_manager(conn)
+
+    assert service.secret_manager_uuid is None
+    assert service.exec.files[env_path] == "_AIRFLOW_OUT_PORT=8080\nUNRELATED=value\n"
+    assert provider.revoked == [service.uuid]
 
 
 def test_airflow_compose_templates_pass_secret_manager_env():
@@ -1372,11 +1520,9 @@ def test_airflow_compose_templates_pass_secret_manager_env():
         "docker-compose-airflow-3.1.3.yaml",
     ):
         content = Path("mlox/services/airflow", filename).read_text()
-        assert "MLOX_SECRET_MANAGER_KEYFILE: ${_MLOX_SECRET_MANAGER_KEYFILE:-}" in content
-        assert (
-            "MLOX_SECRET_MANAGER_KEYFILE_PW: ${_MLOX_SECRET_MANAGER_KEYFILE_PW:-}"
-            in content
-        )
+        assert "env_file:" in content
+        assert "- ./service.env" in content
+        assert "MLOX_SECRET_MANAGER_KEYFILE:" not in content
 
 
 def test_litellm_setup_config_and_check_states(conn):

@@ -741,6 +741,50 @@ class ProjectWorkspace:
 
         return self._mutate(lambda: services.restart_service(self._state, name=name))
 
+    def bind_service_secret_manager(
+        self, *, name: str, manager_uuid: str
+    ) -> OperationResult[ServiceData]:
+        """Bind a secret-manager provider and persist the service reference."""
+
+        return self._mutate(
+            lambda: services.bind_service_secret_manager(
+                self._state,
+                name=name,
+                manager_uuid=manager_uuid,
+            )
+        )
+
+    def unbind_service_secret_manager(
+        self, *, name: str
+    ) -> OperationResult[ServiceData]:
+        """Remove a service's secret-manager binding and persist the change."""
+
+        return self._mutate(
+            lambda: services.unbind_service_secret_manager(self._state, name=name)
+        )
+
+    def bind_service_telemetry(
+        self, *, name: str, telemetry_uuid: str
+    ) -> OperationResult[ServiceData]:
+        """Bind a telemetry provider and persist the service reference."""
+
+        return self._mutate(
+            lambda: services.bind_service_telemetry(
+                self._state,
+                name=name,
+                telemetry_uuid=telemetry_uuid,
+            )
+        )
+
+    def unbind_service_telemetry(
+        self, *, name: str
+    ) -> OperationResult[ServiceData]:
+        """Remove a service's telemetry binding and persist the change."""
+
+        return self._mutate(
+            lambda: services.unbind_service_telemetry(self._state, name=name)
+        )
+
     def stop_service(self, *, name: str) -> OperationResult[ServiceData]:
         """Stop an initialized service and persist its state."""
 

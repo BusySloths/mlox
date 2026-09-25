@@ -23,6 +23,8 @@ services:
       dockerfile: dockerfile-mlflow-gateway-3.8.1
     restart: always
     container_name: mlflow_gateway_${MLFLOW_GATEWAY_PORT}
+    env_file:
+      - ./service.env
     environment:
       - MLFLOW_URI=${MLFLOW_REMOTE_URI}
       - MLFLOW_TRACKING_URI=${MLFLOW_REMOTE_URI}

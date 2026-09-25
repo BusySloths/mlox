@@ -413,6 +413,131 @@ def restart_service(project: WorkspaceState, *, name: str) -> OperationResult[Se
     )
 
 
+def bind_service_secret_manager(
+    project: WorkspaceState, *, name: str, manager_uuid: str
+) -> OperationResult[ServiceData]:
+    """Expose a secret-manager provider to an existing service deployment."""
+
+    return _change_service_binding(
+        project,
+        name=name,
+        provider_uuid=manager_uuid,
+        bind_method="bind_secret_manager",
+        label="secret manager",
+        capability=ServiceCapability.SECRET_MANAGER_BINDING,
+    )
+
+
+def unbind_service_secret_manager(
+    project: WorkspaceState, *, name: str
+) -> OperationResult[ServiceData]:
+    """Remove the consumer-side secret-manager configuration."""
+
+    return _remove_service_binding(
+        project,
+        name=name,
+        unbind_method="unbind_secret_manager",
+        label="secret manager",
+        capability=ServiceCapability.SECRET_MANAGER_BINDING,
+    )
+
+
+def bind_service_telemetry(
+    project: WorkspaceState, *, name: str, telemetry_uuid: str
+) -> OperationResult[ServiceData]:
+    """Expose an observability provider to an existing service deployment."""
+
+    return _change_service_binding(
+        project,
+        name=name,
+        provider_uuid=telemetry_uuid,
+        bind_method="bind_telemetry",
+        label="telemetry",
+        capability=ServiceCapability.TELEMETRY_BINDING,
+    )
+
+
+def unbind_service_telemetry(
+    project: WorkspaceState, *, name: str
+) -> OperationResult[ServiceData]:
+    """Remove the consumer-side telemetry configuration."""
+
+    return _remove_service_binding(
+        project,
+        name=name,
+        unbind_method="unbind_telemetry",
+        label="telemetry",
+        capability=ServiceCapability.TELEMETRY_BINDING,
+    )
+
+
+def _change_service_binding(
+    project: WorkspaceState,
+    *,
+    name: str,
+    provider_uuid: str,
+    bind_method: str,
+    label: str,
+    capability: ServiceCapability,
+) -> OperationResult[ServiceData]:
+    infra = project.infrastructure
+    service = infra.get_service(name)
+    if not service:
+        return OperationResult(False, 63, "Service not found in infrastructure.")
+    if capability.value not in _service_capability_names(service):
+        return OperationResult(False, 65, f"Service cannot bind {label}.")
+    bundle = infra.get_bundle_by_service(service)
+    if not bundle:
+        return OperationResult(False, 64, "Could not find server bundle for service.")
+    method = getattr(service, bind_method, None)
+    if not callable(method):
+        return OperationResult(False, 65, f"Service cannot bind {label}.")
+    try:
+        with bundle.server.get_server_connection() as conn:
+            method(provider_uuid, conn)
+    except Exception as exc:
+        return OperationResult(False, 66, f"Failed to bind {label}: {exc}")
+    return OperationResult(
+        True,
+        0,
+        f"Service {name} bound to {label} provider {provider_uuid}.",
+        {"service": service},
+    )
+
+
+def _remove_service_binding(
+    project: WorkspaceState,
+    *,
+    name: str,
+    unbind_method: str,
+    label: str,
+    capability: ServiceCapability,
+) -> OperationResult[ServiceData]:
+    infra = project.infrastructure
+    service = infra.get_service(name)
+    if not service:
+        return OperationResult(False, 63, "Service not found in infrastructure.")
+    if capability.value not in _service_capability_names(service):
+        return OperationResult(False, 67, f"Service cannot unbind {label}.")
+    bundle = infra.get_bundle_by_service(service)
+    if not bundle:
+        return OperationResult(False, 64, "Could not find server bundle for service.")
+    method = getattr(service, unbind_method, None)
+    if not callable(method):
+        return OperationResult(False, 67, f"Service cannot unbind {label}.")
+    try:
+        with bundle.server.get_server_connection() as conn:
+            method(conn)
+    except Exception as exc:
+        return OperationResult(False, 68, f"Failed to unbind {label}: {exc}")
+    return OperationResult(
+        True,
+        0,
+        f"Service {name} unbound from {label}.",
+        {"service": service},
+    )
+
+
 def stop_service(project: WorkspaceState, *, name: str) -> OperationResult[ServiceData]:
     infra = project.infrastructure
     service = infra.get_service(name)

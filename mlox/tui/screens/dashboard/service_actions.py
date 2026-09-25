@@ -10,7 +10,7 @@ from textual.containers import Container, Horizontal
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Input, Label, Select, Static
 
 from mlox.application.use_cases.services import (
     list_service_web_ui_login_fields,
@@ -18,8 +18,142 @@ from mlox.application.use_cases.services import (
     service_has_health,
     service_has_web_ui,
 )
+from mlox.service import ServiceCapability
 
-from .model import SelectionInfo
+from .model import SelectionInfo, get_service_capabilities
+
+
+def service_supports_runtime_provider_binding(service: object | None) -> bool:
+    """Return whether a service accepts either runtime provider binding."""
+
+    capabilities = set(get_service_capabilities(service))
+    return bool(
+        capabilities
+        & {
+            ServiceCapability.SECRET_MANAGER_BINDING.value,
+            ServiceCapability.TELEMETRY_BINDING.value,
+        }
+    )
+
+
+def runtime_provider_options(
+    infrastructure: object,
+    capability: ServiceCapability,
+    *,
+    consumer_uuid: str = "",
+) -> list[tuple[str, str]]:
+    """Return provider labels and UUIDs matching one provider capability."""
+
+    options: list[tuple[str, str]] = []
+    for bundle in getattr(infrastructure, "bundles", []) or []:
+        for service in getattr(bundle, "services", []) or []:
+            service_uuid = str(getattr(service, "uuid", "") or "")
+            if not service_uuid or service_uuid == consumer_uuid:
+                continue
+            if capability.value not in get_service_capabilities(service):
+                continue
+            name = str(getattr(service, "name", service_uuid) or service_uuid)
+            options.append((name, service_uuid))
+    return sorted(options, key=lambda option: option[0].lower())
+
+
+class RuntimeProvidersDialog(
+    ModalScreen[dict[str, str | None] | None]
+):
+    """Select independently bound secret-manager and telemetry providers."""
+
+    def __init__(
+        self,
+        service: object,
+        *,
+        secret_manager_options: list[tuple[str, str]],
+        telemetry_options: list[tuple[str, str]],
+    ) -> None:
+        super().__init__()
+        self.service = service
+        self.secret_manager_options = self._include_current(
+            secret_manager_options,
+            str(getattr(service, "secret_manager_uuid", "") or ""),
+        )
+        self.telemetry_options = self._include_current(
+            telemetry_options,
+            str(getattr(service, "telemetry_uuid", "") or ""),
+        )
+        capabilities = set(get_service_capabilities(service))
+        self.supports_secret_manager = (
+            ServiceCapability.SECRET_MANAGER_BINDING.value in capabilities
+        )
+        self.supports_telemetry = (
+            ServiceCapability.TELEMETRY_BINDING.value in capabilities
+        )
+
+    @staticmethod
+    def _include_current(
+        options: list[tuple[str, str]], current_uuid: str
+    ) -> list[tuple[str, str]]:
+        if current_uuid and current_uuid not in {value for _, value in options}:
+            return [(f"Current provider ({current_uuid})", current_uuid), *options]
+        return options
+
+    def compose(self) -> ComposeResult:
+        service_name = str(getattr(self.service, "name", "service"))
+        with Container(id="runtime-providers-dialog"):
+            yield Label("Service Connections", id="runtime-providers-title")
+            yield Static(
+                f"Choose the secret manager and telemetry services available "
+                f"to '{service_name}'. Select None to disconnect a service.",
+                id="runtime-providers-description",
+            )
+            if self.supports_secret_manager:
+                yield Label("Secret manager", classes="runtime-provider-label")
+                yield Select(
+                    self.secret_manager_options,
+                    value=self._current_value("secret_manager_uuid"),
+                    prompt="None",
+                    allow_blank=True,
+                    id="runtime-secret-manager",
+                )
+            if self.supports_telemetry:
+                yield Label("Telemetry", classes="runtime-provider-label")
+                yield Select(
+                    self.telemetry_options,
+                    value=self._current_value("telemetry_uuid"),
+                    prompt="None",
+                    allow_blank=True,
+                    id="runtime-telemetry",
+                )
+            with Horizontal(id="runtime-providers-actions"):
+                yield Button("Cancel", id="cancel-runtime-providers")
+                yield Button(
+                    "Apply",
+                    id="confirm-runtime-providers",
+                    variant="success",
+                )
+
+    def _current_value(self, attribute: str):
+        value = str(getattr(self.service, attribute, "") or "")
+        return value or Select.NULL
+
+    @staticmethod
+    def _selected_value(select: Select) -> str | None:
+        return None if select.value is Select.NULL else str(select.value)
+
+    @on(Button.Pressed, "#cancel-runtime-providers")
+    def handle_cancel(self, _: Button.Pressed) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#confirm-runtime-providers")
+    def handle_confirm(self, _: Button.Pressed) -> None:
+        values: dict[str, str | None] = {}
+        if self.supports_secret_manager:
+            values["secret_manager_uuid"] = self._selected_value(
+                self.query_one("#runtime-secret-manager", Select)
+            )
+        if self.supports_telemetry:
+            values["telemetry_uuid"] = self._selected_value(
+                self.query_one("#runtime-telemetry", Select)
+            )
+        self.dismiss(values)
 
 
 class RenameServiceDialog(ModalScreen[str | None]):
@@ -120,6 +254,9 @@ class ServiceActions(Container):
     class SetupRequested(Message):
         """Request that the dashboard sets up the selected service."""
 
+    class ConfigureRuntimeProvidersRequested(Message):
+        """Request the runtime provider configuration dialog."""
+
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
     def compose(self) -> ComposeResult:
@@ -142,6 +279,7 @@ class ServiceActions(Container):
                     variant="primary",
                 )
                 yield Button("Check Health", id="check-service-health")
+                yield Button("Configure Connections", id="configure-runtime-providers")
                 yield Button("Rename Service", id="rename-service", variant="success")
                 yield Button("Setup Service", id="setup-service", variant="warning")
             with Horizontal(id="service-destructive-action-buttons"):
@@ -169,6 +307,10 @@ class ServiceActions(Container):
             self._render_web_ui_login_actions(selection)
             self._render_setup_action(selection)
             self._render_restart_action(selection)
+            self.query_one("#configure-runtime-providers", Button).display = bool(
+                selection
+                and service_supports_runtime_provider_binding(selection.service)
+            )
 
     def _render_web_ui_login_actions(
         self, selection: Optional[SelectionInfo]
@@ -230,6 +372,7 @@ class ServiceActions(Container):
         copy_password = self.query_one("#copy-service-web-ui-password", Button)
         copy_token = self.query_one("#copy-service-web-ui-token", Button)
         health = self.query_one("#check-service-health", Button)
+        runtime_providers = self.query_one("#configure-runtime-providers", Button)
         rename = self.query_one("#rename-service", Button)
         setup = self.query_one("#setup-service", Button)
         restart = self.query_one("#restart-service", Button)
@@ -239,6 +382,7 @@ class ServiceActions(Container):
         copy_password.disabled = loading
         copy_token.disabled = loading
         health.disabled = loading
+        runtime_providers.disabled = loading
         health.label = "Checking..." if loading else "Check Health"
         rename.disabled = loading
         setup.disabled = loading
@@ -256,6 +400,7 @@ class ServiceActions(Container):
         copy_password = self.query_one("#copy-service-web-ui-password", Button)
         copy_token = self.query_one("#copy-service-web-ui-token", Button)
         health = self.query_one("#check-service-health", Button)
+        runtime_providers = self.query_one("#configure-runtime-providers", Button)
         rename = self.query_one("#rename-service", Button)
         setup = self.query_one("#setup-service", Button)
         restart = self.query_one("#restart-service", Button)
@@ -265,6 +410,7 @@ class ServiceActions(Container):
         copy_password.disabled = loading
         copy_token.disabled = loading
         health.disabled = loading
+        runtime_providers.disabled = loading
         health.label = "Checking..." if loading else "Check Health"
         rename.disabled = loading
         setup.disabled = loading
@@ -279,6 +425,7 @@ class ServiceActions(Container):
         copy_password = self.query_one("#copy-service-web-ui-password", Button)
         copy_token = self.query_one("#copy-service-web-ui-token", Button)
         health = self.query_one("#check-service-health", Button)
+        runtime_providers = self.query_one("#configure-runtime-providers", Button)
         rename = self.query_one("#rename-service", Button)
         setup = self.query_one("#setup-service", Button)
         restart = self.query_one("#restart-service", Button)
@@ -288,6 +435,7 @@ class ServiceActions(Container):
         copy_password.disabled = loading
         copy_token.disabled = loading
         health.disabled = loading
+        runtime_providers.disabled = loading
         rename.disabled = loading
         setup.disabled = loading
         restart.disabled = loading
@@ -295,6 +443,13 @@ class ServiceActions(Container):
         teardown.disabled = loading
         if not loading:
             self._update_visibility(self.selection)
+
+    def set_runtime_provider_loading(self, loading: bool) -> None:
+        """Disable service actions while provider bindings are being applied."""
+
+        self.set_loading(loading)
+        button = self.query_one("#configure-runtime-providers", Button)
+        button.label = "Applying..." if loading else "Configure Connections"
 
     @on(Button.Pressed, "#open-service-web-ui")
     def handle_open_web_ui(self, _: Button.Pressed) -> None:
@@ -319,6 +474,10 @@ class ServiceActions(Container):
     @on(Button.Pressed, "#rename-service")
     def handle_rename(self, _: Button.Pressed) -> None:
         self.post_message(self.RenameRequested())
+
+    @on(Button.Pressed, "#configure-runtime-providers")
+    def handle_configure_runtime_providers(self, _: Button.Pressed) -> None:
+        self.post_message(self.ConfigureRuntimeProvidersRequested())
 
     @on(Button.Pressed, "#setup-service")
     def handle_setup(self, _: Button.Pressed) -> None:

@@ -85,6 +85,10 @@ def test_renders_gateway_manifest(gateway: MLFlowGatewayK3sService) -> None:
 
     assert "kind: ConfigMap" in manifest
     assert "from fastapi import FastAPI" in manifest
+    assert "from mlox.services.otel.client import OTelClient" in manifest
+    assert '"busysloths-mlox"' in manifest
+    assert "otel_client.py" not in manifest
+    assert '"opentelemetry-sdk==1.33.1"' in manifest
     assert "xgboost==2.1.0" in manifest
     assert "kind: Secret" in manifest
     assert "name: mlflow-gateway-basic-auth" in manifest
@@ -111,6 +115,15 @@ def test_renders_gateway_manifest(gateway: MLFlowGatewayK3sService) -> None:
     assert 'router.tls: "true"' in manifest
     assert "@kubernetescrd" in manifest
     assert len(list(yaml.safe_load_all(manifest))) == 9
+
+
+def test_runtime_provider_bindings_are_not_advertised_on_kubernetes(
+    gateway: MLFlowGatewayK3sService,
+) -> None:
+    assert ServiceCapability.SECRET_MANAGER_BINDING not in gateway.capabilities
+    assert ServiceCapability.TELEMETRY_BINDING not in gateway.capabilities
+    assert not hasattr(gateway, "secret_manager_uuid")
+    assert not hasattr(gateway, "telemetry_uuid")
 
 
 def test_renders_ingress_with_path_middlewares(

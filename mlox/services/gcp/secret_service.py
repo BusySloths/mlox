@@ -1,6 +1,6 @@
 import logging
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, cast
 
 from mlox.secret_manager import AbstractSecretManager
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GCPSecretService(AbstractService, AbstractSecretManagerService):
     secret_name: str
-    secret_manager_uuid: str
+    secret_manager_uuid: str = field(kw_only=True)
 
     def __post_init__(self):
         self.state = "running"

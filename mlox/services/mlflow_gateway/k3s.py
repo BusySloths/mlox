@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from passlib.hash import apr_md5_crypt
 
 from mlox.executors import TaskGroup
-from mlox.services.mlflow_gateway.docker import (
-    MLFlowGatewayDockerService,
+from mlox.services.mlflow_gateway.base import (
+    MLFlowGatewayService,
     _resolved_setting,
     _resolved_text,
 )
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
+class MLFlowGatewayK3sService(MLFlowGatewayService):
     kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
     container_port: int = 8080
     ingress_port: int = 443
@@ -46,6 +46,14 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
         return re.sub(r"[^a-z0-9-]", "-", self.uuid[:8].lower()).strip("-")
 
     def _render_gateway_manifest(self) -> str:
+        return self.render_template(
+            "gateway-manifest.yaml.tmpl",
+            self._gateway_manifest_variables(),
+        )
+
+    def _gateway_manifest_variables(self) -> dict[str, object]:
+        """Return variables shared by the standard and managed-TLS manifests."""
+
         serve_script_path = self.resolve_asset(self.serve_script)
         serve_script = serve_script_path.read_text(encoding="utf-8")
         requirements = _resolved_text(self.requirements_txt)
@@ -53,30 +61,27 @@ class MLFlowGatewayK3sService(MLFlowGatewayDockerService):
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")
         password_hash = apr_md5_crypt.hash(self.pw)
 
-        return self.render_template(
-            "gateway-manifest.yaml.tmpl",
-            {
-                "namespace": self.namespace,
-                "serve_script_block": self.indent_block(serve_script, 4),
-                "requirements_block": self.indent_block(requirements, 4),
-                "gateway_user": self.yaml_scalar(self.user),
-                "gateway_password": self.yaml_scalar(self.pw),
-                "basic_auth_secret": self.basic_auth_secret,
-                "basic_auth_user": self.yaml_scalar(f"{self.user}:{password_hash}"),
-                "basic_auth_middleware": self.basic_auth_middleware,
-                "strip_prefix_middleware": self.strip_prefix_middleware,
-                "ingress_name": self.ingress_name,
-                "ingress_path": self.yaml_scalar(self.ingress_path),
-                "tracking_uri": self.yaml_scalar(self.tracking_uri),
-                "tracking_user": self.yaml_scalar(self.tracking_user),
-                "tracking_password": self.yaml_scalar(self.tracking_pw),
-                "deployment_name": self.deployment_name,
-                "container_port": self.container_port,
-                "cache_size": self.yaml_scalar(cache_size),
-                "cache_ttl": self.yaml_scalar(cache_ttl),
-                "service_name": self.service_name,
-            },
-        )
+        return {
+            "namespace": self.namespace,
+            "serve_script_block": self.indent_block(serve_script, 4),
+            "requirements_block": self.indent_block(requirements, 4),
+            "gateway_user": self.yaml_scalar(self.user),
+            "gateway_password": self.yaml_scalar(self.pw),
+            "basic_auth_secret": self.basic_auth_secret,
+            "basic_auth_user": self.yaml_scalar(f"{self.user}:{password_hash}"),
+            "basic_auth_middleware": self.basic_auth_middleware,
+            "strip_prefix_middleware": self.strip_prefix_middleware,
+            "ingress_name": self.ingress_name,
+            "ingress_path": self.yaml_scalar(self.ingress_path),
+            "tracking_uri": self.yaml_scalar(self.tracking_uri),
+            "tracking_user": self.yaml_scalar(self.tracking_user),
+            "tracking_password": self.yaml_scalar(self.tracking_pw),
+            "deployment_name": self.deployment_name,
+            "container_port": self.container_port,
+            "cache_size": self.yaml_scalar(cache_size),
+            "cache_ttl": self.yaml_scalar(cache_ttl),
+            "service_name": self.service_name,
+        }
 
     def _kubectl(self, arguments: str) -> str:
         return f"kubectl --kubeconfig {shlex.quote(self.kubeconfig)} {arguments}"

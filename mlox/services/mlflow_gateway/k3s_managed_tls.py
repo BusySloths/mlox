@@ -9,10 +9,8 @@ from datetime import datetime, timezone
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from passlib.hash import apr_md5_crypt
 
 from mlox.service import AbstractSecretManagerService, ServiceCapability
-from mlox.services.mlflow_gateway.docker import _resolved_setting, _resolved_text
 from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
 
 logger = logging.getLogger(__name__)
@@ -73,38 +71,15 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
         return certificate, private_key
 
     def _render_gateway_manifest(self) -> str:
-        serve_script_path = self.resolve_asset(self.serve_script)
-        serve_script = serve_script_path.read_text(encoding="utf-8")
-        requirements = _resolved_text(self.requirements_txt)
-        cache_size = _resolved_setting(self.cache_max_models, "10")
-        cache_ttl = _resolved_setting(self.cache_ttl_days, "10")
-        password_hash = apr_md5_crypt.hash(self.pw)
-
-        return self.render_template(
-            "gateway-managed-tls-manifest.yaml.tmpl",
+        variables = self._gateway_manifest_variables()
+        variables.update(
             {
-                "namespace": self.namespace,
-                "serve_script_block": self.indent_block(serve_script, 4),
-                "requirements_block": self.indent_block(requirements, 4),
-                "gateway_user": self.yaml_scalar(self.user),
-                "gateway_password": self.yaml_scalar(self.pw),
-                "basic_auth_secret": self.basic_auth_secret,
-                "basic_auth_user": self.yaml_scalar(f"{self.user}:{password_hash}"),
-                "basic_auth_middleware": self.basic_auth_middleware,
-                "strip_prefix_middleware": self.strip_prefix_middleware,
-                "ingress_name": self.ingress_name,
-                "ingress_path": self.yaml_scalar(self.ingress_path),
-                "tracking_uri": self.yaml_scalar(self.tracking_uri),
-                "tracking_user": self.yaml_scalar(self.tracking_user),
-                "tracking_password": self.yaml_scalar(self.tracking_pw),
-                "deployment_name": self.deployment_name,
-                "container_port": self.container_port,
-                "cache_size": self.yaml_scalar(cache_size),
-                "cache_ttl": self.yaml_scalar(cache_ttl),
-                "service_name": self.service_name,
                 "tls_hostname": self.yaml_scalar(self._tls_hostname),
                 "tls_secret_name": self.tls_kubernetes_secret_name,
-            },
+            }
+        )
+        return self.render_template(
+            "gateway-managed-tls-manifest.yaml.tmpl", variables
         )
 
     def setup(self, conn) -> None:

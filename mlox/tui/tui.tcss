@@ -748,7 +748,6 @@ MLflowGatewaySettingsPanel {
 }
 
 #add-workflow-repo,
-#expose-workflow-secret-manager,
 #refresh-workflows {
   width: auto;
   min-width: 18;
@@ -760,11 +759,6 @@ MLflowGatewaySettingsPanel {
 #add-workflow-repo {
   background: #0e9455ff;
   border: round #8fe388ff;
-}
-
-#expose-workflow-secret-manager {
-  background: #3b3f8fff;
-  border: round #9aa7ffff;
 }
 
 #workflow-browser {
@@ -783,45 +777,6 @@ MLflowGatewaySettingsPanel {
   width: 19fr;
   height: 1fr;
   border: round #1bd6f3ff;
-}
-
-WorkflowSecretManagerDialog {
-  align: center middle;
-}
-
-#workflow-secret-manager-dialog {
-  width: 78;
-  height: auto;
-  padding: 1 2;
-  background: #17214aff;
-  border: round #69b7ffff;
-}
-
-#workflow-secret-manager-title {
-  width: 1fr;
-  height: 1;
-  content-align: center middle;
-  text-style: bold;
-  color: #f4e223ff;
-}
-
-#workflow-secret-manager-description {
-  width: 1fr;
-  height: auto;
-  margin-top: 1;
-  margin-bottom: 1;
-  color: #a6c9bdff;
-}
-
-#workflow-secret-manager-select {
-  width: 1fr;
-  height: 3;
-  margin-bottom: 1;
-}
-
-#workflow-secret-manager-actions {
-  height: 3;
-  align-horizontal: center;
 }
 
 ModelCallResultDialog {
@@ -1575,6 +1530,18 @@ SecretEditDialog {
   background: #12b86aff;
 }
 
+#configure-runtime-providers {
+  width: auto;
+  margin-left: 2;
+  background: #24406fff;
+  border: round #69b7ffff;
+  color: #ffffff;
+}
+
+#configure-runtime-providers:hover {
+  background: #305aa0ff;
+}
+
 #restart-service {
   width: auto;
   margin-right: 1;
@@ -1874,11 +1841,13 @@ RemoveBundleDialog {
 }
 
 RenameServiceDialog,
+RuntimeProvidersDialog,
 RemoveServiceDialog {
   align: center middle;
 }
 
 #rename-service-dialog,
+#runtime-providers-dialog,
 #remove-service-dialog {
   width: 60;
   height: auto;
@@ -1907,6 +1876,26 @@ RemoveServiceDialog {
   color: #e6edf7;
 }
 
+#runtime-providers-title {
+  color: #e6edf7;
+}
+
+#runtime-providers-description {
+  height: auto;
+  color: #a6c9bdff;
+  margin-bottom: 1;
+}
+
+.runtime-provider-label {
+  height: 1;
+  margin-top: 1;
+}
+
+#runtime-secret-manager,
+#runtime-telemetry {
+  width: 1fr;
+}
+
 #remove-service-title {
   color: #ffd7d7;
 }
@@ -1924,24 +1913,34 @@ RemoveServiceDialog {
 }
 
 #rename-service-actions,
+#runtime-providers-actions,
 #remove-service-actions {
   height: auto;
   align-horizontal: right;
 }
 
 #cancel-service-rename,
+#cancel-runtime-providers,
 #cancel-remove-service,
 #confirm-service-rename,
+#confirm-runtime-providers,
 #confirm-remove-service {
   width: auto;
 }
 
 #confirm-service-rename,
+#confirm-runtime-providers,
 #confirm-remove-service {
   margin-left: 1;
 }
 
 #confirm-service-rename {
+  background: #0e9455ff;
+  border: round #8fe388ff;
+  color: #ffffff;
+}
+
+#confirm-runtime-providers {
   background: #0e9455ff;
   border: round #8fe388ff;
   color: #ffffff;
