@@ -1,4 +1,5 @@
 import grpc  # type: ignore
+import base64
 import logging
 import os
 
@@ -21,6 +22,9 @@ from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.trace import SpanKind, Status, StatusCode
+
+
+MLOX_OTEL_CERTIFICATE_B64_ENV = "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64"
 
 
 class OTelClient:
@@ -82,7 +86,13 @@ class OTelClient:
         insecure_tls = insecure in {"1", "true", "yes", "on"}
         certificate_path = env.get("OTEL_EXPORTER_OTLP_CERTIFICATE", "").strip()
         trusted_certs = None
-        if certificate_path:
+        certificate_b64 = env.get(MLOX_OTEL_CERTIFICATE_B64_ENV, "").strip()
+        if certificate_b64:
+            try:
+                trusted_certs = base64.b64decode(certificate_b64, validate=True)
+            except (ValueError, TypeError) as exc:
+                raise ValueError("Invalid base64 OTLP certificate content.") from exc
+        elif certificate_path:
             try:
                 trusted_certs = Path(certificate_path).read_bytes()
             except OSError as exc:

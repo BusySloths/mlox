@@ -2,16 +2,14 @@
 
 import logging
 import os
-import secrets
 import shlex
 
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Dict
 
 from passlib.hash import apr_md5_crypt  # type: ignore
 
 from mlox.executors import TaskGroup
-from mlox.secret_manager import AbstractSecretManager, get_encrypted_access_keyfile
 from mlox.service import (
     AbstractSecretManagerBindingService,
     AbstractTelemetryBindingService,
@@ -40,23 +38,6 @@ class MLFlowGatewayDockerService(
     }
 
     hashed_pw: str = field(default="", init=False)
-
-    _SECRET_MANAGER_ENV_KEYS = frozenset(
-        {
-            "MLOX_SECRET_MANAGER_KEYFILE",
-            "MLOX_SECRET_MANAGER_KEYFILE_PW",
-        }
-    )
-    _TELEMETRY_ENV_KEYS = frozenset(
-        {
-            "OTEL_EXPORTER_OTLP_ENDPOINT",
-            "OTEL_EXPORTER_OTLP_PROTOCOL",
-            "OTEL_EXPORTER_OTLP_CERTIFICATE",
-            "OTEL_EXPORTER_OTLP_INSECURE",
-            "OTEL_TRACES_SAMPLER",
-            "OTEL_RESOURCE_ATTRIBUTES",
-        }
-    )
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -95,8 +76,6 @@ class MLFlowGatewayDockerService(
             f"{self.target_path}/gateway-requirements.txt",
             _resolved_text(self.requirements_txt or ""),
         )
-        self.exec.fs_create_empty_file(conn, f"{self.target_path}/otel-ca.pem")
-
         self._generate_htpasswd_entry()
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
@@ -127,20 +106,20 @@ class MLFlowGatewayDockerService(
         )
 
         if self.secret_manager_uuid:
-            manager = self.get_bound_secret_manager()
-            if manager is not None:
+            environment = self.get_bound_secret_manager_env_binding()
+            if environment is not None:
                 self._apply_secret_manager_binding(
                     conn,
                     manager_uuid=self.secret_manager_uuid,
-                    manager=manager,
+                    environment=environment,
                 )
         if self.telemetry_uuid:
-            connection = self.get_bound_telemetry_secrets()
-            if connection is not None:
+            environment = self.get_bound_telemetry_env_binding()
+            if environment is not None:
                 self._apply_telemetry_binding(
                     conn,
                     telemetry_uuid=self.telemetry_uuid,
-                    connection=connection,
+                    environment=environment,
                 )
 
         self.service_ports["MLflow Gateway REST API"] = int(self.port)
@@ -153,24 +132,34 @@ class MLFlowGatewayDockerService(
         self,
         conn,
         *,
-        managed_keys: frozenset[str],
+        binding_name: str,
         values: Dict[str, str] | None,
     ) -> None:
-        """Replace one MLOX-owned block in the Compose environment file."""
+        """Replace one provider-owned block in the Compose environment file."""
 
         env_path = f"{self.target_path}/{self.target_docker_env}"
         try:
             current = self.exec.fs_read_file(conn, env_path, format="string") or ""
         except Exception:
             current = ""
+        start_marker = f"# mlox:{binding_name}:begin"
+        end_marker = f"# mlox:{binding_name}:end"
         lines = []
+        in_binding = False
         for raw_line in str(current).splitlines():
-            key = raw_line.split("=", 1)[0].strip()
-            if key not in managed_keys:
+            if raw_line == start_marker:
+                in_binding = True
+                continue
+            if raw_line == end_marker:
+                in_binding = False
+                continue
+            if not in_binding:
                 lines.append(raw_line)
-        for key, value in (values or {}).items():
-            if key in managed_keys:
+        if values:
+            lines.append(start_marker)
+            for key, value in values.items():
                 lines.append(f"{key}={value}")
+            lines.append(end_marker)
         content = "\n".join(lines)
         if content:
             content += "\n"
@@ -183,25 +172,18 @@ class MLFlowGatewayDockerService(
         conn,
         *,
         manager_uuid: str,
-        manager: AbstractSecretManager,
+        environment: Dict[str, str],
     ) -> None:
-        keyfile_password = secrets.token_urlsafe(32)
-        encrypted_keyfile = get_encrypted_access_keyfile(
-            manager, keyfile_password
-        )
         self._update_runtime_environment(
             conn,
-            managed_keys=self._SECRET_MANAGER_ENV_KEYS,
-            values={
-                "MLOX_SECRET_MANAGER_KEYFILE": encrypted_keyfile,
-                "MLOX_SECRET_MANAGER_KEYFILE_PW": keyfile_password,
-            },
+            binding_name="secret-manager",
+            values=environment,
         )
 
     def _remove_secret_manager_binding(self, conn) -> None:
         self._update_runtime_environment(
             conn,
-            managed_keys=self._SECRET_MANAGER_ENV_KEYS,
+            binding_name="secret-manager",
             values=None,
         )
 
@@ -210,42 +192,18 @@ class MLFlowGatewayDockerService(
         conn,
         *,
         telemetry_uuid: str,
-        connection: Dict[str, Any],
+        environment: Dict[str, str],
     ) -> None:
-        endpoint = str(
-            connection.get("collector_url") or connection.get("endpoint") or ""
-        ).strip()
-        if not endpoint:
-            raise ValueError("Telemetry connection does not define a collector URL.")
-        protocol = str(connection.get("protocol") or "grpc").strip().lower()
-        if protocol == "otlp_grpc":
-            protocol = "grpc"
-        certificate = str(connection.get("trusted_certs") or "")
-        certificate_path = f"{self.target_path}/otel-ca.pem"
-        if certificate:
-            self.exec.fs_write_file(conn, certificate_path, certificate)
-        insecure = str(bool(connection.get("insecure_tls", False))).lower()
-        values = {
-            "OTEL_EXPORTER_OTLP_ENDPOINT": endpoint,
-            "OTEL_EXPORTER_OTLP_PROTOCOL": protocol,
-            "OTEL_EXPORTER_OTLP_INSECURE": insecure,
-            "OTEL_TRACES_SAMPLER": "always_on",
-            "OTEL_RESOURCE_ATTRIBUTES": (
-                f"service.name={self.name},mlox.service.uuid={self.uuid}"
-            ),
-        }
-        if certificate:
-            values["OTEL_EXPORTER_OTLP_CERTIFICATE"] = "/run/mlox/otel-ca.pem"
         self._update_runtime_environment(
             conn,
-            managed_keys=self._TELEMETRY_ENV_KEYS,
-            values=values,
+            binding_name="telemetry",
+            values=environment,
         )
 
     def _remove_telemetry_binding(self, conn) -> None:
         self._update_runtime_environment(
             conn,
-            managed_keys=self._TELEMETRY_ENV_KEYS,
+            binding_name="telemetry",
             values=None,
         )
 

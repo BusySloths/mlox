@@ -471,6 +471,26 @@ def test_otel_client_from_env_reads_standard_grpc_configuration(
         )
 
 
+def test_otel_client_from_env_reads_base64_certificate_content(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        OTelClient,
+        "__init__",
+        lambda self, **kwargs: captured.update(kwargs),
+    )
+
+    client = OTelClient.from_env(
+        {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector:4317",
+            "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64": "Y2VydGlmaWNhdGU=",
+        }
+    )
+
+    assert isinstance(client, OTelClient)
+    assert captured["otel_secret"]["trusted_certs"] == b"certificate"
+
+
 def test_otel_client_attaches_application_logger_only_once():
     client = object.__new__(OTelClient)
     client.logging_handler = logging.NullHandler()

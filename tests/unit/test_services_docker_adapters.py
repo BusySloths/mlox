@@ -580,6 +580,10 @@ def test_otel_setup_check_and_read_telemetry(conn):
     assert secrets["otel_client_connection"]["trusted_certs"] == "CERT"
     assert secrets["otel_client_connection"]["insecure_tls"] is False
     assert secrets["otel_client_connection"]["protocol"] == "otlp_grpc"
+    binding = service.get_telemetry_env_binding()
+    assert binding["OTEL_EXPORTER_OTLP_ENDPOINT"] == "https://example.test:4317"
+    assert binding["OTEL_EXPORTER_OTLP_PROTOCOL"] == "grpc"
+    assert binding["MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64"] == "Q0VSVA=="
 
     replacements = [
         call
@@ -1058,18 +1062,20 @@ def test_mlflow_gateway_can_bind_and_unbind_telemetry(conn):
         ),
         FakeExec(),
     )
-    telemetry = SimpleNamespace(
-        uuid="otel-1",
-        capabilities={"observability"},
-        get_secrets=lambda: {
-            "otel_client_connection": {
-                "collector_url": "https://otel.example:4317",
-                "protocol": "otlp_grpc",
-                "trusted_certs": "CERTIFICATE",
-                "insecure_tls": False,
+    from mlox.service import AbstractObservabilityService
+
+    class TelemetryProvider(AbstractObservabilityService):
+        uuid = "otel-1"
+        capabilities = {ServiceCapability.OBSERVABILITY}
+
+        def get_telemetry_env_binding(self):
+            return {
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317",
+                "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+                "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64": "Q0VSVElGSUNBVEU=",
             }
-        },
-    )
+
+    telemetry = TelemetryProvider()
     assert ServiceCapability.SECRET_MANAGER_BINDING in service.capabilities
     assert ServiceCapability.TELEMETRY_BINDING in service.capabilities
     lookup = SimpleNamespace(
@@ -1088,7 +1094,8 @@ def test_mlflow_gateway_can_bind_and_unbind_telemetry(conn):
     assert "MLFLOW_GATEWAY_PORT=8083" in env
     assert "OTEL_EXPORTER_OTLP_ENDPOINT=https://otel.example:4317" in env
     assert "OTEL_EXPORTER_OTLP_PROTOCOL=grpc" in env
-    assert service.exec.files["/tmp/stack-8083/otel-ca.pem"] == "CERTIFICATE"
+    assert "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64=Q0VSVElGSUNBVEU=" in env
+    assert "/tmp/stack-8083/otel-ca.pem" not in service.exec.files
     assert any(call[0] == "docker_restart" for call in service.exec.calls)
 
     service.unbind_telemetry(conn)

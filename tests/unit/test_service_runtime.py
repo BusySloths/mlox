@@ -6,6 +6,7 @@ import pytest
 
 from mlox.service import (
     AbstractHealthService,
+    AbstractObservabilityService,
     AbstractSecretManagerBindingService,
     AbstractSecretManagerService,
     AbstractService,
@@ -90,27 +91,29 @@ class _SecretManager(AbstractSecretManager):
     def get_access_secrets(self):
         return {}
 
+    @property
+    def supports_keyfile_export(self):
+        return True
+
 
 @dataclass
 class _SecretProvider(_Service, AbstractSecretManagerService):
     capabilities = {ServiceCapability.SECRET_MANAGER}
     calls: int = 0
 
-    def get_secret_manager(self, infra):
+    def get_secret_manager(self, infra=None):
         self.calls += 1
         return _SecretManager()
 
 
 @dataclass
-class _TelemetryProvider(_Service):
+class _TelemetryProvider(_Service, AbstractObservabilityService):
     capabilities = {ServiceCapability.OBSERVABILITY}
 
-    def get_secrets(self):
+    def get_telemetry_env_binding(self):
         return {
-            "otel_client_connection": {
-                "collector_url": "https://otel.example:4317",
-                "protocol": "otlp_grpc",
-            }
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317",
+            "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
         }
 
 
@@ -130,14 +133,14 @@ class _BindingService(
         super().__post_init__()
         self.applied = []
 
-    def _apply_secret_manager_binding(self, conn, *, manager_uuid, manager):
-        self.applied.append(("bind-secret-manager", manager_uuid))
+    def _apply_secret_manager_binding(self, conn, *, manager_uuid, environment):
+        self.applied.append(("bind-secret-manager", manager_uuid, environment))
 
     def _remove_secret_manager_binding(self, conn):
         self.applied.append(("unbind-secret-manager",))
 
-    def _apply_telemetry_binding(self, conn, *, telemetry_uuid, connection):
-        self.applied.append(("bind-telemetry", telemetry_uuid, connection))
+    def _apply_telemetry_binding(self, conn, *, telemetry_uuid, environment):
+        self.applied.append(("bind-telemetry", telemetry_uuid, environment))
 
     def _remove_telemetry_binding(self, conn):
         self.applied.append(("unbind-telemetry",))
@@ -218,9 +221,13 @@ def test_secret_manager_and_telemetry_bindings_are_independent_and_reversible():
 
     assert service.secret_manager_uuid == secret_provider.uuid
     assert service.telemetry_uuid == telemetry_provider.uuid
-    assert service.get_bound_secret_manager() is not service.get_bound_secret_manager()
+    assert service.get_bound_secret_manager_env_binding() != (
+        service.get_bound_secret_manager_env_binding()
+    )
     assert secret_provider.calls == 3
-    assert service.get_bound_telemetry_secrets()["collector_url"].endswith("4317")
+    assert service.get_bound_telemetry_env_binding()[
+        "OTEL_EXPORTER_OTLP_ENDPOINT"
+    ].endswith("4317")
 
     service.unbind_telemetry(conn=object())
     assert service.telemetry_uuid is None
@@ -260,7 +267,7 @@ def test_failed_live_binding_restores_previous_provider_uuid():
     )
     service.state = "running"
 
-    def fail_binding(conn, *, telemetry_uuid, connection):
+    def fail_binding(conn, *, telemetry_uuid, environment):
         raise RuntimeError("telemetry update failed")
 
     service._apply_telemetry_binding = fail_binding

@@ -16,19 +16,21 @@ Related modules (plain-text links):
 """
 
 import logging
+import base64
 
 from dataclasses import dataclass, field
 from typing import Dict, Any
 from urllib.parse import unquote
 
-from mlox.executors import TaskGroup
 from mlox.service import (
     AbstractHealthService,
     AbstractMonitorService,
+    AbstractObservabilityService,
     AbstractService,
     ServiceCapability,
     service_health_payload,
 )
+from .client import MLOX_OTEL_CERTIFICATE_B64_ENV
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -39,7 +41,12 @@ logging.basicConfig(
 
 
 @dataclass
-class OtelDockerService(AbstractService, AbstractHealthService, AbstractMonitorService):
+class OtelDockerService(
+    AbstractService,
+    AbstractHealthService,
+    AbstractMonitorService,
+    AbstractObservabilityService,
+):
     capabilities = {
         ServiceCapability.MONITOR,
         ServiceCapability.OBSERVABILITY,
@@ -266,3 +273,32 @@ class OtelDockerService(AbstractService, AbstractHealthService, AbstractMonitorS
             }
 
         return secrets
+
+    def get_telemetry_env_binding(self) -> Dict[str, str]:
+        """Export a complete environment-only OTLP client configuration."""
+
+        connection = self.get_secrets().get("otel_client_connection")
+        if not isinstance(connection, dict):
+            raise ValueError("OpenTelemetry client connection is not configured.")
+        endpoint = str(connection.get("collector_url") or "").strip()
+        if not endpoint:
+            raise ValueError("OpenTelemetry collector URL is not configured.")
+        protocol = str(connection.get("protocol") or "grpc").strip().lower()
+        if protocol == "otlp_grpc":
+            protocol = "grpc"
+        environment = {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": endpoint,
+            "OTEL_EXPORTER_OTLP_PROTOCOL": protocol,
+            "OTEL_EXPORTER_OTLP_INSECURE": str(
+                bool(connection.get("insecure_tls", False))
+            ).lower(),
+            "OTEL_TRACES_SAMPLER": "always_on",
+        }
+        certificate = connection.get("trusted_certs")
+        if certificate:
+            if isinstance(certificate, str):
+                certificate = certificate.encode("utf-8")
+            environment[MLOX_OTEL_CERTIFICATE_B64_ENV] = (
+                base64.b64encode(certificate).decode("ascii")
+            )
+        return environment

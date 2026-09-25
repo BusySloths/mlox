@@ -12,6 +12,7 @@ from mlox.service import (
     AbstractModelRegistryService,
     AbstractModelServerService,
     AbstractMonitorService,
+    AbstractObservabilityService,
     AbstractRepositoryService,
     AbstractSecretManagerBindingService,
     AbstractSecretManagerService,
@@ -61,6 +62,7 @@ SERVICE_CAPABILITY_ABCS = {
     ServiceCapability.MODEL_REGISTRY.value: AbstractModelRegistryService,
     ServiceCapability.MODEL_SERVER.value: AbstractModelServerService,
     ServiceCapability.MONITOR.value: AbstractMonitorService,
+    ServiceCapability.OBSERVABILITY.value: AbstractObservabilityService,
     ServiceCapability.TELEMETRY_BINDING.value: AbstractTelemetryBindingService,
 }
 
