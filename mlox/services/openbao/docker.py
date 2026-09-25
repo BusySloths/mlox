@@ -237,11 +237,13 @@ class OpenBaoDockerService(
             token_renewal_callback=lambda: self._renew_or_rotate_client_token(address),
         )
 
-    def get_scoped_secret_manager_env_binding(
-        self, binding_id: str
+    def get_secret_manager_env_binding(
+        self, binding_id: str | None = None
     ) -> Dict[str, str]:
-        """Issue a renewable child token for one stable runtime binding."""
+        """Export shared access or issue access scoped to one binding."""
 
+        if binding_id is None:
+            return super().get_secret_manager_env_binding()
         application = f"runtime-{binding_id}"
         manager = self.create_keyfile_secret_manager(
             getattr(self, "_service_lookup", None),
@@ -250,9 +252,13 @@ class OpenBaoDockerService(
         )
         return self._build_secret_manager_env_binding(manager)
 
-    def revoke_scoped_secret_manager_env_binding(self, binding_id: str) -> None:
+    def revoke_secret_manager_env_binding(
+        self, binding_id: str | None = None
+    ) -> None:
         """Revoke the child token associated with one runtime binding."""
 
+        if binding_id is None:
+            return
         application = f"runtime-{binding_id}"
         if application not in self.application_credentials:
             return

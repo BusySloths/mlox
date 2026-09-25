@@ -517,6 +517,7 @@ def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
     )
     captured = {}
     scoped_manager = object()
+    shared_manager = object()
 
     def create_keyfile_manager(infra, *, application_name, period):
         captured["created"] = (infra, application_name, period)
@@ -529,6 +530,7 @@ def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
 
     lookup = SimpleNamespace()
     service.bind_service_lookup(lookup)
+    monkeypatch.setattr(service, "get_secret_manager", lambda infra: shared_manager)
     monkeypatch.setattr(service, "create_keyfile_secret_manager", create_keyfile_manager)
     monkeypatch.setattr(
         service,
@@ -537,12 +539,16 @@ def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
     )
     monkeypatch.setattr(service, "revoke_application_credential", revoke)
 
-    assert service.get_scoped_secret_manager_env_binding("consumer-1") == {
+    assert service.get_secret_manager_env_binding() == {"PROVIDER_ENV": "value"}
+    assert "created" not in captured
+    assert service.get_secret_manager_env_binding("consumer-1") == {
         "PROVIDER_ENV": "value"
     }
     assert captured["created"] == (lookup, "runtime-consumer-1", "7d")
 
-    service.revoke_scoped_secret_manager_env_binding("consumer-1")
+    service.revoke_secret_manager_env_binding()
+    assert "runtime-consumer-1" in service.application_credentials
+    service.revoke_secret_manager_env_binding("consumer-1")
 
     assert captured["revoked"] == ("runtime-consumer-1", lookup)
     assert service.application_credentials == {}
@@ -1430,13 +1436,13 @@ def test_airflow_secret_manager_binding_updates_env_restarts_and_revokes(conn):
         def get_secret_manager(self, infra):
             raise AssertionError("The provider-specific environment should be used.")
 
-        def get_scoped_secret_manager_env_binding(self, binding_id):
+        def get_secret_manager_env_binding(self, binding_id=None):
             return {
                 "CUSTOM_SECRET_ENDPOINT": "https://secrets.test",
                 "CUSTOM_SECRET_TOKEN": f"token-for-{binding_id}",
             }
 
-        def revoke_scoped_secret_manager_env_binding(self, binding_id):
+        def revoke_secret_manager_env_binding(self, binding_id=None):
             self.revoked.append(binding_id)
 
     provider = SecretManagerProvider()

@@ -96,7 +96,7 @@ def test_openbao_scoped_runtime_binding_roundtrip_and_revoke(
     binding_id = "integration-runtime-consumer"
     application = f"runtime-{binding_id}"
 
-    environment = service.get_scoped_secret_manager_env_binding(binding_id)
+    environment = service.get_secret_manager_env_binding(binding_id)
     try:
         scoped_manager = load_secret_manager_from_env(environ=environment)
         assert isinstance(scoped_manager, OpenBaoSecretManager)
@@ -105,7 +105,7 @@ def test_openbao_scoped_runtime_binding_roundtrip_and_revoke(
         scoped_manager.save_secret("scoped-runtime-secret", {"bound": True})
         assert scoped_manager.load_secret("scoped-runtime-secret") == {"bound": True}
     finally:
-        service.revoke_scoped_secret_manager_env_binding(binding_id)
+        service.revoke_secret_manager_env_binding(binding_id)
 
     assert application not in service.application_credentials
 

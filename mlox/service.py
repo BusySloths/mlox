@@ -171,21 +171,18 @@ class AbstractSecretManagerService(ABC):
         """Return an AbstractSecretManager client for this service."""
         pass
 
-    def get_secret_manager_env_binding(self) -> Dict[str, str]:
-        """Return the environment required to use this secret manager."""
+    def get_secret_manager_env_binding(
+        self, binding_id: str | None = None
+    ) -> Dict[str, str]:
+        """Return shared or binding-specific environment configuration."""
 
         manager = self.get_secret_manager(getattr(self, "_service_lookup", None))
         return self._build_secret_manager_env_binding(manager)
 
-    def get_scoped_secret_manager_env_binding(
-        self, binding_id: str
-    ) -> Dict[str, str]:
-        """Return binding-specific access when supported by the provider."""
-
-        return self.get_secret_manager_env_binding()
-
-    def revoke_scoped_secret_manager_env_binding(self, binding_id: str) -> None:
-        """Revoke binding-specific access when supported by the provider."""
+    def revoke_secret_manager_env_binding(
+        self, binding_id: str | None = None
+    ) -> None:
+        """Revoke exported access when supported by the provider."""
 
     @staticmethod
     def _build_secret_manager_env_binding(
@@ -454,7 +451,7 @@ class AbstractSecretManagerBindingService(ABC):
             return None
         provider = self._get_secret_manager_provider(manager_uuid)
         binding_id = str(getattr(self, "uuid", "") or "")
-        environment = provider.get_scoped_secret_manager_env_binding(binding_id)
+        environment = provider.get_secret_manager_env_binding(binding_id)
         if not isinstance(environment, dict):
             raise TypeError("Secret-manager environment binding must be a dictionary.")
         return {str(key): str(value) for key, value in environment.items()}
@@ -480,7 +477,7 @@ class AbstractSecretManagerBindingService(ABC):
         except Exception:
             try:
                 provider = self._get_secret_manager_provider(manager_uuid)
-                provider.revoke_scoped_secret_manager_env_binding(
+                provider.revoke_secret_manager_env_binding(
                     str(getattr(self, "uuid", "") or "")
                 )
             except Exception:
@@ -494,7 +491,7 @@ class AbstractSecretManagerBindingService(ABC):
         if previous_uuid and previous_uuid != manager_uuid:
             try:
                 previous_provider = self._get_secret_manager_provider(previous_uuid)
-                previous_provider.revoke_scoped_secret_manager_env_binding(
+                previous_provider.revoke_secret_manager_env_binding(
                     str(getattr(self, "uuid", "") or "")
                 )
             except Exception:
@@ -512,7 +509,7 @@ class AbstractSecretManagerBindingService(ABC):
         provider = self._get_secret_manager_provider(self.secret_manager_uuid)
         if self.state != "un-initialized":  # type: ignore[attr-defined]
             self._remove_secret_manager_binding(conn)
-        provider.revoke_scoped_secret_manager_env_binding(
+        provider.revoke_secret_manager_env_binding(
             str(getattr(self, "uuid", "") or "")
         )
         self.secret_manager_uuid = None
