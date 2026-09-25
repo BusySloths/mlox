@@ -184,6 +184,11 @@ class AbstractSecretManagerService(ABC):
     ) -> None:
         """Revoke exported access when supported by the provider."""
 
+    def get_secret_manager_binding_label(self, binding_id: str) -> str | None:
+        """Return a provider-specific credential label when one is available."""
+
+        return None
+
     @staticmethod
     def _build_secret_manager_env_binding(
         manager: "AbstractSecretManager",

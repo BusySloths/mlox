@@ -354,3 +354,74 @@ def test_service_overview_shows_version_ports_and_uuid() -> None:
     assert "dashboard" in overview
     assert "Ports" in overview
     assert "http:5000" in overview
+
+
+def test_service_overview_resolves_runtime_provider_connections() -> None:
+    rendered = []
+    panel = OverviewPanel()
+    panel.update = rendered.append
+    secret_provider = SimpleNamespace(
+        uuid="secret-123",
+        name="OpenBao",
+        get_secret_manager_binding_label=lambda binding_id: (
+            "runtime-Airflow-svc-123" if binding_id == "svc-123" else None
+        ),
+    )
+    telemetry_provider = SimpleNamespace(uuid="otel-456", name="OpenTelemetry")
+    secret_bundle = SimpleNamespace(server=SimpleNamespace(ip="10.0.0.2"))
+    telemetry_bundle = SimpleNamespace(server=SimpleNamespace(ip="10.0.0.3"))
+    providers = {
+        secret_provider.uuid: secret_provider,
+        telemetry_provider.uuid: telemetry_provider,
+    }
+    provider_bundles = {
+        id(secret_provider): secret_bundle,
+        id(telemetry_provider): telemetry_bundle,
+    }
+    lookup = SimpleNamespace(
+        get_service_by_uuid=lambda service_uuid: providers.get(service_uuid),
+        get_bundle_by_service=lambda provider: provider_bundles.get(id(provider)),
+    )
+    service = SimpleNamespace(
+        name="Airflow",
+        state="running",
+        version="3.1",
+        target_path="/opt/airflow",
+        service_config_id="airflow",
+        uuid="svc-123",
+        secret_manager_uuid=secret_provider.uuid,
+        telemetry_uuid=telemetry_provider.uuid,
+        capabilities={
+            ServiceCapability.SECRET_MANAGER_BINDING,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
+        service_ports={},
+        compose_service_names={},
+        service_urls={},
+        _service_lookup=lookup,
+    )
+    bundle = SimpleNamespace(name="demo", server=SimpleNamespace(ip="10.0.0.1"))
+
+    panel.show_service(
+        SelectionInfo(type="service", bundle=bundle, service=service)
+    )
+
+    overview = _render_panel(rendered[0])
+
+    assert "Secret Manager" in overview
+    assert "OpenBao" in overview
+    assert "secret-123" in overview
+    assert "10.0.0.2" in overview
+    assert "runtime-Airflow-svc-123" in overview
+    assert "Telemetry" in overview
+    assert "OpenTelemetry" in overview
+    assert "otel-456" in overview
+    assert "10.0.0.3" in overview
+
+    service.secret_manager_uuid = None
+    service.telemetry_uuid = None
+    panel.show_service(
+        SelectionInfo(type="service", bundle=bundle, service=service)
+    )
+    overview = _render_panel(rendered[-1])
+    assert overview.count("Not connected") == 2

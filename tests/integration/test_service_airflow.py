@@ -140,11 +140,14 @@ def test_airflow_live_secret_manager_binding_and_unbinding(
             description="Verify Airflow runtime secret-manager environment",
         )
 
-    application = f"runtime-{airflow.uuid}"
+    application = None
     with bundle.server.get_server_connection() as conn:
         airflow.bind_secret_manager(openbao.uuid, conn)
         try:
             assert airflow.secret_manager_uuid == openbao.uuid
+            application = openbao.get_secret_manager_binding_label(airflow.uuid)
+            assert application
+            assert "Airflow" in application
             assert application in openbao.application_credentials
             assert scheduler_environment_test(
                 conn,
@@ -155,6 +158,7 @@ def test_airflow_live_secret_manager_binding_and_unbinding(
             airflow.unbind_secret_manager(conn)
 
         assert airflow.secret_manager_uuid is None
+        assert application is not None
         assert application not in openbao.application_credentials
         assert scheduler_environment_test(
             conn,

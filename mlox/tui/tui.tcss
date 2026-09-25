@@ -1841,6 +1841,7 @@ RemoveBundleDialog {
 }
 
 RenameServiceDialog,
+RuntimeProvidersDialog,
 RemoveServiceDialog {
   align: center middle;
 }

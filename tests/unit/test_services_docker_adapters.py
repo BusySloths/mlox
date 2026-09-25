@@ -528,7 +528,12 @@ def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
         captured["revoked"] = (application_name, infra)
         service.application_credentials.pop(application_name)
 
-    lookup = SimpleNamespace()
+    consumer = SimpleNamespace(uuid="consumer-1", name="Airflow Worker")
+    lookup = SimpleNamespace(
+        get_service_by_uuid=lambda service_uuid: consumer
+        if service_uuid == consumer.uuid
+        else None
+    )
     service.bind_service_lookup(lookup)
     monkeypatch.setattr(service, "get_secret_manager", lambda infra: shared_manager)
     monkeypatch.setattr(service, "create_keyfile_secret_manager", create_keyfile_manager)
@@ -544,13 +549,24 @@ def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
     assert service.get_secret_manager_env_binding("consumer-1") == {
         "PROVIDER_ENV": "value"
     }
-    assert captured["created"] == (lookup, "runtime-consumer-1", "7d")
+    application = "runtime-Airflow-Worker-consumer"
+    assert captured["created"] == (lookup, application, "7d")
+    assert service.get_secret_manager_binding_label("consumer-1") == application
+    assert service.application_credentials[application]["binding_id"] == "consumer-1"
+    assert service.application_credentials[application]["consumer_name"] == (
+        "Airflow Worker"
+    )
+
+    consumer.name = "Renamed Airflow"
+    service.get_secret_manager_env_binding("consumer-1")
+    assert captured["created"] == (lookup, application, "7d")
+    assert service.get_secret_manager_binding_label("consumer-1") == application
 
     service.revoke_secret_manager_env_binding()
-    assert "runtime-consumer-1" in service.application_credentials
+    assert application in service.application_credentials
     service.revoke_secret_manager_env_binding("consumer-1")
 
-    assert captured["revoked"] == ("runtime-consumer-1", lookup)
+    assert captured["revoked"] == (application, lookup)
     assert service.application_credentials == {}
 
 

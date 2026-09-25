@@ -244,12 +244,16 @@ class OpenBaoDockerService(
 
         if binding_id is None:
             return super().get_secret_manager_env_binding()
-        application = f"runtime-{binding_id}"
+        application = self._runtime_binding_application(binding_id)
         manager = self.create_keyfile_secret_manager(
             getattr(self, "_service_lookup", None),
             application_name=application,
             period="7d",
         )
+        credential = self.application_credentials.get(application, {})
+        credential["binding_id"] = binding_id
+        credential["consumer_name"] = self._runtime_binding_consumer_name(binding_id)
+        self.application_credentials[application] = credential
         return self._build_secret_manager_env_binding(manager)
 
     def revoke_secret_manager_env_binding(
@@ -259,13 +263,45 @@ class OpenBaoDockerService(
 
         if binding_id is None:
             return
-        application = f"runtime-{binding_id}"
+        application = self.get_secret_manager_binding_label(binding_id)
+        if application is None:
+            return
         if application not in self.application_credentials:
             return
         self.revoke_application_credential(
             application,
             getattr(self, "_service_lookup", None),
         )
+
+    def get_secret_manager_binding_label(self, binding_id: str) -> str | None:
+        """Return the OpenBao application credential for a runtime binding."""
+
+        for application, credential in self.application_credentials.items():
+            if str(credential.get("binding_id") or "") == binding_id:
+                return application
+        legacy_application = f"runtime-{binding_id}"
+        if legacy_application in self.application_credentials:
+            return legacy_application
+        return None
+
+    def _runtime_binding_application(self, binding_id: str) -> str:
+        existing = self.get_secret_manager_binding_label(binding_id)
+        if existing:
+            return existing
+        consumer_name = self._runtime_binding_consumer_name(binding_id)
+        if not consumer_name:
+            return f"runtime-{binding_id}"
+        return self._normalize_application_name(
+            f"runtime-{consumer_name}-{binding_id[:8]}"
+        )
+
+    def _runtime_binding_consumer_name(self, binding_id: str) -> str:
+        lookup = getattr(self, "_service_lookup", None)
+        get_service = getattr(lookup, "get_service_by_uuid", None)
+        if not callable(get_service):
+            return ""
+        consumer = get_service(binding_id)
+        return str(getattr(consumer, "name", "") or "")
 
     def get_root_secret_manager(
         self, infra: Infrastructure | None = None
