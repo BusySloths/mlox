@@ -29,6 +29,7 @@ from mlox.tui.screens.dashboard.project_actions import ProjectActions
 from mlox.tui.screens.dashboard.repository_panel import RepositoryPanel
 from mlox.tui.screens.dashboard.server_actions import ServerActions
 from mlox.tui.screens.dashboard.service_actions import (
+    RuntimeProvidersDialog,
     ServiceActions,
     runtime_provider_options,
 )
@@ -1521,6 +1522,47 @@ def test_service_actions_show_runtime_providers_only_for_consumers() -> None:
 
     assert asyncio.run(_runtime_providers_button_display_for(telemetry_consumer)) is True
     assert asyncio.run(_runtime_providers_button_display_for(plain_service)) is False
+
+
+async def _empty_runtime_connections_dialog_values() -> tuple[object, object]:
+    app = DashboardTestApp()
+    service = SimpleNamespace(
+        name="Gateway",
+        secret_manager_uuid=None,
+        telemetry_uuid=None,
+        capabilities={
+            ServiceCapability.SECRET_MANAGER_BINDING,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
+    )
+    bundle = SimpleNamespace(
+        name="dev",
+        server=SimpleNamespace(ip="10.0.0.5", backend=["docker"]),
+        services=[service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="service", bundle=bundle, service=service)
+        )
+        app.query_one("#configure-runtime-providers", Button).press()
+        await pilot.pause()
+        dialog = app.screen
+        assert isinstance(dialog, RuntimeProvidersDialog)
+        return (
+            dialog.query_one("#runtime-secret-manager", Select).value,
+            dialog.query_one("#runtime-telemetry", Select).value,
+        )
+
+
+def test_runtime_connections_dialog_accepts_empty_bindings() -> None:
+    secret_manager, telemetry = asyncio.run(
+        _empty_runtime_connections_dialog_values()
+    )
+
+    assert secret_manager is Select.NULL
+    assert telemetry is Select.NULL
 
 
 def test_runtime_provider_options_filter_providers_and_exclude_consumer() -> None:

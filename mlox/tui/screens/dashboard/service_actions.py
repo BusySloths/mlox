@@ -98,10 +98,10 @@ class RuntimeProvidersDialog(
     def compose(self) -> ComposeResult:
         service_name = str(getattr(self.service, "name", "service"))
         with Container(id="runtime-providers-dialog"):
-            yield Label("Runtime Providers", id="runtime-providers-title")
+            yield Label("Service Connections", id="runtime-providers-title")
             yield Static(
-                f"Configure providers exposed to '{service_name}'. "
-                "Select None to remove a binding.",
+                f"Choose the secret manager and telemetry services available "
+                f"to '{service_name}'. Select None to disconnect a service.",
                 id="runtime-providers-description",
             )
             if self.supports_secret_manager:
@@ -132,11 +132,11 @@ class RuntimeProvidersDialog(
 
     def _current_value(self, attribute: str):
         value = str(getattr(self.service, attribute, "") or "")
-        return value or Select.BLANK
+        return value or Select.NULL
 
     @staticmethod
     def _selected_value(select: Select) -> str | None:
-        return None if select.value is Select.BLANK else str(select.value)
+        return None if select.value is Select.NULL else str(select.value)
 
     @on(Button.Pressed, "#cancel-runtime-providers")
     def handle_cancel(self, _: Button.Pressed) -> None:
@@ -279,7 +279,7 @@ class ServiceActions(Container):
                     variant="primary",
                 )
                 yield Button("Check Health", id="check-service-health")
-                yield Button("Runtime Providers", id="configure-runtime-providers")
+                yield Button("Configure Connections", id="configure-runtime-providers")
                 yield Button("Rename Service", id="rename-service", variant="success")
                 yield Button("Setup Service", id="setup-service", variant="warning")
             with Horizontal(id="service-destructive-action-buttons"):
@@ -449,7 +449,7 @@ class ServiceActions(Container):
 
         self.set_loading(loading)
         button = self.query_one("#configure-runtime-providers", Button)
-        button.label = "Applying..." if loading else "Runtime Providers"
+        button.label = "Applying..." if loading else "Configure Connections"
 
     @on(Button.Pressed, "#open-service-web-ui")
     def handle_open_web_ui(self, _: Button.Pressed) -> None:

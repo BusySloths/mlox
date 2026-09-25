@@ -1575,6 +1575,18 @@ SecretEditDialog {
   background: #12b86aff;
 }
 
+#configure-runtime-providers {
+  width: auto;
+  margin-left: 2;
+  background: #24406fff;
+  border: round #69b7ffff;
+  color: #ffffff;
+}
+
+#configure-runtime-providers:hover {
+  background: #305aa0ff;
+}
+
 #restart-service {
   width: auto;
   margin-right: 1;
