@@ -147,8 +147,10 @@ def test_airflow_live_secret_manager_binding_and_unbinding(
             assert airflow.secret_manager_uuid == openbao.uuid
             application = openbao.get_secret_manager_binding_label(airflow.uuid)
             assert application
-            assert "Airflow" in application
             assert application in openbao.application_credentials
+            credential = openbao.application_credentials[application]
+            assert credential["binding_id"] == airflow.uuid
+            assert credential["consumer_name"] == airflow.name
             assert scheduler_environment_test(
                 conn,
                 '-n "$MLOX_SECRET_MANAGER_KEYFILE" '

@@ -83,8 +83,6 @@ tasks:
         set -euo pipefail
         printf '\n\033[1;36m▶ Syncing environment from uv.lock\033[0m\n'
         uv sync --extra dev
-        printf '\n\033[1;36m▶ Installing multipass-sdk (needed for integration tests)\033[0m\n'
-        uv pip install "multipass-sdk @ git+https://github.com/okyanusoz/multipass-sdk.git@main"
         printf '\n\033[1;36m▶ Verifying CLI import\033[0m\n'
         uv run python -c "import mlox.cli; print('mlox.cli OK')"
         printf '\n\033[1;32m✓ Environment ready:\033[0m run commands with \033[1muv run <cmd>\033[0m — no activation needed\n'

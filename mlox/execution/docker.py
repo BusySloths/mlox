@@ -78,6 +78,18 @@ class DockerMixin(TaskRunnerABC):
             command=command,
             sudo=True,
         )
+        if result is None:
+            history = list(getattr(self, "history", ()))
+            last = history[-1] if history else {}
+            detail = (
+                last.get("error", "")
+                if last.get("command") == command and last.get("status") == "error"
+                else ""
+            )
+            raise RuntimeError(
+                f"Docker Compose startup failed for {config_yaml}. "
+                + (detail or "See the preceding command error for build or startup details.")
+            )
         return result
 
     def docker_restart(

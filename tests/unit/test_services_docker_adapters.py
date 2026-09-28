@@ -199,6 +199,13 @@ def test_minio_check_running_and_stopped(conn):
 
     service.setup(conn)
     service.exec.all_states = {"proj_minio_1": {"Status": "running"}}
+    assert any(
+        name == "fs_copy"
+        and Path(args[0]).name == "Dockerfile"
+        and Path(args[0]).is_file()
+        and args[1] == "/tmp/stack/minio-build/Dockerfile"
+        for name, args, _ in service.exec.calls
+    )
     assert service.check(conn) == {"status": "running"}
 
     service.exec.all_states = {"proj_other_1": {"Status": "running"}}
@@ -262,6 +269,13 @@ def test_milvus_setup_and_hash_helper(conn):
     service.setup(conn)
 
     assert service.service_url == "tcp://example.test:19530"
+    assert any(
+        name == "fs_copy"
+        and Path(args[0]).name == "Dockerfile"
+        and Path(args[0]).is_file()
+        and args[1] == "/tmp/stack/minio-build/Dockerfile"
+        for name, args, _ in service.exec.calls
+    )
     assert service.get_secrets() == {
         "milvus_credentials": {"username": "mu", "password": "mpw"}
     }

@@ -62,6 +62,12 @@ class MilvusDockerService(AbstractService):
         self.exec.fs_copy(
             conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
+        self.exec.fs_create_dir(conn, f"{self.target_path}/minio-build")
+        self.exec.fs_copy(
+            conn,
+            str(self.resolve_asset("minio/Dockerfile")),
+            f"{self.target_path}/minio-build/Dockerfile",
+        )
         config = self.resolve_asset(self.config)
         self.exec.fs_copy(conn, str(config), f"{self.target_path}/milvus.yaml")
         self.exec.tls_setup(conn, conn.host, self.target_path)

@@ -9,7 +9,7 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       # Constrain Docker provider to only discover services on this stack's specific network
-      - "--providers.docker.network=mlflow_stack_traefik_net"
+      - "--providers.docker.network=mlflow_2_22_0_stack_traefik_net"
       - "--entrypoints.https.address=:443"
     ports:
       - ${MLFLOW_PORT:-1234}:443
@@ -34,7 +34,7 @@ services:
       MLFLOW_FLASK_SERVER_SECRET_KEY: "my-secret-key"
     restart: always
     container_name: mlflow
-    command: bash -c "pip install Flask-WTF && mlflow server --host 0.0.0.0:5002 --app-name basic-auth"
+    command: bash -c "pip install Flask-WTF && mlflow server --host 0.0.0.0 --port 5002 --app-name basic-auth"
     labels:
       - "traefik.enable=true"
 

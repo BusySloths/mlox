@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_server, remove_server
+from tests.integration.helpers import add_server, log_compose_diagnostics, remove_server
 import uuid
 import time
 import socket
@@ -164,6 +164,8 @@ def wait_for_service_ready(
                 f"Retry {i + 1}/{retries} in {interval}s. Exception during status check: {e}"
             )
         time.sleep(interval)
+    if not no_checks:
+        log_compose_diagnostics(service, bundle)
     return status
 
 
@@ -258,8 +260,8 @@ def ubuntu_docker_server(multipass_instance):
 
     def _list_docker_volumes() -> set[str]:
         try:
-            with server.get_server_connection(force_root=True) as conn:
-                res = conn.run("docker volume ls -q", hide=True, warn=True, pty=False)
+            with server.get_server_connection() as conn:
+                res = conn.sudo("docker volume ls -q", hide=True, warn=False, pty=False)
                 output = (res.stdout or "").strip().splitlines()
                 return {line.strip() for line in output if line.strip()}
         except Exception as exc:  # pragma: no cover - best effort cleanup safeguard

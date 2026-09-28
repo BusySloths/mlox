@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 
+from mlox.executors import UbuntuTaskExecutor
 from mlox.service import (
     AbstractHealthService,
     AbstractObservabilityService,
@@ -300,6 +302,34 @@ def test_compose_up_restart_and_down_update_state():
 
     assert svc.compose_down(conn=object(), remove_volumes=True) is True
     assert svc.state == "stopped"
+
+
+def test_compose_up_reports_command_failure_without_marking_service_running():
+    svc = _svc()
+    svc.exec = UbuntuTaskExecutor()
+    initial_state = svc.state
+
+    def fail_startup(*args, **kwargs):
+        raise RuntimeError("image pull failed")
+
+    conn = SimpleNamespace(sudo=fail_startup)
+    with pytest.raises(RuntimeError, match="Docker Compose startup failed.*image pull failed"):
+        svc.compose_up(conn)
+
+    assert svc.state == initial_state
+    assert svc.exec.history_data[-1]["status"] == "error"
+    assert "image pull failed" in svc.exec.history_data[-1]["error"]
+
+
+def test_compose_up_accepts_success_with_empty_stdout():
+    svc = _svc()
+    svc.exec = UbuntuTaskExecutor()
+    conn = SimpleNamespace(
+        sudo=lambda *args, **kwargs: SimpleNamespace(stdout="", exited=0)
+    )
+
+    assert svc.compose_up(conn) is True
+    assert svc.state == "running"
 
 
 def test_service_restart_prefers_compose_restart_for_compose_services():

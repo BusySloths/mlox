@@ -51,6 +51,12 @@ class MinioDockerService(AbstractService, AbstractWebUIService):
         self.exec.fs_copy(
             conn, str(template), f"{self.target_path}/{self.target_docker_script}"
         )
+        self.exec.fs_create_dir(conn, f"{self.target_path}/minio-build")
+        self.exec.fs_copy(
+            conn,
+            str(self.resolve_asset("minio/Dockerfile")),
+            f"{self.target_path}/minio-build/Dockerfile",
+        )
 
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
