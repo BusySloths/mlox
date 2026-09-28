@@ -26,7 +26,13 @@ from prometheus_client import (
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from mlox.services.otel.client import OTelClient
+from mlox.services.mlflow.mlops import (
+    PIPELINE_ID_HEADER,
+    PIPELINE_NAME_HEADER,
+    ModelInvocationContext,
+    model_invocation_context,
+)
+from mlox.services.otel.client import get_telemetry_client
 
 SYS_PATH = list(sys.path)
 
@@ -43,6 +49,8 @@ DEFAULT_CACHE_TTL_DAYS = 10.0
 REQUEST_ID_HEADER = "X-Request-ID"
 TRACE_ID_HEADER = "X-Trace-ID"
 request_id_context: ContextVar[str] = ContextVar("request_id", default="")
+pipeline_id_context: ContextVar[str] = ContextVar("pipeline_id", default="")
+pipeline_name_context: ContextVar[str] = ContextVar("pipeline_name", default="")
 model_first_request_keys: set[tuple[str, str]] = set()
 model_first_request_lock = threading.Lock()
 
@@ -106,7 +114,7 @@ MODEL_LOAD_DURATION = Histogram(
 )
 
 
-TELEMETRY_CLIENT = OTelClient.from_env()
+TELEMETRY_CLIENT = get_telemetry_client()
 if TELEMETRY_CLIENT is not None:
     TELEMETRY_CLIENT.attach_logging_handler(logger)
 
@@ -204,7 +212,11 @@ app.add_middleware(
 @app.middleware("http")
 async def observe_http_request(request: Request, call_next):
     request_id = request.headers.get(REQUEST_ID_HEADER) or str(uuid.uuid4())
-    token = request_id_context.set(request_id)
+    pipeline_id = request.headers.get(PIPELINE_ID_HEADER) or uuid.uuid4().hex
+    pipeline_name = request.headers.get(PIPELINE_NAME_HEADER, "").strip()
+    request_token = request_id_context.set(request_id)
+    pipeline_id_token = pipeline_id_context.set(pipeline_id)
+    pipeline_name_token = pipeline_name_context.set(pipeline_name)
     started = time.perf_counter()
     status_code = 500
     HTTP_REQUESTS_IN_PROGRESS.labels(request.method).inc()
@@ -227,6 +239,9 @@ async def observe_http_request(request: Request, call_next):
             response = await call_next(request)
             status_code = response.status_code
             response.headers[REQUEST_ID_HEADER] = request_id
+            response.headers[PIPELINE_ID_HEADER] = pipeline_id
+            if pipeline_name:
+                response.headers[PIPELINE_NAME_HEADER] = pipeline_name
             trace_id = _current_trace_id()
             if trace_id:
                 response.headers[TRACE_ID_HEADER] = trace_id
@@ -256,7 +271,9 @@ async def observe_http_request(request: Request, call_next):
                     }
                 )
             )
-            request_id_context.reset(token)
+            pipeline_name_context.reset(pipeline_name_token)
+            pipeline_id_context.reset(pipeline_id_token)
+            request_id_context.reset(request_token)
 
 
 @app.get("/metrics", include_in_schema=False)
@@ -419,9 +436,7 @@ def _evict_cache(
 
     while len(model_cache) > max_models:
         candidates = [
-            (uri, entry)
-            for uri, entry in model_cache.items()
-            if uri != protected_uri
+            (uri, entry) for uri, entry in model_cache.items() if uri != protected_uri
         ]
         if not candidates:
             break
@@ -478,7 +493,16 @@ def runandget(data: PredictionRequest):
 
     loaded_model, is_cached_model = _load_model(model_uri)
     input_data = _prediction_input(data)
-    df_pred = loaded_model.predict(input_data, params=data.params)
+    invocation = ModelInvocationContext(
+        pipeline_id=pipeline_id_context.get() or uuid.uuid4().hex,
+        pipeline_name=pipeline_name_context.get() or data.registry_model_name,
+        request_id=request_id_context.get(),
+        model_name=resolved_model.requested_model_name,
+        model_version=resolved_model.resolved_model_version,
+        model_alias=resolved_model.requested_model_alias,
+    )
+    with model_invocation_context(invocation):
+        df_pred = loaded_model.predict(input_data, params=data.params)
 
     # Proper JSON serialization
     if not isinstance(df_pred, pd.DataFrame):
@@ -559,9 +583,7 @@ def predict(data: PredictionRequest):
         response = _predict(data)
         resolved = response["model"]
         if span is not None:
-            span.set_attribute(
-                "mlox.model.version", resolved["resolved_model_version"]
-            )
+            span.set_attribute("mlox.model.version", resolved["resolved_model_version"])
             span.set_attribute("mlox.model.uri", resolved["resolved_model_uri"])
             span.set_attribute("mlox.model.cache_hit", response["is_cached_model"])
         return response
@@ -584,15 +606,15 @@ def list_models(model_name: str):
             "tags": rm.tags,
             "descr": rm.description,
             "cache_status": "not cached" if uri not in model_cache else "cached",
-            "cache_num_calls": 0
-            if uri not in model_cache
-            else model_cache[uri].num_calls,
-            "cache_first_call": -1
-            if uri not in model_cache
-            else model_cache[uri].first_call,
-            "cache_last_call": -1
-            if uri not in model_cache
-            else model_cache[uri].last_call,
+            "cache_num_calls": (
+                0 if uri not in model_cache else model_cache[uri].num_calls
+            ),
+            "cache_first_call": (
+                -1 if uri not in model_cache else model_cache[uri].first_call
+            ),
+            "cache_last_call": (
+                -1 if uri not in model_cache else model_cache[uri].last_call
+            ),
         }
         res_list.append(out)
     return {"model": model_name, "versions": res_list}
@@ -617,7 +639,7 @@ def list_cached_models():
                 "requirements": entry.requirements,
             }
             for key, entry in model_cache.items()
-        ]
+        ],
     }
 
 

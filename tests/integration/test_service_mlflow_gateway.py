@@ -119,11 +119,15 @@ def test_mlflow_gateway_identity_prediction(deploy_mlflow_gateway):
         json=payload,
         auth=(gateway_service.user, gateway_service.pw),
         headers={
-            "Host": gateway_service.service_url.split("//", 1)[1].split(":", 1)[0]
+            "Host": gateway_service.service_url.split("//", 1)[1].split(":", 1)[0],
+            "X-MLOX-Pipeline-ID": "integration-pipeline-1",
+            "X-MLOX-Pipeline-Name": "identity-pipeline",
         },
         verify=False,
         timeout=120,
     )
     assert response.status_code == 200
+    assert response.headers["X-MLOX-Pipeline-ID"] == "integration-pipeline-1"
+    assert response.headers["X-MLOX-Pipeline-Name"] == "identity-pipeline"
     body = response.json()
     assert body["data"][0]["0"] == 1.0

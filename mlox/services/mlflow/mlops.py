@@ -1,20 +1,35 @@
 import os
 import logging
+import re
 import shutil
 import tempfile
+import time
+import uuid
 from pathlib import Path
 from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd  # type: ignore
 
-from datetime import datetime
-from typing import List, Dict, Sequence, Iterator
+from typing import Any, List, Dict, Sequence, Iterator
 from abc import ABC, abstractmethod
 
 import mlflow  # type: ignore
 from mlflow.models.model import ModelInfo  # type: ignore
 from mlflow.tracking import MlflowClient  # type: ignore
+
+from mlox.secret_manager import (
+    SECRET_MANAGER_KEYFILE_ENV,
+    SECRET_MANAGER_KEYFILE_PW_ENV,
+    AbstractSecretManager,
+    load_secret_manager_from_env,
+)
+from mlox.services.otel.client import (
+    OTelClient,
+    get_telemetry_client as get_process_telemetry_client,
+)
 
 import urllib3
 
@@ -22,6 +37,131 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 logger = logging.getLogger(__name__)
+
+PIPELINE_ID_HEADER = "X-MLOX-Pipeline-ID"
+PIPELINE_NAME_HEADER = "X-MLOX-Pipeline-Name"
+_MODEL_STEP_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+
+
+@dataclass(frozen=True)
+class ModelInvocationContext:
+    """Request-local identity of one concrete registered-model invocation."""
+
+    pipeline_id: str
+    pipeline_name: str
+    request_id: str
+    model_name: str
+    model_version: str
+    model_alias: str | None = None
+
+    def telemetry_attributes(self) -> Dict[str, str]:
+        attributes = {
+            "mlox.pipeline.id": self.pipeline_id,
+            "mlox.pipeline.name": self.pipeline_name,
+            "mlox.model.name": self.model_name,
+            "mlox.model.version": self.model_version,
+        }
+        if self.request_id:
+            attributes["mlox.request.id"] = self.request_id
+        if self.model_alias:
+            attributes["mlox.model.alias"] = self.model_alias
+        return attributes
+
+
+_MODEL_INVOCATION: ContextVar[ModelInvocationContext | None] = ContextVar(
+    "mlox_model_invocation",
+    default=None,
+)
+_MODEL_STEP_PATH: ContextVar[tuple[str, ...]] = ContextVar(
+    "mlox_model_step_path",
+    default=(),
+)
+
+
+@contextmanager
+def model_invocation_context(
+    invocation: ModelInvocationContext,
+) -> Iterator[ModelInvocationContext]:
+    """Expose an invocation to a loaded model for the duration of prediction."""
+
+    invocation_token = _MODEL_INVOCATION.set(invocation)
+    path_token = _MODEL_STEP_PATH.set(())
+    try:
+        yield invocation
+    finally:
+        _MODEL_STEP_PATH.reset(path_token)
+        _MODEL_INVOCATION.reset(invocation_token)
+
+
+def current_model_invocation() -> ModelInvocationContext | None:
+    return _MODEL_INVOCATION.get()
+
+
+@dataclass
+class ModelStep:
+    """Handle used to add safe observations to the active model-step span."""
+
+    name: str
+    qualified_name: str
+    span: Any = None
+
+    def set_attribute(self, name: str, value: Any) -> None:
+        if self.span is not None and value is not None:
+            self.span.set_attribute(name, value)
+
+    def observe_array(
+        self,
+        name: str,
+        values: np.ndarray | pd.DataFrame | pd.Series | Sequence[Any],
+    ) -> None:
+        """Record bounded statistical summaries without exporting raw values."""
+
+        if self.span is None:
+            return
+        observation_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", name).strip("_")
+        if not observation_name:
+            raise ValueError("Observation name must contain a valid character.")
+        prefix = f"mlox.observation.{observation_name}"
+        array = (
+            values.to_numpy()
+            if isinstance(values, (pd.DataFrame, pd.Series))
+            else np.asarray(values)
+        )
+        self.set_attribute(f"{prefix}.dimensions", list(array.shape))
+        self.set_attribute(f"{prefix}.size", int(array.size))
+        if array.size == 0:
+            return
+        try:
+            numeric = np.asarray(array, dtype=float)
+        except (TypeError, ValueError):
+            return
+        finite = numeric[np.isfinite(numeric)]
+        self.set_attribute(
+            f"{prefix}.missing_fraction",
+            float(1.0 - (finite.size / numeric.size)),
+        )
+        if finite.size == 0:
+            return
+        self.set_attribute(f"{prefix}.mean", float(np.mean(finite)))
+        self.set_attribute(f"{prefix}.std", float(np.std(finite)))
+        self.set_attribute(f"{prefix}.min", float(np.min(finite)))
+        self.set_attribute(f"{prefix}.max", float(np.max(finite)))
+
+
+@contextmanager
+def _optional_telemetry_span(
+    telemetry: OTelClient | None,
+    name: str,
+    attributes: Dict[str, Any],
+    *,
+    kind: str = "internal",
+) -> Iterator[Any]:
+    if telemetry is None:
+        yield None
+        return
+    with telemetry.span(name, attributes, kind=kind) as span:
+        yield span
+
 
 _EXCLUDED_CODE_PATH_NAMES = frozenset(
     {
@@ -37,6 +177,87 @@ _EXCLUDED_CODE_PATH_NAMES = frozenset(
 
 
 class DeployableModel(ABC):
+    def get_secret_manager(self) -> AbstractSecretManager | None:
+        """Load the secret manager exposed to the serving process, if configured."""
+
+        if not (
+            os.environ.get(SECRET_MANAGER_KEYFILE_ENV)
+            and os.environ.get(SECRET_MANAGER_KEYFILE_PW_ENV)
+        ):
+            return None
+        return load_secret_manager_from_env()
+
+    def get_telemetry_client(self) -> OTelClient | None:
+        """Return the gateway's process-wide telemetry client, if configured."""
+
+        return get_process_telemetry_client()
+
+    def get_runtime_context(self) -> ModelInvocationContext | None:
+        return current_model_invocation()
+
+    def get_outbound_headers(self) -> Dict[str, str]:
+        """Return headers that continue the active trace and pipeline identity."""
+
+        headers: Dict[str, str] = {}
+        runtime = self.get_runtime_context()
+        if runtime is not None:
+            headers[PIPELINE_ID_HEADER] = runtime.pipeline_id
+            headers[PIPELINE_NAME_HEADER] = runtime.pipeline_name
+        telemetry = self.get_telemetry_client()
+        if telemetry is not None:
+            telemetry.inject_context(headers)
+        return headers
+
+    @contextmanager
+    def model_step(
+        self,
+        name: str,
+        *,
+        component: str | None = None,
+        component_version: str | int | None = None,
+        kind: str | None = None,
+    ) -> Iterator[ModelStep]:
+        """Create a hierarchical, observable step below ``live_predict``."""
+
+        name = str(name).strip()
+        if not _MODEL_STEP_NAME_PATTERN.fullmatch(name):
+            raise ValueError(
+                "Model step names must start with an alphanumeric character and "
+                "contain only letters, numbers, dots, underscores, or hyphens."
+            )
+        current_path = _MODEL_STEP_PATH.get()
+        path = (*current_path, name)
+        runtime = self.get_runtime_context()
+        model_name = (
+            runtime.model_name if runtime is not None else self.__class__.__name__
+        )
+        qualified_name = "/".join((model_name, *path))
+        attributes: Dict[str, Any] = {
+            "mlox.step.name": name,
+            "mlox.step.path": qualified_name,
+            "mlox.step.depth": len(path),
+        }
+        if runtime is not None:
+            attributes.update(runtime.telemetry_attributes())
+        if component:
+            attributes["mlox.component.name"] = str(component)
+        if component_version is not None:
+            attributes["mlox.component.version"] = str(component_version)
+        if kind:
+            attributes["mlox.step.kind"] = str(kind)
+
+        token = _MODEL_STEP_PATH.set(path)
+        telemetry = self.get_telemetry_client()
+        try:
+            with _optional_telemetry_span(
+                telemetry,
+                "mlox.model.step",
+                attributes,
+            ) as span:
+                yield ModelStep(name=name, qualified_name=qualified_name, span=span)
+        finally:
+            _MODEL_STEP_PATH.reset(token)
+
     @abstractmethod
     def live_predict(
         self,
@@ -203,31 +424,93 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
         logger.info("Done.")
 
     def predict(self, context, model_input, params=None) -> pd.DataFrame:
-        logger.info(f"Incoming request with time stamp: {datetime.now().isoformat()}")
-        logger.info(f"Model config: {self.model_config}")
-        logger.info(f"Artifacts: {self.artifacts}")
-        logger.info(f"Params: {params}")
-        logger.info(f"Input: {model_input}")
-        logger.info(f"Input type: {type(model_input)}")
-
         if params is None:
-            logger.info("No params provided; using empty dict.")
             params = {}
-
-        logger.info("Entering prediction.")
-        try:
-            logger.info("Calling live_predict method of the model.")
-            logger.info(f"Model: {self.model}")
-            res = self.model.live_predict(
-                model_input, params=params, artifacts=self.artifacts
+        telemetry = self.model.get_telemetry_client()
+        runtime = self.model.get_runtime_context()
+        if runtime is None:
+            trace_id = telemetry.current_trace_id() if telemetry is not None else ""
+            runtime = ModelInvocationContext(
+                pipeline_id=trace_id or uuid.uuid4().hex,
+                pipeline_name=self.model_class,
+                request_id="",
+                model_name=self.registered_model_name or self.model_class,
+                model_version=str(self.registered_model_version or "unknown"),
             )
-        except Exception as e:
-            # Log the exception and re-raise it.
-            logger.error(f"Error in prediction: {e}", exc_info=True)
-            res = pd.DataFrame({"error": [str(e)]})
+        attributes: Dict[str, Any] = runtime.telemetry_attributes()
+        attributes["mlox.model.class"] = self.model_class
+        attributes["mlox.input.type"] = type(model_input).__name__
+        try:
+            attributes["mlox.input.rows"] = len(model_input)
+        except TypeError:
+            pass
 
-        logger.info(f"Prediction result:\n{res}")  # type: ignore
-        return res
+        started = time.perf_counter()
+        status = "success"
+        with model_invocation_context(runtime):
+            with _optional_telemetry_span(
+                telemetry,
+                "mlox.model.live_predict",
+                attributes,
+            ) as span:
+                try:
+                    result = self.model.live_predict(
+                        model_input,
+                        params=params,
+                        artifacts=self.artifacts,
+                    )
+                    if span is not None:
+                        try:
+                            span.set_attribute("mlox.output.rows", len(result))
+                        except TypeError:
+                            pass
+                except Exception as exc:
+                    status = "error"
+                    if span is not None:
+                        span.record_exception(exc)
+                        if telemetry is not None:
+                            telemetry.mark_span_error(span)
+                    logger.exception(
+                        "Model prediction failed for %s.", runtime.model_name
+                    )
+                    result = pd.DataFrame({"error": [str(exc)]})
+                finally:
+                    duration = time.perf_counter() - started
+                    metric_attributes = {
+                        "mlox.model.name": runtime.model_name,
+                        "mlox.model.version": runtime.model_version,
+                        "mlox.prediction.status": status,
+                    }
+                    if telemetry is not None:
+                        try:
+                            telemetry.send_metric(
+                                "mlox.model.predictions",
+                                1,
+                                metric_attributes,
+                            )
+                            telemetry.send_histogram(
+                                "mlox.model.prediction.duration",
+                                duration,
+                                metric_attributes,
+                                unit="s",
+                                description="Model live prediction duration",
+                            )
+                            telemetry.send_log(
+                                "Model prediction completed.",
+                                severity="ERROR" if status == "error" else "INFO",
+                                attributes=metric_attributes,
+                            )
+                        except Exception:
+                            logger.warning(
+                                "Could not export model prediction metrics.",
+                                exc_info=True,
+                            )
+        logger.info(
+            "Model prediction completed for %s version %s.",
+            runtime.model_name,
+            runtime.model_version,
+        )
+        return result
 
     def _resolve_code_paths_for_logging(self) -> List[str]:
         resolved_paths: List[str] = []

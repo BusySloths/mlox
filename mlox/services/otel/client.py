@@ -2,6 +2,7 @@ import grpc  # type: ignore
 import base64
 import logging
 import os
+import threading
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -23,8 +24,11 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-
 MLOX_OTEL_CERTIFICATE_B64_ENV = "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64"
+
+_TELEMETRY_CLIENT: "OTelClient | None" = None
+_TELEMETRY_CLIENT_INITIALIZED = False
+_TELEMETRY_CLIENT_LOCK = threading.Lock()
 
 
 class OTelClient:
@@ -57,6 +61,8 @@ class OTelClient:
         self.collector_url = resolved_collector_url
         self.trusted_certs = resolved_trusted_certs
         self.resource = Resource.create(resource_attrs or {})
+        self._counters: Dict[str, Any] = {}
+        self._histograms: Dict[tuple[str, str], Any] = {}
         self.ssl_credentials = None
         if not self.insecure_tls and self.trusted_certs:
             self.ssl_credentials = grpc.ssl_channel_credentials(
@@ -160,17 +166,30 @@ class OTelClient:
     def send_metric(
         self, name: str, value: float, attributes: Optional[Dict[str, Any]] = None
     ):
-        counter = self.meter.create_counter(
-            name, unit="1", description="Custom Counter"
-        )
+        counter = self._counters.get(name)
+        if counter is None:
+            counter = self.meter.create_counter(
+                name, unit="1", description="MLOX counter"
+            )
+            self._counters[name] = counter
         counter.add(value, attributes or {})
 
     def send_histogram(
-        self, name: str, value: float, attributes: Optional[Dict[str, Any]] = None
+        self,
+        name: str,
+        value: float,
+        attributes: Optional[Dict[str, Any]] = None,
+        *,
+        unit: str = "ms",
+        description: str = "MLOX histogram",
     ):
-        histogram = self.meter.create_histogram(
-            name, description="Custom Histogram", unit="ms"
-        )
+        key = (name, unit)
+        histogram = self._histograms.get(key)
+        if histogram is None:
+            histogram = self.meter.create_histogram(
+                name, description=description, unit=unit
+            )
+            self._histograms[key] = histogram
         histogram.record(value, attributes or {})
 
     def send_observable_gauge(
@@ -244,6 +263,13 @@ class OTelClient:
         return format(span_context.trace_id, "032x")
 
     @staticmethod
+    def inject_context(carrier: Dict[str, str]) -> Dict[str, str]:
+        """Inject the active W3C trace context into an HTTP header carrier."""
+
+        propagate.inject(carrier)
+        return carrier
+
+    @staticmethod
     def mark_span_error(span: Any) -> None:
         """Mark a span as failed without exposing OTel SDK types to callers."""
 
@@ -266,3 +292,25 @@ class OTelClient:
         self.meter_provider.shutdown()
         self.tracer_provider.shutdown()
         self.logger_provider.shutdown()
+
+
+def get_telemetry_client() -> OTelClient | None:
+    """Return the single environment-configured telemetry client for this process."""
+
+    global _TELEMETRY_CLIENT, _TELEMETRY_CLIENT_INITIALIZED
+    if _TELEMETRY_CLIENT_INITIALIZED:
+        return _TELEMETRY_CLIENT
+    with _TELEMETRY_CLIENT_LOCK:
+        if not _TELEMETRY_CLIENT_INITIALIZED:
+            _TELEMETRY_CLIENT = OTelClient.from_env()
+            _TELEMETRY_CLIENT_INITIALIZED = True
+    return _TELEMETRY_CLIENT
+
+
+def set_telemetry_client(client: OTelClient | None) -> None:
+    """Set the process telemetry client, primarily for embedding and tests."""
+
+    global _TELEMETRY_CLIENT, _TELEMETRY_CLIENT_INITIALIZED
+    with _TELEMETRY_CLIENT_LOCK:
+        _TELEMETRY_CLIENT = client
+        _TELEMETRY_CLIENT_INITIALIZED = True
