@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from examples import runtime
+from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
 
 
 @pytest.mark.parametrize("telemetry,manager", [(False, False), (True, False), (False, True), (True, True)])
@@ -19,7 +20,7 @@ def test_project_providers(monkeypatch, caplog, telemetry, manager):
         if enabled:
             for name in ("first", "second"):
                 provider = Mock(spec=capability)
-                provider.name, provider.service_uuid, provider.state = name, name, "running"
+                provider.name, provider.uuid, provider.state = name, name, "running"
                 getattr(provider, method).return_value = {}
                 providers.append(provider)
     bundle = SimpleNamespace(services=providers, server=SimpleNamespace(uuid="server", ip="127.0.0.1"))
@@ -49,11 +50,15 @@ def test_project_providers(monkeypatch, caplog, telemetry, manager):
 
 
 @pytest.mark.parametrize("available", [False, True])
-def test_tracker_required_and_first_selected(monkeypatch, available):
-    trackers = [Mock(name="tracker1"), Mock(name="tracker2")] if available else []
+def test_tracker_required_and_first_selected(monkeypatch, caplog, available):
+    caplog.set_level(logging.INFO)
+    trackers = [MLFlow3DockerService(
+        name=name, service_config_id="mlflow", template="", target_path="/tmp/mlflow",
+        ui_user="ml", ui_pw="pw", port="5000",
+    ) for name in ("tracker1", "tracker2")] if available else []
     for tracker in trackers:
-        tracker.state, tracker.service_uuid = "running", "uuid"
-        tracker.get_secrets.return_value = {"service_url": "https://tracker.example"}
+        tracker.state = "running"
+        monkeypatch.setattr(tracker, "get_secrets", Mock(return_value={"service_url": "https://tracker.example"}))
     infra = SimpleNamespace(bundles=[], filter_by_group=lambda group: trackers,
                             get_bundle_by_service=lambda s: None)
     monkeypatch.setattr(runtime, "load_project_workspace", lambda: SimpleNamespace(infrastructure=infra))
@@ -67,6 +72,7 @@ def test_tracker_required_and_first_selected(monkeypatch, available):
         assert runtime.os.environ["MLFLOW_URI"] == "https://tracker.example"
         trackers[0].get_secrets.assert_called_once()
         trackers[1].get_secrets.assert_not_called()
+        assert f"selected tracker1 ({trackers[0].uuid})" in caplog.text
 
 
 def test_project_environment_required(monkeypatch):

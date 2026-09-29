@@ -28,7 +28,7 @@ def setup_runtime(*, tracking=False):
         server = bundle.server if bundle else None
         logger.info(
             "%s: selected %s (%s), server=%s (%s)",
-            label, service.name, service.service_uuid,
+            label, service.name, service.uuid,
             getattr(server, "name", None) or getattr(server, "uuid", "unknown"),
             getattr(server, "ip", "unknown"),
         )
