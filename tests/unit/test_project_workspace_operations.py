@@ -84,6 +84,62 @@ def test_service_restart_mutation_commits(monkeypatch):
     workspace.reload.assert_not_called()
 
 
+def test_service_provider_binding_mutations_commit(monkeypatch):
+    workspace = _workspace()
+    workspace.commit = mock.Mock()
+    workspace.reload = mock.Mock()
+    calls = []
+    monkeypatch.setattr(
+        "mlox.project.workspace.services.bind_service_secret_manager",
+        lambda project, name, manager_uuid: (
+            calls.append(("bind-secret-manager", name, manager_uuid))
+            or OperationResult(True, 0, "bound")
+        ),
+    )
+    monkeypatch.setattr(
+        "mlox.project.workspace.services.unbind_service_secret_manager",
+        lambda project, name: (
+            calls.append(("unbind-secret-manager", name))
+            or OperationResult(True, 0, "unbound")
+        ),
+    )
+    monkeypatch.setattr(
+        "mlox.project.workspace.services.bind_service_telemetry",
+        lambda project, name, telemetry_uuid: (
+            calls.append(("bind-telemetry", name, telemetry_uuid))
+            or OperationResult(True, 0, "bound")
+        ),
+    )
+    monkeypatch.setattr(
+        "mlox.project.workspace.services.unbind_service_telemetry",
+        lambda project, name: (
+            calls.append(("unbind-telemetry", name))
+            or OperationResult(True, 0, "unbound")
+        ),
+    )
+
+    results = [
+        workspace.bind_service_secret_manager(
+            name="gateway", manager_uuid="secret-1"
+        ),
+        workspace.bind_service_telemetry(
+            name="gateway", telemetry_uuid="telemetry-1"
+        ),
+        workspace.unbind_service_telemetry(name="gateway"),
+        workspace.unbind_service_secret_manager(name="gateway"),
+    ]
+
+    assert all(result.success for result in results)
+    assert calls == [
+        ("bind-secret-manager", "gateway", "secret-1"),
+        ("bind-telemetry", "gateway", "telemetry-1"),
+        ("unbind-telemetry", "gateway"),
+        ("unbind-secret-manager", "gateway"),
+    ]
+    assert workspace.commit.call_count == 4
+    workspace.reload.assert_not_called()
+
+
 def test_failed_mutation_reloads_without_commit(monkeypatch):
     workspace = _workspace()
     workspace.commit = mock.Mock()

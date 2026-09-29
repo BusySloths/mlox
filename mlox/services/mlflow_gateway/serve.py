@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from contextvars import ContextVar
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
@@ -25,6 +26,14 @@ from prometheus_client import (
 )
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from mlox.services.mlflow.mlops import (
+    PIPELINE_ID_HEADER,
+    PIPELINE_NAME_HEADER,
+    ModelInvocationContext,
+    model_invocation_context,
+)
+from mlox.services.otel.client import get_telemetry_client
+
 SYS_PATH = list(sys.path)
 
 logging.basicConfig(
@@ -38,7 +47,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_CACHE_MAX_MODELS = 10
 DEFAULT_CACHE_TTL_DAYS = 10.0
 REQUEST_ID_HEADER = "X-Request-ID"
+TRACE_ID_HEADER = "X-Trace-ID"
 request_id_context: ContextVar[str] = ContextVar("request_id", default="")
+pipeline_id_context: ContextVar[str] = ContextVar("pipeline_id", default="")
+pipeline_name_context: ContextVar[str] = ContextVar("pipeline_name", default="")
 model_first_request_keys: set[tuple[str, str]] = set()
 model_first_request_lock = threading.Lock()
 
@@ -100,6 +112,31 @@ MODEL_LOAD_DURATION = Histogram(
     "mlox_gateway_model_load_duration_seconds",
     "MLflow model load duration in seconds.",
 )
+
+
+TELEMETRY_CLIENT = get_telemetry_client()
+if TELEMETRY_CLIENT is not None:
+    TELEMETRY_CLIENT.attach_logging_handler(logger)
+
+
+@contextmanager
+def _telemetry_span(name: str, attributes=None, *, context=None, kind=None):
+    if TELEMETRY_CLIENT is None:
+        yield None
+        return
+    with TELEMETRY_CLIENT.span(
+        name,
+        attributes,
+        context=context,
+        kind=kind,
+    ) as span:
+        yield span
+
+
+def _current_trace_id() -> str:
+    if TELEMETRY_CLIENT is None:
+        return ""
+    return TELEMETRY_CLIENT.current_trace_id()
 
 
 def _env_int(name: str, default: int) -> int:
@@ -175,35 +212,68 @@ app.add_middleware(
 @app.middleware("http")
 async def observe_http_request(request: Request, call_next):
     request_id = request.headers.get(REQUEST_ID_HEADER) or str(uuid.uuid4())
-    token = request_id_context.set(request_id)
+    pipeline_id = request.headers.get(PIPELINE_ID_HEADER) or uuid.uuid4().hex
+    pipeline_name = request.headers.get(PIPELINE_NAME_HEADER, "").strip()
+    request_token = request_id_context.set(request_id)
+    pipeline_id_token = pipeline_id_context.set(pipeline_id)
+    pipeline_name_token = pipeline_name_context.set(pipeline_name)
     started = time.perf_counter()
     status_code = 500
     HTTP_REQUESTS_IN_PROGRESS.labels(request.method).inc()
-    try:
-        response = await call_next(request)
-        status_code = response.status_code
-        response.headers[REQUEST_ID_HEADER] = request_id
-        return response
-    finally:
-        route = request.scope.get("route")
-        route_path = getattr(route, "path", "unmatched")
-        duration = time.perf_counter() - started
-        HTTP_REQUESTS.labels(request.method, route_path, str(status_code)).inc()
-        HTTP_REQUEST_DURATION.labels(request.method, route_path).observe(duration)
-        HTTP_REQUESTS_IN_PROGRESS.labels(request.method).dec()
-        logger.info(
-            json.dumps(
-                {
-                    "event": "http_request",
-                    "request_id": request_id,
-                    "method": request.method,
-                    "route": route_path,
-                    "status": status_code,
-                    "duration_sec": round(duration, 6),
-                }
+    parent_context = (
+        TELEMETRY_CLIENT.extract_context(request.headers)
+        if TELEMETRY_CLIENT is not None
+        else None
+    )
+    with _telemetry_span(
+        "http.request",
+        {
+            "http.request.method": request.method,
+            "url.path": request.url.path,
+            "mlox.request.id": request_id,
+        },
+        context=parent_context,
+        kind="server",
+    ) as span:
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers[REQUEST_ID_HEADER] = request_id
+            response.headers[PIPELINE_ID_HEADER] = pipeline_id
+            if pipeline_name:
+                response.headers[PIPELINE_NAME_HEADER] = pipeline_name
+            trace_id = _current_trace_id()
+            if trace_id:
+                response.headers[TRACE_ID_HEADER] = trace_id
+            return response
+        finally:
+            route = request.scope.get("route")
+            route_path = getattr(route, "path", "unmatched")
+            duration = time.perf_counter() - started
+            if span is not None:
+                span.set_attribute("http.route", route_path)
+                span.set_attribute("http.response.status_code", status_code)
+                if status_code >= 500 and TELEMETRY_CLIENT is not None:
+                    TELEMETRY_CLIENT.mark_span_error(span)
+            HTTP_REQUESTS.labels(request.method, route_path, str(status_code)).inc()
+            HTTP_REQUEST_DURATION.labels(request.method, route_path).observe(duration)
+            HTTP_REQUESTS_IN_PROGRESS.labels(request.method).dec()
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "http_request",
+                        "request_id": request_id,
+                        "trace_id": _current_trace_id(),
+                        "method": request.method,
+                        "route": route_path,
+                        "status": status_code,
+                        "duration_sec": round(duration, 6),
+                    }
+                )
             )
-        )
-        request_id_context.reset(token)
+            pipeline_name_context.reset(pipeline_name_token)
+            pipeline_id_context.reset(pipeline_id_token)
+            request_id_context.reset(request_token)
 
 
 @app.get("/metrics", include_in_schema=False)
@@ -366,9 +436,7 @@ def _evict_cache(
 
     while len(model_cache) > max_models:
         candidates = [
-            (uri, entry)
-            for uri, entry in model_cache.items()
-            if uri != protected_uri
+            (uri, entry) for uri, entry in model_cache.items() if uri != protected_uri
         ]
         if not candidates:
             break
@@ -425,7 +493,16 @@ def runandget(data: PredictionRequest):
 
     loaded_model, is_cached_model = _load_model(model_uri)
     input_data = _prediction_input(data)
-    df_pred = loaded_model.predict(input_data, params=data.params)
+    invocation = ModelInvocationContext(
+        pipeline_id=pipeline_id_context.get() or uuid.uuid4().hex,
+        pipeline_name=pipeline_name_context.get() or data.registry_model_name,
+        request_id=request_id_context.get(),
+        model_name=resolved_model.requested_model_name,
+        model_version=resolved_model.resolved_model_version,
+        model_alias=resolved_model.requested_model_alias,
+    )
+    with model_invocation_context(invocation):
+        df_pred = loaded_model.predict(input_data, params=data.params)
 
     # Proper JSON serialization
     if not isinstance(df_pred, pd.DataFrame):
@@ -437,8 +514,7 @@ def runandget(data: PredictionRequest):
     return parsed, is_cached_model, resolved_model
 
 
-@app.post("/prod/predict")
-def predict(data: PredictionRequest):
+def _predict(data: PredictionRequest):
     started = time.perf_counter()
     model_name = data.registry_model_name
     model_version = "unresolved"
@@ -463,6 +539,7 @@ def predict(data: PredictionRequest):
                 {
                     "event": "prediction",
                     "request_id": request_id_context.get(),
+                    "trace_id": _current_trace_id(),
                     "model": model_name,
                     "version": model_version,
                     "model_cache_hit": is_cached_model,
@@ -495,6 +572,23 @@ def predict(data: PredictionRequest):
         )
 
 
+@app.post("/prod/predict")
+def predict(data: PredictionRequest):
+    attributes = {"mlox.model.name": data.registry_model_name}
+    if data.registry_model_version is not None:
+        attributes["mlox.model.requested_version"] = str(data.registry_model_version)
+    if data.registry_model_alias is not None:
+        attributes["mlox.model.requested_alias"] = data.registry_model_alias
+    with _telemetry_span("model.predict", attributes, kind="internal") as span:
+        response = _predict(data)
+        resolved = response["model"]
+        if span is not None:
+            span.set_attribute("mlox.model.version", resolved["resolved_model_version"])
+            span.set_attribute("mlox.model.uri", resolved["resolved_model_uri"])
+            span.set_attribute("mlox.model.cache_hit", response["is_cached_model"])
+        return response
+
+
 @app.get("/model/{model_name}/list")
 def list_models(model_name: str):
     logger.info(f"Model name: {model_name}")
@@ -512,15 +606,15 @@ def list_models(model_name: str):
             "tags": rm.tags,
             "descr": rm.description,
             "cache_status": "not cached" if uri not in model_cache else "cached",
-            "cache_num_calls": 0
-            if uri not in model_cache
-            else model_cache[uri].num_calls,
-            "cache_first_call": -1
-            if uri not in model_cache
-            else model_cache[uri].first_call,
-            "cache_last_call": -1
-            if uri not in model_cache
-            else model_cache[uri].last_call,
+            "cache_num_calls": (
+                0 if uri not in model_cache else model_cache[uri].num_calls
+            ),
+            "cache_first_call": (
+                -1 if uri not in model_cache else model_cache[uri].first_call
+            ),
+            "cache_last_call": (
+                -1 if uri not in model_cache else model_cache[uri].last_call
+            ),
         }
         res_list.append(out)
     return {"model": model_name, "versions": res_list}
@@ -545,7 +639,7 @@ def list_cached_models():
                 "requirements": entry.requirements,
             }
             for key, entry in model_cache.items()
-        ]
+        ],
     }
 
 
@@ -567,7 +661,10 @@ if __name__ == "__main__":
 curl -X POST http://localhost:8080/prod/predict \
      -H "Content-Type: application/json" \
      -d '{
-           "input_data": [["2024-04-15"]], "params": {"my_param": true}, "registry_model_version": 2, "registry_model_name": "Test"
+           "input_data": [["2024-04-15"]],
+           "params": {"my_param": true},
+           "registry_model_version": 2,
+           "registry_model_name": "Test"
          }'
 """
 
@@ -575,6 +672,9 @@ curl -X POST http://localhost:8080/prod/predict \
 curl -X POST http://localhost:8080/prod/predict \
     -H "Content-Type: application/json" \
     -d '{
-        "input_data": [[1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0]], "params": {"my_param": true}, "registry_model_version": 1, "registry_model_name": "Test"
+        "input_data": [[1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0]],
+        "params": {"my_param": true},
+        "registry_model_version": 1,
+        "registry_model_name": "Test"
         }'
 """

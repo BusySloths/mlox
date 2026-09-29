@@ -1,98 +1,68 @@
-import os
-import mlflow
+"""Run with python -m examples.tracking.mlflow_tracking_example; see examples/README.md."""
 import logging
+from pathlib import Path
+
+import mlflow
 import numpy as np
-import pandas as pd  # type: ignore
+import pandas as pd
 
-from typing import Dict
-from datetime import datetime
-
+from examples.runtime import setup_runtime
 from mlox.services.mlflow.mlops import DeployableModel, MLFlowDeployableModelService
 
 logger = logging.getLogger(__name__)
 
 
-# Set MLflow connection environment variables here or in your system environment
-# Warning:  This is just for educational puposes.
-#           Avoid hardcoding sensitive information in production code!
-os.environ["MLFLOW_URI"] = "https://<YOUR-URI>"
-os.environ["MLFLOW_TRACKING_USERNAME"] = "YOUR_USERNAME"
-os.environ["MLFLOW_TRACKING_PASSWORD"] = "YOUR_PASSWORD"
-os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"  # only for self-signed certs
-
-
 class MyTrackedModel(DeployableModel):
-    # The whole object and everything inside will be logged/persisted.
+    """Deterministic normalization, PCA and linear regression."""
 
-    my_model_weights: pd.DataFrame | None = None
+    def tracked_training(self, params=None):
+        x = np.random.default_rng(42).normal(size=(128, 3))
+        y = x @ np.array([1.0, 2.0, -0.5])
+        self.mean, self.scale = x.mean(axis=0), x.std(axis=0)
+        normalized = (x - self.mean) / self.scale
+        _, _, axes = np.linalg.svd(normalized, full_matrices=False)
+        self.components = axes.T
+        self.weights = np.linalg.lstsq(normalized @ self.components, y, rcond=None)[0]
+        mlflow.log_param("training_seed", 42)
+        return None
 
-    def live_predict(
-        self,
-        model_input: np.ndarray | pd.DataFrame,
-        params: Dict | None = None,
-        artifacts: Dict | None = None,
-    ) -> pd.DataFrame:
-        if model_input.ndim < 2:
-            model_input = model_input.reshape(1, -1)
-
-        logger.info(f"New call {datetime.now().isoformat()} : with params {params}")
-        logger.info(f"Received model_input data = {model_input[0, 0]}")
-        df_res = pd.DataFrame()
-        if self.my_model_weights is not None:
-            df_res = self.my_model_weights.copy()
-        logger.info("Stored model weights are =", df_res)
-        df_res["ColA"] = model_input[0, 0]
-
-        logger.info("Check params.")
-        if params is not None:
-            my_param = params.get("my_param", False)
-            logger.info(f"Values = {my_param}")
-        logger.info("Done. Return results")
-        return df_res
-
-    def tracked_training(self, params: Dict | None = None) -> Dict | None:
-        if params is not None:
-            logger.info(
-                f"Tracking: my_train_param_1={params.get('my_train_param_1', None)}"
-            )
-
-        # DO TRAINING AND STUFF
-        df_train = pd.DataFrame([[0, 1], [2, 3]], columns=["ColA", "ColB"])
-        self.my_model_weights = df_train.copy()
-
-        my_train_metrics = {"ACC": 0.8, "AUC": 0.79}
-
-        mlflow.log_metrics(my_train_metrics)
-
-        dataset = mlflow.data.from_pandas(df_train)  # type: ignore
-        mlflow.log_input(dataset=dataset, context="training")
-
-        mlflow.set_tag("dataset", "artificial")
-        mlflow.set_tag("dataset", "artificial")
-        mlflow.log_params({"a_logged_param": "a_logged_param_value"})
-
-        # log additional files that you might need during inference
-        artifacts = {"my_readme.md": "./README.md"}
-        return artifacts
+    def live_predict(self, model_input, params=None, artifacts=None):
+        logger.info("Model runtime: telemetry=%s, secret_manager=%s",
+                    self.get_telemetry_client() is not None,
+                    self.get_secret_manager() is not None)
+        with self.model_step("pipeline"):
+            with self.model_step("input.normalize") as step:
+                x = np.atleast_2d(np.asarray(model_input, dtype=float))
+                step.observe_array("input", x)
+                normalized = (x - self.mean) / self.scale
+                step.observe_array("output", normalized)
+            with self.model_step("pca.transform", component="PCA", component_version="1") as step:
+                transformed = normalized @ self.components
+                step.observe_array("output", transformed)
+            with self.model_step("regression.predict", component="LR") as step:
+                prediction = transformed @ self.weights
+                step.observe_array("output", prediction)
+        return pd.DataFrame({"prediction": prediction})
 
 
 def tracked_experiment():
-    my_model = MyTrackedModel()
-
-    mlops = MLFlowDeployableModelService(my_model, "krabbelbox")
-
-    # mlops.track_model sets up mlops and calls my_model.tracking
-    mlops.track_model(
-        params={"my_train_param_1": "my_train_param_1_value"},  # these parameters are
-        input_example=np.array(
-            [["my_input_example_value"]]
-        ),  # as of now inputs must be wrapped in np.numpy
-        inference_params={
-            "my_param": False,
-            "my_additional_inference_param_1": False,
-        },  # this is optional (=additional parameters during inference)
-    )
+    client, _ = setup_runtime(tracking=True)
+    try:
+        root = Path(__file__).resolve().parents[2]
+        service = MLFlowDeployableModelService(
+            MyTrackedModel(), "mlox-pca-regression-example",
+            code_paths=[str(root / "mlox"), str(root / "examples")],
+        )
+        inputs = np.array([[1.0, 2.0, 3.0], [3.0, 2.0, 1.0]])
+        info = service.track_model(input_example=inputs)
+        loaded = mlflow.pyfunc.load_model(info.model_uri)
+        print(loaded.predict(inputs))
+        logger.info("Tracked model and completed inference: %s", info.model_uri)
+    finally:
+        if client:
+            client.shutdown()
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     tracked_experiment()

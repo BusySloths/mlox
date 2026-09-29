@@ -1070,6 +1070,79 @@ def test_services_restart_service_requires_restart_hook_for_legacy_objects():
     assert result.message == "Selected service cannot be restarted."
 
 
+def test_services_binding_use_cases_dispatch_to_runtime_service_methods():
+    calls = []
+    service = SimpleNamespace(
+        name="gateway",
+        capabilities={
+            ServiceCapability.SECRET_MANAGER_BINDING,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
+        bind_secret_manager=lambda uuid, conn: calls.append(
+            ("bind-secret-manager", uuid, conn)
+        ),
+        unbind_secret_manager=lambda conn: calls.append(
+            ("unbind-secret-manager", conn)
+        ),
+        bind_telemetry=lambda uuid, conn: calls.append(
+            ("bind-telemetry", uuid, conn)
+        ),
+        unbind_telemetry=lambda conn: calls.append(("unbind-telemetry", conn)),
+    )
+    connection = _Connection()
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: connection)
+    )
+    infrastructure = SimpleNamespace(
+        get_service=lambda name: service if name == "gateway" else None,
+        get_bundle_by_service=lambda current: bundle if current is service else None,
+    )
+    current = _project(infrastructure)
+
+    results = [
+        services.bind_service_secret_manager(
+            current, name="gateway", manager_uuid="secret-1"
+        ),
+        services.bind_service_telemetry(
+            current, name="gateway", telemetry_uuid="otel-1"
+        ),
+        services.unbind_service_telemetry(current, name="gateway"),
+        services.unbind_service_secret_manager(current, name="gateway"),
+    ]
+
+    assert all(result.success for result in results)
+    assert calls == [
+        ("bind-secret-manager", "secret-1", connection),
+        ("bind-telemetry", "otel-1", connection),
+        ("unbind-telemetry", connection),
+        ("unbind-secret-manager", connection),
+    ]
+
+
+def test_services_binding_use_cases_reject_unadvertised_bindings():
+    service = SimpleNamespace(
+        name="plain-service",
+        capabilities=set(),
+        bind_telemetry=lambda uuid, conn: None,
+    )
+    bundle = SimpleNamespace(
+        server=SimpleNamespace(get_server_connection=lambda: _Connection())
+    )
+    current = _project(
+        SimpleNamespace(
+            get_service=lambda name: service,
+            get_bundle_by_service=lambda value: bundle,
+        )
+    )
+
+    result = services.bind_service_telemetry(
+        current, name="plain-service", telemetry_uuid="otel-1"
+    )
+
+    assert not result.success
+    assert result.message == "Service cannot bind telemetry."
+
+
 def test_services_check_health_updates_state_from_payload():
     service = SimpleNamespace(
         name="svc",
@@ -1726,198 +1799,6 @@ def test_workflows_add_repository_suffixes_duplicate_final_name():
     assert result.success
     assert repo_service.name == "demo [Airflow DAG]_0"
     assert calls[0] == ("setup", {"name": "demo [Airflow DAG]_0"})
-
-
-def test_workflows_expose_secret_manager_persists_orchestrator_env():
-    class ExportableManager:
-        supports_keyfile_export = True
-
-        def is_working(self):
-            return True
-
-        def get_access_secrets(self):
-            return {"token": "secret"}
-
-    class OpenBaoService:
-        application_credentials = {
-            "airflow-airflow-1": {},
-        }
-
-        def create_keyfile_secret_manager(self, infra, *, application_name, period):
-            captured["application_name"] = application_name
-            captured["period"] = period
-            captured["infra"] = infra
-            return ExportableManager()
-
-    captured = {}
-    orchestrator = SimpleNamespace(
-        uuid="airflow-1",
-        name="Airflow",
-        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
-        set_workflow_secret_manager_env=lambda conn, **kwargs: captured.update(kwargs),
-    )
-    bundle = SimpleNamespace(
-        name="prod",
-        server=SimpleNamespace(
-            ip="10.0.0.5",
-            get_server_connection=lambda: _Connection(),
-        ),
-        services=[orchestrator],
-    )
-    descriptor = SimpleNamespace(
-        id="manager-1",
-        name="OpenBao",
-        kind="service",
-        is_available=True,
-        supports_keyfile_export=True,
-        manager=ExportableManager(),
-        service=OpenBaoService(),
-    )
-    workspace = SimpleNamespace(
-        infrastructure=SimpleNamespace(bundles=[bundle]),
-        probe_secret_manager=lambda manager_id: descriptor,
-        commit=lambda: captured.update({"committed": True}),
-    )
-
-    result = workflows.expose_secret_manager_to_workflow_orchestrator(
-        workspace,
-        "airflow-1",
-        "manager-1",
-    )
-
-    assert result.success
-    assert captured["manager_uuid"] == "manager-1"
-    assert captured["application_name"] == "airflow-airflow-1"
-    assert captured["period"] == "7d"
-    assert captured["encrypted_keyfile"]
-    assert captured["keyfile_password"]
-    assert captured["committed"] is True
-    assert result.data["env"] == {
-        "MLOX_SECRET_MANAGER_KEYFILE": "hidden",
-        "MLOX_SECRET_MANAGER_KEYFILE_PW": "hidden",
-    }
-
-
-def test_workflows_expose_secret_manager_handles_deployment_failure(monkeypatch):
-    captured = {}
-
-    class OpenBaoService:
-        application_credentials = {"airflow-airflow-1": {}}
-
-        def create_keyfile_secret_manager(self, infra, *, application_name, period):
-            return object()
-
-        def revoke_application_credential(self, application_name, infra):
-            captured["revoked"] = application_name
-
-    orchestrator = SimpleNamespace(
-        uuid="airflow-1",
-        name="Airflow",
-        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
-        workflow_secret_manager_uuid="old-manager",
-        workflow_secret_manager_env={"OLD": "value"},
-    )
-
-    def fail_to_deploy(conn, **kwargs):
-        orchestrator.workflow_secret_manager_uuid = kwargs["manager_uuid"]
-        orchestrator.workflow_secret_manager_env = {
-            "MLOX_SECRET_MANAGER_KEYFILE": kwargs["encrypted_keyfile"],
-            "MLOX_SECRET_MANAGER_KEYFILE_PW": kwargs["keyfile_password"],
-        }
-        raise FileNotFoundError("/Users/alice/mlox/services/airflow/compose.yaml")
-
-    orchestrator.set_workflow_secret_manager_env = fail_to_deploy
-    bundle = SimpleNamespace(
-        server=SimpleNamespace(get_server_connection=lambda: _Connection()),
-        services=[orchestrator],
-    )
-    service = OpenBaoService()
-    descriptor = SimpleNamespace(
-        id="manager-1",
-        name="OpenBao",
-        is_available=True,
-        supports_keyfile_export=True,
-        manager=object(),
-        service=service,
-    )
-    workspace = SimpleNamespace(
-        infrastructure=SimpleNamespace(bundles=[bundle]),
-        probe_secret_manager=lambda manager_id: descriptor,
-        commit=lambda: captured.update({"committed": True}),
-    )
-    monkeypatch.setattr(workflows, "generate_pw", lambda length: "do-not-leak-pw")
-    monkeypatch.setattr(
-        workflows,
-        "get_encrypted_access_keyfile",
-        lambda manager, password: "do-not-leak-keyfile",
-    )
-
-    result = workflows.expose_secret_manager_to_workflow_orchestrator(
-        workspace,
-        "airflow-1",
-        "manager-1",
-    )
-
-    assert not result.success
-    assert result.code == 96
-    assert "do-not-leak" not in result.message
-    assert orchestrator.workflow_secret_manager_uuid == "old-manager"
-    assert orchestrator.workflow_secret_manager_env == {"OLD": "value"}
-    assert captured == {"revoked": "airflow-airflow-1"}
-
-
-def test_workflows_secret_manager_options_filter_to_keyfile_exportable():
-    descriptors = [
-        SimpleNamespace(id="embedded", name="Embedded", kind="embedded"),
-        SimpleNamespace(id="manager-1", name="OpenBao", kind="service"),
-    ]
-    probed = {
-        "embedded": SimpleNamespace(
-            id="embedded",
-            name="Embedded",
-            kind="embedded",
-            is_available=True,
-            supports_keyfile_export=False,
-        ),
-        "manager-1": SimpleNamespace(
-            id="manager-1",
-            name="OpenBao",
-            kind="service",
-            is_available=True,
-            supports_keyfile_export=True,
-        ),
-    }
-    orchestrator = SimpleNamespace(
-        uuid="airflow-1",
-        name="Airflow",
-        workflow_secret_manager_uuid="manager-1",
-        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
-    )
-    bundle = SimpleNamespace(
-        name="prod",
-        server=SimpleNamespace(ip="10.0.0.5"),
-        services=[orchestrator],
-    )
-    workspace = SimpleNamespace(
-        infrastructure=SimpleNamespace(bundles=[bundle]),
-        list_secret_managers=lambda: descriptors,
-        probe_secret_manager=lambda manager_id: probed[manager_id],
-    )
-
-    result = workflows.describe_workflow_secret_managers(workspace, "airflow-1")
-
-    assert result.success
-    assert result.data["managers"] == [
-        {
-            "id": "manager-1",
-            "name": "OpenBao",
-            "kind": "service",
-            "available": True,
-            "supports_keyfile_export": True,
-            "selected": True,
-            "message": "",
-        }
-    ]
 
 
 def _repository_workspace(service, *, commit_calls=None):

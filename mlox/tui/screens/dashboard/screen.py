@@ -38,7 +38,9 @@ from .server_info_panel import ServerInfoPanel
 from .service_actions import (
     RemoveServiceDialog,
     RenameServiceDialog,
+    RuntimeProvidersDialog,
     ServiceActions,
+    runtime_provider_options,
 )
 from .secret_manager_panel import SecretManagerPanel
 from .template_panel import TemplatePanel
@@ -72,6 +74,7 @@ from mlox.application.use_cases.services import (
     setup_service_in_workspace,
     teardown_service_in_workspace,
 )
+from mlox.service import ServiceCapability
 from mlox.tui.screens.project_switcher import ProjectSwitchDialog
 from mlox.tui.template_forms import (
     TemplateFormSpec,
@@ -679,6 +682,133 @@ class DashboardScreen(Screen):
 
         self._refresh_tree_after_service_change(selection.bundle, selection.service)
         self.notify(result.message)
+
+    @on(ServiceActions.ConfigureRuntimeProvidersRequested)
+    async def handle_runtime_providers_requested(
+        self, _: ServiceActions.ConfigureRuntimeProvidersRequested
+    ) -> None:
+        selection = self.query_one(ServiceActions).selection
+        if not selection or selection.type != "service" or not selection.service:
+            self.notify("Select a service with runtime providers.", severity="warning")
+            return
+        workspace = getattr(self.app, "workspace", None)
+        infrastructure = getattr(workspace, "infrastructure", None)
+        if workspace is None or infrastructure is None:
+            self.notify(
+                "Cannot configure providers because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        service_uuid = str(getattr(selection.service, "uuid", "") or "")
+        dialog = RuntimeProvidersDialog(
+            selection.service,
+            secret_manager_options=runtime_provider_options(
+                infrastructure,
+                ServiceCapability.SECRET_MANAGER,
+                consumer_uuid=service_uuid,
+            ),
+            telemetry_options=runtime_provider_options(
+                infrastructure,
+                ServiceCapability.OBSERVABILITY,
+                consumer_uuid=service_uuid,
+            ),
+        )
+        await self.app.push_screen(
+            dialog,
+            lambda values: self._apply_runtime_provider_selection(
+                selection,
+                values,
+            ),
+        )
+
+    def _apply_runtime_provider_selection(
+        self,
+        selection: SelectionInfo,
+        values: dict[str, str | None] | None,
+    ) -> None:
+        if values is None:
+            return
+        workspace = getattr(self.app, "workspace", None)
+        if workspace is None:
+            self.notify(
+                "Cannot configure providers because the workspace is unavailable.",
+                severity="error",
+            )
+            return
+
+        service = selection.service
+        service_name = str(getattr(service, "name", "") or "")
+        changes = [
+            (binding, str(getattr(service, attribute, "") or "") or None, value)
+            for binding, attribute, value in (
+                (
+                    "secret_manager",
+                    "secret_manager_uuid",
+                    values.get("secret_manager_uuid"),
+                ),
+                ("telemetry", "telemetry_uuid", values.get("telemetry_uuid")),
+            )
+            if attribute in values
+            and (str(getattr(service, attribute, "") or "") or None) != value
+        ]
+        if not changes:
+            self.notify("Runtime providers are already configured.")
+            return
+
+        self.query_one(ServiceActions).set_runtime_provider_loading(True)
+
+        def run_operation() -> None:
+            results = []
+            for binding, _, provider_uuid in changes:
+                if binding == "secret_manager":
+                    result = (
+                        workspace.bind_service_secret_manager(
+                            name=service_name,
+                            manager_uuid=provider_uuid,
+                        )
+                        if provider_uuid
+                        else workspace.unbind_service_secret_manager(name=service_name)
+                    )
+                else:
+                    result = (
+                        workspace.bind_service_telemetry(
+                            name=service_name,
+                            telemetry_uuid=provider_uuid,
+                        )
+                        if provider_uuid
+                        else workspace.unbind_service_telemetry(name=service_name)
+                    )
+                results.append(result)
+                if not result.success:
+                    break
+            self.app.call_from_thread(
+                self._finish_runtime_provider_update,
+                results,
+                selection.bundle,
+                service,
+            )
+
+        self.app.run_worker(
+            run_operation,
+            thread=True,
+            exclusive=True,
+            group="service-runtime-providers",
+        )
+
+    def _finish_runtime_provider_update(
+        self,
+        results: list,
+        bundle: object | None,
+        service: object,
+    ) -> None:
+        self.query_one(ServiceActions).set_runtime_provider_loading(False)
+        failed = next((result for result in results if not result.success), None)
+        self._refresh_tree_after_service_change(bundle, service)
+        if failed is not None:
+            self.notify(failed.message, severity="error")
+            return
+        self.notify("Runtime providers updated.")
 
     @on(ServiceActions.OpenWebUIRequested)
     def handle_service_open_web_ui_requested(

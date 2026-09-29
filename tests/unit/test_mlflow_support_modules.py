@@ -9,10 +9,17 @@ import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+    InMemorySpanExporter,
+)
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from prometheus_client import generate_latest
 
 from mlox.services.mlflow import mlops
 from mlox.services.mlflow_gateway import serve
+from mlox.services.otel.client import OTelClient
 
 
 class _Span:
@@ -36,12 +43,158 @@ def _cm_empty():
     yield object()
 
 
+def _test_telemetry_client(provider: TracerProvider) -> OTelClient:
+    client = object.__new__(OTelClient)
+    client.tracer = provider.get_tracer("mlox.mlflow_gateway.test")
+    return client
+
+
+def _model_telemetry_client(provider: TracerProvider):
+    client = _test_telemetry_client(provider)
+    client.metrics = []
+    client.histograms = []
+    client.logs = []
+    client.send_metric = lambda name, value, attributes=None: client.metrics.append(
+        (name, value, attributes)
+    )
+    client.send_histogram = (
+        lambda name, value, attributes=None, **kwargs: client.histograms.append(
+            (name, value, attributes, kwargs)
+        )
+    )
+    client.send_log = (
+        lambda message, severity="INFO", attributes=None: client.logs.append(
+            (message, severity, attributes)
+        )
+    )
+    return client
+
+
 class _TrackedModel(mlops.DeployableModel):
     def tracked_training(self, params=None):
         return {"artifact": "value"}
 
     def live_predict(self, input, params=None, artifacts=None):
         return pd.DataFrame({"y": [1 for _ in range(len(input))]})
+
+
+def test_deployable_model_optional_runtime_providers(monkeypatch):
+    model = _TrackedModel()
+    monkeypatch.delenv(mlops.SECRET_MANAGER_KEYFILE_ENV, raising=False)
+    monkeypatch.delenv(mlops.SECRET_MANAGER_KEYFILE_PW_ENV, raising=False)
+    monkeypatch.setattr(mlops, "get_process_telemetry_client", lambda: None)
+
+    assert model.get_secret_manager() is None
+    assert model.get_telemetry_client() is None
+
+    manager = object()
+    monkeypatch.setenv(mlops.SECRET_MANAGER_KEYFILE_ENV, "encrypted")
+    monkeypatch.setenv(mlops.SECRET_MANAGER_KEYFILE_PW_ENV, "password")
+    monkeypatch.setattr(mlops, "load_secret_manager_from_env", lambda: manager)
+
+    assert model.get_secret_manager() is manager
+
+    with pytest.raises(ValueError, match="Model step names"):
+        with model.model_step("invalid/step"):
+            pass
+
+
+def test_mlops_predict_emits_hierarchical_pipeline_spans(monkeypatch):
+    monkeypatch.setenv("MLFLOW_URI", "https://mlflow.local")
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(sampler=ALWAYS_ON)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    telemetry = _model_telemetry_client(provider)
+    monkeypatch.setattr(
+        mlops,
+        "get_process_telemetry_client",
+        lambda: telemetry,
+    )
+
+    class _PipelineModel(_TrackedModel):
+        def live_predict(self, input, params=None, artifacts=None):
+            with self.model_step("pipeline"):
+                with self.model_step("input.normalize") as step:
+                    normalized = np.asarray(input, dtype=float) / 2.0
+                    step.observe_array("output", normalized)
+                with self.model_step(
+                    "pca.transform",
+                    component="PCA",
+                    component_version=2,
+                ) as step:
+                    transformed = normalized[:, :1] * 3.0
+                    step.observe_array("output", transformed)
+                with self.model_step(
+                    "regression.predict",
+                    component="LinearRegression",
+                    component_version=1,
+                ):
+                    prediction = transformed + 1.0
+            return pd.DataFrame({"prediction": prediction[:, 0]})
+
+    service = mlops.MLFlowDeployableModelService(_PipelineModel(), "LR")
+    invocation = mlops.ModelInvocationContext(
+        pipeline_id="pipeline-run-1",
+        pipeline_name="pca-lr",
+        request_id="request-1",
+        model_name="LR",
+        model_version="4",
+        model_alias="champion",
+    )
+    with mlops.model_invocation_context(invocation):
+        result = service.predict(None, np.array([[2.0, 4.0], [6.0, 8.0]]))
+
+    assert result["prediction"].tolist() == [4.0, 10.0]
+    spans = exporter.get_finished_spans()
+    root = next(span for span in spans if span.name == "mlox.model.live_predict")
+    steps = {
+        span.attributes["mlox.step.path"]: span
+        for span in spans
+        if span.name == "mlox.model.step"
+    }
+    pipeline = steps["LR/pipeline"]
+    normalized = steps["LR/pipeline/input.normalize"]
+    pca = steps["LR/pipeline/pca.transform"]
+    regression = steps["LR/pipeline/regression.predict"]
+
+    assert pipeline.parent.span_id == root.context.span_id
+    assert normalized.parent.span_id == pipeline.context.span_id
+    assert pca.parent.span_id == pipeline.context.span_id
+    assert regression.parent.span_id == pipeline.context.span_id
+    assert pca.attributes["mlox.component.version"] == "2"
+    assert pca.attributes["mlox.observation.output.mean"] == 6.0
+    assert pca.attributes["mlox.pipeline.id"] == "pipeline-run-1"
+    assert telemetry.metrics[0][0] == "mlox.model.predictions"
+    assert telemetry.histograms[0][0] == "mlox.model.prediction.duration"
+    assert telemetry.logs[0][1] == "INFO"
+    assert mlops.current_model_invocation() is None
+
+
+def test_deployable_model_propagates_trace_and_pipeline_headers(monkeypatch):
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(sampler=ALWAYS_ON)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    telemetry = _model_telemetry_client(provider)
+    monkeypatch.setattr(
+        mlops,
+        "get_process_telemetry_client",
+        lambda: telemetry,
+    )
+    invocation = mlops.ModelInvocationContext(
+        pipeline_id="pipeline-1",
+        pipeline_name="pca-lr",
+        request_id="request-1",
+        model_name="LR",
+        model_version="1",
+    )
+
+    with mlops.model_invocation_context(invocation):
+        with telemetry.span("outbound", kind="client"):
+            headers = _TrackedModel().get_outbound_headers()
+
+    assert headers[mlops.PIPELINE_ID_HEADER] == "pipeline-1"
+    assert headers[mlops.PIPELINE_NAME_HEADER] == "pca-lr"
+    assert headers["traceparent"].startswith("00-")
 
 
 def test_mlops_service_tracks_models_and_predicts(monkeypatch, tmp_path):
@@ -56,13 +209,23 @@ def test_mlops_service_tracks_models_and_predicts(monkeypatch, tmp_path):
 
     calls = {"set_tracking_uri": [], "set_registry_uri": [], "set_tag": []}
 
-    monkeypatch.setattr(mlops.mlflow, "set_tracking_uri", lambda v: calls["set_tracking_uri"].append(v))
-    monkeypatch.setattr(mlops.mlflow, "set_registry_uri", lambda v: calls["set_registry_uri"].append(v))
+    monkeypatch.setattr(
+        mlops.mlflow, "set_tracking_uri", lambda v: calls["set_tracking_uri"].append(v)
+    )
+    monkeypatch.setattr(
+        mlops.mlflow, "set_registry_uri", lambda v: calls["set_registry_uri"].append(v)
+    )
     monkeypatch.setattr(mlops.mlflow, "set_experiment", lambda *_: None)
     monkeypatch.setattr(mlops.mlflow, "start_run", lambda **_kwargs: _cm_empty())
-    monkeypatch.setattr(mlops.mlflow, "start_span", lambda *_args, **_kwargs: _cm_span())
-    monkeypatch.setattr(mlops.mlflow.models, "infer_signature", lambda *_args, **_kwargs: "sig")
-    monkeypatch.setattr(mlops.mlflow, "set_tag", lambda k, v: calls["set_tag"].append((k, v)))
+    monkeypatch.setattr(
+        mlops.mlflow, "start_span", lambda *_args, **_kwargs: _cm_span()
+    )
+    monkeypatch.setattr(
+        mlops.mlflow.models, "infer_signature", lambda *_args, **_kwargs: "sig"
+    )
+    monkeypatch.setattr(
+        mlops.mlflow, "set_tag", lambda k, v: calls["set_tag"].append((k, v))
+    )
 
     logged = {}
     model_info = SimpleNamespace(
@@ -178,9 +341,7 @@ def test_mlops_default_code_paths_do_not_package_mlox_sources(monkeypatch):
         assert prepared == []
 
 
-def test_mlops_prepared_code_paths_exclude_cache_directories(
-    monkeypatch, tmp_path
-):
+def test_mlops_prepared_code_paths_exclude_cache_directories(monkeypatch, tmp_path):
     monkeypatch.setenv("MLFLOW_URI", "https://mlflow.local")
     project_dir = tmp_path / "project"
     code_dir = project_dir / "airml"
@@ -244,7 +405,9 @@ def test_serve_run_predict_and_list_models(monkeypatch):
         def predict(self, input_data, params=None):
             return pd.DataFrame({"result": [float(np.sum(input_data))]})
 
-    monkeypatch.setattr(serve.mlflow.pyfunc, "load_model", lambda model_uri: _LoadedModel())
+    monkeypatch.setattr(
+        serve.mlflow.pyfunc, "load_model", lambda model_uri: _LoadedModel()
+    )
     monkeypatch.setattr(
         serve.mlflow.artifacts,
         "download_artifacts",
@@ -305,15 +468,107 @@ def test_serve_exposes_prometheus_metrics_and_request_ids():
 
     assert generated_id_response.status_code == 200
     assert generated_id_response.headers[serve.REQUEST_ID_HEADER]
+    assert generated_id_response.headers[mlops.PIPELINE_ID_HEADER]
     assert (
-        supplied_id_response.headers[serve.REQUEST_ID_HEADER]
-        == "request-from-client"
+        supplied_id_response.headers[serve.REQUEST_ID_HEADER] == "request-from-client"
     )
     assert metrics_response.status_code == 200
     assert metrics_response.headers["content-type"].startswith("text/plain")
     assert "mlox_gateway_http_requests_total" in metrics_response.text
     assert "mlox_gateway_http_request_duration_seconds" in metrics_response.text
     assert "mlox_gateway_model_cache_entries" in metrics_response.text
+
+
+def test_gateway_injects_resolved_model_invocation_context(monkeypatch):
+    captured = {}
+
+    class _LoadedModel:
+        def predict(self, input_data, params=None):
+            captured["context"] = mlops.current_model_invocation()
+            return pd.DataFrame({"prediction": [1.0]})
+
+    monkeypatch.setattr(serve, "_load_model", lambda _uri: (_LoadedModel(), False))
+    client = TestClient(serve.app)
+    response = client.post(
+        "/prod/predict",
+        headers={
+            mlops.PIPELINE_ID_HEADER: "pipeline-run-42",
+            mlops.PIPELINE_NAME_HEADER: "pca-lr",
+            serve.REQUEST_ID_HEADER: "request-42",
+        },
+        json={
+            "input_data": [[1.0, 2.0]],
+            "registry_model_name": "LR",
+            "registry_model_version": 7,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers[mlops.PIPELINE_ID_HEADER] == "pipeline-run-42"
+    assert response.headers[mlops.PIPELINE_NAME_HEADER] == "pca-lr"
+    invocation = captured["context"]
+    assert invocation.pipeline_id == "pipeline-run-42"
+    assert invocation.pipeline_name == "pca-lr"
+    assert invocation.request_id == "request-42"
+    assert invocation.model_name == "LR"
+    assert invocation.model_version == "7"
+    assert mlops.current_model_invocation() is None
+
+
+def test_serve_propagates_trace_context_and_records_http_span(monkeypatch):
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(sampler=ALWAYS_ON)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(serve, "TELEMETRY_CLIENT", _test_telemetry_client(provider))
+    trace_id = "0af7651916cd43dd8448eb211c80319c"
+    client = TestClient(serve.app)
+
+    response = client.get(
+        "/health",
+        headers={
+            "traceparent": f"00-{trace_id}-b7ad6b7169203331-01",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers[serve.TRACE_ID_HEADER] == trace_id
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert format(spans[0].context.trace_id, "032x") == trace_id
+    assert spans[0].attributes["http.route"] == "/health"
+
+
+def test_serve_prediction_span_contains_resolved_model_identity(monkeypatch):
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(sampler=ALWAYS_ON)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(serve, "TELEMETRY_CLIENT", _test_telemetry_client(provider))
+    monkeypatch.setattr(
+        serve,
+        "_predict",
+        lambda _data: {
+            "data": [{"prediction": 1}],
+            "is_cached_model": True,
+            "model": {
+                "resolved_model_version": "7",
+                "resolved_model_uri": "models:/Demo/7",
+            },
+        },
+    )
+    request = serve.PredictionRequest(
+        input_data=[[1.0]],
+        registry_model_name="Demo",
+        registry_model_alias="champion",
+    )
+
+    serve.predict(request)
+
+    span = exporter.get_finished_spans()[0]
+    assert span.name == "model.predict"
+    assert span.attributes["mlox.model.name"] == "Demo"
+    assert span.attributes["mlox.model.requested_alias"] == "champion"
+    assert span.attributes["mlox.model.version"] == "7"
+    assert span.attributes["mlox.model.cache_hit"] is True
 
 
 def test_serve_records_prediction_and_model_cache_metrics(monkeypatch):
@@ -463,7 +718,9 @@ def test_serve_forwards_params_with_dataframe_split(monkeypatch):
             seen["params"] = params
             return pd.DataFrame({"value": [params["top_k"]]})
 
-    monkeypatch.setattr(serve.mlflow.pyfunc, "load_model", lambda model_uri: _LoadedModel())
+    monkeypatch.setattr(
+        serve.mlflow.pyfunc, "load_model", lambda model_uri: _LoadedModel()
+    )
     monkeypatch.setattr(
         serve.mlflow.artifacts,
         "download_artifacts",
@@ -597,21 +854,29 @@ def test_serve_predict_error_mapping(monkeypatch):
         registry_model_version=1,
     )
 
-    monkeypatch.setattr(serve, "runandget", lambda _req: (_ for _ in ()).throw(_RestException("missing")))
+    monkeypatch.setattr(
+        serve,
+        "runandget",
+        lambda _req: (_ for _ in ()).throw(_RestException("missing")),
+    )
     try:
         serve.predict(req)
         assert False, "Expected HTTPException for missing model"
     except Exception as exc:
         assert getattr(exc, "status_code", None) == 404
 
-    monkeypatch.setattr(serve, "runandget", lambda _req: (_ for _ in ()).throw(ValueError("bad input")))
+    monkeypatch.setattr(
+        serve, "runandget", lambda _req: (_ for _ in ()).throw(ValueError("bad input"))
+    )
     try:
         serve.predict(req)
         assert False, "Expected HTTPException for invalid input"
     except Exception as exc:
         assert getattr(exc, "status_code", None) == 400
 
-    monkeypatch.setattr(serve, "runandget", lambda _req: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        serve, "runandget", lambda _req: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
     try:
         serve.predict(req)
         assert False, "Expected HTTPException for internal error"

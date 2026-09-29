@@ -2,7 +2,10 @@ version: "3.8"
 
 services:
   minio:
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z-cpuv1
+    image: mlox-minio:RELEASE.2025-07-23T15-54-02Z
+    build:
+      context: ./minio-build
+    pull_policy: build
     container_name: minio
     command: server /data --console-address ":9001"
     environment:

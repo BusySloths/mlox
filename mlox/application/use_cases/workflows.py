@@ -1,21 +1,13 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from mlox.application.result import OperationResult
 from mlox.config import load_service_config_by_id
-from mlox.secret_manager import (
-    SECRET_MANAGER_KEYFILE_ENV,
-    SECRET_MANAGER_KEYFILE_PW_ENV,
-    get_encrypted_access_keyfile,
-)
 from mlox.service import ServiceCapability
-from mlox.utils import generate_pw
 
 
 GITHUB_REPOSITORY_TEMPLATE_ID = "github-repo-0.1-beta-docker"
-logger = logging.getLogger(__name__)
 
 
 def describe_workflows(infra) -> OperationResult:
@@ -132,187 +124,6 @@ def add_workflow_repository(
     )
 
 
-def describe_workflow_secret_managers(workspace, orchestrator_id: str) -> OperationResult:
-    """Return keyfile-exportable secret managers for workflow env exposure."""
-
-    resolved = _resolve_orchestrator(workspace, orchestrator_id)
-    if not resolved.success:
-        return resolved
-    orchestrator = resolved.data["service"]
-
-    managers: list[dict[str, Any]] = []
-    list_managers = getattr(workspace, "list_secret_managers", None)
-    probe_manager = getattr(workspace, "probe_secret_manager", None)
-    if not callable(list_managers) or not callable(probe_manager):
-        return OperationResult(False, 89, "Project workspace cannot list secret managers.")
-
-    for descriptor in list_managers():
-        manager_id = str(getattr(descriptor, "id", "") or "")
-        if not manager_id:
-            continue
-        try:
-            probed = probe_manager(manager_id)
-        except Exception as exc:
-            managers.append(
-                {
-                    "id": manager_id,
-                    "name": str(getattr(descriptor, "name", manager_id)),
-                    "kind": str(getattr(descriptor, "kind", "-")),
-                    "available": False,
-                    "supports_keyfile_export": False,
-                    "message": str(exc),
-                }
-            )
-            continue
-        available = bool(getattr(probed, "is_available", False))
-        supports = bool(getattr(probed, "supports_keyfile_export", False))
-        if not available or not supports:
-            continue
-        managers.append(
-            {
-                "id": manager_id,
-                "name": str(getattr(probed, "name", manager_id)),
-                "kind": str(getattr(probed, "kind", "-")),
-                "available": available,
-                "supports_keyfile_export": supports,
-                "selected": manager_id
-                == str(getattr(orchestrator, "workflow_secret_manager_uuid", "") or ""),
-                "message": "",
-            }
-        )
-
-    return OperationResult(
-        True,
-        0,
-        "Workflow secret managers loaded."
-        if managers
-        else "No keyfile-exportable secret managers found.",
-        {
-            "managers": managers,
-            "selected_manager_id": str(
-                getattr(orchestrator, "workflow_secret_manager_uuid", "") or ""
-            ),
-        },
-    )
-
-
-def expose_secret_manager_to_workflow_orchestrator(
-    workspace,
-    orchestrator_id: str,
-    manager_id: str,
-) -> OperationResult:
-    """Expose one selected secret manager to an orchestrator through env vars."""
-
-    resolved = _resolve_orchestrator(workspace, orchestrator_id)
-    if not resolved.success:
-        return resolved
-    bundle = resolved.data["bundle"]
-    orchestrator = resolved.data["service"]
-
-    probe_manager = getattr(workspace, "probe_secret_manager", None)
-    if not callable(probe_manager):
-        return OperationResult(False, 89, "Project workspace cannot list secret managers.")
-    try:
-        descriptor = probe_manager(manager_id)
-    except Exception as exc:
-        return OperationResult(False, 90, f"Secret manager is unavailable: {exc}")
-    if not getattr(descriptor, "is_available", False):
-        return OperationResult(False, 91, "Selected secret manager is unavailable.")
-    if not getattr(descriptor, "supports_keyfile_export", False):
-        return OperationResult(
-            False,
-            92,
-            "Selected secret manager cannot export keyfile credentials.",
-        )
-    manager = getattr(descriptor, "manager", None)
-    if manager is None:
-        return OperationResult(False, 91, "Selected secret manager is unavailable.")
-
-    password = generate_pw(16)
-    application_name = f"airflow-{orchestrator_id}"
-    service = getattr(descriptor, "service", None)
-    create_keyfile_manager = getattr(service, "create_keyfile_secret_manager", None)
-    application_credential_created = False
-    if callable(create_keyfile_manager):
-        try:
-            manager = create_keyfile_manager(
-                getattr(workspace, "infrastructure", None),
-                application_name=application_name,
-                period="7d",
-            )
-            credentials = getattr(service, "application_credentials", {}) or {}
-            if application_name in credentials:
-                credentials[application_name]["keyfile_password"] = password
-            application_credential_created = True
-        except Exception as exc:
-            return OperationResult(
-                False,
-                93,
-                f"Could not create application credential: {exc}",
-            )
-
-    try:
-        keyfile = get_encrypted_access_keyfile(manager, password)
-    except Exception as exc:
-        return OperationResult(False, 94, f"Could not export secret-manager keyfile: {exc}")
-
-    setter = getattr(orchestrator, "set_workflow_secret_manager_env", None)
-    if not callable(setter):
-        return OperationResult(
-            False,
-            95,
-            "Selected orchestrator cannot expose secret-manager credentials.",
-        )
-
-    previous_uuid = getattr(orchestrator, "workflow_secret_manager_uuid", None)
-    previous_env = dict(getattr(orchestrator, "workflow_secret_manager_env", {}) or {})
-    try:
-        with bundle.server.get_server_connection() as conn:
-            setter(
-                conn,
-                manager_uuid=manager_id,
-                encrypted_keyfile=keyfile,
-                keyfile_password=password,
-            )
-    except Exception:
-        logger.exception("Could not deploy workflow secret-manager configuration.")
-        if hasattr(orchestrator, "workflow_secret_manager_uuid"):
-            orchestrator.workflow_secret_manager_uuid = previous_uuid
-        if hasattr(orchestrator, "workflow_secret_manager_env"):
-            orchestrator.workflow_secret_manager_env = previous_env
-        revoke = getattr(service, "revoke_application_credential", None)
-        if application_credential_created and callable(revoke):
-            try:
-                revoke(application_name, getattr(workspace, "infrastructure", None))
-            except Exception:
-                logger.exception(
-                    "Could not roll back workflow application credential %s.",
-                    application_name,
-                )
-        return OperationResult(
-            False,
-            96,
-            "Could not deploy secret-manager configuration to the workflow service.",
-        )
-    commit = getattr(workspace, "commit", None)
-    if callable(commit):
-        commit()
-
-    return OperationResult(
-        True,
-        0,
-        f"Exposed {getattr(descriptor, 'name', manager_id)} to {orchestrator.name}.",
-        {
-            "manager_id": manager_id,
-            "orchestrator_id": orchestrator_id,
-            "env": {
-                SECRET_MANAGER_KEYFILE_ENV: "hidden",
-                SECRET_MANAGER_KEYFILE_PW_ENV: "hidden",
-            },
-        },
-    )
-
-
 def _resolve_orchestrator(workspace, orchestrator_id: str) -> OperationResult:
     selected_id = str(orchestrator_id).strip()
     if not selected_id:
@@ -425,12 +236,9 @@ def _orchestrator_row(bundle, service) -> dict[str, Any]:
         "active_workflow_count": 0,
         "paused_workflow_count": 0,
         "repository_count": len(workflow_repositories),
-        "workflow_secret_manager_uuid": str(
-            getattr(service, "workflow_secret_manager_uuid", "") or ""
-        ),
-        "secret_manager_status": "Exposed"
-        if getattr(service, "workflow_secret_manager_uuid", None)
-        else "Not exposed",
+        "secret_manager_status": "Connected"
+        if getattr(service, "secret_manager_uuid", None)
+        else "Not connected",
         "message": "",
         "service_ref": service,
         "bundle_ref": bundle,

@@ -408,6 +408,7 @@ dev = [
     { name = "influxdb" },
     { name = "mlflow" },
     { name = "mlserver" },
+    { name = "multipass-sdk" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "opentelemetry-api" },
@@ -479,6 +480,7 @@ requires-dist = [
     { name = "kafka-python-ng", specifier = ">=2.2.3" },
     { name = "mlflow", marker = "extra == 'dev'", specifier = ">=3.8.1" },
     { name = "mlserver", marker = "extra == 'dev'", specifier = ">=1.7.1" },
+    { name = "multipass-sdk", marker = "extra == 'dev'", git = "https://github.com/okyanusoz/multipass-sdk.git?rev=main" },
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26" },
     { name = "opentelemetry-api", marker = "extra == 'dev'", specifier = ">=1.33.1" },
     { name = "opentelemetry-exporter-otlp", marker = "extra == 'dev'", specifier = ">=1.33.1" },
@@ -1512,6 +1514,15 @@ wheels = [
 ]
 
 [[package]]
+name = "haikunator"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/af/58/6a000ee0ec34cac5c78669359a8b1db969f1f511454a140ad3d193714ba2/haikunator-2.1.0.zip", hash = "sha256:91ee3949a3a613cac037ddde0b16b17062e248376b11491436e49d5ddc75ff9b", size = 4933, upload-time = "2016-09-20T17:36:00.843Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/fa/130968f1a1bb1461c287b9ff35c630460801783243acda2cbf3a4c5964a5/haikunator-2.1.0-py2.py3-none-any.whl", hash = "sha256:66f68b15345b279f78a5fffd4ab56cfb19a9dbb1f41b7f442472efd4cb83458e", size = 4595, upload-time = "2016-09-20T17:35:58.142Z" },
+]
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -2282,6 +2293,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/80/31/0b2517913687895f5904325c2069d6a3b78f66cc641a86a2baf75a05dcbb/multidict-6.7.1-cp312-cp312-win_amd64.whl", hash = "sha256:fcee94dfbd638784645b066074b338bc9cc155d4b4bffa4adce1615c5a426c19", size = 46053, upload-time = "2026-01-26T02:44:15.371Z" },
     { url = "https://files.pythonhosted.org/packages/0c/5b/aba28e4ee4006ae4c7df8d327d31025d760ffa992ea23812a601d226e682/multidict-6.7.1-cp312-cp312-win_arm64.whl", hash = "sha256:ba0a9fb644d0c1a2194cf7ffb043bd852cea63a57f66fbd33959f7dae18517bf", size = 43307, upload-time = "2026-01-26T02:44:16.852Z" },
     { url = "https://files.pythonhosted.org/packages/81/08/7036c080d7117f28a4af526d794aab6a84463126db031b007717c1a6676e/multidict-6.7.1-py3-none-any.whl", hash = "sha256:55d97cc6dae627efa6a6e548885712d4864b81110ac76fa4e534c03819fa4a56", size = 12319, upload-time = "2026-01-26T02:46:44.004Z" },
+]
+
+[[package]]
+name = "multipass-sdk"
+version = "0.2"
+source = { git = "https://github.com/okyanusoz/multipass-sdk.git?rev=main#7a993a971f2d705d3fc737c9fb99d776cb3a105f" }
+dependencies = [
+    { name = "haikunator" },
 ]
 
 [[package]]

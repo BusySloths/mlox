@@ -30,6 +30,7 @@ capabilities:
   - web_ui
   - workflow_orchestrator
   - health
+  - secret_manager_binding
   backend:
   - docker
 ports:

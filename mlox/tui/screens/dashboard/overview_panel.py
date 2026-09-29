@@ -15,6 +15,7 @@ from textual.renderables.digits import Digits as DigitsRenderable
 
 from mlox.application.use_cases.firewall import firewall_summary_for_bundle
 from mlox.application.use_cases.project import summarize_infrastructure
+from mlox.service import ServiceCapability
 
 from .model import (
     SelectionInfo,
@@ -259,6 +260,24 @@ class OverviewPanel(Static):
         template_id = getattr(service, "service_config_id", "-")
         table.add_row("Template", template_id)
         table.add_row("UUID", str(getattr(service, "uuid", "-")))
+        capabilities = set(get_service_capabilities(service))
+        if ServiceCapability.SECRET_MANAGER_BINDING.value in capabilities:
+            table.add_row(
+                "Secret Manager",
+                self._runtime_provider_summary(
+                    service,
+                    getattr(service, "secret_manager_uuid", None),
+                    include_credential=True,
+                ),
+            )
+        if ServiceCapability.TELEMETRY_BINDING.value in capabilities:
+            table.add_row(
+                "Telemetry",
+                self._runtime_provider_summary(
+                    service,
+                    getattr(service, "telemetry_uuid", None),
+                ),
+            )
         table.add_row(
             "Ports", self._format_ports(getattr(service, "service_ports", None))
         )
@@ -279,6 +298,40 @@ class OverviewPanel(Static):
                 border_style="green",
             )
         )
+
+    def _runtime_provider_summary(
+        self,
+        service: object,
+        provider_uuid: str | None,
+        *,
+        include_credential: bool = False,
+    ) -> str:
+        provider_uuid = str(provider_uuid or "")
+        if not provider_uuid:
+            return "Not connected"
+
+        lookup = getattr(service, "_service_lookup", None)
+        get_service = getattr(lookup, "get_service_by_uuid", None)
+        provider = get_service(provider_uuid) if callable(get_service) else None
+        if provider is None:
+            return f"UUID: {provider_uuid}\nProvider unavailable"
+
+        lines = [
+            f"Name: {getattr(provider, 'name', '-')}",
+            f"UUID: {provider_uuid}",
+        ]
+        get_bundle = getattr(lookup, "get_bundle_by_service", None)
+        provider_bundle = get_bundle(provider) if callable(get_bundle) else None
+        provider_server = getattr(provider_bundle, "server", None)
+        lines.append(f"Server: {getattr(provider_server, 'ip', '-')}")
+
+        if include_credential:
+            get_label = getattr(provider, "get_secret_manager_binding_label", None)
+            binding_id = str(getattr(service, "uuid", "") or "")
+            credential = get_label(binding_id) if callable(get_label) else None
+            if credential:
+                lines.append(f"Credential: {credential}")
+        return "\n".join(lines)
 
     def _server_resource_rows(self, server: object) -> list[tuple[str, str]]:
         get_info = getattr(server, "get_server_info", None)

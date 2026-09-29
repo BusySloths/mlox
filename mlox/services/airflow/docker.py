@@ -26,12 +26,9 @@ import urllib.request
 from typing import Any, Dict
 from dataclasses import dataclass, field
 
-from mlox.secret_manager import (
-    SECRET_MANAGER_KEYFILE_ENV,
-    SECRET_MANAGER_KEYFILE_PW_ENV,
-)
 from mlox.service import (
     AbstractHealthService,
+    AbstractSecretManagerBindingService,
     AbstractService,
     AbstractWebUIService,
     AbstractWorkflowOrchestratorService,
@@ -46,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AirflowDockerService(
+    AbstractSecretManagerBindingService,
     AbstractService,
     AbstractHealthService,
     AbstractWebUIService,
@@ -55,6 +53,7 @@ class AirflowDockerService(
         ServiceCapability.WORKFLOW_ORCHESTRATOR,
         ServiceCapability.WEB_UI,
         ServiceCapability.HEALTH,
+        ServiceCapability.SECRET_MANAGER_BINDING,
     }
     web_ui_url_label = "Airflow UI"
     web_ui_login_fields = ("username", "password")
@@ -67,10 +66,6 @@ class AirflowDockerService(
     secret_key: str = field(
         default="9d54873d8b53466dbcfd00a2bb9a104caa8071143f864aa88c36d3f5a8c8615f",
         init=False,
-    )
-    workflow_secret_manager_uuid: str | None = field(default=None, init=False)
-    workflow_secret_manager_env: Dict[str, str] = field(
-        default_factory=dict, init=False
     )
     compose_service_names: Dict[str, str] = field(
         init=False,
@@ -88,7 +83,12 @@ class AirflowDockerService(
     )
 
     def __str__(self):
-        return f"AirflowDockerService(path_dags={self.path_dags}, path_output={self.path_output}, ui_user={self.ui_user}, ui_pw={self.ui_pw}, port={self.port}, secret_path={self.secret_path})"
+        return (
+            "AirflowDockerService("
+            f"path_dags={self.path_dags}, path_output={self.path_output}, "
+            f"ui_user={self.ui_user}, ui_pw={self.ui_pw}, port={self.port}, "
+            f"secret_path={self.secret_path})"
+        )
 
     def setup(self, conn) -> None:
         # copy files to target
@@ -137,7 +137,10 @@ class AirflowDockerService(
             conn, env_path, f"_AIRFLOW_DAGS_FILE_PATH={self.path_dags}"
         )
         self.exec.fs_append_line(conn, env_path, "_AIRFLOW_LOAD_EXAMPLES=false")
-        self._write_workflow_secret_manager_env(conn, env_path)
+        if self.secret_manager_uuid:
+            environment = self.get_bound_secret_manager_env_binding()
+            if environment is not None:
+                self._update_secret_manager_environment(conn, environment)
         self.service_urls["Airflow UI"] = base_url
         self.service_ports["Airflow Webserver"] = int(self.port)
 
@@ -249,49 +252,30 @@ class AirflowDockerService(
             )
         return workflows
 
-    def set_workflow_secret_manager_env(
+    def _apply_secret_manager_binding(
         self,
         conn,
         *,
         manager_uuid: str,
-        encrypted_keyfile: str,
-        keyfile_password: str,
+        environment: Dict[str, str],
     ) -> None:
-        """Expose a secret-manager keyfile to DAGs through Airflow env vars."""
+        """Expose a provider-generated environment to every Airflow container."""
 
-        self.workflow_secret_manager_uuid = manager_uuid
-        self.workflow_secret_manager_env = {
-            SECRET_MANAGER_KEYFILE_ENV: encrypted_keyfile,
-            SECRET_MANAGER_KEYFILE_PW_ENV: keyfile_password,
-        }
-        env_path = f"{self.target_path}/{self.target_docker_env}"
-        self._write_workflow_secret_manager_compose(conn)
-        self._write_workflow_secret_manager_env(conn, env_path)
+        self._update_secret_manager_environment(conn, environment)
         self.compose_up(conn)
 
-    def _write_workflow_secret_manager_compose(self, conn) -> None:
-        """Refresh compose file so existing stacks get env pass-through entries."""
+    def _remove_secret_manager_binding(self, conn) -> None:
+        self._update_secret_manager_environment(conn, None)
+        self.compose_up(conn)
 
-        template = self.resolve_asset(self.template)
-        self.exec.fs_copy(
-            conn,
-            str(template),
-            f"{self.target_path}/{self.target_docker_script}",
-        )
+    def _update_secret_manager_environment(
+        self,
+        conn,
+        environment: Dict[str, str] | None,
+    ) -> None:
+        """Replace the provider-owned environment block without interpreting it."""
 
-    def _write_workflow_secret_manager_env(self, conn, env_path: str) -> None:
-        if not self.workflow_secret_manager_env:
-            return
-        managed = {
-            f"_{SECRET_MANAGER_KEYFILE_ENV}": self.workflow_secret_manager_env.get(
-                SECRET_MANAGER_KEYFILE_ENV,
-                "",
-            ),
-            f"_{SECRET_MANAGER_KEYFILE_PW_ENV}": self.workflow_secret_manager_env.get(
-                SECRET_MANAGER_KEYFILE_PW_ENV,
-                "",
-            ),
-        }
+        env_path = f"{self.target_path}/{self.target_docker_env}"
         existing = ""
         try:
             existing = str(
@@ -299,13 +283,27 @@ class AirflowDockerService(
             )
         except Exception:
             existing = ""
-        lines = [
-            line
-            for line in existing.splitlines()
-            if not any(line.startswith(f"{key}=") for key in managed)
-        ]
-        lines.extend(f"{key}={value}" for key, value in managed.items())
-        self.exec.fs_write_file(conn, env_path, "\n".join(lines) + "\n")
+        start_marker = "# mlox:secret-manager:begin"
+        end_marker = "# mlox:secret-manager:end"
+        lines = []
+        in_binding = False
+        for line in existing.splitlines():
+            if line == start_marker:
+                in_binding = True
+                continue
+            if line == end_marker:
+                in_binding = False
+                continue
+            if not in_binding:
+                lines.append(line)
+        if environment:
+            lines.append(start_marker)
+            lines.extend(f"{key}={value}" for key, value in environment.items())
+            lines.append(end_marker)
+        content = "\n".join(lines)
+        if content:
+            content += "\n"
+        self.exec.fs_write_file(conn, env_path, content)
 
     def _latest_dag_run(self, dag_id: str) -> dict[str, Any]:
         encoded_dag_id = urllib.parse.quote(dag_id, safe="")

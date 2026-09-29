@@ -12,7 +12,10 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
+    image: mlox-minio:RELEASE.2025-07-23T15-54-02Z
+    build:
+      context: ./minio-build
+    pull_policy: build
     container_name: milvus-minio
     command: server /data --console-address ":9001"
     environment:

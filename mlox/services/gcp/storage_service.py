@@ -1,6 +1,6 @@
 import logging
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, cast
 
 from mlox.service import AbstractSecretManagerService
@@ -20,7 +20,7 @@ logging.basicConfig(
 class GCPStorageService(AbstractService):
     capabilities = {ServiceCapability.OBJECT_STORAGE}
     secret_name: str
-    secret_manager_uuid: str
+    secret_manager_uuid: str = field(kw_only=True)
 
     def __post_init__(self):
         self.state = "running"

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 
-from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
-from mlox.services.otel.client import OTelClient
+import pytest
 
+from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
+from mlox.services.otel import client as otel_client_module
+from mlox.services.otel.client import OTelClient
 
 BASE = {
     "name": "svc",
@@ -80,7 +83,9 @@ def test_mlflow3_docker_service_setup_check_and_models(monkeypatch):
     monkeypatch.setattr(
         "mlox.services.mlflow.docker_mlflow3.mlflow.set_registry_uri", lambda *_: None
     )
-    monkeypatch.setattr("mlox.services.mlflow.docker_mlflow3.mlflow.tracking", _Tracking)
+    monkeypatch.setattr(
+        "mlox.services.mlflow.docker_mlflow3.mlflow.tracking", _Tracking
+    )
 
     status = service.check(conn)
     assert status["status"] == "running"
@@ -258,21 +263,38 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
     meter = _Meter()
     tracer = _Tracer()
 
-    monkeypatch.setattr("mlox.services.otel.client.grpc.ssl_channel_credentials", lambda root_certificates: "ssl-creds")
+    monkeypatch.setattr(
+        "mlox.services.otel.client.grpc.ssl_channel_credentials",
+        lambda root_certificates: "ssl-creds",
+    )
     monkeypatch.setattr("mlox.services.otel.client.OTLPMetricExporter", _Exporter)
     monkeypatch.setattr("mlox.services.otel.client.OTLPSpanExporter", _Exporter)
     monkeypatch.setattr("mlox.services.otel.client.OTLPLogExporter", _Exporter)
-    monkeypatch.setattr("mlox.services.otel.client.PeriodicExportingMetricReader", _Reader)
+    monkeypatch.setattr(
+        "mlox.services.otel.client.PeriodicExportingMetricReader", _Reader
+    )
     monkeypatch.setattr("mlox.services.otel.client.MeterProvider", _MeterProvider)
     monkeypatch.setattr("mlox.services.otel.client.TracerProvider", _TracerProvider)
-    monkeypatch.setattr("mlox.services.otel.client.BatchSpanProcessor", _BatchSpanProcessor)
-    monkeypatch.setattr("mlox.services.otel.client.BatchLogRecordProcessor", _BatchLogRecordProcessor)
+    monkeypatch.setattr(
+        "mlox.services.otel.client.BatchSpanProcessor", _BatchSpanProcessor
+    )
+    monkeypatch.setattr(
+        "mlox.services.otel.client.BatchLogRecordProcessor", _BatchLogRecordProcessor
+    )
     monkeypatch.setattr("mlox.services.otel.client.LoggerProvider", _LoggerProvider)
     monkeypatch.setattr("mlox.services.otel.client.LoggingHandler", _LoggingHandler)
-    monkeypatch.setattr("mlox.services.otel.client.metrics.set_meter_provider", lambda provider: None)
-    monkeypatch.setattr("mlox.services.otel.client.metrics.get_meter", lambda name: meter)
-    monkeypatch.setattr("mlox.services.otel.client.trace.set_tracer_provider", lambda provider: None)
-    monkeypatch.setattr("mlox.services.otel.client.trace.get_tracer", lambda name: tracer)
+    monkeypatch.setattr(
+        "mlox.services.otel.client.metrics.set_meter_provider", lambda provider: None
+    )
+    monkeypatch.setattr(
+        "mlox.services.otel.client.metrics.get_meter", lambda name: meter
+    )
+    monkeypatch.setattr(
+        "mlox.services.otel.client.trace.set_tracer_provider", lambda provider: None
+    )
+    monkeypatch.setattr(
+        "mlox.services.otel.client.trace.get_tracer", lambda name: tracer
+    )
 
     client = OTelClient(
         collector_url="collector:4317",
@@ -393,19 +415,31 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
     monkeypatch.setattr("mlox.services.otel.client.OTLPMetricExporter", _Exporter)
     monkeypatch.setattr("mlox.services.otel.client.OTLPSpanExporter", _Exporter)
     monkeypatch.setattr("mlox.services.otel.client.OTLPLogExporter", _Exporter)
-    monkeypatch.setattr("mlox.services.otel.client.PeriodicExportingMetricReader", _Reader)
+    monkeypatch.setattr(
+        "mlox.services.otel.client.PeriodicExportingMetricReader", _Reader
+    )
     monkeypatch.setattr("mlox.services.otel.client.MeterProvider", _MeterProvider)
     monkeypatch.setattr("mlox.services.otel.client.TracerProvider", _TracerProvider)
-    monkeypatch.setattr("mlox.services.otel.client.BatchSpanProcessor", _BatchSpanProcessor)
+    monkeypatch.setattr(
+        "mlox.services.otel.client.BatchSpanProcessor", _BatchSpanProcessor
+    )
     monkeypatch.setattr(
         "mlox.services.otel.client.BatchLogRecordProcessor", _BatchLogRecordProcessor
     )
     monkeypatch.setattr("mlox.services.otel.client.LoggerProvider", _LoggerProvider)
     monkeypatch.setattr("mlox.services.otel.client.LoggingHandler", _LoggingHandler)
-    monkeypatch.setattr("mlox.services.otel.client.metrics.set_meter_provider", lambda provider: None)
-    monkeypatch.setattr("mlox.services.otel.client.metrics.get_meter", lambda name: _Meter())
-    monkeypatch.setattr("mlox.services.otel.client.trace.set_tracer_provider", lambda provider: None)
-    monkeypatch.setattr("mlox.services.otel.client.trace.get_tracer", lambda name: object())
+    monkeypatch.setattr(
+        "mlox.services.otel.client.metrics.set_meter_provider", lambda provider: None
+    )
+    monkeypatch.setattr(
+        "mlox.services.otel.client.metrics.get_meter", lambda name: _Meter()
+    )
+    monkeypatch.setattr(
+        "mlox.services.otel.client.trace.set_tracer_provider", lambda provider: None
+    )
+    monkeypatch.setattr(
+        "mlox.services.otel.client.trace.get_tracer", lambda name: object()
+    )
 
     service_secrets = {
         "otel_client_connection": {
@@ -425,3 +459,90 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
     assert client.metric_exporter.kwargs["endpoint"] == "https://collector.example:4317"
     assert client.metric_exporter.kwargs["credentials"] == "ssl-creds"
     assert client.metric_exporter.kwargs["insecure"] is False
+
+
+def test_otel_client_from_env_reads_standard_grpc_configuration(monkeypatch, tmp_path):
+    certificate = tmp_path / "otel-ca.pem"
+    certificate.write_bytes(b"certificate-data")
+    captured = {}
+
+    def fake_init(self, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(OTelClient, "__init__", fake_init)
+
+    client = OTelClient.from_env(
+        {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector:4317",
+            "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+            "OTEL_EXPORTER_OTLP_CERTIFICATE": str(certificate),
+            "OTEL_EXPORTER_OTLP_INSECURE": "false",
+        },
+        resource_attrs={"service.name": "gateway"},
+    )
+
+    assert isinstance(client, OTelClient)
+    assert captured == {
+        "otel_secret": {
+            "collector_url": "https://collector:4317",
+            "trusted_certs": b"certificate-data",
+            "insecure_tls": False,
+        },
+        "resource_attrs": {"service.name": "gateway"},
+    }
+    assert OTelClient.from_env({}) is None
+    with pytest.raises(ValueError, match="Unsupported OTLP protocol"):
+        OTelClient.from_env(
+            {
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector:4318",
+                "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+            }
+        )
+
+
+def test_otel_client_from_env_reads_base64_certificate_content(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        OTelClient,
+        "__init__",
+        lambda self, **kwargs: captured.update(kwargs),
+    )
+
+    client = OTelClient.from_env(
+        {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector:4317",
+            "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64": "Y2VydGlmaWNhdGU=",
+        }
+    )
+
+    assert isinstance(client, OTelClient)
+    assert captured["otel_secret"]["trusted_certs"] == b"certificate"
+
+
+def test_otel_client_attaches_application_logger_only_once():
+    client = object.__new__(OTelClient)
+    client.logging_handler = logging.NullHandler()
+    application_logger = logging.getLogger("test.otel.application")
+    application_logger.handlers.clear()
+
+    client.attach_logging_handler(application_logger)
+    client.attach_logging_handler(application_logger)
+
+    assert application_logger.handlers == [client.logging_handler]
+
+
+def test_get_telemetry_client_initializes_only_once(monkeypatch):
+    client = object()
+    calls = []
+    monkeypatch.setattr(otel_client_module, "_TELEMETRY_CLIENT", None)
+    monkeypatch.setattr(otel_client_module, "_TELEMETRY_CLIENT_INITIALIZED", False)
+    monkeypatch.setattr(
+        OTelClient,
+        "from_env",
+        lambda: calls.append("from-env") or client,
+    )
+
+    assert otel_client_module.get_telemetry_client() is client
+    assert otel_client_module.get_telemetry_client() is client
+    assert calls == ["from-env"]

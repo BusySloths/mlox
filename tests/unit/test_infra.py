@@ -3,7 +3,12 @@ from types import SimpleNamespace
 from typing import Any, ClassVar
 
 from mlox.infra import Bundle, Infrastructure
-from mlox.service import AbstractService
+from mlox.service import (
+    AbstractSecretManagerBindingService,
+    AbstractService,
+    AbstractTelemetryBindingService,
+    ServiceCapability,
+)
 from mlox.server import AbstractServer, ServerCapability
 from mlox.services.github.service import GithubRepoService
 
@@ -90,6 +95,30 @@ class DummyService(AbstractService):
 
     def get_secrets(self) -> dict[str, dict]:
         return {}
+
+
+@dataclass
+class BoundDummyService(
+    AbstractSecretManagerBindingService,
+    AbstractTelemetryBindingService,
+    DummyService,
+):
+    capabilities = {
+        ServiceCapability.SECRET_MANAGER_BINDING,
+        ServiceCapability.TELEMETRY_BINDING,
+    }
+
+    def _apply_secret_manager_binding(self, conn, **kwargs) -> None:
+        pass
+
+    def _remove_secret_manager_binding(self, conn) -> None:
+        pass
+
+    def _apply_telemetry_binding(self, conn, **kwargs) -> None:
+        pass
+
+    def _remove_telemetry_binding(self, conn) -> None:
+        pass
 
 
 def make_service(name: str, config_id: str, uuid: str) -> DummyService:
@@ -323,3 +352,25 @@ def test_from_dict_accepts_legacy_string_boolean_service_fields():
     restored_service = restored.bundles[0].services[0]
     assert isinstance(restored_service, GithubRepoService)
     assert restored_service.is_private is True
+
+
+def test_service_provider_bindings_survive_infrastructure_round_trip():
+    server = make_server(DummyServer, "10.0.0.1")
+    service = BoundDummyService(
+        name="consumer",
+        service_config_id="consumer",
+        template="consumer.yaml",
+        target_path="/consumer",
+        secret_manager_uuid="secret-provider-uuid",
+        telemetry_uuid="telemetry-provider-uuid",
+    )
+    bundle = Bundle(name="repo-bundle", server=server)
+    bundle.services = [service]
+    infra = make_infra(bundles=[bundle])
+
+    restored = Infrastructure.from_dict(infra.to_dict(), configs=[])
+
+    restored_service = restored.bundles[0].services[0]
+    assert restored_service.secret_manager_uuid == "secret-provider-uuid"
+    assert restored_service.telemetry_uuid == "telemetry-provider-uuid"
+    assert not hasattr(restored_service, "_secret_manager_cache")

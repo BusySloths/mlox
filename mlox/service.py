@@ -24,6 +24,7 @@ import uuid
 import string
 import inspect
 import logging
+import secrets
 import textwrap
 from importlib import resources
 from pathlib import Path
@@ -92,11 +93,13 @@ class ServiceCapability(StrEnum):
     HEALTH = "health"
     WEB_UI = "web_ui"
     SECRET_MANAGER = "secret_manager"
+    SECRET_MANAGER_BINDING = "secret_manager_binding"
     REPOSITORY = "repository"
     MODEL_REGISTRY = "model_registry"
     MODEL_SERVER = "model_server"
     MONITOR = "monitor"
     OBSERVABILITY = "observability"
+    TELEMETRY_BINDING = "telemetry_binding"
     DATA_WAREHOUSE = "data_warehouse"
     OBJECT_STORAGE = "object_storage"
     SPREADSHEET = "spreadsheet"
@@ -166,6 +169,57 @@ class AbstractSecretManagerService(ABC):
     @abstractmethod
     def get_secret_manager(self, infra: "Infrastructure") -> "AbstractSecretManager":
         """Return an AbstractSecretManager client for this service."""
+        pass
+
+    def get_secret_manager_env_binding(
+        self, binding_id: str | None = None
+    ) -> Dict[str, str]:
+        """Return shared or binding-specific environment configuration."""
+
+        manager = self.get_secret_manager(getattr(self, "_service_lookup", None))
+        return self._build_secret_manager_env_binding(manager)
+
+    def revoke_secret_manager_env_binding(
+        self, binding_id: str | None = None
+    ) -> None:
+        """Revoke exported access when supported by the provider."""
+
+    def get_secret_manager_binding_label(self, binding_id: str) -> str | None:
+        """Return a provider-specific credential label when one is available."""
+
+        return None
+
+    @staticmethod
+    def _build_secret_manager_env_binding(
+        manager: "AbstractSecretManager",
+    ) -> Dict[str, str]:
+        """Encode a secret-manager client as the standard MLOX environment."""
+
+        from mlox.secret_manager import (
+            SECRET_MANAGER_KEYFILE_ENV,
+            SECRET_MANAGER_KEYFILE_PW_ENV,
+            get_encrypted_access_keyfile,
+        )
+
+        password = secrets.token_urlsafe(32)
+        return {
+            SECRET_MANAGER_KEYFILE_ENV: get_encrypted_access_keyfile(
+                manager, password
+            ),
+            SECRET_MANAGER_KEYFILE_PW_ENV: password,
+        }
+
+
+class AbstractObservabilityService(ABC):
+    """Service capability for providers that accept application telemetry."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {
+        ServiceCapability.OBSERVABILITY
+    }
+
+    @abstractmethod
+    def get_telemetry_env_binding(self) -> Dict[str, str]:
+        """Return the environment required to export telemetry to this service."""
         pass
 
 
@@ -371,6 +425,190 @@ class ServiceLookup(Protocol):
     def get_service_by_uuid(self, service_uuid: str) -> Optional["AbstractService"]: ...
 
     def get_service_by_name(self, service_name: str) -> Optional["AbstractService"]: ...
+
+
+@dataclass(kw_only=True)
+class AbstractSecretManagerBindingService(ABC):
+    """Opt-in capability for services accepting a secret-manager binding."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {
+        ServiceCapability.SECRET_MANAGER_BINDING
+    }
+    secret_manager_uuid: str | None = None
+
+    def _get_secret_manager_provider(
+        self, manager_uuid: str
+    ) -> AbstractSecretManagerService:
+        provider = self.get_dependent_service(  # type: ignore[attr-defined]
+            manager_uuid,
+            required_type=AbstractSecretManagerService,
+            required_capabilities={ServiceCapability.SECRET_MANAGER},
+        )
+        if provider is None:
+            raise ValueError(f"Secret-manager service {manager_uuid!r} was not found.")
+        return provider
+
+    def get_bound_secret_manager_env_binding(self) -> Dict[str, str] | None:
+        """Return the environment exported by the configured provider."""
+
+        manager_uuid = self.secret_manager_uuid
+        if manager_uuid is None:
+            return None
+        provider = self._get_secret_manager_provider(manager_uuid)
+        binding_id = str(getattr(self, "uuid", "") or "")
+        environment = provider.get_secret_manager_env_binding(binding_id)
+        if not isinstance(environment, dict):
+            raise TypeError("Secret-manager environment binding must be a dictionary.")
+        return {str(key): str(value) for key, value in environment.items()}
+
+    def bind_secret_manager(self, manager_uuid: str, conn) -> None:
+        """Bind a secret-manager provider and expose it to the deployment."""
+
+        manager_uuid = str(manager_uuid).strip()
+        if not manager_uuid:
+            raise ValueError("Secret-manager UUID must not be empty.")
+        previous_uuid = self.secret_manager_uuid
+        if manager_uuid == previous_uuid:
+            return
+        self.secret_manager_uuid = manager_uuid
+        try:
+            if self.state != "un-initialized":  # type: ignore[attr-defined]
+                environment = self.get_bound_secret_manager_env_binding()
+                self._apply_secret_manager_binding(
+                    conn,
+                    manager_uuid=manager_uuid,
+                    environment=environment or {},
+                )
+        except Exception:
+            try:
+                provider = self._get_secret_manager_provider(manager_uuid)
+                provider.revoke_secret_manager_env_binding(
+                    str(getattr(self, "uuid", "") or "")
+                )
+            except Exception:
+                logger.warning(
+                    "Could not roll back secret-manager credential for %s.",
+                    manager_uuid,
+                    exc_info=True,
+                )
+            self.secret_manager_uuid = previous_uuid
+            raise
+        if previous_uuid and previous_uuid != manager_uuid:
+            try:
+                previous_provider = self._get_secret_manager_provider(previous_uuid)
+                previous_provider.revoke_secret_manager_env_binding(
+                    str(getattr(self, "uuid", "") or "")
+                )
+            except Exception:
+                logger.warning(
+                    "Could not revoke the previous secret-manager credential for %s.",
+                    previous_uuid,
+                    exc_info=True,
+                )
+
+    def unbind_secret_manager(self, conn) -> None:
+        """Remove this service's secret-manager access configuration."""
+
+        if self.secret_manager_uuid is None:
+            return
+        provider = self._get_secret_manager_provider(self.secret_manager_uuid)
+        if self.state != "un-initialized":  # type: ignore[attr-defined]
+            self._remove_secret_manager_binding(conn)
+        provider.revoke_secret_manager_env_binding(
+            str(getattr(self, "uuid", "") or "")
+        )
+        self.secret_manager_uuid = None
+
+    @abstractmethod
+    def _apply_secret_manager_binding(
+        self,
+        conn,
+        *,
+        manager_uuid: str,
+        environment: Dict[str, str],
+    ) -> None:
+        """Expose the selected provider to an initialized deployment."""
+
+    @abstractmethod
+    def _remove_secret_manager_binding(self, conn) -> None:
+        """Remove secret-manager access from an initialized deployment."""
+
+
+@dataclass(kw_only=True)
+class AbstractTelemetryBindingService(ABC):
+    """Opt-in capability for services accepting a telemetry binding."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {
+        ServiceCapability.TELEMETRY_BINDING
+    }
+    telemetry_uuid: str | None = None
+
+    def get_bound_telemetry_env_binding(self) -> Dict[str, str] | None:
+        """Return the environment exported by the configured telemetry provider."""
+
+        telemetry_uuid = self.telemetry_uuid
+        if telemetry_uuid is None:
+            return None
+        provider = self.get_dependent_service(  # type: ignore[attr-defined]
+            telemetry_uuid,
+            required_type=AbstractObservabilityService,
+            required_capabilities={ServiceCapability.OBSERVABILITY},
+        )
+        if provider is None:
+            raise ValueError(f"Telemetry service {telemetry_uuid!r} was not found.")
+        environment = provider.get_telemetry_env_binding()  # type: ignore[attr-defined]
+        if not isinstance(environment, dict):
+            raise TypeError("Telemetry environment binding must be a dictionary.")
+        result = {str(key): str(value) for key, value in environment.items()}
+        result.setdefault(
+            "OTEL_RESOURCE_ATTRIBUTES",
+            "service.name="
+            f"{getattr(self, 'name', '')},mlox.service.uuid={getattr(self, 'uuid', '')}",
+        )
+        return result
+
+    def bind_telemetry(self, telemetry_uuid: str, conn) -> None:
+        """Bind an observability provider and expose it to the deployment."""
+
+        telemetry_uuid = str(telemetry_uuid).strip()
+        if not telemetry_uuid:
+            raise ValueError("Telemetry UUID must not be empty.")
+        previous_uuid = self.telemetry_uuid
+        self.telemetry_uuid = telemetry_uuid
+        try:
+            environment = self.get_bound_telemetry_env_binding()
+            if self.state != "un-initialized":  # type: ignore[attr-defined]
+                self._apply_telemetry_binding(
+                    conn,
+                    telemetry_uuid=telemetry_uuid,
+                    environment=environment or {},
+                )
+        except Exception:
+            self.telemetry_uuid = previous_uuid
+            raise
+
+    def unbind_telemetry(self, conn) -> None:
+        """Remove this service's telemetry exporter configuration."""
+
+        if self.telemetry_uuid is None:
+            return
+        if self.state != "un-initialized":  # type: ignore[attr-defined]
+            self._remove_telemetry_binding(conn)
+        self.telemetry_uuid = None
+
+    @abstractmethod
+    def _apply_telemetry_binding(
+        self,
+        conn,
+        *,
+        telemetry_uuid: str,
+        environment: Dict[str, str],
+    ) -> None:
+        """Expose the selected telemetry provider to an initialized deployment."""
+
+    @abstractmethod
+    def _remove_telemetry_binding(self, conn) -> None:
+        """Remove telemetry configuration from an initialized deployment."""
 
 
 @dataclass

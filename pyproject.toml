@@ -105,6 +105,7 @@ dev = [
     "redis>=4.6",
     "influxdb>=5.3",
     # Development tools
+    "multipass-sdk @ git+https://github.com/okyanusoz/multipass-sdk.git@main",  # Multipass integration fixtures
     "pytest>=8.3",
     "pytest-cov>=4.1",
     "pytest-mock>=3.11",

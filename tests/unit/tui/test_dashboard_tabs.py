@@ -28,7 +28,11 @@ from mlox.tui.screens.dashboard.overview_panel import OverviewPanel
 from mlox.tui.screens.dashboard.project_actions import ProjectActions
 from mlox.tui.screens.dashboard.repository_panel import RepositoryPanel
 from mlox.tui.screens.dashboard.server_actions import ServerActions
-from mlox.tui.screens.dashboard.service_actions import ServiceActions
+from mlox.tui.screens.dashboard.service_actions import (
+    RuntimeProvidersDialog,
+    ServiceActions,
+    runtime_provider_options,
+)
 from mlox.tui.screens.dashboard.secret_manager_panel import SecretManagerPanel
 from mlox.tui.screens.dashboard.template_panel import TemplatePanel
 from mlox.tui.screens.dashboard.tree import InfraTree
@@ -480,6 +484,7 @@ async def _workflow_table_text() -> tuple[str, str]:
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for workflow rows.")
             await pilot.pause(0.05)
+        assert not app.query("#expose-workflow-secret-manager")
         return (
             " ".join(str(cell) for cell in orchestrator_table.get_row_at(0)),
             " ".join(str(cell) for cell in dag_table.get_row_at(0)),
@@ -550,80 +555,6 @@ async def _workflow_add_repo_dialog_title() -> str:
 
 def test_workflow_tab_add_repo_opens_github_form() -> None:
     assert asyncio.run(_workflow_add_repo_dialog_title()) == "Add GitHub Repository"
-
-
-async def _workflow_secret_manager_modal_selection() -> tuple[str, bool]:
-    app = DashboardTestApp()
-    workflow_service = SimpleNamespace(
-        uuid="airflow-1",
-        name="Airflow",
-        path_dags="/airflow/dags",
-        workflow_secret_manager_uuid="manager-1",
-        service_config_id="airflow",
-        state="running",
-        capabilities={ServiceCapability.WORKFLOW_ORCHESTRATOR},
-        service_urls={"Airflow UI": "https://example.test:8080"},
-        list_workflows=lambda: [],
-    )
-    bundle = SimpleNamespace(
-        name="prod",
-        server=SimpleNamespace(ip="10.0.0.5"),
-        services=[workflow_service],
-    )
-    descriptors = [
-        SimpleNamespace(id="manager-1", name="OpenBao", kind="service"),
-    ]
-    probed = SimpleNamespace(
-        id="manager-1",
-        name="OpenBao",
-        kind="service",
-        is_available=True,
-        supports_keyfile_export=True,
-        manager=SimpleNamespace(),
-        service=None,
-    )
-    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
-    app.workspace.list_secret_managers = lambda: descriptors
-    app.workspace.probe_secret_manager = lambda manager_id: probed
-
-    async with app.run_test() as pilot:
-        screen = app.query_one(DashboardScreen)
-        screen._apply_selection(SelectionInfo(type="root"))
-        screen.query_one("#main-tabs", TabbedContent).active = WORKFLOW_TAB_ID
-        table = app.query_one("#workflow-orchestrator-table")
-        deadline = time.monotonic() + 2
-        while table.row_count == 0:
-            if time.monotonic() > deadline:
-                raise AssertionError("Timed out waiting for workflow orchestrator.")
-            await pilot.pause(0.05)
-        app.query_one("#expose-workflow-secret-manager", Button).press()
-        deadline = time.monotonic() + 2
-        while True:
-            if time.monotonic() > deadline:
-                raise AssertionError("Timed out waiting for secret manager modal.")
-            await pilot.pause(0.05)
-            try:
-                screen = app.screen_stack[-1]
-                select = screen.query_one(
-                    "#workflow-secret-manager-select",
-                    Select,
-                )
-                button = screen.query_one(
-                    "#confirm-workflow-secret-manager",
-                    Button,
-                )
-                if select.value is Select.BLANK:
-                    continue
-                return str(select.value), button.disabled
-            except Exception:
-                continue
-
-
-def test_workflow_tab_secret_manager_modal_lists_eligible_managers() -> None:
-    selected, disabled = asyncio.run(_workflow_secret_manager_modal_selection())
-
-    assert selected == "manager-1"
-    assert disabled is False
 
 
 class _RepositoryConnection:
@@ -1426,6 +1357,15 @@ async def _service_restart_button_display_for(service: object) -> bool:
         return app.query_one("#restart-service", Button).display
 
 
+async def _runtime_providers_button_display_for(service: object) -> bool:
+    app = DashboardTestApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(SelectionInfo(type="service", service=service))
+        await pilot.pause()
+        return app.query_one("#configure-runtime-providers", Button).display
+
+
 class _NonComposeService(AbstractService):
     def setup(self, conn):
         pass
@@ -1498,6 +1438,157 @@ def test_service_actions_show_restart_button_only_for_initialized_services() -> 
     assert asyncio.run(_service_restart_button_display_for(initialized)) is True
     assert asyncio.run(_service_restart_button_display_for(uninitialized)) is False
     assert asyncio.run(_service_restart_button_display_for(non_compose)) is False
+
+
+def test_service_actions_show_runtime_providers_only_for_consumers() -> None:
+    telemetry_consumer = SimpleNamespace(
+        name="gateway",
+        capabilities={ServiceCapability.TELEMETRY_BINDING},
+    )
+    plain_service = SimpleNamespace(name="api", capabilities=set())
+
+    assert asyncio.run(_runtime_providers_button_display_for(telemetry_consumer)) is True
+    assert asyncio.run(_runtime_providers_button_display_for(plain_service)) is False
+
+
+async def _empty_runtime_connections_dialog_values() -> tuple[object, object]:
+    app = DashboardTestApp()
+    service = SimpleNamespace(
+        name="Gateway",
+        secret_manager_uuid=None,
+        telemetry_uuid=None,
+        capabilities={
+            ServiceCapability.SECRET_MANAGER_BINDING,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
+    )
+    bundle = SimpleNamespace(
+        name="dev",
+        server=SimpleNamespace(ip="10.0.0.5", backend=["docker"]),
+        services=[service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        screen._apply_selection(
+            SelectionInfo(type="service", bundle=bundle, service=service)
+        )
+        app.query_one("#configure-runtime-providers", Button).press()
+        await pilot.pause()
+        dialog = app.screen
+        assert isinstance(dialog, RuntimeProvidersDialog)
+        return (
+            dialog.query_one("#runtime-secret-manager", Select).value,
+            dialog.query_one("#runtime-telemetry", Select).value,
+        )
+
+
+def test_runtime_connections_dialog_accepts_empty_bindings() -> None:
+    secret_manager, telemetry = asyncio.run(
+        _empty_runtime_connections_dialog_values()
+    )
+
+    assert secret_manager is Select.NULL
+    assert telemetry is Select.NULL
+
+
+def test_runtime_provider_options_filter_providers_and_exclude_consumer() -> None:
+    secret_manager = SimpleNamespace(
+        name="Vault",
+        uuid="secret-1",
+        capabilities={ServiceCapability.SECRET_MANAGER},
+    )
+    telemetry = SimpleNamespace(
+        name="OTel",
+        uuid="otel-1",
+        capabilities={ServiceCapability.OBSERVABILITY},
+    )
+    consumer = SimpleNamespace(
+        name="Gateway",
+        uuid="gateway-1",
+        capabilities={
+            ServiceCapability.SECRET_MANAGER,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
+    )
+    infrastructure = SimpleNamespace(
+        bundles=[SimpleNamespace(services=[telemetry, consumer, secret_manager])]
+    )
+
+    assert runtime_provider_options(
+        infrastructure,
+        ServiceCapability.SECRET_MANAGER,
+        consumer_uuid="gateway-1",
+    ) == [("Vault", "secret-1")]
+    assert runtime_provider_options(
+        infrastructure,
+        ServiceCapability.OBSERVABILITY,
+        consumer_uuid="gateway-1",
+    ) == [("OTel", "otel-1")]
+
+
+async def _apply_runtime_provider_changes() -> tuple[list[tuple], object]:
+    app = DashboardTestApp()
+    calls = []
+    service = SimpleNamespace(
+        name="Gateway",
+        uuid="gateway-1",
+        state="running",
+        secret_manager_uuid="secret-old",
+        telemetry_uuid="otel-old",
+        capabilities={
+            ServiceCapability.SECRET_MANAGER_BINDING,
+            ServiceCapability.TELEMETRY_BINDING,
+        },
+    )
+    bundle = SimpleNamespace(
+        name="dev",
+        server=SimpleNamespace(ip="10.0.0.5", backend=["docker"]),
+        services=[service],
+    )
+    app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+
+    def bind_secret_manager(*, name, manager_uuid):
+        calls.append(("bind-secret-manager", name, manager_uuid))
+        service.secret_manager_uuid = manager_uuid
+        return OperationResult(True, 0, "bound")
+
+    def unbind_telemetry(*, name):
+        calls.append(("unbind-telemetry", name))
+        service.telemetry_uuid = None
+        return OperationResult(True, 0, "unbound")
+
+    app.workspace.bind_service_secret_manager = bind_secret_manager
+    app.workspace.unbind_service_telemetry = unbind_telemetry
+
+    async with app.run_test() as pilot:
+        screen = app.query_one(DashboardScreen)
+        selection = SelectionInfo(type="service", bundle=bundle, service=service)
+        screen._apply_selection(selection)
+        screen._apply_runtime_provider_selection(
+            selection,
+            {
+                "secret_manager_uuid": "secret-new",
+                "telemetry_uuid": None,
+            },
+        )
+        deadline = time.monotonic() + 2
+        while len(calls) < 2:
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for provider updates.")
+            await pilot.pause(0.05)
+    return calls, service
+
+
+def test_runtime_provider_action_uses_workspace_bind_and_unbind() -> None:
+    calls, service = asyncio.run(_apply_runtime_provider_changes())
+
+    assert calls == [
+        ("bind-secret-manager", "Gateway", "secret-new"),
+        ("unbind-telemetry", "Gateway"),
+    ]
+    assert service.secret_manager_uuid == "secret-new"
+    assert service.telemetry_uuid is None
 
 
 def test_service_actions_hide_web_ui_for_uninitialized_services() -> None:
