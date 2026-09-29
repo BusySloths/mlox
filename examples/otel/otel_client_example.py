@@ -5,8 +5,8 @@ What this demonstrates:
 - Build an ``OTelClient`` from service secrets
 - Emit spans, metrics, and logs in one short run
 
-With no providers, reports their absence and exits successfully. Use existing
-runtime environment bindings or optionally discover services in a MLOX project.
+Requires MLOX_PROJECT_PATH and MLOX_PROJECT_PASSWORD. Missing optional
+providers are reported; without telemetry, emission is skipped.
 """
 
 from __future__ import annotations
