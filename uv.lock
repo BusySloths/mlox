@@ -408,7 +408,6 @@ dev = [
     { name = "influxdb" },
     { name = "mlflow" },
     { name = "mlserver" },
-    { name = "multipass-sdk" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "opentelemetry-api" },
@@ -450,6 +449,11 @@ tui = [
     { name = "textual" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "multipass-sdk" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "backports-tarfile", marker = "extra == 'dev'", specifier = ">=1.0" },
@@ -480,7 +484,6 @@ requires-dist = [
     { name = "kafka-python-ng", specifier = ">=2.2.3" },
     { name = "mlflow", marker = "extra == 'dev'", specifier = ">=3.8.1" },
     { name = "mlserver", marker = "extra == 'dev'", specifier = ">=1.7.1" },
-    { name = "multipass-sdk", marker = "extra == 'dev'", git = "https://github.com/okyanusoz/multipass-sdk.git?rev=main" },
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26" },
     { name = "opentelemetry-api", marker = "extra == 'dev'", specifier = ">=1.33.1" },
     { name = "opentelemetry-exporter-otlp", marker = "extra == 'dev'", specifier = ">=1.33.1" },
@@ -513,6 +516,9 @@ requires-dist = [
     { name = "typer", specifier = ">=0.17.4" },
 ]
 provides-extras = ["gcp", "feast", "minio", "tui", "dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "multipass-sdk", git = "https://github.com/okyanusoz/multipass-sdk.git?rev=main" }]
 
 [[package]]
 name = "cachetools"
