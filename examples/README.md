@@ -18,7 +18,9 @@ manager environment settings take precedence. Alternatively set both
 by capability and export their standard environment bindings. Secret manager
 and telemetry discovery are independent. No services are rebound or restarted.
 
-When multiple providers exist, select a name or UUID with
+When multiple providers exist, the first running entry in project order is used.
+The selected service name, UUID and server are logged, including for MLflow.
+To override discovery, select a name or UUID with
 `MLOX_EXAMPLE_TELEMETRY`, `MLOX_EXAMPLE_SECRET_MANAGER`, or
 `MLOX_EXAMPLE_TRACKER`. These selectors apply to project discovery; existing
 environment bindings take precedence. Set either optional provider selector to

@@ -31,11 +31,20 @@ def setup_runtime(*, tracking=False):
             candidates = [s for s in candidates if requested in (s.name, s.service_uuid)]
             if not candidates:
                 raise ValueError(f"No running provider matches {selector}.")
-        if len(candidates) > 1:
-            raise ValueError(f"Multiple providers found; set {selector} to a name or UUID.")
         if candidates:
             service = candidates[0]
-            logger.info("%s: found %s (%s)", selector, service.name, service.service_uuid)
+            server = next(
+                (getattr(bundle, "server", None)
+                 for bundle in workspace.infrastructure.bundles
+                 if any(item is service for item in bundle.services)),
+                None,
+            )
+            logger.info(
+                "%s: selected %s (%s), server=%s (%s); first of %d matching providers",
+                selector, service.name, service.service_uuid,
+                getattr(server, "name", None) or getattr(server, "uuid", "unknown"),
+                getattr(server, "ip", "unknown"), len(candidates),
+            )
             return service
         return None
 
