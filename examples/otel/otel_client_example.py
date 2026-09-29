@@ -1,50 +1,34 @@
-"""WORK IN PROGRESS: Educational OTel client example for MLOX OpenTelemetry Collector.
+"""Educational OTel client example; see examples/README.md for configuration.
 
 What this demonstrates:
 - Discover an OTEL collector service from your active MLOX infra
 - Build an ``OTelClient`` from service secrets
 - Emit spans, metrics, and logs in one short run
 
-Prerequisites:
-- Environment variables: ``MLOX_PROJECT_PATH`` and ``MLOX_PROJECT_PASSWORD``
-- A running OpenTelemetry Collector service in your project
+With no providers, reports their absence and exits successfully. Use existing
+runtime environment bindings or optionally discover services in a MLOX project.
 """
 
 from __future__ import annotations
 
 import time
+import logging
 
-from mlox.project import ProjectWorkspace
-from mlox.services.otel.client import OTelClient
-
-from examples.load_project_data import load_project_workspace
-
-
-def _otel_client(workspace: ProjectWorkspace) -> OTelClient:
-    monitors = workspace.infrastructure.filter_by_group("monitor")
-    if not monitors:
-        raise RuntimeError("No monitor services found. Start an OTEL collector first.")
-
-    for service in monitors:
-        if service.state == "running":
-            secrets = service.get_secrets()
-            client = OTelClient(
-                otel_secret=secrets,
-                resource_attrs={
-                    "service.name": "mlox.examples.otel-client",
-                    "service.version": "1.0.0",
-                    "service.instance.id": "example-instance-1",
-                    "deployment.environment": "dev",
-                },
-            )
-            return client
-
-    raise RuntimeError("No running monitor service found.")
+from examples.runtime import setup_runtime
 
 
 def main() -> None:
-    workspace = load_project_workspace()
-    client = _otel_client(workspace)
+    client, _ = setup_runtime()
+    if client is None:
+        print("No telemetry provider configured; telemetry emission skipped.")
+        return
+    try:
+        emit_telemetry(client)
+    finally:
+        client.shutdown()
+
+
+def emit_telemetry(client) -> None:
 
     # Traces: parent + nested span
     with client.span(
@@ -114,11 +98,9 @@ def main() -> None:
         },
     )
 
-    # Give exporters a moment to flush periodic batches.
-    time.sleep(3)
-    client.shutdown()
-    print("Telemetry sent successfully.")
+    print("Telemetry queued; exporters flush on shutdown. Check collector for delivery.")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()

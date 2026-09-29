@@ -17,7 +17,6 @@ from a running MLflow service.
 
 from __future__ import annotations
 
-import os
 import mlflow  # type: ignore[import]
 import logging
 import numpy as np
@@ -33,6 +32,7 @@ from sktime.forecasting.naive import NaiveForecaster  # type: ignore[import]
 from sktime.performance_metrics.forecasting import mean_absolute_error  # type: ignore[import]
 
 from mlox.services.mlflow.mlops import DeployableModel, MLFlowDeployableModelService
+from examples.runtime import setup_runtime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,7 +60,12 @@ class SktimeTrackedModel(DeployableModel):
 
         horizon_steps = int(raw)
         fh = ForecastingHorizon(np.arange(1, horizon_steps + 1), is_relative=True)
-        y_pred = self.forecaster.predict(fh=fh)
+        logger.info("Model runtime: telemetry=%s, secret_manager=%s",
+                    self.get_telemetry_client() is not None,
+                    self.get_secret_manager() is not None)
+        with self.model_step("forecast.predict") as step:
+            y_pred = self.forecaster.predict(fh=fh)
+            step.observe_array("output", y_pred)
 
         return pd.DataFrame(
             {
@@ -109,29 +114,7 @@ class SktimeTrackedModel(DeployableModel):
         mlflow.set_tag("example", "sktime_tracking")
         mlflow.set_tag("dataset", "airline")
 
-        return {"README.md": "./README.md"}
-
-
-def setup_tracker(tracker_service_name: str) -> None:
-    """Configure MLflow environment variables."""
-    from examples.load_project_data import load_project_workspace
-
-    workspace = load_project_workspace()
-    candidates = workspace.infrastructure.filter_by_group(
-        "experiment-tracking"
-    )
-    mlflow_service = next(
-        (s for s in candidates if s.name == tracker_service_name), None
-    )
-    if mlflow_service is None:
-        raise RuntimeError(f"Could not find MLflow service {tracker_service_name}. ")
-    secrets = mlflow_service.get_secrets()
-    os.environ["MLFLOW_URI"] = str(secrets.get("service_url", ""))
-    os.environ["MLFLOW_TRACKING_USERNAME"] = str(secrets.get("username", ""))
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = str(secrets.get("password", ""))
-    os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = str(
-        secrets.get("insecure_tls", "true")
-    )
+        return None
 
 
 def run_sktime_tracking_example(tracked_experiment: str) -> None:
@@ -149,7 +132,7 @@ def run_sktime_tracking_example(tracked_experiment: str) -> None:
         model=model,
         model_class="sktime-naive-forecaster",
         code_paths=[str(repo_root / "mlox"), str(repo_root / "examples")],
-        requirements_file="examples/tracking/requirements_sktime_mlflow.txt",
+        requirements_file=str(repo_root / "examples/tracking/requirements_sktime_mlflow.txt"),
     )
 
     if tracked_experiment:
@@ -165,6 +148,8 @@ def run_sktime_tracking_example(tracked_experiment: str) -> None:
     )
 
     print("Tracking run completed.")
+    loaded = mlflow.pyfunc.load_model(mlops.logged_model_info.model_uri)
+    print(loaded.predict(np.array([[12]])))
     if tracked_experiment:
         print(f"Model registration requested under name: {tracked_experiment}")
     else:
@@ -172,5 +157,9 @@ def run_sktime_tracking_example(tracked_experiment: str) -> None:
 
 
 if __name__ == "__main__":
-    setup_tracker(tracker_service_name="mlflow-3.8.1")
-    run_sktime_tracking_example(tracked_experiment="sktime-airline-forecaster")
+    client, _ = setup_runtime(tracking=True)
+    try:
+        run_sktime_tracking_example(tracked_experiment="sktime-airline-forecaster")
+    finally:
+        if client:
+            client.shutdown()
