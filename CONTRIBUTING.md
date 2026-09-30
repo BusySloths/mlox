@@ -165,6 +165,11 @@ Before a release:
 - release notes mention breaking changes and migration steps
 - package/Docker publishing workflows are green
 
+Maintainers deploy releases through the **Deploy Release** GitHub Actions
+workflow. Select a semantic version bump, review the validation jobs, and approve
+the protected PyPI deployment. The complete setup, execution, and recovery
+procedure is documented in [`docs/RELEASING.md`](docs/RELEASING.md).
+
 Release notes should capture new features, fixed bugs, changed behavior, migration
 notes, and known limitations.
 

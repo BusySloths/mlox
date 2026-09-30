@@ -199,9 +199,12 @@ never duplicate the list in both places.
       passwords never end up in logs, command output, rendered UI state, or
       exported project data — redaction as a tested core invariant, not a
       best effort.
-   3. **Release supply-chain hygiene.** Attested/signed PyPI releases
-      (provenance), pinned build and workflow dependencies, and a
-      reproducible release pipeline.
+   3. **Release supply-chain hygiene.** In progress: the manually dispatched
+      release pipeline calculates semantic versions, validates and builds once,
+      publishes through PyPI Trusted Publishing with attestations, verifies the
+      exact package, creates the GitHub Release, and deploys release-tagged docs.
+      Its security-sensitive actions are commit-pinned. Remaining work is
+      repository-wide workflow pinning and version-pinned historical API docs.
 4. **Community & adoption** — make MLOX easy to discover, learn, and trust.
    1. **Tutorial / cookbook series.** Written, end-to-end guides for common
       deployment stories: install → TUI → first deployed service, plus

@@ -1,0 +1,21 @@
+changelog:
+  exclude:
+    labels:
+      - status:draft
+  categories:
+    - title: Features
+      labels:
+        - type:feature
+    - title: Fixes
+      labels:
+        - type:bug
+    - title: Documentation
+      labels:
+        - type:documentation
+    - title: Maintenance
+      labels:
+        - type:maintenance
+        - dependencies
+    - title: Other changes
+      labels:
+        - "*"

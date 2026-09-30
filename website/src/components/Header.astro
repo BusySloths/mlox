@@ -1,10 +1,14 @@
 ---
+const releaseTag = import.meta.env.PUBLIC_MLOX_RELEASE_TAG;
+const releaseUrl = import.meta.env.PUBLIC_MLOX_RELEASE_URL || 'https://github.com/BusySloths/mlox/releases/latest';
+
 const navItems = [
   { name: 'Features', href: '#features' },
   { name: 'Why MLOX?', href: '#why-mlox' },
   { name: 'Screenshots', href: '#screenshots' },
   { name: 'Get Started', href: '#get-started' },
   { name: 'Docs', href: '/mlox/docs/', external: true },
+  { name: releaseTag ? `Release ${releaseTag}` : 'Releases', href: releaseUrl, external: true },
   { name: 'Sponsors', href: '#sponsors' },
   { name: 'GitHub', href: 'https://github.com/BusySloths/mlox', external: true },
 ];
