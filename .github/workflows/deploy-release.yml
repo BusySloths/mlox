@@ -1,6 +1,9 @@
 name: Deploy Release
 
-run-name: Deploy ${{ inputs.bump }} release from ${{ github.ref_name }}
+run-name: >-
+  ${{ inputs.recovery_tag
+      && format('Recover release {0}', inputs.recovery_tag)
+      || format('Deploy {0} release from {1}', inputs.bump, github.ref_name) }}
 
 on:
   workflow_dispatch:
@@ -14,8 +17,8 @@ on:
           - patch
           - minor
           - major
-      resume_tag:
-        description: Existing vMAJOR.MINOR.PATCH tag to resume after a partial failure
+      recovery_tag:
+        description: "RECOVERY ONLY — leave blank for a normal release; use a NEW tag created by a failed run"
         required: false
         type: string
 
@@ -64,32 +67,33 @@ jobs:
         id: release
         env:
           BUMP: ${{ inputs.bump }}
-          RESUME_TAG: ${{ inputs.resume_tag }}
+          RECOVERY_TAG: ${{ inputs.recovery_tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
           args=(--bump "$BUMP" --format tag)
-          if [ -n "$RESUME_TAG" ]; then
-            args+=(--resume-tag "$RESUME_TAG")
+          if [ -n "$RECOVERY_TAG" ]; then
+            args+=(--resume-tag "$RECOVERY_TAG")
           fi
           tag="$(python scripts/next_release_version.py "${args[@]}")"
           version="${tag#v}"
           is_resume=false
           sha="$GITHUB_SHA"
 
-          if [ -n "$RESUME_TAG" ]; then
+          if [ -n "$RECOVERY_TAG" ]; then
             is_resume=true
             git rev-parse --verify "refs/tags/$tag" >/dev/null || {
-              echo "::error::Resume tag $tag does not exist."
+              echo "::error::Recovery tag $tag does not exist."
               exit 1
             }
             sha="$(git rev-list -n 1 "$tag")"
             gh release view "$tag" >/dev/null 2>&1 && {
-              echo "::error::GitHub release $tag is already published."
+              next_tag="$(python scripts/next_release_version.py --bump "$BUMP" --format tag)"
+              echo "::error::GitHub release $tag is already published. recovery_tag is only for a NEW tag left by a partially failed run. For a normal $BUMP release, leave recovery_tag blank; this run would then create $next_tag."
               exit 1
             }
           else
             git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1 && {
-              echo "::error::Tag $tag already exists; use resume_tag for recovery."
+              echo "::error::Tag $tag already exists; use recovery_tag only to recover a partially failed release."
               exit 1
             }
             status="$(curl --silent --output /dev/null --write-out '%{http_code}' \

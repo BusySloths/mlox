@@ -30,7 +30,8 @@ API token is stored in the workflow.
 
 1. Confirm release-blocking work is merged into `main` and checks are green.
 2. Open **Actions → Deploy Release → Run workflow**.
-3. Select `patch`, `minor`, or `major` and run it from `main`.
+3. Select `patch`, `minor`, or `major`, leave `recovery_tag` blank, and run
+   it from `main`. The workflow discovers the current version automatically.
 4. Review the calculated version and validation jobs.
 5. Approve the `pypi` environment deployment.
 6. Confirm the PyPI verification matrix, GitHub Release, and docs deployment
@@ -54,8 +55,12 @@ Validation and build failures occur before the protected release job and can be
 fixed normally on `main`. PyPI versions and Git tags are immutable, so never
 delete or move a release tag to retry publication.
 
-If the workflow fails after creating the tag, dispatch **Deploy Release** again
-from `main` and set `resume_tag` to that exact `vX.Y.Z` tag. The workflow then:
+The `recovery_tag` input is not the current version or the version to create.
+Leave it blank for every normal release.
+
+If the workflow fails after creating a new tag, dispatch **Deploy Release**
+again from `main` and set `recovery_tag` to that exact `vX.Y.Z` tag. The
+workflow then:
 
 - rebuilds the tagged commit rather than current `main`;
 - verifies that the tag still points to the expected commit;
