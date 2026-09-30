@@ -31,6 +31,7 @@ from .model import SelectionChanged, SelectionInfo, is_bundle_initialized
 from .models_panel import ModelsPanel
 from .monitor_panel import MonitorPanel
 from .overview_panel import OverviewPanel
+from .operations_panel import OperationsPanel
 from .project_actions import ProjectActions, RenameProjectDialog
 from .repository_panel import RepositoryPanel
 from .server_actions import ServerActions
@@ -87,6 +88,7 @@ FIREWALL_TAB_ID = "firewall-tab"
 DATABASES_TAB_ID = "databases-tab"
 KNOWLEDGE_TAB_ID = "knowledge-tab"
 MONITOR_TAB_ID = "monitor-tab"
+OPERATIONS_TAB_ID = "operations-tab"
 MODELS_TAB_ID = "models-tab"
 WORKFLOW_TAB_ID = "workflow-tab"
 SERVICE_TUI_TAB_ID = "service-tui-tab"
@@ -206,6 +208,8 @@ class DashboardScreen(Screen):
                                 yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Monitor", id=MONITOR_TAB_ID):
                                 yield MonitorPanel(id="monitor-panel")
+                            with TabPane("Operations", id=OPERATIONS_TAB_ID):
+                                yield OperationsPanel(id="operations-panel")
                             with TabPane("Databases", id=DATABASES_TAB_ID):
                                 yield DatabasePanel(id="databases-panel")
                             with TabPane("Models", id=MODELS_TAB_ID):
@@ -347,6 +351,7 @@ class DashboardScreen(Screen):
         self.query_one(SecretManagerPanel).selection = None
         self.query_one(FirewallPanel).selection = None
         self.query_one(MonitorPanel).selection = None
+        self.query_one(OperationsPanel).selection = None
         self.query_one(DatabasePanel).selection = None
         self.query_one(ModelsPanel).selection = None
         self.query_one(WorkflowPanel).selection = None
@@ -363,6 +368,7 @@ class DashboardScreen(Screen):
             SECRET_MANAGER_TAB_ID: self.query_one(SecretManagerPanel),
             FIREWALL_TAB_ID: self.query_one(FirewallPanel),
             MONITOR_TAB_ID: self.query_one(MonitorPanel),
+            OPERATIONS_TAB_ID: self.query_one(OperationsPanel),
             DATABASES_TAB_ID: self.query_one(DatabasePanel),
             MODELS_TAB_ID: self.query_one(ModelsPanel),
             WORKFLOW_TAB_ID: self.query_one(WorkflowPanel),
@@ -1483,6 +1489,10 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             MONITOR_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
+            OPERATIONS_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(

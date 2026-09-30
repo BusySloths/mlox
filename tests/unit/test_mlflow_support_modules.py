@@ -130,6 +130,8 @@ def test_mlops_predict_emits_hierarchical_pipeline_spans(monkeypatch):
                     component_version=1,
                 ):
                     prediction = transformed + 1.0
+                with self.model_step("quality.evaluate") as step:
+                    step.observe_value("rmse", 0.25)
             return pd.DataFrame({"prediction": prediction[:, 0]})
 
     service = mlops.MLFlowDeployableModelService(_PipelineModel(), "LR")
@@ -156,11 +158,13 @@ def test_mlops_predict_emits_hierarchical_pipeline_spans(monkeypatch):
     normalized = steps["LR/pipeline/input.normalize"]
     pca = steps["LR/pipeline/pca.transform"]
     regression = steps["LR/pipeline/regression.predict"]
+    quality = steps["LR/pipeline/quality.evaluate"]
 
     assert pipeline.parent.span_id == root.context.span_id
     assert normalized.parent.span_id == pipeline.context.span_id
     assert pca.parent.span_id == pipeline.context.span_id
     assert regression.parent.span_id == pipeline.context.span_id
+    assert quality.attributes["mlox.observation.rmse.value"] == 0.25
     assert pca.attributes["mlox.component.version"] == "2"
     assert pca.attributes["mlox.observation.output.mean"] == 6.0
     assert pca.attributes["mlox.pipeline.id"] == "pipeline-run-1"

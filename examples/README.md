@@ -20,3 +20,8 @@ a collector is available. Check the collector to confirm delivery.
 
 For the forecasting variant, install `examples/tracking/requirements_sktime_mlflow.txt`
 and run `uv run -m examples.tracking.sktime_tracking_example`.
+
+The reproducible model-operations incident demonstration is documented in
+[`operations_demo/README.md`](operations_demo/README.md). It registers one
+instrumented model and provides an interactive healthy/corrupt traffic loop for
+the TUI Operations tab.

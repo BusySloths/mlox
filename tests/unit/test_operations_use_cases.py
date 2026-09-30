@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+from mlox.application.use_cases.operations import (
+    OperationsWatchSession,
+    refresh_operations_watch,
+    start_operations_watch,
+)
+
+
+def _attribute(key, value):
+    if isinstance(value, int):
+        encoded = {"intValue": str(value)}
+    elif isinstance(value, float):
+        encoded = {"doubleValue": value}
+    else:
+        encoded = {"stringValue": value}
+    return {"key": key, "value": encoded}
+
+
+def _span(trace, span, name, started, **attrs):
+    return {
+        "traceId": trace,
+        "spanId": span,
+        "name": name,
+        "startTimeUnixNano": str(started),
+        "endTimeUnixNano": str(started + 10),
+        "attributes": [_attribute(key, value) for key, value in attrs.items()],
+    }
+
+
+def _run(number, *, pca=1.0, regression=2.0, rmse=0.1):
+    trace = f"trace-{number}"
+    common = {
+        "mlox.model.name": "demo",
+        "mlox.model.version": "1",
+        "mlox.pipeline.name": "operations-demo",
+    }
+    spans = [_span(trace, f"root-{number}", "mlox.model.live_predict", number * 100, **common)]
+    values = [
+        ("input.normalize", 0.0, "output.mean"),
+        ("pca.transform", pca, "output.mean"),
+        ("regression.predict", regression, "output.mean"),
+        ("quality.evaluate", rmse, "rmse.value"),
+    ]
+    for index, (name, value, observation) in enumerate(values, start=1):
+        attrs = {
+            **common,
+            "mlox.step.path": f"demo/pipeline/{name}",
+            "mlox.step.name": name,
+            "mlox.step.depth": 2,
+            f"mlox.observation.{observation}": value,
+        }
+        spans.append(
+            _span(
+                trace,
+                f"step-{number}-{index}",
+                "mlox.model.step",
+                number * 100 + index,
+                **attrs,
+            )
+        )
+    return spans
+
+
+def _raw(*runs):
+    spans = [span for run in runs for span in run]
+    return json.dumps({"resourceSpans": [{"scopeSpans": [{"spans": spans}]}]})
+
+
+def test_watch_calibrates_detects_first_deviation_and_recovery():
+    session = OperationsWatchSession(baseline_runs=2)
+    session.start("")
+
+    assert session.ingest(_raw(_run(1))) == 1
+    assert session.snapshot()["state"] == "calibrating"
+
+    session.ingest(_raw(_run(1), _run(2)))
+    assert session.snapshot()["state"] == "watching"
+
+    session.ingest(_raw(_run(1), _run(2), _run(3, pca=10, regression=20, rmse=5)))
+    incident = session.snapshot()
+    assert incident["state"] == "incident"
+    assert incident["culprit"] == "demo/pipeline/pca.transform"
+    assert incident["baseline_rmse"] == 0.1
+    assert incident["latest_rmse"] == 5
+
+    session.ingest(
+        _raw(
+            _run(1),
+            _run(2),
+            _run(3, pca=10, regression=20, rmse=5),
+            _run(4),
+        )
+    )
+    assert session.snapshot()["state"] == "recovered"
+    session.stop()
+    assert session.snapshot()["state"] == "recovered"
+    assert not session.snapshot()["active"]
+
+
+def test_start_uses_existing_telemetry_as_watermark():
+    telemetry = _raw(_run(1))
+    service = SimpleNamespace(get_telemetry_data=lambda bundle: telemetry)
+    infra = SimpleNamespace(
+        bundles=[SimpleNamespace(name="demo", services=[service])]
+    )
+
+    result = start_operations_watch(infra, baseline_runs=1)
+
+    assert result.success
+    session = result.data["session"]
+    assert refresh_operations_watch(infra, session).data["snapshot"]["runs"] == 0
+
+
+def test_start_requires_a_telemetry_source():
+    result = start_operations_watch(SimpleNamespace(bundles=[]))
+
+    assert not result.success
+    assert "telemetry collector" in result.message
