@@ -2,15 +2,35 @@ name: Deploy Docs
 
 # Publishes the documentation surfaces:
 #   - GitHub Pages (Astro website + pdoc API docs under /docs):
-#       manually, or when a release is published
+#       manually, from Deploy Release, or when a release is published manually
 #   - GitHub Wiki (synced from the wiki/ directory):
-#       on every push touching wiki/, or manually
+#       on every push touching wiki/, manually, or from Deploy Release
 on:
     push:
         branches: [main]
         paths:
             - "wiki/**"
     workflow_dispatch:
+        inputs:
+            ref:
+                description: Git ref to publish
+                required: false
+                default: main
+                type: string
+            release_tag:
+                description: Release tag displayed on the website
+                required: false
+                type: string
+    workflow_call:
+        inputs:
+            ref:
+                description: Git ref to publish
+                required: true
+                type: string
+            release_tag:
+                description: Release tag displayed on the website
+                required: false
+                type: string
     release:
         types: [published]
 
@@ -23,7 +43,7 @@ jobs:
     # GitHub Pages: website + API docs (manual or release)
     # ---------------------------------------------------------------
     pages:
-        if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
+        if: github.event_name != 'push'
         runs-on: ubuntu-latest
         permissions:
             contents: read
@@ -31,17 +51,37 @@ jobs:
             id-token: write
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+              with:
+                  ref: ${{ inputs.ref || github.event.release.tag_name || github.ref }}
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
               with:
                   node-version: "20"
                   cache: "npm"
                   cache-dependency-path: website/package-lock.json
 
             - name: Setup Pages
-              uses: actions/configure-pages@v4
+              uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+            - name: Resolve website release indicator
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  REQUESTED_TAG: ${{ inputs.release_tag }}
+                  EVENT_TAG: ${{ github.event.release.tag_name }}
+              run: |
+                  tag="$REQUESTED_TAG"
+                  if [ -z "$tag" ]; then
+                      tag="$EVENT_TAG"
+                  fi
+                  if [ -z "$tag" ]; then
+                      tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)"
+                  fi
+                  if [ -n "$tag" ]; then
+                      echo "PUBLIC_MLOX_RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+                      echo "PUBLIC_MLOX_RELEASE_URL=https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_ENV"
+                  fi
 
             - name: Install website dependencies
               working-directory: ./website
@@ -52,7 +92,7 @@ jobs:
               run: npm run build
 
             - name: Install uv
-              uses: astral-sh/setup-uv@v5
+              uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
 
             - name: Install Python dependencies
               run: uv sync --extra dev
@@ -68,7 +108,7 @@ jobs:
                   cp -r temp_docs/* website/dist/docs/
 
             - name: Upload artifact
-              uses: actions/upload-pages-artifact@v3
+              uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
               with:
                   path: ./website/dist
 
@@ -84,19 +124,25 @@ jobs:
         steps:
             - name: Deploy to GitHub Pages
               id: deployment
-              uses: actions/deploy-pages@v4
+              uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
 
     # ---------------------------------------------------------------
     # GitHub Wiki: rsync wiki/ into the wiki repo (push or manual)
     # ---------------------------------------------------------------
     wiki:
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: >-
+            github.event_name == 'push' ||
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'workflow_call' ||
+            github.event_name == 'release'
         runs-on: ubuntu-latest
         permissions:
             contents: write
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+              with:
+                  ref: ${{ inputs.ref || github.event.release.tag_name || github.ref }}
 
             - name: Publish wiki pages
               run: |

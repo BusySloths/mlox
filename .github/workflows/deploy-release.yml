@@ -1,0 +1,337 @@
+name: Deploy Release
+
+run-name: Deploy ${{ inputs.bump }} release from ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semantic version component to increment
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      resume_tag:
+        description: Existing vMAJOR.MINOR.PATCH tag to resume after a partial failure
+        required: false
+        type: string
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+# Reusable deployment workflows can only reduce the permissions granted here.
+# Every direct job below narrows its own permissions further.
+permissions:
+  contents: write
+  id-token: write
+  pages: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+      is_resume: ${{ steps.release.outputs.is_resume }}
+    steps:
+      - name: Require the default branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Deploy Release must be dispatched from main."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Confirm main has not advanced
+        run: |
+          git fetch origin main --tags
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || {
+            echo "::error::The selected commit is not the current tip of main."
+            exit 1
+          }
+
+      - name: Resolve release version
+        id: release
+        env:
+          BUMP: ${{ inputs.bump }}
+          RESUME_TAG: ${{ inputs.resume_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=(--bump "$BUMP" --format tag)
+          if [ -n "$RESUME_TAG" ]; then
+            args+=(--resume-tag "$RESUME_TAG")
+          fi
+          tag="$(python scripts/next_release_version.py "${args[@]}")"
+          version="${tag#v}"
+          is_resume=false
+          sha="$GITHUB_SHA"
+
+          if [ -n "$RESUME_TAG" ]; then
+            is_resume=true
+            git rev-parse --verify "refs/tags/$tag" >/dev/null || {
+              echo "::error::Resume tag $tag does not exist."
+              exit 1
+            }
+            sha="$(git rev-list -n 1 "$tag")"
+            gh release view "$tag" >/dev/null 2>&1 && {
+              echo "::error::GitHub release $tag is already published."
+              exit 1
+            }
+          else
+            git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1 && {
+              echo "::error::Tag $tag already exists; use resume_tag for recovery."
+              exit 1
+            }
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              "https://pypi.org/pypi/busysloths-mlox/$version/json")"
+            test "$status" = "404" || {
+              echo "::error::PyPI version check returned HTTP $status for $version."
+              exit 1
+            }
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "is_resume=$is_resume" >> "$GITHUB_OUTPUT"
+          echo "Preparing $tag from $sha (resume: $is_resume)"
+
+  validate:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Verify and install dependencies
+        run: |
+          uv lock --check
+          uv sync --extra dev
+
+      - name: Lint
+        run: |
+          # Existing repository-wide style debt is advisory; syntax errors and
+          # undefined names remain release blockers, matching the former PyPI job.
+          uv run python -m flake8 mlox/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          uv run python -m flake8 \
+            scripts/next_release_version.py tests/unit/test_release_version.py
+          uv run python -m flake8 mlox/ --count --exit-zero \
+            --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run unit tests
+        run: uv run python -m pytest tests/unit/ -v
+
+      - name: Validate generated documentation
+        run: uv run python scripts/check_docs.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Validate website build
+        working-directory: website
+        run: |
+          npm ci
+          npm run build
+
+  build:
+    needs: [prepare, validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Mark checkout with release version
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          existing="$(git rev-list -n 1 "$RELEASE_TAG" 2>/dev/null || true)"
+          if [ -n "$existing" ] && [ "$existing" != "$RELEASE_SHA" ]; then
+            echo "::error::$RELEASE_TAG points to $existing instead of $RELEASE_SHA."
+            exit 1
+          fi
+          if [ -z "$existing" ]; then
+            git tag "$RELEASE_TAG" "$RELEASE_SHA"
+          fi
+
+      - name: Build and validate distributions
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          uv run --no-project --with build python -m build
+          uv run --no-project --with twine twine check --strict dist/*
+          unzip -p dist/*.whl '*/METADATA' | grep -Fx "Version: $RELEASE_VERSION"
+          mkdir -p release-bundle/dist
+          cp dist/* release-bundle/dist/
+          cd dist
+          sha256sum * > ../release-bundle/SHA256SUMS
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ needs.prepare.outputs.tag }}
+          path: release-bundle/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/busysloths-mlox/${{ needs.prepare.outputs.version }}/
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Create or verify release tag
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          existing="$(git rev-list -n 1 "$RELEASE_TAG" 2>/dev/null || true)"
+          if [ -n "$existing" ] && [ "$existing" != "$RELEASE_SHA" ]; then
+            echo "::error::$RELEASE_TAG points to $existing instead of $RELEASE_SHA."
+            exit 1
+          fi
+          if [ -z "$existing" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$RELEASE_TAG" "$RELEASE_SHA" -m "Release $RELEASE_TAG"
+            git push origin "$RELEASE_TAG"
+          fi
+
+      - name: Download release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-${{ needs.prepare.outputs.tag }}
+          path: release-bundle
+
+      - name: Publish distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: release-bundle/dist/
+          skip-existing: ${{ needs.prepare.outputs.is_resume }}
+
+  verify:
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+
+      - name: Wait for and install the exact PyPI version
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          uv python install "$PYTHON_VERSION"
+          ok=0
+          for attempt in $(seq 1 12); do
+            if uv tool install --force --refresh --python "$PYTHON_VERSION" \
+              "busysloths-mlox[tui]==$RELEASE_VERSION"; then
+              ok=1
+              break
+            fi
+            echo "Attempt $attempt: $RELEASE_VERSION is not available yet; retrying."
+            sleep 15
+          done
+          test "$ok" = "1" || {
+            echo "::error::PyPI did not serve $RELEASE_VERSION within 3 minutes."
+            exit 1
+          }
+
+      - name: Smoke test published entry points
+        run: |
+          mlox --version
+          mlox --help
+
+      - name: Smoke test eager imports
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          uv run --no-project --refresh \
+            --with "busysloths-mlox[tui]==$RELEASE_VERSION" \
+            python -c "import mlox.cli; import mlox.tui.app; print('eager imports OK')"
+
+  github-release:
+    needs: [prepare, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-${{ needs.prepare.outputs.tag }}
+          path: release-bundle
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release-bundle/dist/* \
+            release-bundle/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "$RELEASE_TAG" \
+            --notes "PyPI: https://pypi.org/project/busysloths-mlox/$RELEASE_VERSION/" \
+            --generate-notes
+
+  deploy-docs:
+    needs: [prepare, github-release]
+    uses: ./.github/workflows/deploy-docs.yml
+    with:
+      ref: ${{ needs.prepare.outputs.tag }}
+      release_tag: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit

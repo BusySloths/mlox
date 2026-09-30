@@ -40,7 +40,11 @@ All commands are run from the `website` directory:
 
 ## 🚀 Deployment
 
-The site is deployed to GitHub Pages via the GitHub Actions workflow at `.github/workflows/deploy-pages.yml`, triggered manually or when a release is published (the API docs are mounted under `/docs/`).
+The site is deployed to GitHub Pages by
+`.github/workflows/deploy-docs.yml`, either manually, for a manually published
+GitHub Release, or as part of the **Deploy Release** workflow. API docs are
+mounted under `/docs/`, and release deployments inject a link to the released
+version into the site header.
 
 The site will be available at: `https://busysloths.github.io/mlox/`
 
