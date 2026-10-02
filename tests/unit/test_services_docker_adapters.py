@@ -846,11 +846,9 @@ def test_mlflow_setup_check_and_list_models(conn, monkeypatch):
         def search_model_versions(self, filter_string="", max_results=250):
             return [_Model("demo", "1")]
 
-    class _Tracking:
-        MlflowClient = _Client
-
-    monkeypatch.setattr("mlox.services.mlflow.docker.mlflow.set_registry_uri", lambda *_: None)
-    monkeypatch.setattr("mlox.services.mlflow.docker.mlflow.tracking", _Tracking)
+    monkeypatch.setattr(
+        "mlox.services.mlflow.docker.create_mlflow_client", lambda *_: _Client()
+    )
 
     out = service.check(conn)
     assert out["status"] == "running"

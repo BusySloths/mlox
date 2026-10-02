@@ -7,9 +7,6 @@ from mlox.secret_manager import AbstractSecretManager
 from mlox.service import AbstractSecretManagerService
 from mlox.service import AbstractService
 from mlox.infra import Infrastructure
-from mlox.services.gcp.secret_manager import GCPSecretManager
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +19,8 @@ class GCPSecretService(AbstractService, AbstractSecretManagerService):
         self.state = "running"
 
     def get_secret_manager(self, infra: Infrastructure) -> AbstractSecretManager:
+        from mlox.services.gcp.secret_manager import GCPSecretManager
+
         keyfile_dict = dict()
         service = infra.get_service_by_uuid(self.secret_manager_uuid)
         if not service:

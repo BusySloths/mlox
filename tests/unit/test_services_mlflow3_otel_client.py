@@ -77,14 +77,9 @@ def test_mlflow3_docker_service_setup_check_and_models(monkeypatch):
         def search_model_versions(self, filter_string="", max_results=250):
             return [_Model("demo", "1")]
 
-    class _Tracking:
-        MlflowClient = _Client
-
     monkeypatch.setattr(
-        "mlox.services.mlflow.docker_mlflow3.mlflow.set_registry_uri", lambda *_: None
-    )
-    monkeypatch.setattr(
-        "mlox.services.mlflow.docker_mlflow3.mlflow.tracking", _Tracking
+        "mlox.services.mlflow.docker_mlflow3.create_mlflow_client",
+        lambda *_: _Client(),
     )
 
     status = service.check(conn)
@@ -107,16 +102,9 @@ def test_mlflow3_docker_service_fallback_paths(monkeypatch):
     conn = SimpleNamespace(host="example.test")
     service.setup(conn)
 
-    class _TrackingFailure:
-        class MlflowClient:
-            def __init__(self):
-                raise RuntimeError("boom")
-
     monkeypatch.setattr(
-        "mlox.services.mlflow.docker_mlflow3.mlflow.set_registry_uri", lambda *_: None
-    )
-    monkeypatch.setattr(
-        "mlox.services.mlflow.docker_mlflow3.mlflow.tracking", _TrackingFailure
+        "mlox.services.mlflow.docker_mlflow3.create_mlflow_client",
+        lambda *_: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
     assert service.check(conn)["status"] == "unknown"

@@ -1,12 +1,14 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict, cast
+from typing import TYPE_CHECKING, Dict, cast
 
 from mlox.service import AbstractSecretManagerService
 from mlox.service import AbstractService, ServiceCapability
 from mlox.infra import Infrastructure
-from mlox.services.gcp.gsheet import GCPSheets
+
+if TYPE_CHECKING:
+    from mlox.services.gcp.gsheet import GCPSheets
 
 
 # Configure logging (optional, but recommended)
@@ -26,7 +28,9 @@ class GCPSpreadsheetsService(AbstractService):
     def __post_init__(self):
         self.state = "running"
 
-    def get_sheets(self, infra: Infrastructure) -> GCPSheets:
+    def get_sheets(self, infra: Infrastructure) -> "GCPSheets":
+        from mlox.services.gcp.gsheet import GCPSheets
+
         keyfile_dict = dict()
         service = infra.get_service_by_uuid(self.secret_manager_uuid)
         if not service:

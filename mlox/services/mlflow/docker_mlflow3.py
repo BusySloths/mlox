@@ -1,4 +1,3 @@
-import mlflow  # type: ignore
 import logging
 
 from typing import Any, Dict, List
@@ -13,9 +12,9 @@ from mlox.service import (
     ServiceCapability,
     service_health_payload,
 )
-from mlox.services.mlflow.artifacts import (
-    configure_mlflow_client,
-    load_registered_model_json_artifact,
+from mlox.services.mlflow.registry_client import (
+    create_mlflow_client,
+    load_model_json_artifact,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,8 +96,7 @@ class MLFlow3DockerService(
         """
         # Primary approach: use the mlflow client API for a structured health check
         try:
-            configure_mlflow_client(self.service_url, self.ui_user, self.ui_pw)
-            client = mlflow.tracking.MlflowClient()
+            client = create_mlflow_client(self.service_url, self.ui_user, self.ui_pw)
 
             models = client.search_registered_models(filter_string="", max_results=10)
             return {
@@ -136,9 +134,7 @@ class MLFlow3DockerService(
         """List all registered model names from the MLflow server."""
         all_models = []
         try:
-            configure_mlflow_client(self.service_url, self.ui_user, self.ui_pw)
-
-            client = mlflow.tracking.MlflowClient()
+            client = create_mlflow_client(self.service_url, self.ui_user, self.ui_pw)
             models = client.search_model_versions(
                 filter_string=filter or "", max_results=250
             )
@@ -169,7 +165,7 @@ class MLFlow3DockerService(
         artifact_path: str,
     ) -> Any | None:
         try:
-            return load_registered_model_json_artifact(
+            return load_model_json_artifact(
                 service_url=self.service_url,
                 username=self.ui_user,
                 password=self.ui_pw,

@@ -1,11 +1,11 @@
-"""The deployment adapter must remain usable without the optional OTel SDK."""
+"""Deployment adapters must load without their optional client SDKs."""
 
 from pathlib import Path
 import subprocess
 import sys
 
 
-def test_docker_adapter_import_does_not_require_opentelemetry_sdk():
+def test_deployment_adapter_imports_do_not_require_optional_sdks():
     repository_root = Path(__file__).resolve().parents[4]
     script = """
 import builtins
@@ -13,16 +13,29 @@ import builtins
 original_import = builtins.__import__
 
 
-def reject_opentelemetry(name, *args, **kwargs):
-    if name == "opentelemetry" or name.startswith("opentelemetry."):
-        raise ModuleNotFoundError("OpenTelemetry SDK intentionally unavailable")
+def reject_optional_sdk(name, *args, **kwargs):
+    blocked = ("google", "gspread", "mlflow", "numpy", "opentelemetry", "pandas")
+    if any(name == package or name.startswith(f"{package}.") for package in blocked):
+        raise ModuleNotFoundError(f"Optional SDK {name!r} intentionally unavailable")
     return original_import(name, *args, **kwargs)
 
 
-builtins.__import__ = reject_opentelemetry
+builtins.__import__ = reject_optional_sdk
 from mlox.services.otel.docker import OtelDockerService
+from mlox.services.mlflow.docker import MLFlowDockerService
+from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
+from mlox.services.gcp.bq_service import GCPBigQueryService
+from mlox.services.gcp.secret_service import GCPSecretService
+from mlox.services.gcp.sheet_service import GCPSpreadsheetsService
+from mlox.services.gcp.storage_service import GCPStorageService
 
 assert OtelDockerService.__name__ == "OtelDockerService"
+assert MLFlowDockerService.__name__ == "MLFlowDockerService"
+assert MLFlow3DockerService.__name__ == "MLFlow3DockerService"
+assert GCPBigQueryService.__name__ == "GCPBigQueryService"
+assert GCPSecretService.__name__ == "GCPSecretService"
+assert GCPSpreadsheetsService.__name__ == "GCPSpreadsheetsService"
+assert GCPStorageService.__name__ == "GCPStorageService"
 """
 
     result = subprocess.run(
