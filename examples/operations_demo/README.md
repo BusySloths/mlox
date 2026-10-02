@@ -74,9 +74,11 @@ quit    stop traffic
 
 The Operations tab summarizes every observed model pipeline and provides
 baseline, current, 1-minute/5-sample, and 5-minute/10-sample values for the
-selected pipeline. It should first highlight `pca.transform`, show the downstream
-regression/RMSE deviation, and report recovery after corrupted samples leave the
-rolling windows.
+selected pipeline. A third drill-down table exposes the latest run's pipeline,
+trace, span, request, model and alias identifiers together with ordered steps,
+labels, and raw observation summaries. The view should first highlight
+`pca.transform`, show the downstream regression/RMSE deviation, and report
+recovery after corrupted samples leave the rolling windows.
 
 This controlled scenario assumes immediate labels. Real deployments may instead
 use delayed labels, business KPIs, canary tests, or model-quality proxies.

@@ -55,20 +55,27 @@ def _numeric_observations(attributes: dict[str, Any]) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class PipelineStepRun:
+    span_id: str
     path: str
     name: str
     depth: int
     started_ns: int
+    labels: dict[str, Any]
     observations: dict[str, float]
 
 
 @dataclass(frozen=True)
 class PipelineRun:
     trace_id: str
+    span_id: str
+    pipeline_id: str
     model_name: str
     model_version: str
+    model_alias: str
     pipeline_name: str
+    request_id: str
     started_ns: int
+    labels: dict[str, Any]
     steps: tuple[PipelineStepRun, ...]
 
 
@@ -154,10 +161,16 @@ class OperationsWatchSession:
                 continue
             steps.append(
                 PipelineStepRun(
+                    span_id=str(span.get("spanId") or ""),
                     path=path,
                     name=str(attrs.get("mlox.step.name") or path.rsplit("/", 1)[-1]),
                     depth=int(attrs.get("mlox.step.depth") or 1),
                     started_ns=int(span.get("startTimeUnixNano") or 0),
+                    labels={
+                        key: value
+                        for key, value in attrs.items()
+                        if not key.startswith(OBSERVATION_PREFIX)
+                    },
                     observations=_numeric_observations(attrs),
                 )
             )
@@ -168,10 +181,15 @@ class OperationsWatchSession:
         steps.sort(key=lambda step: step.started_ns)
         return PipelineRun(
             trace_id=trace_id,
+            span_id=str(root.get("spanId") or ""),
+            pipeline_id=str(attrs.get("mlox.pipeline.id") or ""),
             model_name=str(attrs.get("mlox.model.name") or "unknown"),
             model_version=str(attrs.get("mlox.model.version") or "unknown"),
+            model_alias=str(attrs.get("mlox.model.alias") or ""),
             pipeline_name=str(attrs.get("mlox.pipeline.name") or "model pipeline"),
+            request_id=str(attrs.get("mlox.request.id") or ""),
             started_ns=int(root.get("startTimeUnixNano") or 0),
+            labels=attrs,
             steps=tuple(steps),
         )
 
@@ -356,6 +374,7 @@ class OperationsWatchSession:
         )
         quality = self._quality_metric(rows)
         model_name, model_version, pipeline_name = key
+        latest = runs[-1]
         return {
             "id": "\x1f".join(key),
             "pipeline_name": pipeline_name,
@@ -371,6 +390,30 @@ class OperationsWatchSession:
             "quality_value": quality.get("long_window") if quality else None,
             "quality_current": quality.get("current") if quality else None,
             "quality_baseline": quality.get("baseline") if quality else None,
+            "details": {
+                "trace_id": latest.trace_id,
+                "span_id": latest.span_id,
+                "pipeline_id": latest.pipeline_id,
+                "pipeline_name": latest.pipeline_name,
+                "request_id": latest.request_id,
+                "model_name": latest.model_name,
+                "model_version": latest.model_version,
+                "model_alias": latest.model_alias,
+                "started_ns": latest.started_ns,
+                "labels": latest.labels,
+                "steps": [
+                    {
+                        "span_id": step.span_id,
+                        "path": step.path,
+                        "name": step.name,
+                        "depth": step.depth,
+                        "started_ns": step.started_ns,
+                        "labels": step.labels,
+                        "observations": step.observations,
+                    }
+                    for step in latest.steps
+                ],
+            },
         }
 
     def snapshot(self) -> dict[str, Any]:

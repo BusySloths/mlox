@@ -118,7 +118,7 @@ def test_operations_panel_lists_and_defaults_monitor_selector() -> None:
     assert selected == "monitor-a"
 
 
-async def _pipeline_summary_view() -> tuple[list[str], list[str]]:
+async def _pipeline_summary_view() -> tuple[list[str], list[str], str]:
     app = OperationsTestApp()
     async with app.run_test() as pilot:
         panel = app.query_one(OperationsPanel)
@@ -138,6 +138,29 @@ async def _pipeline_summary_view() -> tuple[list[str], list[str]]:
                         "quality_name": "rmse.mean",
                         "quality_value": 0.1234,
                         "steps": [],
+                        "details": {
+                            "pipeline_id": "pipeline-123",
+                            "pipeline_name": "forecasting",
+                            "trace_id": "trace-456",
+                            "span_id": "root-span",
+                            "request_id": "request-789",
+                            "model_name": "forecast",
+                            "model_version": "2",
+                            "model_alias": "champion",
+                            "started_ns": 123456,
+                            "labels": {"deployment.environment": "demo"},
+                            "steps": [
+                                {
+                                    "name": "normalize",
+                                    "path": "forecast/pipeline/normalize",
+                                    "span_id": "step-span",
+                                    "depth": 2,
+                                    "started_ns": 123457,
+                                    "labels": {"mlox.step.kind": "normalization"},
+                                    "observations": {"output.mean": 0.2},
+                                }
+                            ],
+                        },
                     },
                     {
                         "id": "ranking",
@@ -157,17 +180,25 @@ async def _pipeline_summary_view() -> tuple[list[str], list[str]]:
         )
         await pilot.pause()
         table = app.query_one("#operations-pipelines", DataTable)
+        details = app.query_one("#operations-details", DataTable)
         return (
             [str(cell) for cell in table.get_row_at(0)],
             [str(cell) for cell in table.get_row_at(1)],
+            "\n".join(
+                " | ".join(str(cell) for cell in details.get_row_at(index))
+                for index in range(details.row_count)
+            ),
         )
 
 
 def test_operations_panel_summarizes_each_pipeline_in_table() -> None:
-    forecast, ranking = asyncio.run(_pipeline_summary_view())
+    forecast, ranking, details = asyncio.run(_pipeline_summary_view())
 
     assert "forecasting" in forecast
     assert "forecast / 2" in forecast
     assert "rmse.mean: 0.1234" in forecast
     assert "ranking" in ranking
     assert "accuracy.mean: 0.9100" in ranking
+    assert "pipeline_id | pipeline-123" in details
+    assert "request_id | request-789" in details
+    assert "step 1: normalize observation | output.mean | 0.2" in details

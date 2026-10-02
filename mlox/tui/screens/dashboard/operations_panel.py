@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 from rich.text import Text
@@ -68,6 +69,11 @@ class OperationsPanel(Static):
                 "State",
             )
             yield table
+            details = DataTable(id="operations-details")
+            details.cursor_type = "row"
+            details.add_columns("Scope", "Field", "Value")
+            details.border_title = "Latest pipeline run data"
+            yield details
             yield Static(
                 "Start watching, then send healthy traffic to establish a baseline.",
                 id="operations-evidence",
@@ -157,6 +163,7 @@ class OperationsPanel(Static):
             self._watch_timer = None
         self.query_one("#operations-pipeline", DataTable).clear(columns=False)
         self.query_one("#operations-pipelines", DataTable).clear(columns=False)
+        self.query_one("#operations-details", DataTable).clear(columns=False)
         self._pipeline_snapshots.clear()
         self._selected_pipeline_id = ""
         self.query_one("#operations-monitor", Select).disabled = False
@@ -170,6 +177,7 @@ class OperationsPanel(Static):
             return
         self._selected_pipeline_id = pipeline_id
         self._populate_pipeline(pipeline.get("steps") or [])
+        self._populate_details(pipeline.get("details") or {})
         self._show_evidence(pipeline)
 
     def _refresh_if_active(self) -> None:
@@ -240,6 +248,7 @@ class OperationsPanel(Static):
             selected = pipelines[0]
             self._selected_pipeline_id = str(selected.get("id") or "")
         self._populate_pipeline((selected or {}).get("steps") or [])
+        self._populate_details((selected or {}).get("details") or {})
         self._show_evidence(selected or snapshot)
 
     def _populate_pipelines(
@@ -328,6 +337,42 @@ class OperationsPanel(Static):
             table.add_row(
                 label, baseline, current, short_window, long_window, state_text
             )
+
+    @staticmethod
+    def _detail_value(value: Any) -> str:
+        if isinstance(value, (dict, list, tuple)):
+            return json.dumps(value, sort_keys=True, default=str)
+        return str(value) if value not in (None, "") else "-"
+
+    def _populate_details(self, details: dict[str, Any]) -> None:
+        table = self.query_one("#operations-details", DataTable)
+        table.clear(columns=False)
+        if not details:
+            return
+        for field in (
+            "pipeline_id",
+            "pipeline_name",
+            "trace_id",
+            "span_id",
+            "request_id",
+            "model_name",
+            "model_version",
+            "model_alias",
+            "started_ns",
+        ):
+            table.add_row("run", field, self._detail_value(details.get(field)))
+        for key, value in sorted((details.get("labels") or {}).items()):
+            table.add_row("run label", str(key), self._detail_value(value))
+        for index, step in enumerate(details.get("steps") or [], start=1):
+            scope = f"step {index}: {step.get('name', '-')}"
+            for field in ("path", "span_id", "depth", "started_ns"):
+                table.add_row(scope, field, self._detail_value(step.get(field)))
+            for key, value in sorted((step.get("labels") or {}).items()):
+                table.add_row(f"{scope} label", str(key), self._detail_value(value))
+            for key, value in sorted((step.get("observations") or {}).items()):
+                table.add_row(
+                    f"{scope} observation", str(key), self._detail_value(value)
+                )
 
     def _show_evidence(self, snapshot: dict[str, Any]) -> None:
         state = snapshot.get("state")

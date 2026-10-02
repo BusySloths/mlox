@@ -44,9 +44,12 @@ def _run(
 ):
     trace = f"trace-{model}-{pipeline}-{number}"
     common = {
+        "mlox.pipeline.id": f"pipeline-{model}-{pipeline}",
         "mlox.model.name": model,
         "mlox.model.version": version,
+        "mlox.model.alias": "champion",
         "mlox.pipeline.name": pipeline,
+        "mlox.request.id": f"request-{model}-{number}",
     }
     spans = [
         _span(
@@ -228,3 +231,9 @@ def test_watch_keeps_independent_pipeline_summaries():
     assert pipelines["forecasting"]["model_name"] == "forecast"
     assert pipelines["ranking"]["model_version"] == "7"
     assert pipelines["forecasting"]["quality_name"] == "rmse.mean"
+    details = pipelines["forecasting"]["details"]
+    assert details["pipeline_id"] == "pipeline-forecast-forecasting"
+    assert details["request_id"] == "request-forecast-1"
+    assert details["model_alias"] == "champion"
+    assert details["steps"][1]["path"] == "forecast/pipeline/pca.transform"
+    assert details["steps"][1]["observations"]["output.mean"] == 1.0

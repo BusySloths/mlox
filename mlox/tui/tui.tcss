@@ -977,6 +977,13 @@ ModelCallResultDialog {
   border: round #1bd6f3ff;
 }
 
+#operations-details {
+  height: 2fr;
+  width: 1fr;
+  margin-top: 1;
+  border: round #a78bfa;
+}
+
 #operations-pipelines {
   height: 9;
   width: 1fr;
