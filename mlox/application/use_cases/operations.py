@@ -81,6 +81,8 @@ class OperationsWatchSession:
     active: bool = False
     state: str = "stopped"
     model_name: str = ""
+    monitor_uuid: str = ""
+    monitor_name: str = ""
     runs: list[PipelineRun] = field(default_factory=list)
     seen_span_ids: set[str] = field(default_factory=set)
     _pending: dict[str, dict[str, dict[str, Any]]] = field(
@@ -266,23 +268,61 @@ class OperationsWatchSession:
         }
 
 
-def _telemetry_source(infra) -> tuple[Any, Any] | tuple[None, None]:
+def list_operations_monitors(infra) -> list[dict[str, str]]:
+    """Return services that can provide raw telemetry for operations analysis."""
+
+    monitors: list[dict[str, str]] = []
     for bundle in getattr(infra, "bundles", []) or []:
         for service in getattr(bundle, "services", []) or []:
             if callable(getattr(service, "get_telemetry_data", None)):
-                return bundle, service
+                monitors.append(
+                    {
+                        "uuid": str(getattr(service, "uuid", "")),
+                        "name": str(getattr(service, "name", "Telemetry monitor")),
+                        "state": str(getattr(service, "state", "unknown")),
+                        "bundle": str(getattr(bundle, "name", "-")),
+                        "server": str(
+                            getattr(getattr(bundle, "server", None), "ip", "-")
+                        ),
+                    }
+                )
+    return monitors
+
+
+def _telemetry_source(
+    infra, monitor_uuid: str | None = None
+) -> tuple[Any, Any] | tuple[None, None]:
+    for bundle in getattr(infra, "bundles", []) or []:
+        for service in getattr(bundle, "services", []) or []:
+            if not callable(getattr(service, "get_telemetry_data", None)):
+                continue
+            if monitor_uuid and str(getattr(service, "uuid", "")) != monitor_uuid:
+                continue
+            return bundle, service
     return None, None
 
 
-def start_operations_watch(infra, *, baseline_runs: int = 10) -> OperationResult:
-    bundle, service = _telemetry_source(infra)
+def start_operations_watch(
+    infra,
+    *,
+    baseline_runs: int = 10,
+    monitor_uuid: str | None = None,
+) -> OperationResult:
+    bundle, service = _telemetry_source(infra, monitor_uuid)
     if bundle is None or service is None:
-        return OperationResult(False, 30, "No telemetry collector is available.")
+        message = (
+            "The selected telemetry monitor is no longer available."
+            if monitor_uuid
+            else "No telemetry collector is available."
+        )
+        return OperationResult(False, 30, message)
     try:
         raw = service.get_telemetry_data(bundle)
     except Exception as exc:
         return OperationResult(False, 31, f"Could not read telemetry: {exc}")
     session = OperationsWatchSession(baseline_runs=baseline_runs)
+    session.monitor_uuid = str(getattr(service, "uuid", ""))
+    session.monitor_name = str(getattr(service, "name", "Telemetry monitor"))
     session.start(raw)
     return OperationResult(
         True,
@@ -293,9 +333,11 @@ def start_operations_watch(infra, *, baseline_runs: int = 10) -> OperationResult
 
 
 def refresh_operations_watch(infra, session: OperationsWatchSession) -> OperationResult:
-    bundle, service = _telemetry_source(infra)
+    bundle, service = _telemetry_source(infra, session.monitor_uuid or None)
     if bundle is None or service is None:
-        return OperationResult(False, 30, "No telemetry collector is available.")
+        return OperationResult(
+            False, 30, "The selected telemetry monitor is no longer available."
+        )
     try:
         raw = service.get_telemetry_data(bundle)
         ingested = session.ingest(raw)

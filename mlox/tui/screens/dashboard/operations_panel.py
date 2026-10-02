@@ -9,10 +9,11 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import Button, DataTable, Static
+from textual.widgets import Button, DataTable, Select, Static
 
 from mlox.application.use_cases.operations import (
     OperationsWatchSession,
+    list_operations_monitors,
     refresh_operations_watch,
     start_operations_watch,
 )
@@ -33,6 +34,13 @@ class OperationsPanel(Static):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="operations-content"):
+            with Horizontal(id="operations-source"):
+                yield Static("Telemetry monitor", id="operations-source-label")
+                yield Select(
+                    options=[],
+                    prompt="Select telemetry monitor",
+                    id="operations-monitor",
+                )
             with Horizontal(id="operations-summary"):
                 yield Static(id="operations-state", classes="operations-metric")
                 yield Static(id="operations-model", classes="operations-metric")
@@ -63,15 +71,46 @@ class OperationsPanel(Static):
         if not self.is_mounted:
             return
         self.display = bool(selection and selection.type == "root")
+        if self.display:
+            self._load_monitor_options()
+
+    def _load_monitor_options(self) -> None:
+        workspace = getattr(self.app, "workspace", None)
+        infra = getattr(workspace, "infrastructure", None)
+        select = self.query_one("#operations-monitor", Select)
+        current = None if select.value is Select.BLANK else str(select.value)
+        monitors = list_operations_monitors(infra)
+        options = [
+            (
+                f"{monitor['name']} — {monitor['server']} "
+                f"({monitor['state']}, {monitor['uuid']})",
+                monitor["uuid"],
+            )
+            for monitor in monitors
+            if monitor["uuid"]
+        ]
+        select.set_options(options)
+        available = {value for _, value in options}
+        if current in available:
+            select.value = current
+        elif options:
+            select.value = options[0][1]
+        else:
+            select.clear()
 
     @on(Button.Pressed, "#start-operations")
     def handle_start(self, _: Button.Pressed) -> None:
         workspace = getattr(self.app, "workspace", None)
         infra = getattr(workspace, "infrastructure", None)
+        monitor = self.query_one("#operations-monitor", Select)
+        monitor_uuid = None if monitor.value is Select.BLANK else str(monitor.value)
+        if not monitor_uuid:
+            self.app.notify("Select a telemetry monitor first.", severity="error")
+            return
         self.query_one("#start-operations", Button).disabled = True
 
         def start() -> None:
-            result = start_operations_watch(infra)
+            result = start_operations_watch(infra, monitor_uuid=monitor_uuid)
             self.app.call_from_thread(self._finish_start, result)
 
         self.app.run_worker(start, thread=True, exclusive=True, group="operations-start")
@@ -83,6 +122,7 @@ class OperationsPanel(Static):
             return
         payload = result.data or {}
         self._session = payload.get("session")
+        self.query_one("#operations-monitor", Select).disabled = True
         if self._watch_timer is None:
             self._watch_timer = self.set_interval(2.0, self._refresh_if_active)
         else:
@@ -97,6 +137,7 @@ class OperationsPanel(Static):
             self._show_snapshot(self._session.snapshot())
         if self._watch_timer is not None:
             self._watch_timer.pause()
+        self.query_one("#operations-monitor", Select).disabled = False
 
     @on(Button.Pressed, "#reset-operations")
     def handle_reset(self, _: Button.Pressed) -> None:
@@ -105,6 +146,7 @@ class OperationsPanel(Static):
             self._watch_timer.stop()
             self._watch_timer = None
         self.query_one("#operations-pipeline", DataTable).clear(columns=False)
+        self.query_one("#operations-monitor", Select).disabled = False
         self._show_snapshot(self._empty_snapshot())
 
     def _refresh_if_active(self) -> None:

@@ -28,8 +28,10 @@ Register the model and assign its `champion` alias:
 uv run -m examples.operations_demo.register
 ```
 
-Open the MLOX TUI, select the project root, open **Operations**, and press
-**Start Watching**. Then start traffic in another terminal:
+Open the MLOX TUI, select the project root, and open **Operations**. Select the
+telemetry monitor bound to the gateway from the dropdown, then press **Start
+Watching**. The selection remains fixed for that watch session. Start traffic
+in another terminal:
 
 ```sh
 uv run -m examples.operations_demo.traffic

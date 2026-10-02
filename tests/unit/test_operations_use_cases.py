@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from mlox.application.use_cases.operations import (
     OperationsWatchSession,
+    list_operations_monitors,
     refresh_operations_watch,
     start_operations_watch,
 )
@@ -120,3 +121,62 @@ def test_start_requires_a_telemetry_source():
 
     assert not result.success
     assert "telemetry collector" in result.message
+
+
+def test_watch_uses_selected_monitor_for_start_and_refresh():
+    readings = {
+        "wrong": [_raw(_run(1))],
+        "right": ["", _raw(_run(2))],
+    }
+
+    def monitor(name, uuid):
+        def read(_bundle):
+            values = readings[name]
+            return values.pop(0) if len(values) > 1 else values[0]
+
+        return SimpleNamespace(
+            name=name,
+            uuid=uuid,
+            state="running",
+            get_telemetry_data=read,
+        )
+
+    wrong = monitor("wrong", "monitor-wrong")
+    right = monitor("right", "monitor-right")
+    infra = SimpleNamespace(
+        bundles=[
+            SimpleNamespace(
+                name="first",
+                server=SimpleNamespace(ip="10.0.0.1"),
+                services=[wrong],
+            ),
+            SimpleNamespace(
+                name="second",
+                server=SimpleNamespace(ip="10.0.0.2"),
+                services=[right],
+            ),
+        ]
+    )
+
+    monitors = list_operations_monitors(infra)
+    result = start_operations_watch(
+        infra, baseline_runs=1, monitor_uuid="monitor-right"
+    )
+    session = result.data["session"]
+    refreshed = refresh_operations_watch(infra, session)
+
+    assert [item["uuid"] for item in monitors] == ["monitor-wrong", "monitor-right"]
+    assert monitors[1]["server"] == "10.0.0.2"
+    assert result.success
+    assert session.monitor_uuid == "monitor-right"
+    assert session.monitor_name == "right"
+    assert refreshed.data["snapshot"]["runs"] == 1
+
+
+def test_start_rejects_missing_selected_monitor():
+    result = start_operations_watch(
+        SimpleNamespace(bundles=[]), monitor_uuid="missing-monitor"
+    )
+
+    assert not result.success
+    assert "selected telemetry monitor" in result.message
