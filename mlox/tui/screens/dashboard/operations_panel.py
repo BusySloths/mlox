@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from typing import Any, Optional
 
@@ -10,6 +11,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
+from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Select, Static
 
 from mlox.application.use_cases.operations import (
@@ -20,6 +22,67 @@ from mlox.application.use_cases.operations import (
 )
 
 from .model import SelectionInfo
+
+
+def _pipeline_detail_rows(details: dict[str, Any]) -> list[tuple[str, str, str]]:
+    def value_text(value: Any) -> str:
+        if isinstance(value, (dict, list, tuple)):
+            return json.dumps(value, sort_keys=True, default=str)
+        return str(value) if value not in (None, "") else "-"
+
+    rows: list[tuple[str, str, str]] = []
+    for field in (
+        "pipeline_id",
+        "pipeline_name",
+        "trace_id",
+        "span_id",
+        "request_id",
+        "model_name",
+        "model_version",
+        "model_alias",
+        "started_ns",
+    ):
+        rows.append(("run", field, value_text(details.get(field))))
+    for key, value in sorted((details.get("labels") or {}).items()):
+        rows.append(("run label", str(key), value_text(value)))
+    for index, step in enumerate(details.get("steps") or [], start=1):
+        scope = f"step {index}: {step.get('name', '-')}"
+        for field in ("path", "span_id", "depth", "started_ns"):
+            rows.append((scope, field, value_text(step.get(field))))
+        for key, value in sorted((step.get("labels") or {}).items()):
+            rows.append((f"{scope} label", str(key), value_text(value)))
+        for key, value in sorted((step.get("observations") or {}).items()):
+            rows.append((f"{scope} observation", str(key), value_text(value)))
+    return rows
+
+
+class PipelineDetailsDialog(ModalScreen[None]):
+    """Display one immutable snapshot of the selected pipeline's latest run."""
+
+    def __init__(self, pipeline: dict[str, Any]) -> None:
+        super().__init__()
+        self.pipeline = deepcopy(pipeline)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="operations-details-dialog"):
+            yield Static(
+                f"Pipeline details: {self.pipeline.get('pipeline_name', '-')}",
+                id="operations-details-title",
+            )
+            table = DataTable(id="operations-details-table")
+            table.cursor_type = "row"
+            table.add_columns("Scope", "Field", "Value")
+            yield table
+            yield Button("Close", id="close-operations-details", variant="primary")
+
+    def on_mount(self) -> None:
+        table = self.query_one("#operations-details-table", DataTable)
+        for row in _pipeline_detail_rows(self.pipeline.get("details") or {}):
+            table.add_row(*row)
+
+    @on(Button.Pressed, "#close-operations-details")
+    def handle_close(self, _: Button.Pressed) -> None:
+        self.dismiss(None)
 
 
 class OperationsPanel(Static):
@@ -52,6 +115,9 @@ class OperationsPanel(Static):
                 yield Button("Start Watching", id="start-operations", variant="success")
                 yield Button("Stop Watching", id="stop-operations", variant="warning")
                 yield Button("Reset", id="reset-operations")
+                yield Button(
+                    "Get Details", id="operations-get-details", disabled=True
+                )
             pipelines = DataTable(id="operations-pipelines")
             pipelines.cursor_type = "row"
             pipelines.add_columns(
@@ -69,11 +135,6 @@ class OperationsPanel(Static):
                 "State",
             )
             yield table
-            details = DataTable(id="operations-details")
-            details.cursor_type = "row"
-            details.add_columns("Scope", "Field", "Value")
-            details.border_title = "Latest pipeline run data"
-            yield details
             yield Static(
                 "Start watching, then send healthy traffic to establish a baseline.",
                 id="operations-evidence",
@@ -163,9 +224,9 @@ class OperationsPanel(Static):
             self._watch_timer = None
         self.query_one("#operations-pipeline", DataTable).clear(columns=False)
         self.query_one("#operations-pipelines", DataTable).clear(columns=False)
-        self.query_one("#operations-details", DataTable).clear(columns=False)
         self._pipeline_snapshots.clear()
         self._selected_pipeline_id = ""
+        self.query_one("#operations-get-details", Button).disabled = True
         self.query_one("#operations-monitor", Select).disabled = False
         self._show_snapshot(self._empty_snapshot())
 
@@ -177,8 +238,16 @@ class OperationsPanel(Static):
             return
         self._selected_pipeline_id = pipeline_id
         self._populate_pipeline(pipeline.get("steps") or [])
-        self._populate_details(pipeline.get("details") or {})
+        self.query_one("#operations-get-details", Button).disabled = not bool(
+            pipeline.get("details")
+        )
         self._show_evidence(pipeline)
+
+    @on(Button.Pressed, "#operations-get-details")
+    def handle_get_details(self, _: Button.Pressed) -> None:
+        pipeline = self._pipeline_snapshots.get(self._selected_pipeline_id)
+        if pipeline and pipeline.get("details"):
+            self.app.push_screen(PipelineDetailsDialog(pipeline))
 
     def _refresh_if_active(self) -> None:
         if not self._session or not self._session.active or self._refreshing:
@@ -248,7 +317,9 @@ class OperationsPanel(Static):
             selected = pipelines[0]
             self._selected_pipeline_id = str(selected.get("id") or "")
         self._populate_pipeline((selected or {}).get("steps") or [])
-        self._populate_details((selected or {}).get("details") or {})
+        self.query_one("#operations-get-details", Button).disabled = not bool(
+            (selected or {}).get("details")
+        )
         self._show_evidence(selected or snapshot)
 
     def _populate_pipelines(
@@ -337,42 +408,6 @@ class OperationsPanel(Static):
             table.add_row(
                 label, baseline, current, short_window, long_window, state_text
             )
-
-    @staticmethod
-    def _detail_value(value: Any) -> str:
-        if isinstance(value, (dict, list, tuple)):
-            return json.dumps(value, sort_keys=True, default=str)
-        return str(value) if value not in (None, "") else "-"
-
-    def _populate_details(self, details: dict[str, Any]) -> None:
-        table = self.query_one("#operations-details", DataTable)
-        table.clear(columns=False)
-        if not details:
-            return
-        for field in (
-            "pipeline_id",
-            "pipeline_name",
-            "trace_id",
-            "span_id",
-            "request_id",
-            "model_name",
-            "model_version",
-            "model_alias",
-            "started_ns",
-        ):
-            table.add_row("run", field, self._detail_value(details.get(field)))
-        for key, value in sorted((details.get("labels") or {}).items()):
-            table.add_row("run label", str(key), self._detail_value(value))
-        for index, step in enumerate(details.get("steps") or [], start=1):
-            scope = f"step {index}: {step.get('name', '-')}"
-            for field in ("path", "span_id", "depth", "started_ns"):
-                table.add_row(scope, field, self._detail_value(step.get(field)))
-            for key, value in sorted((step.get("labels") or {}).items()):
-                table.add_row(f"{scope} label", str(key), self._detail_value(value))
-            for key, value in sorted((step.get("observations") or {}).items()):
-                table.add_row(
-                    f"{scope} observation", str(key), self._detail_value(value)
-                )
 
     def _show_evidence(self, snapshot: dict[str, Any]) -> None:
         state = snapshot.get("state")

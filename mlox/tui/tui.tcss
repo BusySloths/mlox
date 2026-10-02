@@ -977,11 +977,35 @@ ModelCallResultDialog {
   border: round #1bd6f3ff;
 }
 
-#operations-details {
-  height: 2fr;
-  width: 1fr;
-  margin-top: 1;
+PipelineDetailsDialog {
+  align: center middle;
+  background: #000000 70%;
+}
+
+#operations-details-dialog {
+  width: 90%;
+  height: 90%;
+  padding: 1 2;
   border: round #a78bfa;
+  background: #10211fff;
+}
+
+#operations-details-title {
+  height: 2;
+  text-style: bold;
+  color: #c4b5fd;
+}
+
+#operations-details-table {
+  height: 1fr;
+  width: 1fr;
+}
+
+#close-operations-details {
+  width: 14;
+  height: 3;
+  margin-top: 1;
+  align-horizontal: right;
 }
 
 #operations-pipelines {

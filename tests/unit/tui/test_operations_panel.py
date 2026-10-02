@@ -5,9 +5,12 @@ import asyncio
 from textual.app import App, ComposeResult
 from types import SimpleNamespace
 
-from textual.widgets import DataTable, Select, Static
+from textual.widgets import Button, DataTable, Select, Static
 
-from mlox.tui.screens.dashboard.operations_panel import OperationsPanel
+from mlox.tui.screens.dashboard.operations_panel import (
+    OperationsPanel,
+    PipelineDetailsDialog,
+)
 
 
 class OperationsTestApp(App):
@@ -120,7 +123,7 @@ def test_operations_panel_lists_and_defaults_monitor_selector() -> None:
 
 async def _pipeline_summary_view() -> tuple[list[str], list[str], str]:
     app = OperationsTestApp()
-    async with app.run_test() as pilot:
+    async with app.run_test(size=(160, 50)) as pilot:
         panel = app.query_one(OperationsPanel)
         panel._show_snapshot(
             {
@@ -180,14 +183,25 @@ async def _pipeline_summary_view() -> tuple[list[str], list[str], str]:
         )
         await pilot.pause()
         table = app.query_one("#operations-pipelines", DataTable)
-        details = app.query_one("#operations-details", DataTable)
+        details_button = app.query_one("#operations-get-details", Button)
+        assert not details_button.disabled
+        panel.handle_get_details(Button.Pressed(details_button))
+        await pilot.pause()
+        dialog = app.screen
+        assert isinstance(dialog, PipelineDetailsDialog)
+        details = dialog.query_one("#operations-details-table", DataTable)
+        panel._pipeline_snapshots["forecast"]["details"]["request_id"] = (
+            "newer-request"
+        )
+        detail_text = "\n".join(
+            " | ".join(str(cell) for cell in details.get_row_at(index))
+            for index in range(details.row_count)
+        )
+        await pilot.click("#close-operations-details")
         return (
             [str(cell) for cell in table.get_row_at(0)],
             [str(cell) for cell in table.get_row_at(1)],
-            "\n".join(
-                " | ".join(str(cell) for cell in details.get_row_at(index))
-                for index in range(details.row_count)
-            ),
+            detail_text,
         )
 
 
@@ -201,4 +215,5 @@ def test_operations_panel_summarizes_each_pipeline_in_table() -> None:
     assert "accuracy.mean: 0.9100" in ranking
     assert "pipeline_id | pipeline-123" in details
     assert "request_id | request-789" in details
+    assert "newer-request" not in details
     assert "step 1: normalize observation | output.mean | 0.2" in details
