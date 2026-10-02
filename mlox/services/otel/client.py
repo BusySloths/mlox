@@ -24,7 +24,7 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-MLOX_OTEL_CERTIFICATE_B64_ENV = "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64"
+from mlox.services.otel.constants import MLOX_OTEL_CERTIFICATE_B64_ENV
 
 _TELEMETRY_CLIENT: "OTelClient | None" = None
 _TELEMETRY_CLIENT_INITIALIZED = False

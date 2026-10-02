@@ -30,7 +30,7 @@ from mlox.service import (
     ServiceCapability,
     service_health_payload,
 )
-from .client import MLOX_OTEL_CERTIFICATE_B64_ENV
+from mlox.services.otel.constants import MLOX_OTEL_CERTIFICATE_B64_ENV
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
