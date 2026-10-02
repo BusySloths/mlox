@@ -74,7 +74,7 @@ class PipelineRun:
 
 @dataclass
 class OperationsWatchSession:
-    """Bounded, in-memory baseline and incident analysis for one model pipeline."""
+    """Bounded, in-memory baseline and incident analysis for model pipelines."""
 
     baseline_runs: int = 10
     max_runs: int = 200
@@ -88,7 +88,7 @@ class OperationsWatchSession:
     _pending: dict[str, dict[str, dict[str, Any]]] = field(
         default_factory=lambda: defaultdict(dict), repr=False
     )
-    incident_seen: bool = False
+    incident_pipelines: set[tuple[str, str, str]] = field(default_factory=set)
 
     def start(self, raw: str | None) -> None:
         """Start after the current telemetry watermark; earlier data is ignored."""
@@ -98,7 +98,7 @@ class OperationsWatchSession:
         self.model_name = ""
         self.runs.clear()
         self._pending.clear()
-        self.incident_seen = False
+        self.incident_pipelines.clear()
         self.seen_span_ids = {
             str(span.get("spanId")) for span in _spans(raw) if span.get("spanId")
         }
@@ -126,14 +126,17 @@ class OperationsWatchSession:
             if run is None:
                 continue
             del self._pending[trace_id]
-            if not self.model_name or run.model_name == self.model_name:
-                if not self.model_name:
-                    self.model_name = run.model_name
-                completed.append(run)
+            completed.append(run)
 
         completed.sort(key=lambda run: run.started_ns)
         self.runs.extend(completed)
-        self.runs = self.runs[-self.max_runs:]
+        grouped = self._grouped_runs()
+        self.runs = sorted(
+            (run for runs in grouped.values() for run in runs[-self.max_runs:]),
+            key=lambda run: run.started_ns,
+        )
+        if self.runs:
+            self.model_name = self.runs[-1].model_name
         self._update_state()
         return len(completed)
 
@@ -172,9 +175,21 @@ class OperationsWatchSession:
             steps=tuple(steps),
         )
 
-    def _baseline(self) -> dict[tuple[str, str], list[float]]:
+    @staticmethod
+    def _key(run: PipelineRun) -> tuple[str, str, str]:
+        return run.model_name, run.model_version, run.pipeline_name
+
+    def _grouped_runs(self) -> dict[tuple[str, str, str], list[PipelineRun]]:
+        grouped: dict[tuple[str, str, str], list[PipelineRun]] = defaultdict(list)
+        for run in self.runs:
+            grouped[self._key(run)].append(run)
+        return grouped
+
+    def _baseline(
+        self, runs: list[PipelineRun]
+    ) -> dict[tuple[str, str], list[float]]:
         baseline: dict[tuple[str, str], list[float]] = defaultdict(list)
-        for run in self.runs[:self.baseline_runs]:
+        for run in runs[: self.baseline_runs]:
             for step in run.steps:
                 for name, value in step.observations.items():
                     if math.isfinite(value):
@@ -192,23 +207,69 @@ class OperationsWatchSession:
         tolerance = max(6.0 * mad, 4.0 * spread, abs(center) * 0.25, 1e-6)
         return abs(value - center) > tolerance
 
-    def _step_rows(self) -> list[dict[str, Any]]:
-        if not self.runs:
+    @staticmethod
+    def _window_average(
+        runs: list[PipelineRun],
+        step_path: str,
+        observation_name: str,
+        *,
+        duration_ns: int,
+        max_samples: int,
+    ) -> float | None:
+        if not runs:
+            return None
+        cutoff = runs[-1].started_ns - duration_ns
+        values: list[float] = []
+        for run in reversed(runs):
+            if run.started_ns < cutoff:
+                break
+            for step in run.steps:
+                if step.path == step_path and observation_name in step.observations:
+                    value = step.observations[observation_name]
+                    if math.isfinite(value):
+                        values.append(value)
+                    break
+            if len(values) >= max_samples:
+                break
+        return statistics.mean(values) if values else None
+
+    def _step_rows(self, runs: list[PipelineRun]) -> list[dict[str, Any]]:
+        if not runs:
             return []
-        baseline = self._baseline()
-        latest = self.runs[-1]
+        baseline = self._baseline(runs)
+        latest = runs[-1]
         rows: list[dict[str, Any]] = []
         for step in latest.steps:
             comparisons = []
             for name, value in step.observations.items():
                 reference = baseline.get((step.path, name), [])
                 if reference:
+                    short_window = self._window_average(
+                        runs,
+                        step.path,
+                        name,
+                        duration_ns=60 * 1_000_000_000,
+                        max_samples=5,
+                    )
+                    long_window = self._window_average(
+                        runs,
+                        step.path,
+                        name,
+                        duration_ns=5 * 60 * 1_000_000_000,
+                        max_samples=10,
+                    )
                     comparisons.append(
                         {
                             "name": name,
                             "baseline": statistics.median(reference),
                             "current": value,
-                            "anomalous": self._is_anomalous(value, reference),
+                            "short_window": short_window,
+                            "long_window": long_window,
+                            "anomalous": any(
+                                candidate is not None
+                                and self._is_anomalous(candidate, reference)
+                                for candidate in (short_window, long_window)
+                            ),
                         }
                     )
             anomalous = any(item["anomalous"] for item in comparisons)
@@ -223,21 +284,67 @@ class OperationsWatchSession:
             )
         return rows
 
-    def _update_state(self) -> None:
-        if len(self.runs) < self.baseline_runs:
-            self.state = "calibrating"
-            return
-        anomalous = any(row["state"] == "anomalous" for row in self._step_rows())
+    def _pipeline_state(
+        self, key: tuple[str, str, str], runs: list[PipelineRun]
+    ) -> str:
+        if len(runs) < self.baseline_runs:
+            return "calibrating"
+        anomalous = any(
+            row["state"] == "anomalous" for row in self._step_rows(runs)
+        )
         if anomalous:
-            self.incident_seen = True
+            self.incident_pipelines.add(key)
+            return "incident"
+        if key in self.incident_pipelines:
+            return "recovered"
+        return "watching"
+
+    def _update_state(self) -> None:
+        states = [
+            self._pipeline_state(key, runs)
+            for key, runs in self._grouped_runs().items()
+        ]
+        if not states:
+            self.state = "calibrating"
+        elif "incident" in states:
             self.state = "incident"
-        elif self.incident_seen:
+        elif "calibrating" in states:
+            self.state = "calibrating"
+        elif "recovered" in states:
             self.state = "recovered"
         else:
             self.state = "watching"
 
-    def snapshot(self) -> dict[str, Any]:
-        rows = self._step_rows() if len(self.runs) >= self.baseline_runs else []
+    @staticmethod
+    def _quality_metric(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+        preferred = ("rmse", "mae", "mse", "error", "accuracy", "f1", "precision", "recall")
+        observations = [
+            observation
+            for row in rows
+            if row.get("name") == "quality.evaluate"
+            for observation in row.get("observations", [])
+        ]
+        if not observations:
+            observations = [
+                observation
+                for row in rows
+                for observation in row.get("observations", [])
+            ]
+        return next(
+            (
+                observation
+                for metric in preferred
+                for observation in observations
+                if str(observation.get("name", "")).lower().startswith(metric)
+            ),
+            None,
+        )
+
+    def _pipeline_snapshot(
+        self, key: tuple[str, str, str], runs: list[PipelineRun]
+    ) -> dict[str, Any]:
+        state = self._pipeline_state(key, runs)
+        rows = self._step_rows(runs)
         culprit = next(
             (
                 row["path"]
@@ -247,24 +354,44 @@ class OperationsWatchSession:
             ),
             "",
         )
-        latest_rmse = None
-        baseline_rmse = None
-        for row in rows:
-            for observation in row["observations"]:
-                if observation["name"] in {"rmse.value", "rmse.mean"}:
-                    latest_rmse = observation["current"]
-                    baseline_rmse = observation["baseline"]
+        quality = self._quality_metric(rows)
+        model_name, model_version, pipeline_name = key
         return {
-            "active": self.active,
-            "state": self.state,
-            "model_name": self.model_name,
-            "runs": len(self.runs),
-            "baseline_runs": min(len(self.runs), self.baseline_runs),
+            "id": "\x1f".join(key),
+            "pipeline_name": pipeline_name,
+            "model_name": model_name,
+            "model_version": model_version,
+            "state": state,
+            "runs": len(runs),
+            "baseline_runs": min(len(runs), self.baseline_runs),
             "baseline_target": self.baseline_runs,
             "steps": rows,
             "culprit": culprit,
-            "latest_rmse": latest_rmse,
-            "baseline_rmse": baseline_rmse,
+            "quality_name": quality.get("name") if quality else "",
+            "quality_value": quality.get("long_window") if quality else None,
+            "quality_current": quality.get("current") if quality else None,
+            "quality_baseline": quality.get("baseline") if quality else None,
+        }
+
+    def snapshot(self) -> dict[str, Any]:
+        pipelines = [
+            self._pipeline_snapshot(key, runs)
+            for key, runs in self._grouped_runs().items()
+        ]
+        pipelines.sort(key=lambda item: (item["pipeline_name"], item["model_name"]))
+        primary = pipelines[0] if pipelines else {}
+        return {
+            "active": self.active,
+            "state": self.state,
+            "model_name": primary.get("model_name", self.model_name),
+            "runs": len(self.runs),
+            "baseline_runs": primary.get("baseline_runs", 0),
+            "baseline_target": self.baseline_runs,
+            "steps": primary.get("steps", []),
+            "culprit": primary.get("culprit", ""),
+            "latest_rmse": primary.get("quality_current"),
+            "baseline_rmse": primary.get("quality_baseline"),
+            "pipelines": pipelines,
         }
 
 

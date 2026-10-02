@@ -116,3 +116,58 @@ def test_operations_panel_lists_and_defaults_monitor_selector() -> None:
         ("Monitor B — 10.0.0.2 (stopped, monitor-b)", "monitor-b"),
     ]
     assert selected == "monitor-a"
+
+
+async def _pipeline_summary_view() -> tuple[list[str], list[str]]:
+    app = OperationsTestApp()
+    async with app.run_test() as pilot:
+        panel = app.query_one(OperationsPanel)
+        panel._show_snapshot(
+            {
+                "active": True,
+                "pipelines": [
+                    {
+                        "id": "forecast",
+                        "pipeline_name": "forecasting",
+                        "model_name": "forecast",
+                        "model_version": "2",
+                        "state": "watching",
+                        "runs": 12,
+                        "baseline_runs": 10,
+                        "baseline_target": 10,
+                        "quality_name": "rmse.mean",
+                        "quality_value": 0.1234,
+                        "steps": [],
+                    },
+                    {
+                        "id": "ranking",
+                        "pipeline_name": "ranking",
+                        "model_name": "ranker",
+                        "model_version": "7",
+                        "state": "calibrating",
+                        "runs": 4,
+                        "baseline_runs": 4,
+                        "baseline_target": 10,
+                        "quality_name": "accuracy.mean",
+                        "quality_value": 0.91,
+                        "steps": [],
+                    },
+                ],
+            }
+        )
+        await pilot.pause()
+        table = app.query_one("#operations-pipelines", DataTable)
+        return (
+            [str(cell) for cell in table.get_row_at(0)],
+            [str(cell) for cell in table.get_row_at(1)],
+        )
+
+
+def test_operations_panel_summarizes_each_pipeline_in_table() -> None:
+    forecast, ranking = asyncio.run(_pipeline_summary_view())
+
+    assert "forecasting" in forecast
+    assert "forecast / 2" in forecast
+    assert "rmse.mean: 0.1234" in forecast
+    assert "ranking" in ranking
+    assert "accuracy.mean: 0.9100" in ranking

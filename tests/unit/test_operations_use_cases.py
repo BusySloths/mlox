@@ -32,14 +32,31 @@ def _span(trace, span, name, started, **attrs):
     }
 
 
-def _run(number, *, pca=1.0, regression=2.0, rmse=0.1):
-    trace = f"trace-{number}"
+def _run(
+    number,
+    *,
+    pca=1.0,
+    regression=2.0,
+    rmse=0.1,
+    model="demo",
+    version="1",
+    pipeline="operations-demo",
+):
+    trace = f"trace-{model}-{pipeline}-{number}"
     common = {
-        "mlox.model.name": "demo",
-        "mlox.model.version": "1",
-        "mlox.pipeline.name": "operations-demo",
+        "mlox.model.name": model,
+        "mlox.model.version": version,
+        "mlox.pipeline.name": pipeline,
     }
-    spans = [_span(trace, f"root-{number}", "mlox.model.live_predict", number * 100, **common)]
+    spans = [
+        _span(
+            trace,
+            f"root-{model}-{pipeline}-{number}",
+            "mlox.model.live_predict",
+            number * 100,
+            **common,
+        )
+    ]
     values = [
         ("input.normalize", 0.0, "output.mean"),
         ("pca.transform", pca, "output.mean"),
@@ -49,7 +66,7 @@ def _run(number, *, pca=1.0, regression=2.0, rmse=0.1):
     for index, (name, value, observation) in enumerate(values, start=1):
         attrs = {
             **common,
-            "mlox.step.path": f"demo/pipeline/{name}",
+            "mlox.step.path": f"{model}/pipeline/{name}",
             "mlox.step.name": name,
             "mlox.step.depth": 2,
             f"mlox.observation.{observation}": value,
@@ -57,7 +74,7 @@ def _run(number, *, pca=1.0, regression=2.0, rmse=0.1):
         spans.append(
             _span(
                 trace,
-                f"step-{number}-{index}",
+                f"step-{model}-{pipeline}-{number}-{index}",
                 "mlox.model.step",
                 number * 100 + index,
                 **attrs,
@@ -88,14 +105,7 @@ def test_watch_calibrates_detects_first_deviation_and_recovery():
     assert incident["baseline_rmse"] == 0.1
     assert incident["latest_rmse"] == 5
 
-    session.ingest(
-        _raw(
-            _run(1),
-            _run(2),
-            _run(3, pca=10, regression=20, rmse=5),
-            _run(4),
-        )
-    )
+    session.ingest(_raw(*(_run(number) for number in range(1, 14))))
     assert session.snapshot()["state"] == "recovered"
     session.stop()
     assert session.snapshot()["state"] == "recovered"
@@ -180,3 +190,41 @@ def test_start_rejects_missing_selected_monitor():
 
     assert not result.success
     assert "selected telemetry monitor" in result.message
+
+
+def test_watch_calculates_bounded_rolling_averages():
+    session = OperationsWatchSession(baseline_runs=2)
+    session.start("")
+    session.ingest(
+        _raw(*(_run(number, pca=float(number)) for number in range(1, 13)))
+    )
+
+    pipeline = session.snapshot()["pipelines"][0]
+    pca = next(step for step in pipeline["steps"] if step["name"] == "pca.transform")
+    observation = next(
+        item for item in pca["observations"] if item["name"] == "output.mean"
+    )
+
+    assert observation["current"] == 12.0
+    assert observation["short_window"] == 10.0
+    assert observation["long_window"] == 7.5
+
+
+def test_watch_keeps_independent_pipeline_summaries():
+    session = OperationsWatchSession(baseline_runs=1)
+    session.start("")
+    session.ingest(
+        _raw(
+            _run(1, model="forecast", version="2", pipeline="forecasting"),
+            _run(1, model="ranking", version="7", pipeline="ranking"),
+        )
+    )
+
+    snapshot = session.snapshot()
+    pipelines = {item["pipeline_name"]: item for item in snapshot["pipelines"]}
+
+    assert snapshot["runs"] == 2
+    assert set(pipelines) == {"forecasting", "ranking"}
+    assert pipelines["forecasting"]["model_name"] == "forecast"
+    assert pipelines["ranking"]["model_version"] == "7"
+    assert pipelines["forecasting"]["quality_name"] == "rmse.mean"

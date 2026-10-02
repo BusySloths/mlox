@@ -31,6 +31,8 @@ class OperationsPanel(Static):
         self._session: OperationsWatchSession | None = None
         self._refreshing = False
         self._watch_timer = None
+        self._pipeline_snapshots: dict[str, dict[str, Any]] = {}
+        self._selected_pipeline_id = ""
 
     def compose(self) -> ComposeResult:
         with Vertical(id="operations-content"):
@@ -41,22 +43,30 @@ class OperationsPanel(Static):
                     prompt="Select telemetry monitor",
                     id="operations-monitor",
                 )
-            with Horizontal(id="operations-summary"):
-                yield Static(id="operations-state", classes="operations-metric")
-                yield Static(id="operations-model", classes="operations-metric")
-                yield Static(id="operations-runs", classes="operations-metric")
-                yield Static(id="operations-rmse", classes="operations-metric")
             with Horizontal(id="operations-actions"):
                 yield Static(
-                    "The first 10 completed runs after Start are assumed normal.",
+                    "The first 10 completed runs per pipeline are assumed normal.",
                     id="operations-assumption",
                 )
                 yield Button("Start Watching", id="start-operations", variant="success")
                 yield Button("Stop Watching", id="stop-operations", variant="warning")
                 yield Button("Reset", id="reset-operations")
+            pipelines = DataTable(id="operations-pipelines")
+            pipelines.cursor_type = "row"
+            pipelines.add_columns(
+                "Pipeline", "Model / version", "Runs / baseline", "Quality", "State"
+            )
+            yield pipelines
             table = DataTable(id="operations-pipeline")
             table.cursor_type = "row"
-            table.add_columns("Pipeline step", "Baseline", "Current", "State")
+            table.add_columns(
+                "Pipeline step",
+                "Baseline",
+                "Current",
+                "1 min / 5 avg",
+                "5 min / 10 avg",
+                "State",
+            )
             yield table
             yield Static(
                 "Start watching, then send healthy traffic to establish a baseline.",
@@ -146,8 +156,21 @@ class OperationsPanel(Static):
             self._watch_timer.stop()
             self._watch_timer = None
         self.query_one("#operations-pipeline", DataTable).clear(columns=False)
+        self.query_one("#operations-pipelines", DataTable).clear(columns=False)
+        self._pipeline_snapshots.clear()
+        self._selected_pipeline_id = ""
         self.query_one("#operations-monitor", Select).disabled = False
         self._show_snapshot(self._empty_snapshot())
+
+    @on(DataTable.RowSelected, "#operations-pipelines")
+    def handle_pipeline_selected(self, event: DataTable.RowSelected) -> None:
+        pipeline_id = str(event.row_key.value)
+        pipeline = self._pipeline_snapshots.get(pipeline_id)
+        if pipeline is None:
+            return
+        self._selected_pipeline_id = pipeline_id
+        self._populate_pipeline(pipeline.get("steps") or [])
+        self._show_evidence(pipeline)
 
     def _refresh_if_active(self) -> None:
         if not self._session or not self._session.active or self._refreshing:
@@ -187,50 +210,77 @@ class OperationsPanel(Static):
             "culprit": "",
             "latest_rmse": None,
             "baseline_rmse": None,
+            "pipelines": [],
         }
 
     def _show_snapshot(self, snapshot: dict[str, Any]) -> None:
-        state = str(snapshot.get("state") or "stopped")
-        display_state = state if snapshot.get("active") else "stopped"
-        colors = {
-            "stopped": "grey70",
-            "calibrating": "bright_yellow",
-            "watching": "bright_green",
-            "incident": "bright_red",
-            "recovered": "bright_cyan",
-        }
-        self._metric(
-            "#operations-state",
-            "State",
-            display_state.title(),
-            colors.get(display_state, "white"),
-        )
-        self._metric(
-            "#operations-model", "Model", str(snapshot.get("model_name") or "-"), "cyan"
-        )
-        baseline = int(snapshot.get("baseline_runs") or 0)
-        target = int(snapshot.get("baseline_target") or 10)
-        self._metric(
-            "#operations-runs",
-            "Runs / baseline",
-            f"{snapshot.get('runs', 0)} / {baseline}/{target}",
-            "bright_green" if baseline >= target else "bright_yellow",
-        )
-        rmse = snapshot.get("latest_rmse")
-        self._metric(
-            "#operations-rmse",
-            "Latest RMSE",
-            "-" if rmse is None else f"{float(rmse):.4f}",
-            "bright_red" if state == "incident" else "bright_green",
-        )
-        self._populate_pipeline(snapshot.get("steps") or [])
-        self._show_evidence(snapshot)
+        pipelines = snapshot.get("pipelines") or []
+        if not pipelines and snapshot.get("steps"):
+            pipelines = [
+                {
+                    "id": "legacy-pipeline",
+                    "pipeline_name": snapshot.get("pipeline_name") or "model pipeline",
+                    "model_name": snapshot.get("model_name") or "-",
+                    "model_version": snapshot.get("model_version") or "-",
+                    "state": snapshot.get("state") or "stopped",
+                    "runs": snapshot.get("runs") or 0,
+                    "baseline_runs": snapshot.get("baseline_runs") or 0,
+                    "baseline_target": snapshot.get("baseline_target") or 10,
+                    "quality_name": "rmse.mean"
+                    if snapshot.get("latest_rmse") is not None
+                    else "",
+                    "quality_value": snapshot.get("latest_rmse"),
+                    "steps": snapshot.get("steps") or [],
+                    "culprit": snapshot.get("culprit") or "",
+                }
+            ]
+        self._populate_pipelines(pipelines, active=bool(snapshot.get("active")))
+        selected = self._pipeline_snapshots.get(self._selected_pipeline_id)
+        if selected is None and pipelines:
+            selected = pipelines[0]
+            self._selected_pipeline_id = str(selected.get("id") or "")
+        self._populate_pipeline((selected or {}).get("steps") or [])
+        self._show_evidence(selected or snapshot)
 
-    def _metric(self, selector: str, label: str, value: str, color: str) -> None:
-        text = Text()
-        text.append(f"{value}\n", style=f"bold {color}")
-        text.append(label, style="dim")
-        self.query_one(selector, Static).update(text)
+    def _populate_pipelines(
+        self, pipelines: list[dict[str, Any]], *, active: bool
+    ) -> None:
+        table = self.query_one("#operations-pipelines", DataTable)
+        table.clear(columns=False)
+        self._pipeline_snapshots = {
+            str(pipeline.get("id") or index): pipeline
+            for index, pipeline in enumerate(pipelines)
+        }
+        for pipeline_id, pipeline in self._pipeline_snapshots.items():
+            state = str(pipeline.get("state") or "stopped") if active else "stopped"
+            quality_name = str(pipeline.get("quality_name") or "")
+            quality_value = pipeline.get("quality_value")
+            quality = (
+                "-"
+                if quality_value is None
+                else f"{quality_name}: {float(quality_value):.4f}"
+            )
+            state_text = Text(
+                f" {state.upper()} ",
+                style=(
+                    "bold white on dark_red"
+                    if state == "incident"
+                    else "bold white on dark_green"
+                    if state in {"watching", "recovered"}
+                    else "bold black on yellow"
+                    if state == "calibrating"
+                    else "dim"
+                ),
+            )
+            table.add_row(
+                str(pipeline.get("pipeline_name") or "-"),
+                f"{pipeline.get('model_name', '-')} / {pipeline.get('model_version', '-')}",
+                f"{pipeline.get('runs', 0)} / {pipeline.get('baseline_runs', 0)}/"
+                f"{pipeline.get('baseline_target', 10)}",
+                quality,
+                state_text,
+                key=pipeline_id,
+            )
 
     def _populate_pipeline(self, rows: list[dict[str, Any]]) -> None:
         table = self.query_one("#operations-pipeline", DataTable)
@@ -253,6 +303,16 @@ class OperationsPanel(Static):
             )
             baseline = "-" if not focus else f"{float(focus['baseline']):.4f}"
             current = "-" if not focus else f"{float(focus['current']):.4f}"
+            short_window = (
+                "-"
+                if not focus or focus.get("short_window") is None
+                else f"{float(focus['short_window']):.4f}"
+            )
+            long_window = (
+                "-"
+                if not focus or focus.get("long_window") is None
+                else f"{float(focus['long_window']):.4f}"
+            )
             depth = max(0, int(row.get("depth") or 1) - 1)
             branch = "└─ " if index == len(rows) - 1 else "├─ "
             label = f"{'  ' * depth}{branch if depth else ''}{row.get('name', '-')}"
@@ -265,7 +325,9 @@ class OperationsPanel(Static):
                     else "bold white on dark_green"
                 ),
             )
-            table.add_row(label, baseline, current, state_text)
+            table.add_row(
+                label, baseline, current, short_window, long_window, state_text
+            )
 
     def _show_evidence(self, snapshot: dict[str, Any]) -> None:
         state = snapshot.get("state")

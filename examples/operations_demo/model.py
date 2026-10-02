@@ -12,13 +12,25 @@ from mlox.services.mlflow.mlops import DeployableModel
 MODEL_NAME = "mlox-operations-demo"
 FEATURE_COLUMNS = ("feature_1", "feature_2", "feature_3")
 TARGET_COLUMN = "target"
+TARGET_WEIGHTS = np.array([1.25, -2.0, 0.75])
 
 
-def demonstration_batch(rows: int = 64) -> pd.DataFrame:
-    """Return the same labelled batch so baseline changes come only from the fault."""
+def demonstration_batch(
+    rows: int = 64,
+    *,
+    rng: np.random.Generator | None = None,
+    feature_noise: float = 0.0,
+    label_noise: float = 0.0,
+) -> pd.DataFrame:
+    """Return labelled samples with optional realistic feature and label noise."""
 
-    features = np.random.default_rng(2026).normal(size=(rows, len(FEATURE_COLUMNS)))
-    target = features @ np.array([1.25, -2.0, 0.75]) + 0.15
+    rng = rng or np.random.default_rng(2026)
+    features = rng.normal(size=(rows, len(FEATURE_COLUMNS)))
+    if feature_noise:
+        features += rng.normal(scale=feature_noise, size=features.shape)
+    target = features @ TARGET_WEIGHTS + 0.15
+    if label_noise:
+        target += rng.normal(scale=label_noise, size=rows)
     frame = pd.DataFrame(features, columns=FEATURE_COLUMNS)
     frame[TARGET_COLUMN] = target
     return frame

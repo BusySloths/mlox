@@ -31,6 +31,29 @@ def test_demonstration_batch_is_reproducible_and_labelled():
     assert list(first.columns) == ["feature_1", "feature_2", "feature_3", "target"]
 
 
+def test_demonstration_batch_supports_reproducible_sample_noise():
+    first = demonstration_batch(
+        32,
+        rng=np.random.default_rng(7),
+        feature_noise=0.03,
+        label_noise=0.02,
+    )
+    second = demonstration_batch(
+        32,
+        rng=np.random.default_rng(7),
+        feature_noise=0.03,
+        label_noise=0.02,
+    )
+    noiseless_target = (
+        first[["feature_1", "feature_2", "feature_3"]].to_numpy()
+        @ np.array([1.25, -2.0, 0.75])
+        + 0.15
+    )
+
+    assert first.equals(second)
+    assert not np.allclose(first["target"], noiseless_target)
+
+
 def _traffic_service(name, uuid, *, state="running", service_url=""):
     return SimpleNamespace(
         name=name,

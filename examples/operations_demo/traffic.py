@@ -6,6 +6,7 @@ import argparse
 import threading
 import uuid
 
+import numpy as np
 import requests
 import urllib3
 
@@ -15,7 +16,15 @@ from mlox.services.mlflow_gateway.base import MLFlowGatewayService
 
 
 class TrafficLoop:
-    def __init__(self, interval: float, gateway_uuid: str | None = None) -> None:
+    def __init__(
+        self,
+        interval: float,
+        gateway_uuid: str | None = None,
+        *,
+        feature_noise: float = 0.03,
+        label_noise: float = 0.02,
+        seed: int = 2026,
+    ) -> None:
         self.workspace = load_project_workspace()
         self.gateways = [
             service
@@ -32,6 +41,9 @@ class TrafficLoop:
         self.stop_event = threading.Event()
         self._lock = threading.Lock()
         self._request_number = 0
+        self.feature_noise = max(0.0, feature_noise)
+        self.label_noise = max(0.0, label_noise)
+        self._rng = np.random.default_rng(seed)
         if gateway_uuid:
             self.select_gateway(gateway_uuid)
 
@@ -101,6 +113,10 @@ class TrafficLoop:
             corrupt = self.corrupt
         lines = [
             f"Corruption is {'ON' if corrupt else 'OFF'}.",
+            (
+                f"Noise: feature σ={self.feature_noise:g}, "
+                f"label σ={self.label_noise:g}."
+            ),
             "Connected services:",
             self._service_summary("Gateway", gateway, gateway.uuid),
         ]
@@ -125,15 +141,19 @@ class TrafficLoop:
 
     def run(self) -> None:
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        batch = demonstration_batch()
-        payload_frame = {
-            "columns": list(batch.columns),
-            "data": batch.values.tolist(),
-        }
         while not self.stop_event.is_set():
             with self._lock:
                 corrupt = self.corrupt
                 gateway = self.gateway
+            batch = demonstration_batch(
+                rng=self._rng,
+                feature_noise=self.feature_noise,
+                label_noise=self.label_noise,
+            )
+            payload_frame = {
+                "columns": list(batch.columns),
+                "data": batch.values.tolist(),
+            }
             payload = {
                 "dataframe_split": payload_frame,
                 "params": {"corrupt": corrupt},
@@ -171,8 +191,27 @@ def main() -> None:
         metavar="UUID",
         help="Select a running MLflow Gateway by UUID or an unambiguous UUID prefix",
     )
+    parser.add_argument(
+        "--feature-noise",
+        type=float,
+        default=0.03,
+        help="Gaussian feature noise standard deviation",
+    )
+    parser.add_argument(
+        "--label-noise",
+        type=float,
+        default=0.02,
+        help="Gaussian label noise standard deviation",
+    )
+    parser.add_argument("--seed", type=int, default=2026, help="Traffic random seed")
     args = parser.parse_args()
-    loop = TrafficLoop(max(0.1, args.interval), gateway_uuid=args.gateway)
+    loop = TrafficLoop(
+        max(0.1, args.interval),
+        gateway_uuid=args.gateway,
+        feature_noise=args.feature_noise,
+        label_noise=args.label_noise,
+        seed=args.seed,
+    )
     worker = threading.Thread(target=loop.run, daemon=True)
     worker.start()
     print("Sending healthy traffic. Commands: on, off, status, gateways, use <uuid>, quit")
