@@ -81,7 +81,10 @@ class OperationsDemoModel(DeployableModel):
             if target is not None:
                 with self.model_step("quality.evaluate", kind="evaluation") as step:
                     rmse = float(np.sqrt(np.mean((prediction - target) ** 2)))
-                    step.observe_value("rmse", rmse)
-                    step.observe_value("sample_count", len(target))
+                    # Keep the artifact compatible with the ModelStep API already
+                    # installed in deployed gateways. Scalar values are represented
+                    # as one-element arrays and therefore appear as ``*.mean``.
+                    step.observe_array("rmse", [rmse])
+                    step.observe_array("sample_count", [len(target)])
 
         return pd.DataFrame({"prediction": prediction})

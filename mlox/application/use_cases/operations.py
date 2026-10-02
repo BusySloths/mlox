@@ -249,7 +249,7 @@ class OperationsWatchSession:
         baseline_rmse = None
         for row in rows:
             for observation in row["observations"]:
-                if observation["name"] == "rmse.value":
+                if observation["name"] in {"rmse.value", "rmse.mean"}:
                     latest_rmse = observation["current"]
                     baseline_rmse = observation["baseline"]
         return {

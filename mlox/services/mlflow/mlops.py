@@ -147,20 +147,6 @@ class ModelStep:
         self.set_attribute(f"{prefix}.min", float(np.min(finite)))
         self.set_attribute(f"{prefix}.max", float(np.max(finite)))
 
-    def observe_value(self, name: str, value: float | int) -> None:
-        """Record one scalar observation on the active model-step span."""
-
-        observation_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", name).strip("_")
-        if not observation_name:
-            raise ValueError("Observation name must contain a valid character.")
-        try:
-            numeric_value = float(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Scalar observations must be numeric.") from exc
-        self.set_attribute(
-            f"mlox.observation.{observation_name}.value", numeric_value
-        )
-
 
 @contextmanager
 def _optional_telemetry_span(

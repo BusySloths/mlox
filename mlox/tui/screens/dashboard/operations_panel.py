@@ -199,7 +199,14 @@ class OperationsPanel(Static):
                 (item for item in observations if item.get("anomalous")),
                 next(
                     (item for item in observations if item.get("name") == "rmse.value"),
-                    observations[0] if observations else None,
+                    next(
+                        (
+                            item
+                            for item in observations
+                            if item.get("name") == "rmse.mean"
+                        ),
+                        observations[0] if observations else None,
+                    ),
                 ),
             )
             baseline = "-" if not focus else f"{float(focus['baseline']):.4f}"

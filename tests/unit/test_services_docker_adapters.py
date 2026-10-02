@@ -1103,6 +1103,10 @@ def test_mlflow_gateway_setup_check_and_is_model(conn):
     env_lines = service.exec.appended["/tmp/stack-8081/service.env"]
     assert "MLOX_GATEWAY_CACHE_MAX_MODELS=3" in env_lines
     assert "MLOX_GATEWAY_CACHE_TTL_DAYS=10" in env_lines
+    assert service.secret_manager_uuid is None
+    assert service.telemetry_uuid is None
+    assert not any("OTEL_EXPORTER_" in line for line in env_lines)
+    assert not any("MLOX_SECRET_MANAGER_" in line for line in env_lines)
 
     service.exec.service_states[service.compose_service_names["MLflow Gateway"]] = "running"
     service.exec.execute_result = "200"

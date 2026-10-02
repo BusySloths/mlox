@@ -43,7 +43,7 @@ def _run(number, *, pca=1.0, regression=2.0, rmse=0.1):
         ("input.normalize", 0.0, "output.mean"),
         ("pca.transform", pca, "output.mean"),
         ("regression.predict", regression, "output.mean"),
-        ("quality.evaluate", rmse, "rmse.value"),
+        ("quality.evaluate", rmse, "rmse.mean"),
     ]
     for index, (name, value, observation) in enumerate(values, start=1):
         attrs = {
