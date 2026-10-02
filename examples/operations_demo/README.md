@@ -35,6 +35,22 @@ Open the MLOX TUI, select the project root, open **Operations**, and press
 uv run -m examples.operations_demo.traffic
 ```
 
+The script selects the first running MLflow Gateway by default. Use `status` to
+see the exact gateway endpoint and its bound registry, telemetry, and secret
+manager services. If the project contains multiple gateways, list and select
+them interactively:
+
+```text
+gateways
+use <gateway-uuid>
+```
+
+You can also select one at startup (an unambiguous UUID prefix is accepted):
+
+```sh
+uv run -m examples.operations_demo.traffic --gateway <gateway-uuid>
+```
+
 Leave corruption off while the first ten runs establish the assumed-normal
 baseline. At the interactive prompt use:
 
@@ -42,6 +58,8 @@ baseline. At the interactive prompt use:
 on      inject the PCA fault
 off     restore normal PCA behavior
 status  show the current mode
+gateways list configured gateways and mark the selected one
+use ID  send subsequent requests through gateway ID
 quit    stop traffic
 ```
 
