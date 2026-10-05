@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from textual.app import App, ComposeResult
 
 from mlox.project import ProjectWorkspace
-from mlox.project.entries import parse_board
+from mlox.project.entries import Entry, parse_board
 from mlox.tui.screens.dashboard.knowledge_panel import KnowledgePanel
 from mlox.tui.screens.dashboard.screen import DashboardScreen
 
@@ -53,6 +53,23 @@ def test_knowledge_panel_seeds_default_board(tmp_path) -> None:
             assert not panel.query_one("#kb-viewer-scroll").display
 
     asyncio.run(run())
+
+
+def test_empty_board_column_ignores_card_actions(tmp_path) -> None:
+    panel = KnowledgePanel()
+    panel._board_entry = Entry(
+        kind="board", title="Board", body_md="## Open\n\n## Doing\n"
+    )
+
+    # An empty column has no card at index zero. These actions must be safe
+    # because keyboard commands can arrive while the column is focused.
+    panel.toggle_card(0, 0)
+    panel.move_card(0, 0, 1)
+    panel.delete_card(0, 0)
+    panel.open_card(0, 0)
+    panel._linkify_card(0, 0, "Ignored")
+
+    assert panel._board_entry.body_md == "## Open\n\n## Doing\n"
 
 
 def test_knowledge_panel_survives_workspace_without_entries_api(tmp_path) -> None:
