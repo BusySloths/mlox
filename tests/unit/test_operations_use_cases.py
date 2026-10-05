@@ -4,11 +4,19 @@ import json
 from types import SimpleNamespace
 
 from mlox.application.use_cases.operations import (
+    OPERATIONS_REASONING_SECRET,
     OperationsWatchSession,
+    get_operations_board,
     list_operations_monitors,
+    load_operations_reasoning_settings,
+    reason_about_operations_incident,
     refresh_operations_watch,
+    save_operations_postmortem,
+    save_operations_reasoning_settings,
     start_operations_watch,
 )
+from mlox.project import ProjectWorkspace
+from mlox.project.operations import OperationsEvent
 
 
 def _attribute(key, value):
@@ -237,3 +245,126 @@ def test_watch_keeps_independent_pipeline_summaries():
     assert details["model_alias"] == "champion"
     assert details["steps"][1]["path"] == "forecast/pipeline/pca.transform"
     assert details["steps"][1]["observations"]["output.mean"] == 1.0
+
+
+def test_reasoning_settings_are_redacted_and_blank_key_preserves_secret():
+    class Secrets:
+        value = None
+
+        def load_secret(self, _name):
+            return self.value
+
+        def save_secret(self, name, value):
+            assert name == OPERATIONS_REASONING_SECRET
+            self.value = value
+
+    secrets = Secrets()
+    workspace = SimpleNamespace(secrets=secrets)
+
+    saved = save_operations_reasoning_settings(
+        workspace,
+        mode="advisory",
+        provider="openai-compatible",
+        endpoint="https://llm.example/v1",
+        model="reasoner",
+        api_key="top-secret",
+    )
+    updated = save_operations_reasoning_settings(
+        workspace,
+        mode="approval",
+        provider="openai-compatible",
+        endpoint="https://llm.example/v1",
+        model="reasoner-v2",
+        api_key="",
+    )
+    loaded = load_operations_reasoning_settings(workspace)
+
+    assert saved.success and updated.success and loaded.success
+    assert "api_key" not in saved.data
+    assert secrets.value["api_key"] == "top-secret"
+    assert loaded.data["api_key_configured"] is True
+    assert loaded.data["mode"] == "approval"
+
+
+def test_reasoning_uses_openai_compatible_endpoint_without_exposing_key():
+    secret = {
+        "mode": "approval",
+        "provider": "openai-compatible",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+        "api_key": "top-secret",
+    }
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(load_secret=lambda _name: secret)
+    )
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {"message": {"content": "Disable corrupt traffic and verify recovery."}}
+                ]
+            }
+
+    def post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return Response()
+
+    result = reason_about_operations_incident(
+        workspace,
+        {
+            "pipeline_name": "demo",
+            "state": "incident",
+            "culprit": "demo/pca.transform",
+            "steps": [],
+        },
+        post=post,
+    )
+
+    assert result.success
+    assert captured["url"] == "https://llm.example/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer top-secret"
+    assert result.data == {
+        "recommendation": "Disable corrupt traffic and verify recovery.",
+        "mode": "approval",
+        "model": "reasoner",
+    }
+    assert "top-secret" not in result.message
+
+
+def test_operations_board_and_postmortem_reuse_knowledge(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "operations"), "pw")
+
+    board_result = get_operations_board(workspace, create=True)
+    assert board_result.success
+    board = board_result.data["board"]
+    assert board.title == "Operations"
+
+    pipeline = {
+        "id": "demo\x1f1\x1foperations-demo",
+        "pipeline_name": "operations-demo",
+        "culprit": "demo/pipeline/pca.transform",
+        "quality_name": "rmse.mean",
+        "quality_value": 4.2,
+    }
+    event = OperationsEvent(
+        event_type="incident_recovered",
+        summary="Pipeline recovered.",
+        target=pipeline["id"],
+        created_at="2026-10-05T10:05:00+00:00",
+    )
+
+    result = save_operations_postmortem(workspace, pipeline, [event])
+
+    assert result.success
+    postmortem = result.data["entry"]
+    assert postmortem.kind == "wiki"
+    assert "pca.transform" in postmortem.body_md
+    assert "Pipeline recovered." in postmortem.body_md
+    updated_board = workspace.find_entry_by_title("Operations", "board")
+    assert postmortem.title in updated_board.body_md

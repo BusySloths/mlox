@@ -4,15 +4,255 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 import json
 import math
 import statistics
 from typing import Any
 
+import requests
+
 from mlox.application.result import OperationResult
+from mlox.project.entries import Entry, add_item, default_template, parse_board
+from mlox.project.operations import OperationsEvent
 
 
 OBSERVATION_PREFIX = "mlox.observation."
+OPERATIONS_BOARD_TITLE = "Operations"
+OPERATIONS_REASONING_SECRET = "mlox.operations.reasoning"
+REASONING_MODES = {"disabled", "advisory", "approval"}
+
+
+def _reasoning_defaults() -> dict[str, Any]:
+    return {
+        "mode": "disabled",
+        "provider": "openai-compatible",
+        "endpoint": "",
+        "model": "",
+        "api_key_configured": False,
+    }
+
+
+def load_operations_reasoning_settings(workspace) -> OperationResult:
+    """Load redacted reasoning-assistant settings from the active secret manager."""
+
+    settings = _reasoning_defaults()
+    manager = getattr(workspace, "secrets", None)
+    if manager is None:
+        return OperationResult(False, 40, "Project secret manager is unavailable.")
+    try:
+        stored = manager.load_secret(OPERATIONS_REASONING_SECRET)
+    except Exception as exc:
+        return OperationResult(False, 41, f"Could not load reasoning settings: {exc}")
+    if stored is None:
+        return OperationResult(True, 0, "Reasoning assistant is not configured.", settings)
+    if not isinstance(stored, dict):
+        return OperationResult(False, 42, "Stored reasoning settings are invalid.")
+    for key in ("mode", "provider", "endpoint", "model"):
+        if key in stored:
+            settings[key] = str(stored[key])
+    settings["api_key_configured"] = bool(stored.get("api_key"))
+    return OperationResult(True, 0, "Reasoning settings loaded.", settings)
+
+
+def save_operations_reasoning_settings(
+    workspace,
+    *,
+    mode: str,
+    provider: str,
+    endpoint: str,
+    model: str,
+    api_key: str = "",
+) -> OperationResult:
+    """Persist reasoning settings without returning or logging the API key."""
+
+    normalized_mode = str(mode).strip().lower()
+    if normalized_mode not in REASONING_MODES:
+        return OperationResult(False, 43, "Unknown reasoning-assistant mode.")
+    manager = getattr(workspace, "secrets", None)
+    if manager is None:
+        return OperationResult(False, 40, "Project secret manager is unavailable.")
+    try:
+        existing = manager.load_secret(OPERATIONS_REASONING_SECRET)
+        existing_key = existing.get("api_key", "") if isinstance(existing, dict) else ""
+        stored = {
+            "mode": normalized_mode,
+            "provider": str(provider).strip() or "openai-compatible",
+            "endpoint": str(endpoint).strip(),
+            "model": str(model).strip(),
+            "api_key": str(api_key).strip() or existing_key,
+        }
+        manager.save_secret(OPERATIONS_REASONING_SECRET, stored)
+    except Exception as exc:
+        return OperationResult(False, 44, f"Could not save reasoning settings: {exc}")
+    redacted = {key: value for key, value in stored.items() if key != "api_key"}
+    redacted["api_key_configured"] = bool(stored["api_key"])
+    return OperationResult(True, 0, "Reasoning settings saved.", redacted)
+
+
+def reason_about_operations_incident(
+    workspace,
+    pipeline: dict[str, Any],
+    *,
+    post=None,
+) -> OperationResult:
+    """Ask the configured OpenAI-compatible model for advisory remediation."""
+
+    manager = getattr(workspace, "secrets", None)
+    if manager is None:
+        return OperationResult(False, 40, "Project secret manager is unavailable.")
+    try:
+        settings = manager.load_secret(OPERATIONS_REASONING_SECRET)
+    except Exception as exc:
+        return OperationResult(False, 41, f"Could not load reasoning settings: {exc}")
+    if not isinstance(settings, dict) or settings.get("mode") == "disabled":
+        return OperationResult(False, 46, "Reasoning assistant is disabled.")
+    endpoint = str(settings.get("endpoint") or "").strip().rstrip("/")
+    model = str(settings.get("model") or "").strip()
+    if not endpoint or not model:
+        return OperationResult(
+            False,
+            47,
+            "Reasoning endpoint and model must be configured.",
+        )
+    if not endpoint.endswith("/chat/completions"):
+        endpoint += "/chat/completions"
+    evidence = {
+        "pipeline": pipeline.get("pipeline_name"),
+        "model": pipeline.get("model_name"),
+        "model_version": pipeline.get("model_version"),
+        "state": pipeline.get("state"),
+        "likely_origin": pipeline.get("culprit"),
+        "quality_metric": pipeline.get("quality_name"),
+        "quality_value": pipeline.get("quality_value"),
+        "steps": pipeline.get("steps") or [],
+    }
+    headers = {"Content-Type": "application/json"}
+    api_key = str(settings.get("api_key") or "").strip()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = post or requests.post
+    try:
+        response = request(
+            endpoint,
+            headers=headers,
+            json={
+                "model": model,
+                "temperature": 0.1,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an MLOps incident advisor. Provide a concise, "
+                            "non-destructive remediation recommendation, the evidence "
+                            "supporting it, and a recovery verification step. Never "
+                            "claim that an action was executed."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": json.dumps(evidence, sort_keys=True, default=str),
+                    },
+                ],
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        recommendation = str(payload["choices"][0]["message"]["content"]).strip()
+        if not recommendation:
+            raise ValueError("The model returned an empty recommendation.")
+    except Exception as exc:
+        return OperationResult(False, 48, f"Incident reasoning failed: {exc}")
+    return OperationResult(
+        True,
+        0,
+        "Reasoning recommendation received.",
+        {
+            "recommendation": recommendation,
+            "mode": str(settings.get("mode") or "advisory"),
+            "model": model,
+        },
+    )
+
+
+def get_operations_board(workspace, *, create: bool = False) -> OperationResult:
+    """Load the Knowledge board reserved for operations planning."""
+
+    find_entry = getattr(workspace, "find_entry_by_title", None)
+    save_entry = getattr(workspace, "save_entry", None)
+    if not callable(find_entry):
+        return OperationResult(False, 45, "Project knowledge base is unavailable.")
+    board = find_entry(OPERATIONS_BOARD_TITLE, "board")
+    if board is None and create:
+        if not callable(save_entry):
+            return OperationResult(False, 45, "Project knowledge base is unavailable.")
+        board = save_entry(
+            Entry(
+                kind="board",
+                title=OPERATIONS_BOARD_TITLE,
+                body_md=default_template("board", OPERATIONS_BOARD_TITLE),
+            )
+        )
+    message = (
+        "Operations board loaded."
+        if board is not None
+        else "No Knowledge board named 'Operations' exists yet."
+    )
+    return OperationResult(True, 0, message, {"board": board})
+
+
+def save_operations_postmortem(
+    workspace,
+    pipeline: dict[str, Any],
+    events: list[OperationsEvent],
+) -> OperationResult:
+    """Save a deterministic incident postmortem and link it from the plan board."""
+
+    save_entry = getattr(workspace, "save_entry", None)
+    if not callable(save_entry):
+        return OperationResult(False, 45, "Project knowledge base is unavailable.")
+    pipeline_name = str(pipeline.get("pipeline_name") or "model pipeline")
+    timestamp = datetime.now(timezone.utc)
+    title = f"Postmortem - {pipeline_name} - {timestamp:%Y-%m-%d %H:%M UTC}"
+    culprit = str(pipeline.get("culprit") or "Not determined")
+    quality_name = str(pipeline.get("quality_name") or "quality metric")
+    quality_value = pipeline.get("quality_value")
+    timeline = "\n".join(
+        f"- {event.created_at}: **{event.event_type}** — {event.summary}"
+        for event in reversed(events)
+        if event.target == str(pipeline.get("id") or "")
+    ) or "- No persisted incident events were available."
+    body = (
+        "## Summary\n\n"
+        f"Pipeline `{pipeline_name}` entered an anomalous state and later recovered.\n\n"
+        "## Impact\n\n"
+        f"Latest {quality_name}: `{quality_value if quality_value is not None else '-'}`.\n\n"
+        "## Likely origin\n\n"
+        f"`{culprit}`\n\n"
+        "## Timeline\n\n"
+        f"{timeline}\n\n"
+        "## Remediation\n\n"
+        "Recovery was verified through the rolling windows. Review the incident "
+        "activity trail for proposed and manually applied remediation.\n\n"
+        "## Follow-up actions\n\n"
+        "- [ ] Review detection thresholds and baseline coverage.\n"
+        "- [ ] Confirm the production rollback or traffic-control runbook.\n"
+    )
+    entry = save_entry(Entry(kind="wiki", title=title, body_md=body))
+    board_result = get_operations_board(workspace, create=True)
+    board = (board_result.data or {}).get("board") if board_result.success else None
+    if board is not None:
+        columns = parse_board(board.body_md)
+        if columns:
+            board.body_md = add_item(board.body_md, 0, f"Review [[{title}]] follow-ups")
+            save_entry(board)
+    return OperationResult(
+        True,
+        0,
+        f"Postmortem saved to Knowledge as '{title}'.",
+        {"entry": entry, "board": board},
+    )
 
 
 def _attributes(attributes: Any) -> dict[str, Any]:

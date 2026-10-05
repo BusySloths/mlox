@@ -139,13 +139,22 @@ UUID. Unavailable external providers remain selected; there is no automatic
 fallback. Provider changes copy and verify secrets before the pointer is committed.
 
 The project knowledge base stores titled markdown entries (kinds: `note`, `faq`,
-`wiki`, `todo`, `board`, `template`) in the encrypted `entries` table (schema
-version 3). Boards are a convention over markdown: `## Column` subheaders name
+`wiki`, `todo`, `board`, `template`) in the encrypted `entries` table. Boards
+are a convention over markdown: `## Column` subheaders name
 the lanes and `- [ ]` checkbox lines are the cards, and entries reference each
 other via `[[Title]]` wiki-links. `mlox/project/entries.py` holds the dataclass,
 the pure markdown board/link helpers, and per-kind templates; the TUI knowledge
 panel (dashboard tab) reads and writes entries through thin `ProjectWorkspace`
 pass-throughs — there is deliberately no use-case layer or CLI surface yet.
+
+Schema version 4 adds the append-only `operations_events` table. Operations
+uses it for project-scoped detection, acknowledgement, remediation, recovery,
+configuration, and review audit events. Planning and postmortems deliberately
+remain Knowledge entries: the Operations Plan view projects the board titled
+`Operations`, and resolved incidents can create linked wiki postmortems and
+follow-up cards without introducing a second planning store. Reasoning-assistant
+configuration is stored under the active secret manager and is always redacted
+at the application boundary.
 
 SQLModel is intentionally deferred. The infrastructure graph remains behavior-heavy
 and polymorphic, while the JSON snapshot is still authoritative. Reconsider separate

@@ -191,6 +191,8 @@ class DashboardScreen(Screen):
                                     yield ServerInfoPanel(id="selection-server-info")
                                     yield ServerActions(id="selection-server-actions")
                                     yield ServiceActions(id="selection-service-actions")
+                            with TabPane("Operations", id=OPERATIONS_TAB_ID):
+                                yield OperationsPanel(id="operations-panel")
                             with TabPane("Knowledge", id=KNOWLEDGE_TAB_ID):
                                 yield KnowledgePanel(id="knowledge-panel")
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
@@ -208,8 +210,6 @@ class DashboardScreen(Screen):
                                 yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Monitor", id=MONITOR_TAB_ID):
                                 yield MonitorPanel(id="monitor-panel")
-                            with TabPane("Operations", id=OPERATIONS_TAB_ID):
-                                yield OperationsPanel(id="operations-panel")
                             with TabPane("Databases", id=DATABASES_TAB_ID):
                                 yield DatabasePanel(id="databases-panel")
                             with TabPane("Models", id=MODELS_TAB_ID):

@@ -29,10 +29,10 @@ Register the model and assign its `champion` alias:
 uv run -m examples.operations_demo.register
 ```
 
-Open the MLOX TUI, select the project root, and open **Operations**. Select the
-telemetry monitor bound to the gateway from the dropdown, then press **Start
-Watching**. The selection remains fixed for that watch session. Start traffic
-in another terminal:
+Open the MLOX TUI, select the project root, and open **Operations → Settings**.
+Select the telemetry monitor bound to the gateway, then press **Start Watching**.
+The selection remains fixed for that watch session. Return to **Incidents** and
+start traffic in another terminal:
 
 ```sh
 uv run -m examples.operations_demo.traffic
@@ -72,12 +72,19 @@ use ID  send subsequent requests through gateway ID
 quit    stop traffic
 ```
 
-The Operations tab summarizes every observed model pipeline and provides
-baseline, current, 1-minute/5-sample, and 5-minute/10-sample values for the
-selected pipeline. **Get Details** opens a frozen snapshot of the latest run's
-pipeline, trace, span, request, model and alias identifiers together with ordered
-steps, labels, and raw observation summaries. The popup does not update while it
-is open. The view should first highlight `pca.transform`, show the downstream
+Operations contains four focused views:
+
+- **Incidents** summarizes every observed model pipeline and provides baseline,
+  current, 1-minute/5-sample, and 5-minute/10-sample values. **Get Details**
+  opens a frozen snapshot; **Recommend Action** records a manual, approval-gated
+  remediation; and a recovered incident can be saved as a Knowledge postmortem.
+- **Plan** projects the Knowledge board titled `Operations`, creating it on
+  demand and linking generated postmortem follow-ups into its first lane.
+- **Activity** shows the persisted, append-only operations audit trail.
+- **Settings** controls the watcher and stores optional OpenAI-compatible
+  reasoning-assistant configuration through the active project secret manager.
+
+The incident view should first highlight `pca.transform`, show the downstream
 regression/RMSE deviation, and report recovery after corrupted samples leave the
 rolling windows.
 

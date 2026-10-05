@@ -20,13 +20,14 @@ from uuid import uuid4
 
 from mlox.infra import Infrastructure
 from mlox.project.entries import Entry
+from mlox.project.operations import OperationsEvent
 
 if TYPE_CHECKING:
     from mlox.config import ServiceConfig
 
 PROJECT_SUFFIX = ".mlox"
 PROJECT_FORMAT_VERSION = 1
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 PLAINTEXT_TEST_ENV = "MLOX_ALLOW_PLAINTEXT_SQLITE"
 
 ENTRIES_SCHEMA_SQL = """
@@ -41,6 +42,22 @@ CREATE TABLE IF NOT EXISTS entries (
 );
 CREATE INDEX IF NOT EXISTS idx_entries_project ON entries(project_id);
 CREATE INDEX IF NOT EXISTS idx_entries_kind ON entries(project_id, kind);
+"""
+
+OPERATIONS_EVENTS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS operations_events (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    target TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'recorded',
+    summary TEXT NOT NULL,
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_operations_events_project_time
+    ON operations_events(project_id, created_at);
 """
 
 
@@ -216,7 +233,7 @@ class SqlCipherRepository:
                 key_salt TEXT,
                 key_check TEXT
             );
-            INSERT INTO schema_info VALUES (1, 3, CURRENT_TIMESTAMP, NULL, NULL);
+            INSERT INTO schema_info VALUES (1, 4, CURRENT_TIMESTAMP, NULL, NULL);
 
             CREATE TABLE projects (
                 id TEXT PRIMARY KEY,
@@ -288,6 +305,7 @@ class SqlCipherRepository:
             """
         )
         conn.executescript(ENTRIES_SCHEMA_SQL)
+        conn.executescript(OPERATIONS_EVENTS_SCHEMA_SQL)
 
     @staticmethod
     def _upgrade_schema(conn: Any, current_version: int) -> None:
@@ -301,6 +319,8 @@ class SqlCipherRepository:
             )
         if current_version < 3:
             conn.executescript(ENTRIES_SCHEMA_SQL)
+        if current_version < 4:
+            conn.executescript(OPERATIONS_EVENTS_SCHEMA_SQL)
         if current_version < SCHEMA_VERSION:
             conn.execute(
                 "UPDATE schema_info SET schema_version=?, applied_at=CURRENT_TIMESTAMP "
@@ -541,6 +561,64 @@ class SqlCipherRepository:
             conn.execute(
                 "DELETE FROM entries WHERE id=? AND project_id=?", (entry_id, pid)
             )
+
+    def record_operations_event(self, event: OperationsEvent) -> OperationsEvent:
+        """Append an immutable event to the operations audit trail."""
+
+        event_id = event.id or str(uuid4())
+        created_at = event.created_at or utcnow()
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT INTO operations_events "
+                "(id, project_id, created_at, actor, event_type, target, status, "
+                "summary, details_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    event_id,
+                    self.project_id(conn),
+                    created_at,
+                    event.actor,
+                    event.event_type,
+                    event.target,
+                    event.status,
+                    event.summary,
+                    json.dumps(event.details),
+                ),
+            )
+        return OperationsEvent(
+            id=event_id,
+            created_at=created_at,
+            actor=event.actor,
+            event_type=event.event_type,
+            target=event.target,
+            status=event.status,
+            summary=event.summary,
+            details=dict(event.details),
+        )
+
+    def list_operations_events(self, limit: int = 200) -> list[OperationsEvent]:
+        """Return newest operations events first, bounded by ``limit``."""
+
+        bounded_limit = max(1, min(int(limit), 1000))
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at, actor, event_type, target, status, summary, "
+                "details_json FROM operations_events WHERE project_id=? "
+                "ORDER BY created_at DESC, id DESC LIMIT ?",
+                (self.project_id(conn), bounded_limit),
+            ).fetchall()
+        return [
+            OperationsEvent(
+                id=row[0],
+                created_at=row[1],
+                actor=row[2],
+                event_type=row[3],
+                target=row[4],
+                status=row[5],
+                summary=row[6],
+                details=json.loads(row[7]),
+            )
+            for row in rows
+        ]
 
     def record_legacy_import(self, source_path: str, source_sha256: str, resources: int, secrets: int) -> None:
         with self.connection() as conn:

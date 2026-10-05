@@ -31,6 +31,7 @@ from mlox.config import (
 )
 from mlox.infra import Infrastructure
 from mlox.project.entries import Entry
+from mlox.project.operations import OperationsEvent
 from mlox.project.repository import SqlCipherRepository
 from mlox.project.secrets import (
     EmbeddedSecretManager,
@@ -256,6 +257,16 @@ class ProjectWorkspace:
         """Delete a knowledge-base entry by identifier."""
 
         self._repository.delete_entry(entry_id)
+
+    def record_operations_event(self, event: OperationsEvent) -> OperationsEvent:
+        """Append an immutable project operations event."""
+
+        return self._repository.record_operations_event(event)
+
+    def list_operations_events(self, limit: int = 200) -> list[OperationsEvent]:
+        """List the newest persisted project operations events."""
+
+        return self._repository.list_operations_events(limit)
 
     def _resolve_secret_manager(self) -> AbstractSecretManager:
         if self._state.secret_manager_kind == "embedded":

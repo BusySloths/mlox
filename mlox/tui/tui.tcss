@@ -940,6 +940,39 @@ ModelCallResultDialog {
   width: 1fr;
 }
 
+#operations-tabs,
+#operations-incidents-tab,
+#operations-plan-tab,
+#operations-activity-tab,
+#operations-settings-tab {
+  height: 1fr;
+  width: 1fr;
+}
+
+#operations-incidents-tab,
+#operations-plan-tab,
+#operations-activity-tab {
+  padding: 0;
+}
+
+#operations-settings-scroll {
+  height: 1fr;
+  width: 1fr;
+  padding: 1 2;
+}
+
+.operations-heading {
+  height: 2;
+  margin-top: 1;
+  text-style: bold;
+  color: #c4b5fd;
+}
+
+.operations-settings-help {
+  height: 2;
+  color: #94a3b8;
+}
+
 #operations-source {
   height: 3;
   margin-bottom: 1;
@@ -960,12 +993,60 @@ ModelCallResultDialog {
 }
 
 #operations-assumption {
-  width: 1fr;
+  height: 2;
   content-align: left middle;
   color: #f4e223ff;
 }
 
 #operations-actions Button {
+  width: auto;
+  min-width: 12;
+  margin-right: 1;
+}
+
+.operations-setting-row {
+  height: 3;
+  margin-bottom: 1;
+}
+
+.operations-setting-label {
+  width: 22;
+  content-align: left middle;
+}
+
+.operations-setting-row Input,
+.operations-setting-row Select {
+  width: 1fr;
+}
+
+#operations-reasoning-actions {
+  height: 3;
+}
+
+#operations-reasoning-status {
+  width: 1fr;
+  padding-left: 2;
+  content-align: left middle;
+}
+
+#operations-incident-actions,
+#operations-plan-actions,
+#operations-activity-actions {
+  height: 3;
+  margin-bottom: 1;
+}
+
+#operations-watch-summary,
+#operations-plan-title,
+#operations-activity-title {
+  width: 1fr;
+  content-align: left middle;
+  text-style: bold;
+}
+
+#operations-incident-actions Button,
+#operations-plan-actions Button,
+#operations-activity-actions Button {
   width: auto;
   min-width: 12;
   margin-left: 1;
@@ -1015,6 +1096,13 @@ PipelineDetailsDialog {
   border: round #61d394ff;
 }
 
+#operations-remediation {
+  height: auto;
+  min-height: 0;
+  color: #f4e223ff;
+  padding: 0 1;
+}
+
 #operations-evidence {
   height: 5;
   width: 1fr;
@@ -1022,6 +1110,40 @@ PipelineDetailsDialog {
   padding: 1 2;
   border: round #35635bff;
   background: #10211fff;
+}
+
+#operations-plan-board {
+  height: 1fr;
+  width: 1fr;
+  overflow-x: auto;
+}
+
+.operations-plan-column {
+  width: 1fr;
+  min-width: 24;
+  height: 1fr;
+  padding: 1;
+  margin-right: 1;
+}
+
+.operations-plan-empty {
+  width: 1fr;
+  height: 1fr;
+  content-align: center middle;
+  color: #94a3b8;
+}
+
+#operations-plan-status,
+#operations-activity-help {
+  height: 3;
+  padding: 1;
+  color: #94a3b8;
+}
+
+#operations-activity {
+  height: 1fr;
+  width: 1fr;
+  border: round #a78bfa;
 }
 
 #database-content {

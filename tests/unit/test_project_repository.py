@@ -6,6 +6,7 @@ import pytest
 
 from mlox.infra import Infrastructure
 from mlox.project.entries import Entry
+from mlox.project.operations import OperationsEvent
 from mlox.project.repository import SqlCipherRepository, resolve_project_path
 
 
@@ -57,7 +58,7 @@ def test_project_repository_is_not_plain_json(tmp_path):
     assert not store.path.read_bytes().startswith(b"{")
     # In unit tests this is SQLite, but production rejects this driver unless explicitly enabled.
     with sqlite3.connect(store.path) as conn:
-        assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (3,)
+        assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (4,)
 
 
 def test_version_one_schema_is_upgraded_with_embedded_secret_manager_default():
@@ -91,7 +92,10 @@ def test_version_one_schema_is_upgraded_with_embedded_secret_manager_default():
     ).fetchone()
     assert {"active_secret_manager_kind", "active_secret_manager_service_uuid"} <= columns
     assert pointer == ("embedded", None)
-    assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (3,)
+    assert "operations_events" in {
+        row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (4,)
 
 
 def test_schema_version_two_is_upgraded_with_entries_table():
@@ -120,7 +124,34 @@ def test_schema_version_two_is_upgraded_with_entries_table():
 
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "entries" in tables
-    assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (3,)
+    assert "operations_events" in tables
+    assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (4,)
+
+
+def test_schema_version_three_is_upgraded_with_operations_events_table():
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(
+        """
+        CREATE TABLE schema_info (
+            singleton INTEGER PRIMARY KEY,
+            schema_version INTEGER NOT NULL,
+            applied_at TEXT NOT NULL,
+            key_salt TEXT,
+            key_check TEXT
+        );
+        INSERT INTO schema_info VALUES (1, 3, CURRENT_TIMESTAMP, NULL, NULL);
+        CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+        INSERT INTO projects VALUES ('project-id', 'demo');
+        """
+    )
+
+    SqlCipherRepository._upgrade_schema(conn, 3)
+
+    tables = {
+        row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    assert "operations_events" in tables
+    assert conn.execute("SELECT schema_version FROM schema_info").fetchone() == (4,)
 
 
 def test_entries_crud_round_trip(tmp_path):
@@ -154,3 +185,31 @@ def test_entries_crud_round_trip(tmp_path):
     store.delete_entry(note.id)
     assert store.get_entry(note.id) is None
     assert [e.title for e in store.list_entries()] == ["Main Board"]
+
+
+def test_operations_events_are_append_only_and_newest_first(tmp_path):
+    store = SqlCipherRepository.create(tmp_path / "demo", "pw")
+
+    first = store.record_operations_event(
+        OperationsEvent(
+            event_type="incident_detected",
+            summary="Pipeline drifted.",
+            target="pipeline-1",
+            status="open",
+            created_at="2026-10-05T10:00:00+00:00",
+        )
+    )
+    second = store.record_operations_event(
+        OperationsEvent(
+            event_type="incident_recovered",
+            summary="Pipeline recovered.",
+            target="pipeline-1",
+            status="recovered",
+            created_at="2026-10-05T10:05:00+00:00",
+        )
+    )
+
+    events = store.list_operations_events()
+    assert [event.id for event in events] == [second.id, first.id]
+    assert events[0].summary == "Pipeline recovered."
+    assert events[1].target == "pipeline-1"
