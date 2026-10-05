@@ -940,7 +940,99 @@ ModelCallResultDialog {
   width: 1fr;
 }
 
-#operations-tabs,
+#operations-workspace {
+  height: 1fr;
+  width: 1fr;
+}
+
+#operations-nav {
+  width: 23;
+  height: 1fr;
+  padding: 1 1;
+  margin-right: 1;
+  border: round #35635bff;
+  background: #0b1d1aff;
+}
+
+#operations-nav-title {
+  height: 1;
+  color: #61d394ff;
+  text-style: bold;
+}
+
+#operations-nav-subtitle {
+  height: 2;
+  color: #94a3b8;
+}
+
+#operations-nav Button {
+  width: 1fr;
+  height: 3;
+  margin-top: 1;
+  border: none;
+  background: #10211fff;
+  color: #cbd5e1;
+  text-style: bold;
+  content-align: left middle;
+}
+
+#operations-nav Button:hover {
+  background: #173b35ff;
+  color: #ffffff;
+}
+
+#operations-nav Button.operations-nav-active {
+  background: #35635bff;
+  color: #ffffff;
+}
+
+#operations-nav-footer {
+  height: 1fr;
+  padding: 2 1 0 1;
+  color: #64748b;
+  text-style: italic;
+}
+
+#operations-stage {
+  width: 1fr;
+  height: 1fr;
+}
+
+#operations-hero {
+  height: 6;
+  width: 1fr;
+  padding: 0 2;
+  margin-bottom: 1;
+  border: round #35635bff;
+  background: #0b1d1aff;
+}
+
+#operations-eyebrow {
+  height: 1;
+  color: #61d394ff;
+  text-style: bold;
+}
+
+#operations-title {
+  height: 2;
+  color: #f8fafc;
+  text-style: bold;
+}
+
+#operations-subtitle {
+  height: 2;
+  color: #94a3b8;
+}
+
+#operations-tabs {
+  height: 1fr;
+  width: 1fr;
+}
+
+#operations-tabs > Tabs {
+  display: none;
+}
+
 #operations-incidents-tab,
 #operations-plan-tab,
 #operations-activity-tab,

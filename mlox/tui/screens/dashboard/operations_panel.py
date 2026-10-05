@@ -158,179 +158,198 @@ class OperationsPanel(Static):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="operations-content"):
-            with TabbedContent(id="operations-tabs"):
-                with TabPane("Incidents", id="operations-incidents-tab"):
-                    with Horizontal(id="operations-incident-actions"):
-                        yield Static(
-                            "Watcher is stopped.", id="operations-watch-summary"
-                        )
-                        yield Button(
-                            "Get Details",
-                            id="operations-get-details",
-                            disabled=True,
-                        )
-                        yield Button(
-                            "Acknowledge",
-                            id="operations-acknowledge",
-                            disabled=True,
-                        )
-                        yield Button(
-                            "Recommend Action",
-                            id="operations-recommend-action",
-                            disabled=True,
-                        )
-                        yield Button(
-                            "Save Postmortem",
-                            id="operations-save-postmortem",
-                            disabled=True,
-                        )
-                    pipelines = DataTable(id="operations-pipelines")
-                    pipelines.cursor_type = "row"
-                    pipelines.add_columns(
-                        "Pipeline",
-                        "Model / version",
-                        "Runs / baseline",
-                        "Quality",
-                        "State",
+            with Horizontal(id="operations-workspace"):
+                with Vertical(id="operations-nav"):
+                    yield Static("OPERATIONS", id="operations-nav-title")
+                    yield Static("CONTROL ROOM", id="operations-nav-subtitle")
+                    yield Button(
+                        "Incidents",
+                        id="operations-nav-incidents",
+                        classes="operations-nav-active",
                     )
-                    yield pipelines
-                    table = DataTable(id="operations-pipeline")
-                    table.cursor_type = "row"
-                    table.add_columns(
-                        "Pipeline step",
-                        "Baseline",
-                        "Current",
-                        "1 min / 5 avg",
-                        "5 min / 10 avg",
-                        "State",
-                    )
-                    yield table
-                    yield Static("", id="operations-remediation")
+                    yield Button("Plan", id="operations-nav-plan")
+                    yield Button("Activity", id="operations-nav-activity")
+                    yield Button("Settings", id="operations-nav-settings")
                     yield Static(
-                        "Start watching, then send healthy traffic to establish a baseline.",
-                        id="operations-evidence",
+                        "Observe\nPlan\nRecover",
+                        id="operations-nav-footer",
                     )
-                with TabPane("Plan", id="operations-plan-tab"):
-                    with Horizontal(id="operations-plan-actions"):
+                with Vertical(id="operations-stage"):
+                    with Vertical(id="operations-hero"):
+                        yield Static("OPERATIONS CONTROL ROOM", id="operations-eyebrow")
+                        yield Static("Incident detective", id="operations-title")
                         yield Static(
-                            "Knowledge board: Operations",
-                            id="operations-plan-title",
+                            "Live evidence, safe recommendations, and recovery tracking.",
+                            id="operations-subtitle",
                         )
-                        yield Button("Reload", id="operations-plan-reload")
-                        yield Button(
-                            "Create Operations Board",
-                            id="operations-plan-create",
-                        )
-                        yield Button(
-                            "Open in Knowledge",
-                            id="operations-plan-open-knowledge",
-                            disabled=True,
-                        )
-                    yield OperationsPlanBoard(id="operations-plan-board")
-                    yield Static("", id="operations-plan-status")
-                with TabPane("Activity", id="operations-activity-tab"):
-                    with Horizontal(id="operations-activity-actions"):
-                        yield Static(
-                            "Immutable project operations history",
-                            id="operations-activity-title",
-                        )
-                        yield Button("Reload", id="operations-activity-reload")
-                    activity = DataTable(id="operations-activity")
-                    activity.cursor_type = "row"
-                    activity.add_columns(
-                        "Timestamp", "Actor", "Event", "Target", "Status", "Summary"
+                    yield from self._compose_operations_tabs()
+
+    def _compose_operations_tabs(self) -> ComposeResult:
+        with TabbedContent(id="operations-tabs"):
+            with TabPane("Incidents", id="operations-incidents-tab"):
+                with Horizontal(id="operations-incident-actions"):
+                    yield Static("Watcher is stopped.", id="operations-watch-summary")
+                    yield Button(
+                        "Get Details",
+                        id="operations-get-details",
+                        disabled=True,
                     )
-                    yield activity
+                    yield Button(
+                        "Acknowledge",
+                        id="operations-acknowledge",
+                        disabled=True,
+                    )
+                    yield Button(
+                        "Recommend Action",
+                        id="operations-recommend-action",
+                        disabled=True,
+                    )
+                    yield Button(
+                        "Save Postmortem",
+                        id="operations-save-postmortem",
+                        disabled=True,
+                    )
+                pipelines = DataTable(id="operations-pipelines")
+                pipelines.cursor_type = "row"
+                pipelines.add_columns(
+                    "Pipeline",
+                    "Model / version",
+                    "Runs / baseline",
+                    "Quality",
+                    "State",
+                )
+                yield pipelines
+                table = DataTable(id="operations-pipeline")
+                table.cursor_type = "row"
+                table.add_columns(
+                    "Pipeline step",
+                    "Baseline",
+                    "Current",
+                    "1 min / 5 avg",
+                    "5 min / 10 avg",
+                    "State",
+                )
+                yield table
+                yield Static("", id="operations-remediation")
+                yield Static(
+                    "Start watching, then send healthy traffic to establish a baseline.",
+                    id="operations-evidence",
+                )
+            with TabPane("Plan", id="operations-plan-tab"):
+                with Horizontal(id="operations-plan-actions"):
+                    yield Static("Knowledge board: Operations", id="operations-plan-title")
+                    yield Button("Reload", id="operations-plan-reload")
+                    yield Button(
+                        "Create Operations Board",
+                        id="operations-plan-create",
+                    )
+                    yield Button(
+                        "Open in Knowledge",
+                        id="operations-plan-open-knowledge",
+                        disabled=True,
+                    )
+                yield OperationsPlanBoard(id="operations-plan-board")
+                yield Static("", id="operations-plan-status")
+            with TabPane("Activity", id="operations-activity-tab"):
+                with Horizontal(id="operations-activity-actions"):
                     yield Static(
-                        "Detection, acknowledgement, remediation, recovery and review "
-                        "events are persisted in the project audit trail.",
-                        id="operations-activity-help",
+                        "Immutable project operations history",
+                        id="operations-activity-title",
                     )
-                with TabPane("Settings", id="operations-settings-tab"):
-                    with VerticalScroll(id="operations-settings-scroll"):
-                        yield Static("Telemetry watcher", classes="operations-heading")
-                        with Horizontal(id="operations-source"):
-                            yield Static(
-                                "Telemetry monitor", id="operations-source-label"
-                            )
-                            yield Select(
-                                options=[],
-                                prompt="Select telemetry monitor",
-                                id="operations-monitor",
-                            )
-                        yield Static(
-                            "The first 10 completed runs per pipeline are assumed normal.",
-                            id="operations-assumption",
+                    yield Button("Reload", id="operations-activity-reload")
+                activity = DataTable(id="operations-activity")
+                activity.cursor_type = "row"
+                activity.add_columns(
+                    "Timestamp", "Actor", "Event", "Target", "Status", "Summary"
+                )
+                yield activity
+                yield Static(
+                    "Detection, acknowledgement, remediation, recovery and review "
+                    "events are persisted in the project audit trail.",
+                    id="operations-activity-help",
+                )
+            with TabPane("Settings", id="operations-settings-tab"):
+                with VerticalScroll(id="operations-settings-scroll"):
+                    yield Static("Telemetry watcher", classes="operations-heading")
+                    with Horizontal(id="operations-source"):
+                        yield Static("Telemetry monitor", id="operations-source-label")
+                        yield Select(
+                            options=[],
+                            prompt="Select telemetry monitor",
+                            id="operations-monitor",
                         )
-                        with Horizontal(id="operations-actions"):
-                            yield Button(
-                                "Start Watching",
-                                id="start-operations",
-                                variant="success",
-                            )
-                            yield Button(
-                                "Stop Watching",
-                                id="stop-operations",
-                                variant="warning",
-                            )
-                            yield Button("Reset", id="reset-operations")
-                        yield Static(
-                            "Reasoning assistant", classes="operations-heading"
+                    yield Static(
+                        "The first 10 completed runs per pipeline are assumed normal.",
+                        id="operations-assumption",
+                    )
+                    with Horizontal(id="operations-actions"):
+                        yield Button(
+                            "Start Watching",
+                            id="start-operations",
+                            variant="success",
                         )
-                        yield Static(
-                            "Detection remains deterministic. The assistant is advisory "
-                            "and cannot execute remediation without approval.",
-                            classes="operations-settings-help",
+                        yield Button(
+                            "Stop Watching",
+                            id="stop-operations",
+                            variant="warning",
                         )
-                        with Horizontal(classes="operations-setting-row"):
-                            yield Static("Mode", classes="operations-setting-label")
-                            yield Select(
-                                [
-                                    ("Disabled", "disabled"),
-                                    ("Advisory", "advisory"),
-                                    ("Approval required", "approval"),
-                                ],
-                                value="disabled",
-                                allow_blank=False,
-                                id="operations-reasoning-mode",
-                            )
-                        with Horizontal(classes="operations-setting-row"):
-                            yield Static("Provider", classes="operations-setting-label")
-                            yield Select(
-                                [("OpenAI compatible", "openai-compatible")],
-                                value="openai-compatible",
-                                allow_blank=False,
-                                id="operations-reasoning-provider",
-                            )
-                        with Horizontal(classes="operations-setting-row"):
-                            yield Static("Endpoint", classes="operations-setting-label")
-                            yield Input(
-                                placeholder="https://…/v1",
-                                id="operations-reasoning-endpoint",
-                            )
-                        with Horizontal(classes="operations-setting-row"):
-                            yield Static("Model", classes="operations-setting-label")
-                            yield Input(
-                                placeholder="Reasoning model name",
-                                id="operations-reasoning-model",
-                            )
-                        with Horizontal(classes="operations-setting-row"):
-                            yield Static("API key", classes="operations-setting-label")
-                            yield Input(
-                                placeholder="Leave blank to keep the stored key",
-                                password=True,
-                                id="operations-reasoning-api-key",
-                            )
-                        with Horizontal(id="operations-reasoning-actions"):
-                            yield Button(
-                                "Save Reasoning Settings",
-                                id="operations-save-reasoning",
-                                variant="primary",
-                            )
-                            yield Static("", id="operations-reasoning-status")
+                        yield Button("Reset", id="reset-operations")
+                    yield Static("Reasoning assistant", classes="operations-heading")
+                    yield Static(
+                        "Detection remains deterministic. The assistant is advisory "
+                        "and cannot execute remediation without approval.",
+                        classes="operations-settings-help",
+                    )
+                    with Horizontal(classes="operations-setting-row"):
+                        yield Static("Mode", classes="operations-setting-label")
+                        yield Select(
+                            [
+                                ("Disabled", "disabled"),
+                                ("Advisory", "advisory"),
+                                ("Approval required", "approval"),
+                            ],
+                            value="disabled",
+                            allow_blank=False,
+                            id="operations-reasoning-mode",
+                        )
+                    with Horizontal(classes="operations-setting-row"):
+                        yield Static("Provider", classes="operations-setting-label")
+                        yield Select(
+                            [("OpenAI compatible", "openai-compatible")],
+                            value="openai-compatible",
+                            allow_blank=False,
+                            id="operations-reasoning-provider",
+                        )
+                    with Horizontal(classes="operations-setting-row"):
+                        yield Static("Endpoint", classes="operations-setting-label")
+                        yield Input(
+                            placeholder="https://…/v1",
+                            id="operations-reasoning-endpoint",
+                        )
+                    with Horizontal(classes="operations-setting-row"):
+                        yield Static("Model", classes="operations-setting-label")
+                        yield Input(
+                            placeholder="Reasoning model name",
+                            id="operations-reasoning-model",
+                        )
+                    with Horizontal(classes="operations-setting-row"):
+                        yield Static("API key", classes="operations-setting-label")
+                        yield Input(
+                            placeholder="Leave blank to keep the stored key",
+                            password=True,
+                            id="operations-reasoning-api-key",
+                        )
+                    with Horizontal(id="operations-reasoning-actions"):
+                        yield Button(
+                            "Save Reasoning Settings",
+                            id="operations-save-reasoning",
+                            variant="primary",
+                        )
+                        yield Static("", id="operations-reasoning-status")
 
     def on_mount(self) -> None:
         self.watch_selection(self.selection)
+        self._activate_operations_section("incidents")
         self._show_snapshot(self._empty_snapshot())
         self._load_plan()
         self._load_activity()
@@ -348,15 +367,56 @@ class OperationsPanel(Static):
 
     @on(TabbedContent.TabActivated, "#operations-tabs")
     def handle_operations_tab_activated(
-        self, event: TabbedContent.TabActivated
+        self, _: TabbedContent.TabActivated
     ) -> None:
-        tab_id = event.tab.id
+        tab_id = self.query_one("#operations-tabs", TabbedContent).active
         if tab_id == "operations-plan-tab":
             self._load_plan()
         elif tab_id == "operations-activity-tab":
             self._load_activity()
         elif tab_id == "operations-settings-tab":
             self._load_monitor_options()
+        self._show_operations_hero(tab_id)
+
+    @on(Button.Pressed, "#operations-nav-incidents")
+    @on(Button.Pressed, "#operations-nav-plan")
+    @on(Button.Pressed, "#operations-nav-activity")
+    @on(Button.Pressed, "#operations-nav-settings")
+    def handle_operations_navigation(self, event: Button.Pressed) -> None:
+        section = str(event.button.id or "").removeprefix("operations-nav-")
+        self._activate_operations_section(section)
+
+    def _activate_operations_section(self, section: str) -> None:
+        tab_id = f"operations-{section}-tab"
+        tabs = self.query_one("#operations-tabs", TabbedContent)
+        tabs.active = tab_id
+        self._show_operations_hero(tab_id)
+        for name in ("incidents", "plan", "activity", "settings"):
+            button = self.query_one(f"#operations-nav-{name}", Button)
+            button.set_class(name == section, "operations-nav-active")
+
+    def _show_operations_hero(self, tab_id: str) -> None:
+        headings = {
+            "operations-incidents-tab": (
+                "Incident detective",
+                "Live evidence, safe recommendations, and recovery tracking.",
+            ),
+            "operations-plan-tab": (
+                "Operational plan",
+                "Turn incidents and decisions into visible, durable follow-up work.",
+            ),
+            "operations-activity-tab": (
+                "Activity & audit",
+                "A durable account of what was detected, decided, and reviewed.",
+            ),
+            "operations-settings-tab": (
+                "Watcher & reasoning",
+                "Configure telemetry watching and an optional advisory reasoning model.",
+            ),
+        }
+        title, subtitle = headings.get(tab_id, headings["operations-incidents-tab"])
+        self.query_one("#operations-title", Static).update(title)
+        self.query_one("#operations-subtitle", Static).update(subtitle)
 
     def _load_monitor_options(self) -> None:
         workspace = getattr(self.app, "workspace", None)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from textual.app import App, ComposeResult
 from types import SimpleNamespace
@@ -16,6 +17,8 @@ from mlox.tui.screens.dashboard.operations_panel import (
 
 
 class OperationsTestApp(App):
+    CSS_PATH = str(Path(__file__).parents[3] / "mlox/tui/tui.tcss")
+
     def __init__(self, infrastructure=None, workspace=None):
         super().__init__()
         self.workspace = workspace or SimpleNamespace(infrastructure=infrastructure)
@@ -219,6 +222,30 @@ def test_operations_panel_summarizes_each_pipeline_in_table() -> None:
     assert "request_id | request-789" in details
     assert "newer-request" not in details
     assert "step 1: normalize observation | output.mean | 0.2" in details
+
+
+def test_operations_side_rail_switches_section_heading() -> None:
+    app = OperationsTestApp()
+
+    async def run() -> tuple[str, bool, bool]:
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = app.query_one(OperationsPanel)
+            plan = app.query_one("#operations-nav-plan", Button)
+            panel.handle_operations_navigation(Button.Pressed(plan))
+            await pilot.pause()
+            return (
+                str(app.query_one("#operations-title", Static).content),
+                plan.has_class("operations-nav-active"),
+                app.query_one("#operations-nav-incidents", Button).has_class(
+                    "operations-nav-active"
+                ),
+            )
+
+    title, plan_active, incidents_active = asyncio.run(run())
+
+    assert title == "Operational plan"
+    assert plan_active
+    assert not incidents_active
 
 
 def test_operations_plan_activity_and_reasoning_settings_share_project_state(
