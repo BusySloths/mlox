@@ -72,7 +72,11 @@ service cannot be removed until another manager is selected.
 The Operations reasoning assistant stores its endpoint, model, mode, and API
 credential as one value in the active secret manager. The TUI never reloads the
 credential into an input or returns it in an application result; a blank API-key
-field preserves the existing stored key.
+field preserves the existing stored key. Reasoning responses are persisted as
+short audit metadata. The model receives only a dynamically derived allow-list
+of MLOX function tools; it can propose, but never automatically execute, one of
+those tools. Execution requires an explicit TUI click while *Approval required*
+mode is selected.
 
 For OpenBao, application keyfiles are separate renewable credentials for the
 same project-level KV mount, not separate per-application secret namespaces. A

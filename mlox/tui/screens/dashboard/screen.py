@@ -246,6 +246,19 @@ class DashboardScreen(Screen):
     def on_selection_changed(self, message: SelectionChanged) -> None:
         self._apply_selection(message.selection)
 
+    def on_operations_panel_open_knowledge_requested(
+        self, message: OperationsPanel.OpenKnowledgeRequested
+    ) -> None:
+        """Reveal a requested Knowledge entry after switching to its lazy tab."""
+
+        self.query_one("#main-tabs", TabbedContent).active = KNOWLEDGE_TAB_ID
+        self.call_after_refresh(self._open_operations_knowledge_entry, message.title)
+
+    def _open_operations_knowledge_entry(self, title: str) -> None:
+        panel = self.query_one("#knowledge-panel", KnowledgePanel)
+        panel.reload_entries()
+        panel.open_entry_by_title(title)
+
     def on_secret_manager_panel_active_manager_changed(
         self,
         _: SecretManagerPanel.ActiveManagerChanged,

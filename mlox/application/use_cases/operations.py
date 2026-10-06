@@ -13,6 +13,10 @@ from typing import Any
 import requests
 
 from mlox.application.result import OperationResult
+from mlox.application.use_cases.services import (
+    service_can_restart,
+    service_has_health,
+)
 from mlox.project.entries import Entry, add_item, default_template, parse_board
 from mlox.project.operations import OperationsEvent
 
@@ -21,6 +25,153 @@ OBSERVATION_PREFIX = "mlox.observation."
 OPERATIONS_BOARD_TITLE = "Operations"
 OPERATIONS_REASONING_SECRET = "mlox.operations.reasoning"
 REASONING_MODES = {"disabled", "advisory", "approval"}
+
+
+def _services(workspace) -> list[Any]:
+    """Return the project's configured services without assuming a concrete workspace."""
+
+    infrastructure = getattr(workspace, "infrastructure", None)
+    services = getattr(infrastructure, "services", None)
+    return list(services()) if callable(services) else []
+
+
+def operations_remediation_tools(workspace) -> list[dict[str, Any]]:
+    """Describe the executable, approval-gated operations actions available now.
+
+    The schemas are deliberately derived from :class:`ProjectWorkspace` methods.
+    They are sent to an OpenAI-compatible model as function tools, but are never
+    invoked while reasoning. A person must explicitly choose Execute in the TUI.
+    """
+
+    services = _services(workspace)
+    restartable = [
+        str(service.name)
+        for service in services
+        if service_can_restart(service) and str(getattr(service, "name", ""))
+    ]
+    health_checkable = [
+        str(service.name)
+        for service in services
+        if service_has_health(service) and str(getattr(service, "name", ""))
+    ]
+    tools: list[dict[str, Any]] = []
+    if health_checkable:
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "check_service_health",
+                    "description": (
+                        "Run the configured MLOX health check for one service. "
+                        "Use this to verify a suspected dependency or recovery."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "service_name": {
+                                "type": "string",
+                                "enum": health_checkable,
+                                "description": "Configured service to inspect.",
+                            }
+                        },
+                        "required": ["service_name"],
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        )
+    if restartable:
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "restart_service",
+                    "description": (
+                        "Restart or repair one configured MLOX service. This is a "
+                        "mutating action and requires an explicit human approval."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "service_name": {
+                                "type": "string",
+                                "enum": restartable,
+                                "description": "Configured service to restart.",
+                            }
+                        },
+                        "required": ["service_name"],
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        )
+    return tools
+
+
+def _strip_reasoning(content: str) -> str:
+    """Keep the answer after a reasoning-model's optional ``<think>`` block."""
+
+    if "</think>" in content:
+        return content.rsplit("</think>", 1)[1].strip()
+    return content.strip()
+
+
+def _recommendation_content(content: str) -> dict[str, str]:
+    """Normalize the compact JSON response while tolerating plain text models."""
+
+    answer = _strip_reasoning(content)
+    try:
+        decoded = json.loads(answer)
+    except (TypeError, json.JSONDecodeError):
+        decoded = {}
+    if isinstance(decoded, dict):
+        headline = str(decoded.get("headline") or "Recommended remediation").strip()
+        description = str(decoded.get("description") or "").strip()
+        verification = str(decoded.get("verification") or "").strip()
+        if description:
+            return {
+                "headline": headline[:120],
+                "description": description[:1200],
+                "verification": verification[:600],
+            }
+    first_line = next((line.strip() for line in answer.splitlines() if line.strip()), "")
+    return {
+        "headline": (first_line or "Recommended remediation")[:120],
+        "description": answer[:1200],
+        "verification": "Verify recovery against the rolling telemetry windows.",
+    }
+
+
+def _requested_tools(message: dict[str, Any], available: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Validate model function calls against the exact schemas offered to it."""
+
+    allowed = {
+        str(tool["function"]["name"]): tool
+        for tool in available
+        if isinstance(tool.get("function"), dict)
+    }
+    requested: list[dict[str, Any]] = []
+    for call in message.get("tool_calls") or []:
+        function = call.get("function") if isinstance(call, dict) else None
+        if not isinstance(function, dict):
+            continue
+        name = str(function.get("name") or "")
+        if name not in allowed:
+            continue
+        try:
+            arguments = json.loads(str(function.get("arguments") or "{}"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(arguments, dict):
+            continue
+        service_name = str(arguments.get("service_name") or "")
+        enum = (
+            allowed[name]["function"]["parameters"]["properties"]["service_name"].get("enum", [])
+        )
+        if service_name not in enum:
+            continue
+        requested.append({"name": name, "arguments": {"service_name": service_name}})
+    return requested
 
 
 def _reasoning_defaults() -> dict[str, Any]:
@@ -132,6 +283,7 @@ def reason_about_operations_incident(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     request = post or requests.post
+    tools = operations_remediation_tools(workspace)
     try:
         response = request(
             endpoint,
@@ -139,14 +291,20 @@ def reason_about_operations_incident(
             json={
                 "model": model,
                 "temperature": 0.1,
+                "tools": tools,
+                "tool_choice": "auto",
                 "messages": [
                     {
                         "role": "system",
                         "content": (
-                            "You are an MLOps incident advisor. Provide a concise, "
-                            "non-destructive remediation recommendation, the evidence "
-                            "supporting it, and a recovery verification step. Never "
-                            "claim that an action was executed."
+                            "You are an MLOps incident advisor. Assess only the supplied "
+                            "telemetry evidence. Return a compact JSON object with: "
+                            "`headline` (an imperative solution title, at most 80 "
+                            "characters), `description` (one to three concise sentences), "
+                            "and `verification` (one concise recovery check). Use a tool "
+                            "call only when one of the supplied MLOX actions is relevant; "
+                            "never invent a tool. Tool calls are proposals only: never "
+                            "claim an action was executed."
                         ),
                     },
                     {
@@ -159,8 +317,11 @@ def reason_about_operations_incident(
         )
         response.raise_for_status()
         payload = response.json()
-        recommendation = str(payload["choices"][0]["message"]["content"]).strip()
-        if not recommendation:
+        message = payload["choices"][0]["message"]
+        if not isinstance(message, dict):
+            raise ValueError("The model returned an invalid message.")
+        recommendation = _recommendation_content(str(message.get("content") or ""))
+        if not recommendation["description"]:
             raise ValueError("The model returned an empty recommendation.")
     except Exception as exc:
         return OperationResult(False, 48, f"Incident reasoning failed: {exc}")
@@ -169,11 +330,56 @@ def reason_about_operations_incident(
         0,
         "Reasoning recommendation received.",
         {
-            "recommendation": recommendation,
+            "recommendation": recommendation["description"],
+            "headline": recommendation["headline"],
+            "verification": recommendation["verification"],
+            "actions": _requested_tools(message, tools),
             "mode": str(settings.get("mode") or "advisory"),
             "model": model,
         },
     )
+
+
+def execute_operations_remediation(
+    workspace,
+    actions: list[dict[str, Any]],
+) -> OperationResult:
+    """Execute explicitly approved remediation actions selected by the user.
+
+    This deliberately accepts only the same narrow action set advertised to the
+    model. It does not execute a free-form model instruction.
+    """
+
+    offered = {
+        tool["function"]["name"]: tool
+        for tool in operations_remediation_tools(workspace)
+    }
+    if not actions:
+        return OperationResult(False, 49, "There are no proposed MLOX actions to execute.")
+    messages: list[str] = []
+    for action in actions:
+        name = str(action.get("name") or "")
+        arguments = action.get("arguments") or {}
+        service_name = str(arguments.get("service_name") or "")
+        tool = offered.get(name)
+        if not tool:
+            return OperationResult(False, 50, f"Unsupported remediation action: {name}.")
+        permitted_names = tool["function"]["parameters"]["properties"]["service_name"].get("enum", [])
+        if service_name not in permitted_names:
+            return OperationResult(False, 51, "Remediation action has an invalid service target.")
+        try:
+            if name == "check_service_health":
+                result = workspace.check_service_health(name=service_name)
+            elif name == "restart_service":
+                result = workspace.restart_service(name=service_name)
+            else:  # Defensive guard if the advertised registry grows later.
+                return OperationResult(False, 50, f"Unsupported remediation action: {name}.")
+        except Exception as exc:
+            return OperationResult(False, 52, f"Remediation action failed: {exc}")
+        if not result.success:
+            return OperationResult(False, result.code, result.message)
+        messages.append(result.message)
+    return OperationResult(True, 0, " ".join(messages), {"actions": actions})
 
 
 def get_operations_board(workspace, *, create: bool = False) -> OperationResult:
@@ -202,6 +408,33 @@ def get_operations_board(workspace, *, create: bool = False) -> OperationResult:
     return OperationResult(True, 0, message, {"board": board})
 
 
+def add_operations_plan_item(
+    workspace,
+    *,
+    headline: str,
+    description: str,
+) -> OperationResult:
+    """Add a concise, human-reviewed remediation proposal to the Operations board."""
+
+    board_result = get_operations_board(workspace, create=True)
+    if not board_result.success:
+        return board_result
+    board = (board_result.data or {}).get("board")
+    save_entry = getattr(workspace, "save_entry", None)
+    if board is None or not callable(save_entry):
+        return OperationResult(False, 45, "Project knowledge base is unavailable.")
+    columns = parse_board(board.body_md)
+    if not columns:
+        return OperationResult(False, 53, "The Operations board has no markdown columns.")
+    compact_description = " ".join(str(description).split())[:280]
+    card = str(headline).strip()[:120]
+    if compact_description:
+        card = f"{card} — {compact_description}"
+    board.body_md = add_item(board.body_md, 0, card)
+    saved = save_entry(board)
+    return OperationResult(True, 0, "Recommendation added to the Operations plan.", {"board": saved})
+
+
 def save_operations_postmortem(
     workspace,
     pipeline: dict[str, Any],
@@ -214,7 +447,13 @@ def save_operations_postmortem(
         return OperationResult(False, 45, "Project knowledge base is unavailable.")
     pipeline_name = str(pipeline.get("pipeline_name") or "model pipeline")
     timestamp = datetime.now(timezone.utc)
-    title = f"Postmortem - {pipeline_name} - {timestamp:%Y-%m-%d %H:%M UTC}"
+    title_prefix = f"Postmortem - {pipeline_name} - {timestamp:%Y-%m-%d %H:%M:%S UTC}"
+    existing_titles = {entry.title for entry in workspace.list_entries("wiki")}
+    title = title_prefix
+    duplicate_number = 2
+    while title in existing_titles:
+        title = f"{title_prefix} ({duplicate_number})"
+        duplicate_number += 1
     culprit = str(pipeline.get("culprit") or "Not determined")
     quality_name = str(pipeline.get("quality_name") or "quality metric")
     quality_value = pipeline.get("quality_value")

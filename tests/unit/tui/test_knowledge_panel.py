@@ -7,10 +7,12 @@ import time
 from types import SimpleNamespace
 
 from textual.app import App, ComposeResult
+from textual.widgets import TabbedContent
 
 from mlox.project import ProjectWorkspace
 from mlox.project.entries import Entry, parse_board
 from mlox.tui.screens.dashboard.knowledge_panel import KnowledgePanel
+from mlox.tui.screens.dashboard.operations_panel import OperationsPanel
 from mlox.tui.screens.dashboard.screen import DashboardScreen
 
 
@@ -70,6 +72,29 @@ def test_empty_board_column_ignores_card_actions(tmp_path) -> None:
     panel._linkify_card(0, 0, "Ignored")
 
     assert panel._board_entry.body_md == "## Open\n\n## Doing\n"
+
+
+def test_operations_plan_navigation_opens_knowledge_entry(tmp_path) -> None:
+    workspace = _make_workspace(tmp_path)
+    board = workspace.save_entry(
+        Entry(kind="board", title="Operations", body_md="## Open\n")
+    )
+    app = DashboardTestApp(workspace)
+
+    async def run():
+        async with app.run_test() as pilot:
+            screen = app.query_one(DashboardScreen)
+            screen.on_operations_panel_open_knowledge_requested(
+                OperationsPanel.OpenKnowledgeRequested(board.title)
+            )
+            await pilot.pause()
+            await pilot.pause()
+            tabs = app.query_one("#main-tabs", TabbedContent)
+            panel = app.query_one(KnowledgePanel)
+            assert tabs.active == "knowledge-tab"
+            assert panel._board_entry.title == "Operations"
+
+    asyncio.run(run())
 
 
 def test_knowledge_panel_survives_workspace_without_entries_api(tmp_path) -> None:

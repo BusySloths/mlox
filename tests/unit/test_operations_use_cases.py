@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from mlox.application.use_cases.operations import (
     OPERATIONS_REASONING_SECRET,
     OperationsWatchSession,
+    add_operations_plan_item,
+    execute_operations_remediation,
     get_operations_board,
     list_operations_monitors,
     load_operations_reasoning_settings,
@@ -330,11 +332,93 @@ def test_reasoning_uses_openai_compatible_endpoint_without_exposing_key():
     assert captured["url"] == "https://llm.example/v1/chat/completions"
     assert captured["headers"]["Authorization"] == "Bearer top-secret"
     assert result.data == {
+        "headline": "Disable corrupt traffic and verify recovery.",
         "recommendation": "Disable corrupt traffic and verify recovery.",
+        "verification": "Verify recovery against the rolling telemetry windows.",
+        "actions": [],
         "mode": "approval",
         "model": "reasoner",
     }
+    assert captured["json"]["tools"] == []
     assert "top-secret" not in result.message
+
+
+def test_reasoning_proposes_only_advertised_workspace_actions():
+    secret = {
+        "mode": "approval",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+    }
+    service = SimpleNamespace(name="gateway", state="running", restart=lambda: None)
+    calls = []
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(load_secret=lambda _name: secret),
+        infrastructure=SimpleNamespace(services=lambda: iter([service])),
+        restart_service=lambda *, name: calls.append(name)
+        or SimpleNamespace(success=True, code=0, message=f"Restarted {name}."),
+    )
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "headline": "Restart model gateway",
+                                    "description": "Restart the gateway after preserving evidence.",
+                                    "verification": "Check that the error rate returns to baseline.",
+                                }
+                            ),
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "name": "restart_service",
+                                        "arguments": '{"service_name": "gateway"}',
+                                    }
+                                },
+                                {
+                                    "function": {
+                                        "name": "invent_a_rollback",
+                                        "arguments": "{}",
+                                    }
+                                },
+                            ],
+                        }
+                    }
+                ]
+            }
+
+    result = reason_about_operations_incident(
+        workspace, {"pipeline_name": "demo", "steps": []}, post=lambda *_args, **_kwargs: Response()
+    )
+
+    assert result.success
+    assert result.data["headline"] == "Restart model gateway"
+    assert result.data["actions"] == [
+        {"name": "restart_service", "arguments": {"service_name": "gateway"}}
+    ]
+    executed = execute_operations_remediation(workspace, result.data["actions"])
+    assert executed.success
+    assert calls == ["gateway"]
+
+
+def test_add_operations_plan_item_reuses_the_knowledge_operations_board(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "plan"), "pw")
+
+    result = add_operations_plan_item(
+        workspace,
+        headline="Rollback model gateway",
+        description="Restore the known-good deployment after checking evidence.",
+    )
+
+    assert result.success
+    board = workspace.find_entry_by_title("Operations", "board")
+    assert "Rollback model gateway" in board.body_md
 
 
 def test_operations_board_and_postmortem_reuse_knowledge(tmp_path):
@@ -368,3 +452,17 @@ def test_operations_board_and_postmortem_reuse_knowledge(tmp_path):
     assert "Pipeline recovered." in postmortem.body_md
     updated_board = workspace.find_entry_by_title("Operations", "board")
     assert postmortem.title in updated_board.body_md
+
+
+def test_postmortems_have_distinct_titles_and_plan_links(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "postmortems"), "pw")
+    pipeline = {"id": "pipeline-1", "pipeline_name": "forecast"}
+
+    first = save_operations_postmortem(workspace, pipeline, [])
+    second = save_operations_postmortem(workspace, pipeline, [])
+
+    assert first.success and second.success
+    assert first.data["entry"].title != second.data["entry"].title
+    board = workspace.find_entry_by_title("Operations", "board")
+    assert first.data["entry"].title in board.body_md
+    assert second.data["entry"].title in board.body_md

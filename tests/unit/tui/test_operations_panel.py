@@ -13,6 +13,7 @@ from mlox.project import ProjectWorkspace
 from mlox.tui.screens.dashboard.operations_panel import (
     OperationsPanel,
     PipelineDetailsDialog,
+    RecommendationDialog,
 )
 
 
@@ -222,6 +223,42 @@ def test_operations_panel_summarizes_each_pipeline_in_table() -> None:
     assert "request_id | request-789" in details
     assert "newer-request" not in details
     assert "step 1: normalize observation | output.mean | 0.2" in details
+
+
+def test_recommendation_dialog_keeps_details_out_of_the_incident_view() -> None:
+    app = OperationsTestApp()
+
+    async def run() -> tuple[str, bool, int]:
+        async with app.run_test(size=(160, 50)) as pilot:
+            app.push_screen(
+                RecommendationDialog(
+                    headline="Restart model gateway",
+                    description="A concise explanation of the selected remediation.",
+                    verification="Check that the error rate returns to baseline.",
+                    actions=[
+                        {
+                            "name": "restart_service",
+                            "arguments": {"service_name": "gateway"},
+                        }
+                    ],
+                    mode="advisory",
+                )
+            )
+            await pilot.pause()
+            dialog = app.screen
+            execute = dialog.query_one("#operations-recommendation-execute", Button)
+            table = dialog.query_one("#operations-recommendation-actions", DataTable)
+            return (
+                str(dialog.query_one("#operations-recommendation-title", Static).content),
+                execute.disabled,
+                table.row_count,
+            )
+
+    title, execute_disabled, action_count = asyncio.run(run())
+
+    assert title == "Restart model gateway"
+    assert execute_disabled
+    assert action_count == 1
 
 
 def test_operations_side_rail_switches_section_heading() -> None:

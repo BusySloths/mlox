@@ -78,6 +78,11 @@ Operations contains four focused views:
   current, 1-minute/5-sample, and 5-minute/10-sample values. **Get Details**
   opens a frozen snapshot; **Recommend Action** records a manual, approval-gated
   remediation; and a recovered incident can be saved as a Knowledge postmortem.
+  Recommendations open in a review dialog with a concise headline, explanation,
+  verification step, and any proposed MLOX actions. **Add to Plan** writes the
+  reviewed proposal to the Operations board. **Execute** is enabled only in
+  *Approval required* mode and only for tool calls that MLOX explicitly offered
+  to the model; it never executes free-form model text.
 - **Plan** projects the Knowledge board titled `Operations`, creating it on
   demand and linking generated postmortem follow-ups into its first lane.
 - **Activity** shows the persisted, append-only operations audit trail.

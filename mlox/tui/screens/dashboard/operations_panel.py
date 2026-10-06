@@ -11,7 +11,7 @@ from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.css.query import NoMatches
+from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import (
@@ -27,6 +27,8 @@ from textual.widgets import (
 from mlox.application.use_cases.operations import (
     OPERATIONS_BOARD_TITLE,
     OperationsWatchSession,
+    add_operations_plan_item,
+    execute_operations_remediation,
     get_operations_board,
     list_operations_monitors,
     load_operations_reasoning_settings,
@@ -103,6 +105,79 @@ class PipelineDetailsDialog(ModalScreen[None]):
         self.dismiss(None)
 
 
+class RecommendationDialog(ModalScreen[str | None]):
+    """Review a compact reasoning proposal before any plan or runtime change."""
+
+    def __init__(
+        self,
+        *,
+        headline: str,
+        description: str,
+        verification: str,
+        actions: list[dict[str, Any]],
+        mode: str,
+    ) -> None:
+        super().__init__()
+        self.headline = headline
+        self.description = description
+        self.verification = verification
+        self.actions = deepcopy(actions)
+        self.mode = mode
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="operations-recommendation-dialog"):
+            yield Static("REMEDIATION PROPOSAL", id="operations-recommendation-eyebrow")
+            yield Static(self.headline, id="operations-recommendation-title")
+            with VerticalScroll(id="operations-recommendation-scroll"):
+                yield Static(self.description, id="operations-recommendation-description")
+                yield Static("Verification", classes="operations-recommendation-label")
+                yield Static(
+                    self.verification or "Verify recovery against the rolling telemetry windows.",
+                    id="operations-recommendation-verification",
+                )
+                yield Static("Proposed MLOX actions", classes="operations-recommendation-label")
+                actions = DataTable(id="operations-recommendation-actions")
+                actions.cursor_type = "row"
+                actions.add_columns("Action", "Target", "Effect")
+                yield actions
+            with Horizontal(id="operations-recommendation-buttons"):
+                yield Button("Add to Plan", id="operations-recommendation-add-plan")
+                yield Button(
+                    "Execute",
+                    id="operations-recommendation-execute",
+                    variant="warning",
+                    disabled=not self.actions or self.mode != "approval",
+                )
+                yield Button("Dismiss", id="operations-recommendation-dismiss", variant="primary")
+
+    def on_mount(self) -> None:
+        table = self.query_one("#operations-recommendation-actions", DataTable)
+        if not self.actions:
+            table.add_row("No MLOX action proposed", "-", "Review manually")
+            return
+        labels = {
+            "check_service_health": ("Check service health", "Read / verify"),
+            "restart_service": ("Restart service", "Restart / repair"),
+        }
+        for action in self.actions:
+            name = str(action.get("name") or "MLOX action")
+            title, effect = labels.get(name, (name.replace("_", " ").title(), "Execute"))
+            target = str((action.get("arguments") or {}).get("service_name") or "-")
+            table.add_row(title, target, effect)
+
+    @on(Button.Pressed, "#operations-recommendation-add-plan")
+    def handle_add_plan(self, _: Button.Pressed) -> None:
+        self.dismiss("plan")
+
+    @on(Button.Pressed, "#operations-recommendation-execute")
+    def handle_execute(self, _: Button.Pressed) -> None:
+        self.dismiss("execute")
+
+    @on(Button.Pressed, "#operations-recommendation-dismiss")
+    def handle_dismiss(self, _: Button.Pressed) -> None:
+        self.dismiss(None)
+
+
 class OperationsPlanBoard(Horizontal):
     """Read-only projection of the Operations board stored in Knowledge."""
 
@@ -145,6 +220,13 @@ class OperationsPanel(Static):
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
+    class OpenKnowledgeRequested(Message):
+        """Ask the dashboard to reveal a Knowledge entry after its tab is mounted."""
+
+        def __init__(self, title: str) -> None:
+            super().__init__()
+            self.title = title
+
     def __init__(self, *children, **kwargs) -> None:
         super().__init__(*children, **kwargs)
         self._session: OperationsWatchSession | None = None
@@ -155,6 +237,7 @@ class OperationsPanel(Static):
         self._pipeline_states: dict[str, str] = {}
         self._activity: list[OperationsEvent] = []
         self._operations_board: Entry | None = None
+        self._postmortem_saved_for: set[str] = set()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="operations-content"):
@@ -506,6 +589,7 @@ class OperationsPanel(Static):
         self._pipeline_snapshots.clear()
         self._selected_pipeline_id = ""
         self._pipeline_states.clear()
+        self._postmortem_saved_for.clear()
         self.query_one("#operations-get-details", Button).disabled = True
         self.query_one("#operations-monitor", Select).disabled = False
         self._show_snapshot(self._empty_snapshot())
@@ -576,6 +660,9 @@ class OperationsPanel(Static):
         if result.success:
             payload = result.data or {}
             recommendation = str(payload.get("recommendation") or "")
+            headline = str(payload.get("headline") or "Recommended remediation")
+            verification = str(payload.get("verification") or "")
+            actions = list(payload.get("actions") or [])
             actor = "reasoning-assistant"
             status = (
                 "approval-required"
@@ -584,10 +671,13 @@ class OperationsPanel(Static):
             )
             details = {"model": payload.get("model"), "execution": "manual"}
         else:
+            headline = "Preserve evidence and stop corrupted traffic"
             recommendation = (
-                "Disable corrupted traffic, preserve the current evidence snapshot, "
-                f"and verify that rolling observations recover after {culprit}."
+                "Preserve the current evidence snapshot, disable corrupted traffic, "
+                f"and investigate {culprit}."
             )
+            verification = "Verify that rolling observations return to their established baseline."
+            actions = []
             actor = "system"
             status = "manual-runbook"
             details = {
@@ -596,18 +686,121 @@ class OperationsPanel(Static):
                 "reasoning_fallback": result.message,
             }
         self.query_one("#operations-remediation", Static).update(
-            f"Recommended manual remediation: {recommendation}"
+            f"Recommendation ready: {headline}"
         )
         self._record_activity(
             "remediation_proposed",
-            recommendation,
+            headline,
             actor=actor,
             target=str(pipeline.get("id") or ""),
             status=status,
-            details=details,
+            details={
+                **details,
+                "description": recommendation,
+                "verification": verification,
+                "actions": actions,
+            },
         )
         self._update_incident_actions(self._selected_pipeline())
-        self.app.notify("A manual remediation was proposed; no action was executed.")
+        self.app.push_screen(
+            RecommendationDialog(
+                headline=headline,
+                description=recommendation,
+                verification=verification,
+                actions=actions,
+                mode=str((result.data or {}).get("mode") or "disabled")
+                if result.success
+                else "disabled",
+            ),
+            lambda decision: self._handle_recommendation_decision(
+                decision,
+                pipeline=deepcopy(pipeline),
+                headline=headline,
+                description=recommendation,
+                actions=actions,
+            ),
+        )
+
+    def _handle_recommendation_decision(
+        self,
+        decision: str | None,
+        *,
+        pipeline: dict[str, Any],
+        headline: str,
+        description: str,
+        actions: list[dict[str, Any]],
+    ) -> None:
+        if decision == "plan":
+            workspace = getattr(self.app, "workspace", None)
+            result = add_operations_plan_item(
+                workspace, headline=headline, description=description
+            )
+            if not result.success:
+                self.app.notify(result.message, severity="error")
+                return
+            self._record_activity(
+                "remediation_added_to_plan",
+                headline,
+                actor="user",
+                target=str(pipeline.get("id") or ""),
+                status="planned",
+                details={"actions": actions},
+            )
+            self._load_plan()
+            self.app.notify(result.message)
+        elif decision == "execute":
+            self._execute_recommendation(pipeline, headline, actions)
+
+    def _execute_recommendation(
+        self,
+        pipeline: dict[str, Any],
+        headline: str,
+        actions: list[dict[str, Any]],
+    ) -> None:
+        self.app.notify("Executing approved MLOX remediation action…")
+
+        def execute() -> None:
+            result = execute_operations_remediation(
+                getattr(self.app, "workspace", None), deepcopy(actions)
+            )
+            self.app.call_from_thread(
+                self._finish_recommendation_execution,
+                deepcopy(pipeline),
+                headline,
+                deepcopy(actions),
+                result,
+            )
+
+        self.app.run_worker(
+            execute,
+            thread=True,
+            exclusive=True,
+            group="operations-remediation",
+        )
+
+    def _finish_recommendation_execution(
+        self, pipeline, headline: str, actions: list[dict[str, Any]], result
+    ) -> None:
+        if not result.success:
+            self._record_activity(
+                "remediation_failed",
+                headline,
+                actor="user",
+                target=str(pipeline.get("id") or ""),
+                status="failed",
+                details={"actions": actions, "error": result.message},
+            )
+            self.app.notify(result.message, severity="error")
+            return
+        self._record_activity(
+            "remediation_executed",
+            headline,
+            actor="user",
+            target=str(pipeline.get("id") or ""),
+            status="executed",
+            details={"actions": actions},
+        )
+        self.app.notify(result.message)
 
     @on(Button.Pressed, "#operations-save-postmortem")
     def handle_save_postmortem(self, _: Button.Pressed) -> None:
@@ -626,6 +819,7 @@ class OperationsPanel(Static):
             target=str(pipeline.get("id") or ""),
             status="reviewed",
         )
+        self._postmortem_saved_for.add(str(pipeline.get("id") or ""))
         self._load_plan()
         self.app.notify(result.message)
 
@@ -668,18 +862,7 @@ class OperationsPanel(Static):
     def handle_plan_open_knowledge(self, _: Button.Pressed) -> None:
         if self._operations_board is None:
             return
-        try:
-            main_tabs = self.app.query_one("#main-tabs", TabbedContent)
-            main_tabs.active = "knowledge-tab"
-            from .knowledge_panel import KnowledgePanel
-
-            self.app.query_one(KnowledgePanel).open_entry_by_title(
-                self._operations_board.title
-            )
-        except NoMatches:
-            self.app.notify(
-                "The Knowledge panel is unavailable in this view.", severity="warning"
-            )
+        self.post_message(self.OpenKnowledgeRequested(self._operations_board.title))
 
     def _load_activity(self) -> None:
         if not self.is_mounted:
@@ -882,7 +1065,9 @@ class OperationsPanel(Static):
             "recovered",
         }
         self.query_one("#operations-save-postmortem", Button).disabled = not (
-            has_pipeline and state == "recovered"
+            has_pipeline
+            and state == "recovered"
+            and str((pipeline or {}).get("id") or "") not in self._postmortem_saved_for
         )
 
     def _record_pipeline_state_changes(
@@ -897,6 +1082,7 @@ class OperationsPanel(Static):
             self._pipeline_states[pipeline_id] = state
             name = str(pipeline.get("pipeline_name") or "model pipeline")
             if state == "incident":
+                self._postmortem_saved_for.discard(pipeline_id)
                 culprit = str(pipeline.get("culprit") or "unknown origin")
                 self._record_activity(
                     "incident_detected",

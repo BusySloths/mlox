@@ -1181,6 +1181,66 @@ PipelineDetailsDialog {
   align-horizontal: right;
 }
 
+#operations-recommendation-dialog {
+  width: 76;
+  max-width: 92%;
+  height: 30;
+  max-height: 88%;
+  padding: 1 2;
+  border: round #f4e223ff;
+  background: #10211fff;
+}
+
+#operations-recommendation-eyebrow {
+  height: 1;
+  color: #f4e223ff;
+  text-style: bold;
+}
+
+#operations-recommendation-title {
+  height: auto;
+  margin: 0 0 1 0;
+  color: #f8fafcff;
+  text-style: bold;
+}
+
+#operations-recommendation-scroll {
+  height: 1fr;
+  overflow-y: auto;
+}
+
+#operations-recommendation-description,
+#operations-recommendation-verification {
+  height: auto;
+  margin-bottom: 1;
+  color: #d9e6e4;
+}
+
+.operations-recommendation-label {
+  height: 1;
+  margin-top: 1;
+  color: #9ab8b2;
+  text-style: bold;
+}
+
+#operations-recommendation-actions {
+  height: 7;
+  margin-top: 1;
+  border: round #35635bff;
+}
+
+#operations-recommendation-buttons {
+  height: 3;
+  margin-top: 1;
+  align-horizontal: right;
+}
+
+#operations-recommendation-buttons Button {
+  width: auto;
+  min-width: 14;
+  margin-left: 1;
+}
+
 #operations-pipelines {
   height: 9;
   width: 1fr;
