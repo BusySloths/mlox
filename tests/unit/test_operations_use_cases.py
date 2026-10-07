@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import requests
+
 from mlox.application.use_cases.operations import (
     OPERATIONS_REASONING_SECRET,
     OperationsWatchSession,
@@ -437,6 +439,77 @@ def test_reasoning_proposes_only_advertised_workspace_actions():
     executed = execute_operations_remediation(workspace, result.data["actions"])
     assert executed.success
     assert calls == ["gateway"]
+
+
+def test_reasoning_sends_only_public_tool_schema(monkeypatch):
+    secret = {
+        "mode": "advisory",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+    }
+    workspace = SimpleNamespace(secrets=SimpleNamespace(load_secret=lambda _name: secret))
+    offered_tool = {
+        "type": "function",
+        "function": {
+            "name": "restart_service",
+            "description": "Restart a service.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        "x-mlox-valid-choices": [{"service_name": "gateway"}],
+    }
+    monkeypatch.setattr(
+        "mlox.application.use_cases.operations.operations_remediation_tools",
+        lambda *_args, **_kwargs: [offered_tool],
+    )
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Review the service."}}]}
+
+    def post(_url, **kwargs):
+        captured.update(kwargs)
+        return Response()
+
+    result = reason_about_operations_incident(
+        workspace, {"pipeline_name": "demo", "steps": []}, post=post
+    )
+
+    assert result.success
+    assert captured["json"]["tools"] == [
+        {key: value for key, value in offered_tool.items() if not key.startswith("x-mlox-")}
+    ]
+
+
+def test_reasoning_includes_redacted_provider_error_body():
+    secret = {
+        "mode": "advisory",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+        "api_key": "top-secret",
+    }
+    workspace = SimpleNamespace(secrets=SimpleNamespace(load_secret=lambda _name: secret))
+
+    class Response:
+        text = '{"error": "unsupported tool schema"}'
+
+        def raise_for_status(self):
+            error = requests.HTTPError("400 Client Error: Bad Request")
+            error.response = self
+            raise error
+
+    result = reason_about_operations_incident(
+        workspace,
+        {"pipeline_name": "demo", "steps": []},
+        post=lambda *_args, **_kwargs: Response(),
+    )
+
+    assert not result.success
+    assert "unsupported tool schema" in result.message
+    assert "top-secret" not in result.message
 
 
 def test_reasoning_accepts_tool_only_response_from_openai_compatible_provider():

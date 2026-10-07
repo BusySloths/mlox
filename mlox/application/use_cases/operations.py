@@ -268,6 +268,29 @@ def _tool_only_recommendation(actions: list[dict[str, Any]]) -> dict[str, str] |
     }
 
 
+def _provider_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove MLOX-only metadata before sending OpenAI-compatible tools."""
+
+    return [
+        {key: value for key, value in tool.items() if not key.startswith("x-mlox-")}
+        for tool in tools
+    ]
+
+
+def _reasoning_error_message(error: Exception, api_key: str) -> str:
+    """Return a useful provider error without revealing the configured secret."""
+
+    message = str(error)
+    response = getattr(error, "response", None)
+    body = str(getattr(response, "text", "") or "").strip()
+    if api_key:
+        message = message.replace(api_key, "[redacted]")
+        body = body.replace(api_key, "[redacted]")
+    if body and body not in message:
+        message = f"{message}: {body[:600]}"
+    return message[:800]
+
+
 def _requested_tools(
     message: dict[str, Any], available: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -433,6 +456,7 @@ def reason_about_operations_incident(
         headers["Authorization"] = f"Bearer {api_key}"
     request = post or requests.post
     tools = operations_remediation_tools(workspace, pipeline)
+    provider_tools = _provider_tools(tools)
     request_payload: dict[str, Any] = {
         "model": model,
         "temperature": 0.1,
@@ -458,8 +482,8 @@ def reason_about_operations_incident(
             },
         ],
     }
-    if tools:
-        request_payload["tools"] = tools
+    if provider_tools:
+        request_payload["tools"] = provider_tools
         request_payload["tool_choice"] = "auto"
     try:
         response = request(
@@ -480,7 +504,11 @@ def reason_about_operations_incident(
         if not recommendation["description"]:
             raise ValueError("The model returned an empty recommendation.")
     except Exception as exc:
-        return OperationResult(False, 48, f"Incident reasoning failed: {exc}")
+        return OperationResult(
+            False,
+            48,
+            f"Incident reasoning failed: {_reasoning_error_message(exc, api_key)}",
+        )
     return OperationResult(
         True,
         0,
