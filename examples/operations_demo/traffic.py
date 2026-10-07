@@ -229,6 +229,16 @@ class TrafficLoop:
                     verify=False,
                     timeout=max(30.0, self.interval * 2),
                 )
+                if not response.ok and not send_labels:
+                    with self._lock:
+                        self.send_labels = True
+                    self.console.print(
+                        "[bold yellow]![/] Prediction-only traffic was rejected by "
+                        "the deployed model signature. Labels were restored. Register "
+                        "the latest demonstrator version before using labels off."
+                    )
+                    self.stop_event.wait(self.interval)
+                    continue
                 response.raise_for_status()
                 self.console.print(
                     f"[green]✓[/] request {self._request_number:04d}  "

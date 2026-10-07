@@ -44,13 +44,18 @@ Noise is configurable when a different signal-to-noise ratio is useful:
 uv run -m examples.operations_demo.traffic --feature-noise 0.03 --label-noise 0.02
 ```
 
-Use prediction-only traffic when labels are delayed or unavailable; the deployed
-demonstrator already accepts requests without the `target` column, so this does
-not require a model redeploy:
+Use prediction-only traffic when labels are delayed or unavailable:
 
 ```sh
 uv run -m examples.operations_demo.traffic --without-labels
 ```
+
+The version currently selected by `champion` must have been registered with the
+optional-target signature. Run `uv run -m examples.operations_demo.register`
+once to register that version and advance `champion`; the gateway then resolves
+the new alias without a service redeploy. Older demonstrator versions require
+the `target` column. The traffic script detects that response, restores labels,
+and explains the next step instead of continuing to send failing requests.
 
 The script selects the first running MLflow Gateway by default. Use `status` to
 see the exact gateway endpoint and its bound registry, telemetry, and secret

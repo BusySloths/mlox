@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from examples.operations_demo.model import OperationsDemoModel, demonstration_batch
 from examples.operations_demo import traffic
+from examples.operations_demo.register import _serving_signature
 
 
 def test_demo_model_fault_is_isolated_to_pca_and_degrades_rmse(monkeypatch):
@@ -29,6 +30,13 @@ def test_demonstration_batch_is_reproducible_and_labelled():
 
     assert first.equals(second)
     assert list(first.columns) == ["feature_1", "feature_2", "feature_3", "target"]
+
+
+def test_registered_demo_signature_allows_an_optional_target_label():
+    fields = {field.name: field for field in _serving_signature().inputs}
+
+    assert fields["target"].required is False
+    assert {"feature_1", "feature_2", "feature_3"} <= set(fields)
 
 
 def test_demonstration_batch_supports_reproducible_sample_noise():
