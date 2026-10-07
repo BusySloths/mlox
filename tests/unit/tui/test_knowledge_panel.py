@@ -84,6 +84,7 @@ def test_operations_plan_navigation_opens_knowledge_entry(tmp_path) -> None:
 
     async def run():
         async with app.run_test() as pilot:
+            screen = app.query_one(DashboardScreen)
             operations = app.query_one(OperationsPanel)
             # An active watcher must survive the cross-tab handoff without
             # pulling the user back from Knowledge.
@@ -100,7 +101,16 @@ def test_operations_plan_navigation_opens_knowledge_entry(tmp_path) -> None:
             button.press()
             await pilot.pause()
             await pilot.pause()
+            # Reproduce a late focus-restoration activation from the originating
+            # Operations button. The navigation handoff must restore Knowledge.
+            tabs.active = "operations-tab"
             await pilot.pause()
+            await pilot.pause()
+            # Repeated infrastructure-selection syncs happen while a live
+            # dashboard refreshes. They must not override explicit navigation.
+            for _ in range(3):
+                screen._apply_selection(SelectionInfo(type="root"))
+                await pilot.pause()
             panel = app.query_one(KnowledgePanel)
             assert tabs.active == "knowledge-tab"
             assert operations.watching

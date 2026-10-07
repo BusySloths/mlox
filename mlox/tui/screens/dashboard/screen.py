@@ -158,6 +158,7 @@ class DashboardScreen(Screen):
         super().__init__(*args, **kwargs)
         self._sidebar_width = SIDEBAR_DEFAULT_WIDTH
         self._requested_tab_id: str | None = None
+        self._navigation_tab_id: str | None = None
         self._current_selection: SelectionInfo | None = None
 
     def compose(self) -> ComposeResult:
@@ -260,8 +261,16 @@ class DashboardScreen(Screen):
         self.call_later(self._activate_operations_knowledge, message.title)
 
     def _activate_operations_knowledge(self, title: str) -> None:
+        self._navigation_tab_id = KNOWLEDGE_TAB_ID
         self.query_one("#main-tabs", TabbedContent).active = KNOWLEDGE_TAB_ID
         self.call_later(self._open_operations_knowledge_entry, title)
+        # A button nested in TabbedContent may restore its parent tab after the
+        # message queue drains. Hold the destination only for that handoff; it
+        # is deliberately not a persistent navigation lock.
+        self.set_timer(0.25, self._release_navigation_tab)
+
+    def _release_navigation_tab(self) -> None:
+        self._navigation_tab_id = None
 
     def _open_operations_knowledge_entry(self, title: str) -> None:
         panel = self.query_one("#knowledge-panel", KnowledgePanel)
@@ -367,7 +376,16 @@ class DashboardScreen(Screen):
 
     @on(TabbedContent.TabActivated, "#main-tabs")
     def handle_main_tab_activated(self, _: TabbedContent.TabActivated) -> None:
+        destination = self._navigation_tab_id
+        tabs = self.query_one("#main-tabs", TabbedContent)
+        if destination and tabs.active != destination:
+            self.call_later(self._restore_navigation_tab, destination)
+            return
         self._sync_active_root_panel()
+
+    def _restore_navigation_tab(self, tab_id: str) -> None:
+        if self._navigation_tab_id == tab_id:
+            self.query_one("#main-tabs", TabbedContent).active = tab_id
 
     def _clear_lazy_root_panels(self) -> None:
         self.query_one(SecretManagerPanel).selection = None
