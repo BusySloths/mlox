@@ -44,6 +44,14 @@ Noise is configurable when a different signal-to-noise ratio is useful:
 uv run -m examples.operations_demo.traffic --feature-noise 0.03 --label-noise 0.02
 ```
 
+Use prediction-only traffic when labels are delayed or unavailable; the deployed
+demonstrator already accepts requests without the `target` column, so this does
+not require a model redeploy:
+
+```sh
+uv run -m examples.operations_demo.traffic --without-labels
+```
+
 The script selects the first running MLflow Gateway by default. Use `status` to
 see the exact gateway endpoint and its bound registry, telemetry, and secret
 manager services. If the project contains multiple gateways, list and select
@@ -66,6 +74,7 @@ establish its assumed-normal baseline. At the interactive prompt use:
 ```text
 on      inject the PCA fault
 off     restore normal PCA behavior
+labels on/off  include or omit target labels (controls immediate RMSE telemetry)
 status  show the current mode
 gateways list configured gateways and mark the selected one
 use ID  send subsequent requests through gateway ID
@@ -74,7 +83,7 @@ quit    stop traffic
 
 Operations contains four focused views:
 
-- **Incidents** summarizes every observed model pipeline and provides baseline,
+- **Incidents** summarizes every observed workload and provides baseline,
   current, 1-minute/5-sample, and 5-minute/10-sample values. **Get Details**
   opens a frozen snapshot; **Recommend Action** records a manual, approval-gated
   remediation; and a recovered incident can be saved as a Knowledge postmortem.
@@ -82,7 +91,9 @@ Operations contains four focused views:
   verification step, and any proposed MLOX actions. **Add to Plan** writes the
   reviewed proposal to the Operations board. **Execute** is enabled only in
   *Approval required* mode and only for tool calls that MLOX explicitly offered
-  to the model; it never executes free-form model text.
+  to the model; it never executes free-form model text. When the active model
+  registry exposes an earlier version, the assistant can propose moving the
+  observed model alias (for example `champion`) back to that known version.
 - **Plan** projects the Knowledge board titled `Operations`, creating it on
   demand and linking generated postmortem follow-ups into its first lane.
 - **Activity** shows the persisted, append-only operations audit trail.
@@ -93,5 +104,6 @@ The incident view should first highlight `pca.transform`, show the downstream
 regression/RMSE deviation, and report recovery after corrupted samples leave the
 rolling windows.
 
-This controlled scenario assumes immediate labels. Real deployments may instead
-use delayed labels, business KPIs, canary tests, or model-quality proxies.
+This controlled scenario assumes immediate labels by default. Real deployments
+may instead use delayed labels, business KPIs, canary tests, or model-quality
+proxies; turn labels off in the traffic generator to exercise that case.

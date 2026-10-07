@@ -1150,7 +1150,8 @@ ModelCallResultDialog {
   border: round #1bd6f3ff;
 }
 
-PipelineDetailsDialog {
+PipelineDetailsDialog,
+RecommendationDialog {
   align: center middle;
   background: #000000 70%;
 }

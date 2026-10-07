@@ -149,8 +149,10 @@ pass-throughs — there is deliberately no use-case layer or CLI surface yet.
 
 Schema version 4 adds the append-only `operations_events` table. Operations
 uses it for project-scoped detection, acknowledgement, remediation, recovery,
-configuration, and review audit events. Planning and postmortems deliberately
-remain Knowledge entries: the Operations Plan view projects the board titled
+configuration, and review audit events. Its telemetry contract is workload-first:
+model invocations remain supported, while generic `mlox.workload.run` and
+`mlox.workload.step` spans can describe data, batch, or service workloads with
+an optional typed subject. Planning and postmortems deliberately remain Knowledge entries: the Operations Plan view projects the board titled
 `Operations`, and resolved incidents can create linked wiki postmortems and
 follow-up cards without introducing a second planning store. Reasoning-assistant
 configuration is stored under the active secret manager and is always redacted

@@ -364,7 +364,12 @@ class DashboardScreen(Screen):
         self.query_one(SecretManagerPanel).selection = None
         self.query_one(FirewallPanel).selection = None
         self.query_one(MonitorPanel).selection = None
-        self.query_one(OperationsPanel).selection = None
+        operations = self.query_one(OperationsPanel)
+        # A watcher must keep its live session mounted while the user reads the
+        # shared Knowledge plan. Hiding it here can make Textual reselect the
+        # Operations pane after a cross-tab navigation.
+        if not operations.watching:
+            operations.selection = None
         self.query_one(DatabasePanel).selection = None
         self.query_one(ModelsPanel).selection = None
         self.query_one(WorkflowPanel).selection = None
@@ -387,7 +392,10 @@ class DashboardScreen(Screen):
             WORKFLOW_TAB_ID: self.query_one(WorkflowPanel),
             REPOSITORY_TAB_ID: self.query_one(RepositoryPanel),
         }
+        operations = panel_by_tab[OPERATIONS_TAB_ID]
         for tab_id, panel in panel_by_tab.items():
+            if panel is operations and operations.watching:
+                continue
             panel.selection = selection if tabs.active == tab_id else None
 
     def action_copy_model_example(self) -> None:

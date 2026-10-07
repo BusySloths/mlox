@@ -57,6 +57,9 @@ def _pipeline_detail_rows(details: dict[str, Any]) -> list[tuple[str, str, str]]
         "trace_id",
         "span_id",
         "request_id",
+        "subject_kind",
+        "subject_name",
+        "subject_version",
         "model_name",
         "model_version",
         "model_alias",
@@ -77,7 +80,7 @@ def _pipeline_detail_rows(details: dict[str, Any]) -> list[tuple[str, str, str]]
 
 
 class PipelineDetailsDialog(ModalScreen[None]):
-    """Display one immutable snapshot of the selected pipeline's latest run."""
+    """Display one immutable snapshot of the selected workload's latest run."""
 
     def __init__(self, pipeline: dict[str, Any]) -> None:
         super().__init__()
@@ -86,7 +89,7 @@ class PipelineDetailsDialog(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="operations-details-dialog"):
             yield Static(
-                f"Pipeline details: {self.pipeline.get('pipeline_name', '-')}",
+                f"Workload details: {self.pipeline.get('pipeline_name', '-')}",
                 id="operations-details-title",
             )
             table = DataTable(id="operations-details-table")
@@ -158,11 +161,19 @@ class RecommendationDialog(ModalScreen[str | None]):
         labels = {
             "check_service_health": ("Check service health", "Read / verify"),
             "restart_service": ("Restart service", "Restart / repair"),
+            "rollback_model_alias": ("Roll back model alias", "Move to earlier version"),
         }
         for action in self.actions:
             name = str(action.get("name") or "MLOX action")
             title, effect = labels.get(name, (name.replace("_", " ").title(), "Execute"))
-            target = str((action.get("arguments") or {}).get("service_name") or "-")
+            arguments = action.get("arguments") or {}
+            target = str(
+                arguments.get("service_name")
+                or (
+                    f"{arguments.get('model_name', '-')}:"
+                    f"{arguments.get('alias', '-') } → v{arguments.get('target_version', '-')}"
+                )
+            )
             table.add_row(title, target, effect)
 
     @on(Button.Pressed, "#operations-recommendation-add-plan")
@@ -216,7 +227,7 @@ class OperationsPlanBoard(Horizontal):
 
 
 class OperationsPanel(Static):
-    """Calibrate and watch one telemetry-discovered model pipeline."""
+    """Calibrate and watch telemetry-discovered workloads and their steps."""
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
@@ -295,8 +306,8 @@ class OperationsPanel(Static):
                 pipelines = DataTable(id="operations-pipelines")
                 pipelines.cursor_type = "row"
                 pipelines.add_columns(
-                    "Pipeline",
-                    "Model / version",
+                    "Workload",
+                    "Subject / version",
                     "Runs / baseline",
                     "Quality",
                     "State",
@@ -315,7 +326,7 @@ class OperationsPanel(Static):
                 yield table
                 yield Static("", id="operations-remediation")
                 yield Static(
-                    "Start watching, then send healthy traffic to establish a baseline.",
+                    "Start watching, then send healthy workload runs to establish a baseline.",
                     id="operations-evidence",
                 )
             with TabPane("Plan", id="operations-plan-tab"):
@@ -362,7 +373,7 @@ class OperationsPanel(Static):
                             id="operations-monitor",
                         )
                     yield Static(
-                        "The first 10 completed runs per pipeline are assumed normal.",
+                        "The first 10 completed runs per workload are assumed normal.",
                         id="operations-assumption",
                     )
                     with Horizontal(id="operations-actions"):
@@ -447,6 +458,12 @@ class OperationsPanel(Static):
             self._load_plan()
             self._load_activity()
             self._load_reasoning_settings()
+
+    @property
+    def watching(self) -> bool:
+        """Whether a live session must stay mounted while another tab is visible."""
+
+        return bool(self._session and self._session.active)
 
     @on(TabbedContent.TabActivated, "#operations-tabs")
     def handle_operations_tab_activated(
@@ -626,7 +643,7 @@ class OperationsPanel(Static):
             return
         self._record_activity(
             "incident_acknowledged",
-            f"Acknowledged the incident for {pipeline.get('pipeline_name', 'pipeline')}.",
+                f"Acknowledged the incident for {pipeline.get('pipeline_name', 'workload')}.",
             actor="user",
             target=str(pipeline.get("id") or ""),
             status="acknowledged",
@@ -656,7 +673,7 @@ class OperationsPanel(Static):
         )
 
     def _finish_recommend_action(self, pipeline, result) -> None:
-        culprit = str(pipeline.get("culprit") or "the affected pipeline")
+        culprit = str(pipeline.get("culprit") or "the affected workload")
         if result.success:
             payload = result.data or {}
             recommendation = str(payload.get("recommendation") or "")
@@ -671,10 +688,11 @@ class OperationsPanel(Static):
             )
             details = {"model": payload.get("model"), "execution": "manual"}
         else:
-            headline = "Preserve evidence and stop corrupted traffic"
+            headline = "Review the affected workload before remediation"
             recommendation = (
-                "Preserve the current evidence snapshot, disable corrupted traffic, "
-                f"and investigate {culprit}."
+                "Preserve the current evidence snapshot and investigate "
+                f"{culprit}. No MLOX runtime action was proposed because the reasoning "
+                "assistant was unavailable."
             )
             verification = "Verify that rolling observations return to their established baseline."
             actions = []
@@ -761,7 +779,9 @@ class OperationsPanel(Static):
 
         def execute() -> None:
             result = execute_operations_remediation(
-                getattr(self.app, "workspace", None), deepcopy(actions)
+                getattr(self.app, "workspace", None),
+                deepcopy(actions),
+                pipeline=deepcopy(pipeline),
             )
             self.app.call_from_thread(
                 self._finish_recommendation_execution,
@@ -1023,7 +1043,7 @@ class OperationsPanel(Static):
             pipelines = [
                 {
                     "id": "legacy-pipeline",
-                    "pipeline_name": snapshot.get("pipeline_name") or "model pipeline",
+                    "pipeline_name": snapshot.get("pipeline_name") or "observed workload",
                     "model_name": snapshot.get("model_name") or "-",
                     "model_version": snapshot.get("model_version") or "-",
                     "state": snapshot.get("state") or "stopped",
@@ -1080,7 +1100,7 @@ class OperationsPanel(Static):
             if not pipeline_id or not state or previous == state:
                 continue
             self._pipeline_states[pipeline_id] = state
-            name = str(pipeline.get("pipeline_name") or "model pipeline")
+            name = str(pipeline.get("pipeline_name") or "observed workload")
             if state == "incident":
                 self._postmortem_saved_for.discard(pipeline_id)
                 culprit = str(pipeline.get("culprit") or "unknown origin")
@@ -1138,7 +1158,8 @@ class OperationsPanel(Static):
             )
             table.add_row(
                 str(pipeline.get("pipeline_name") or "-"),
-                f"{pipeline.get('model_name', '-')} / {pipeline.get('model_version', '-')}",
+                f"{pipeline.get('subject_name', pipeline.get('model_name', '-'))} / "
+                f"{pipeline.get('subject_version', pipeline.get('model_version', '-'))}",
                 f"{pipeline.get('runs', 0)} / {pipeline.get('baseline_runs', 0)}/"
                 f"{pipeline.get('baseline_target', 10)}",
                 quality,
@@ -1211,7 +1232,7 @@ class OperationsPanel(Static):
         elif state == "recovered":
             message = "Observed values returned to the captured baseline after an incident."
         elif state == "watching":
-            message = "Baseline complete. Watching new model runs for deviations."
+            message = "Baseline complete. Watching new workload runs for deviations."
         else:
-            message = "Start watching, then send healthy traffic to establish a baseline."
+            message = "Start watching, then send healthy workload runs to establish a baseline."
         self.query_one("#operations-evidence", Static).update(message)

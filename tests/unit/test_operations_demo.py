@@ -128,6 +128,17 @@ def test_traffic_loop_reports_and_switches_gateway_dependencies(monkeypatch):
     assert loop.gateway is second
     assert "* Gateway B" in "\n".join(loop.gateway_lines())
 
+    loop.set_send_labels(False)
+    prediction_only = loop._payload(
+        demonstration_batch(2), corrupt=False, send_labels=loop.send_labels
+    )
+    assert prediction_only["dataframe_split"]["columns"] == [
+        "feature_1",
+        "feature_2",
+        "feature_3",
+    ]
+    assert "Labels: OFF (prediction-only)." in "\n".join(loop.status_lines())
+
     with pytest.raises(ValueError, match="not running"):
         loop.select_gateway("gateway-cccc")
 

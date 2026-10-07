@@ -12,6 +12,7 @@ from textual.widgets import TabbedContent
 from mlox.project import ProjectWorkspace
 from mlox.project.entries import Entry, parse_board
 from mlox.tui.screens.dashboard.knowledge_panel import KnowledgePanel
+from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.tui.screens.dashboard.operations_panel import OperationsPanel
 from mlox.tui.screens.dashboard.screen import DashboardScreen
 
@@ -84,6 +85,11 @@ def test_operations_plan_navigation_opens_knowledge_entry(tmp_path) -> None:
     async def run():
         async with app.run_test() as pilot:
             screen = app.query_one(DashboardScreen)
+            operations = app.query_one(OperationsPanel)
+            # Simulate an active watcher: switching to Knowledge must not cause
+            # the lazy-panel sync to hide Operations and reselect its tab.
+            operations._session = SimpleNamespace(active=True)
+            operations.selection = SelectionInfo(type="root")
             screen.on_operations_panel_open_knowledge_requested(
                 OperationsPanel.OpenKnowledgeRequested(board.title)
             )
@@ -92,6 +98,7 @@ def test_operations_plan_navigation_opens_knowledge_entry(tmp_path) -> None:
             tabs = app.query_one("#main-tabs", TabbedContent)
             panel = app.query_one(KnowledgePanel)
             assert tabs.active == "knowledge-tab"
+            assert operations.selection is not None
             assert panel._board_entry.title == "Operations"
 
     asyncio.run(run())

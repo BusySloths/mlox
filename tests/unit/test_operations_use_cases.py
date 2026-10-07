@@ -11,6 +11,7 @@ from mlox.application.use_cases.operations import (
     get_operations_board,
     list_operations_monitors,
     load_operations_reasoning_settings,
+    operations_remediation_tools,
     reason_about_operations_incident,
     refresh_operations_watch,
     save_operations_postmortem,
@@ -249,6 +250,36 @@ def test_watch_keeps_independent_pipeline_summaries():
     assert details["steps"][1]["observations"]["output.mean"] == 1.0
 
 
+def test_watch_accepts_generic_workload_telemetry():
+    spans = _run(1, model="ignored", pipeline="daily-etl")
+    for span in spans:
+        span["name"] = (
+            "mlox.workload.run"
+            if span["name"] == "mlox.model.live_predict"
+            else "mlox.workload.step"
+        )
+        for attribute in span["attributes"]:
+            if attribute["key"] == "mlox.model.name":
+                attribute["key"] = "mlox.subject.name"
+                attribute["value"] = {"stringValue": "customer-features"}
+            elif attribute["key"] == "mlox.model.version":
+                attribute["key"] = "mlox.subject.version"
+                attribute["value"] = {"stringValue": "2026-10-06"}
+            elif attribute["key"] == "mlox.model.alias":
+                attribute["key"] = "mlox.subject.kind"
+                attribute["value"] = {"stringValue": "data pipeline"}
+
+    session = OperationsWatchSession(baseline_runs=1)
+    session.start("")
+    assert session.ingest(_raw(spans)) == 1
+
+    workload = session.snapshot()["pipelines"][0]
+    assert workload["pipeline_name"] == "daily-etl"
+    assert workload["subject_kind"] == "data pipeline"
+    assert workload["subject_name"] == "customer-features"
+    assert workload["subject_version"] == "2026-10-06"
+
+
 def test_reasoning_settings_are_redacted_and_blank_key_preserves_secret():
     class Secrets:
         value = None
@@ -405,6 +436,53 @@ def test_reasoning_proposes_only_advertised_workspace_actions():
     executed = execute_operations_remediation(workspace, result.data["actions"])
     assert executed.success
     assert calls == ["gateway"]
+
+
+def test_model_rollback_tool_only_offers_and_executes_known_previous_version():
+    calls = []
+    registry = SimpleNamespace(
+        name="MLflow",
+        list_models=lambda: [
+            {"Model": "operations-demo", "Version": "1"},
+            {"Model": "operations-demo", "Version": "2"},
+            {"Model": "operations-demo", "Version": "3"},
+        ],
+        set_registered_model_alias=lambda **kwargs: calls.append(kwargs),
+    )
+    infrastructure = SimpleNamespace(
+        services=lambda: iter([]),
+        filter_by_group=lambda group: [registry] if group == "model-registry" else [],
+        get_service=lambda name: registry if name == "MLflow" else None,
+    )
+    workspace = SimpleNamespace(infrastructure=infrastructure)
+    pipeline = {
+        "model_name": "operations-demo",
+        "model_version": "3",
+        "model_alias": "champion",
+    }
+
+    rollback = next(
+        tool
+        for tool in operations_remediation_tools(workspace, pipeline)
+        if tool["function"]["name"] == "rollback_model_alias"
+    )
+    action = {
+        "name": "rollback_model_alias",
+        "arguments": {
+            "registry_name": "MLflow",
+            "model_name": "operations-demo",
+            "alias": "champion",
+            "target_version": "2",
+        },
+    }
+
+    assert rollback["x-mlox-valid-choices"][-1]["target_version"] == "1"
+    result = execute_operations_remediation(workspace, [action], pipeline=pipeline)
+
+    assert result.success
+    assert calls == [
+        {"name": "operations-demo", "alias": "champion", "version": "2"}
+    ]
 
 
 def test_add_operations_plan_item_reuses_the_knowledge_operations_board(tmp_path):

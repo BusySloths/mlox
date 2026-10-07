@@ -9,6 +9,9 @@ import uuid
 import numpy as np
 import requests
 import urllib3
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from examples.load_project_data import load_project_workspace
 from examples.operations_demo.model import MODEL_NAME, demonstration_batch
@@ -23,6 +26,7 @@ class TrafficLoop:
         *,
         feature_noise: float = 0.03,
         label_noise: float = 0.02,
+        send_labels: bool = True,
         seed: int = 2026,
     ) -> None:
         self.workspace = load_project_workspace()
@@ -43,7 +47,9 @@ class TrafficLoop:
         self._request_number = 0
         self.feature_noise = max(0.0, feature_noise)
         self.label_noise = max(0.0, label_noise)
+        self.send_labels = send_labels
         self._rng = np.random.default_rng(seed)
+        self.console = Console()
         if gateway_uuid:
             self.select_gateway(gateway_uuid)
 
@@ -111,12 +117,15 @@ class TrafficLoop:
         with self._lock:
             gateway = self.gateway
             corrupt = self.corrupt
+            send_labels = self.send_labels
         lines = [
             f"Corruption is {'ON' if corrupt else 'OFF'}.",
             (
                 f"Noise: feature σ={self.feature_noise:g}, "
                 f"label σ={self.label_noise:g}."
             ),
+            "Labels: "
+            f"{'ON (quality metrics enabled)' if send_labels else 'OFF (prediction-only)'}.",
             "Connected services:",
             self._service_summary("Gateway", gateway, gateway.uuid),
         ]
@@ -137,7 +146,60 @@ class TrafficLoop:
     def set_corrupt(self, enabled: bool) -> None:
         with self._lock:
             self.corrupt = enabled
-        print(f"Corruption is now {'ON' if enabled else 'OFF'}.")
+        state = "[bold red]ON[/]" if enabled else "[bold green]OFF[/]"
+        self.console.print(f"Corruption is now {state}.")
+
+    def set_send_labels(self, enabled: bool) -> None:
+        with self._lock:
+            self.send_labels = enabled
+        state = "[bold green]ON[/]" if enabled else "[bold yellow]OFF[/]"
+        self.console.print(f"Sending labels is now {state}.")
+
+    def print_status(self) -> None:
+        """Render the current traffic wiring as a compact terminal status card."""
+
+        with self._lock:
+            corrupt = self.corrupt
+            labels = self.send_labels
+        table = Table.grid(padding=(0, 1))
+        table.add_column(style="bold cyan", no_wrap=True)
+        table.add_column()
+        table.add_row(
+            "Fault injection", "[bold red]ON[/]" if corrupt else "[bold green]OFF[/]"
+        )
+        table.add_row(
+            "Labels",
+            "[bold green]ON[/] · quality metrics"
+            if labels
+            else "[bold yellow]OFF[/] · prediction only",
+        )
+        table.add_row(
+            "Noise", f"feature σ={self.feature_noise:g} · label σ={self.label_noise:g}"
+        )
+        for line in self.status_lines()[4:]:
+            name, _, value = line.strip().partition(": ")
+            table.add_row(name, value)
+        self.console.print(
+            Panel(
+                table,
+                title="[bold]MLOX Operations demo traffic[/]",
+                border_style="cyan",
+            )
+        )
+
+    @staticmethod
+    def _payload(batch, *, corrupt: bool, send_labels: bool) -> dict:
+        if not send_labels:
+            batch = batch.drop(columns=["target"])
+        return {
+            "dataframe_split": {
+                "columns": list(batch.columns),
+                "data": batch.values.tolist(),
+            },
+            "params": {"corrupt": corrupt},
+            "registry_model_name": MODEL_NAME,
+            "registry_model_alias": "champion",
+        }
 
     def run(self) -> None:
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -145,21 +207,15 @@ class TrafficLoop:
             with self._lock:
                 corrupt = self.corrupt
                 gateway = self.gateway
+                send_labels = self.send_labels
             batch = demonstration_batch(
                 rng=self._rng,
                 feature_noise=self.feature_noise,
                 label_noise=self.label_noise,
             )
-            payload_frame = {
-                "columns": list(batch.columns),
-                "data": batch.values.tolist(),
-            }
-            payload = {
-                "dataframe_split": payload_frame,
-                "params": {"corrupt": corrupt},
-                "registry_model_name": MODEL_NAME,
-                "registry_model_alias": "champion",
-            }
+            payload = self._payload(
+                batch, corrupt=corrupt, send_labels=send_labels
+            )
             self._request_number += 1
             try:
                 response = requests.post(
@@ -174,12 +230,15 @@ class TrafficLoop:
                     timeout=max(30.0, self.interval * 2),
                 )
                 response.raise_for_status()
-                print(
-                    f"request {self._request_number}: ok "
-                    f"(corruption={'on' if corrupt else 'off'})"
+                self.console.print(
+                    f"[green]✓[/] request {self._request_number:04d}  "
+                    f"[dim]fault={'on' if corrupt else 'off'} · "
+                    f"labels={'on' if send_labels else 'off'}[/]"
                 )
             except Exception as exc:
-                print(f"request {self._request_number}: failed: {exc}")
+                self.console.print(
+                    f"[bold red]✗[/] request {self._request_number:04d} failed: {exc}"
+                )
             self.stop_event.wait(self.interval)
 
 
@@ -203,6 +262,11 @@ def main() -> None:
         default=0.02,
         help="Gaussian label noise standard deviation",
     )
+    parser.add_argument(
+        "--without-labels",
+        action="store_true",
+        help="Send prediction-only requests without the target label (no model redeploy required)",
+    )
     parser.add_argument("--seed", type=int, default=2026, help="Traffic random seed")
     args = parser.parse_args()
     loop = TrafficLoop(
@@ -210,13 +274,21 @@ def main() -> None:
         gateway_uuid=args.gateway,
         feature_noise=args.feature_noise,
         label_noise=args.label_noise,
+        send_labels=not args.without_labels,
         seed=args.seed,
     )
     worker = threading.Thread(target=loop.run, daemon=True)
     worker.start()
-    print("Sending healthy traffic. Commands: on, off, status, gateways, use <uuid>, quit")
-    for line in loop.status_lines():
-        print(line)
+    loop.console.print(
+        Panel(
+            "[bold]on/off[/] fault injection  ·  [bold]labels on/off[/] quality labels\n"
+            "[bold]status[/] wiring  ·  [bold]gateways[/] choose source  ·  "
+            "[bold]use <uuid>[/] switch  ·  [bold]quit[/] stop",
+            title="[bold cyan]Sending Operations demo traffic[/]",
+            border_style="cyan",
+        )
+    )
+    loop.print_status()
     try:
         while True:
             command = input("operations-demo> ").strip()
@@ -226,8 +298,7 @@ def main() -> None:
             elif normalized in {"off", "corrupt off"}:
                 loop.set_corrupt(False)
             elif normalized == "status":
-                for line in loop.status_lines():
-                    print(line)
+                loop.print_status()
             elif normalized == "gateways":
                 for line in loop.gateway_lines():
                     print(line)
@@ -236,10 +307,14 @@ def main() -> None:
                     loop.select_gateway(command.split(maxsplit=1)[1])
                 except ValueError as exc:
                     print(exc)
+            elif normalized in {"labels on", "label on"}:
+                loop.set_send_labels(True)
+            elif normalized in {"labels off", "label off"}:
+                loop.set_send_labels(False)
             elif normalized in {"quit", "q", "exit"}:
                 break
             elif command:
-                print("Commands: on, off, status, gateways, use <uuid>, quit")
+                print("Commands: on, off, labels on/off, status, gateways, use <uuid>, quit")
     except (EOFError, KeyboardInterrupt):
         pass
     finally:

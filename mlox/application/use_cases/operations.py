@@ -1,4 +1,4 @@
-"""Observe model pipelines and compare live telemetry with a normal baseline."""
+"""Observe telemetry workloads and compare live signals with a normal baseline."""
 
 from __future__ import annotations
 
@@ -35,11 +35,67 @@ def _services(workspace) -> list[Any]:
     return list(services()) if callable(services) else []
 
 
-def operations_remediation_tools(workspace) -> list[dict[str, Any]]:
+def _model_rollback_choices(
+    workspace, pipeline: dict[str, Any] | None
+) -> list[dict[str, str]]:
+    """Find safe previous registered-model versions for an observed workload."""
+
+    if not pipeline:
+        return []
+    model_name = str(
+        pipeline.get("model_name")
+        or pipeline.get("subject_name")
+        or ""
+    ).strip()
+    current_version = str(
+        pipeline.get("model_version")
+        or pipeline.get("subject_version")
+        or ""
+    ).strip()
+    if not model_name or not current_version.isdigit():
+        return []
+    infrastructure = getattr(workspace, "infrastructure", None)
+    filter_by_group = getattr(infrastructure, "filter_by_group", None)
+    try:
+        registries = (
+            list(filter_by_group("model-registry")) if callable(filter_by_group) else []
+        )
+    except Exception:
+        return []
+    choices: list[dict[str, str]] = []
+    for registry in registries:
+        list_models = getattr(registry, "list_models", None)
+        if not callable(list_models):
+            continue
+        try:
+            versions = {
+                str(item.get("Version"))
+                for item in list_models()
+                if str(item.get("Model") or "") == model_name
+                and str(item.get("Version") or "").isdigit()
+                and int(str(item["Version"])) < int(current_version)
+            }
+        except Exception:
+            continue
+        for version in sorted(versions, key=int, reverse=True):
+            choices.append(
+                {
+                    "registry_name": str(getattr(registry, "name", "")),
+                    "model_name": model_name,
+                    "alias": str(pipeline.get("model_alias") or "champion"),
+                    "target_version": version,
+                }
+            )
+    return choices
+
+
+def operations_remediation_tools(
+    workspace, pipeline: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
     """Describe the executable, approval-gated operations actions available now.
 
-    The schemas are deliberately derived from :class:`ProjectWorkspace` methods.
-    They are sent to an OpenAI-compatible model as function tools, but are never
+    The schemas are derived from real MLOX service and registry operations. They
+    are sent to an OpenAI-compatible model as function tools, but are never
     invoked while reasoning. A person must explicitly choose Execute in the TUI.
     """
 
@@ -105,6 +161,45 @@ def operations_remediation_tools(workspace) -> list[dict[str, Any]]:
                 },
             }
         )
+    rollback_choices = _model_rollback_choices(workspace, pipeline)
+    if rollback_choices:
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "rollback_model_alias",
+                    "description": (
+                        "Move a registered-model alias to a known earlier version. "
+                        "Use only when the incident is consistent with a model "
+                        "deployment regression. This is a mutating action and requires "
+                        "an explicit human approval."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            key: {
+                                "type": "string",
+                                "enum": sorted({choice[key] for choice in rollback_choices}),
+                            }
+                            for key in (
+                                "registry_name",
+                                "model_name",
+                                "alias",
+                                "target_version",
+                            )
+                        },
+                        "required": [
+                            "registry_name",
+                            "model_name",
+                            "alias",
+                            "target_version",
+                        ],
+                        "additionalProperties": False,
+                    },
+                },
+                "x-mlox-valid-choices": rollback_choices,
+            }
+        )
     return tools
 
 
@@ -142,7 +237,9 @@ def _recommendation_content(content: str) -> dict[str, str]:
     }
 
 
-def _requested_tools(message: dict[str, Any], available: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _requested_tools(
+    message: dict[str, Any], available: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """Validate model function calls against the exact schemas offered to it."""
 
     allowed = {
@@ -164,13 +261,31 @@ def _requested_tools(message: dict[str, Any], available: list[dict[str, Any]]) -
             continue
         if not isinstance(arguments, dict):
             continue
-        service_name = str(arguments.get("service_name") or "")
-        enum = (
-            allowed[name]["function"]["parameters"]["properties"]["service_name"].get("enum", [])
-        )
-        if service_name not in enum:
+        parameters = allowed[name]["function"]["parameters"]
+        properties = parameters.get("properties", {})
+        required = parameters.get("required", [])
+        if any(key not in arguments for key in required):
             continue
-        requested.append({"name": name, "arguments": {"service_name": service_name}})
+        if any(
+            key not in properties
+            or (
+                properties[key].get("enum")
+                and str(value) not in properties[key]["enum"]
+            )
+            for key, value in arguments.items()
+        ):
+            continue
+        choice_set = allowed[name].get("x-mlox-valid-choices")
+        if choice_set and {
+            key: str(arguments[key]) for key in required
+        } not in choice_set:
+            continue
+        requested.append(
+            {
+                "name": name,
+                "arguments": {key: str(arguments[key]) for key in required},
+            }
+        )
     return requested
 
 
@@ -269,9 +384,12 @@ def reason_about_operations_incident(
     if not endpoint.endswith("/chat/completions"):
         endpoint += "/chat/completions"
     evidence = {
-        "pipeline": pipeline.get("pipeline_name"),
-        "model": pipeline.get("model_name"),
-        "model_version": pipeline.get("model_version"),
+        "workload": pipeline.get("pipeline_name"),
+        "subject": {
+            "kind": pipeline.get("subject_kind") or "model",
+            "name": pipeline.get("subject_name") or pipeline.get("model_name"),
+            "version": pipeline.get("subject_version") or pipeline.get("model_version"),
+        },
         "state": pipeline.get("state"),
         "likely_origin": pipeline.get("culprit"),
         "quality_metric": pipeline.get("quality_name"),
@@ -283,7 +401,7 @@ def reason_about_operations_incident(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     request = post or requests.post
-    tools = operations_remediation_tools(workspace)
+    tools = operations_remediation_tools(workspace, pipeline)
     try:
         response = request(
             endpoint,
@@ -297,12 +415,14 @@ def reason_about_operations_incident(
                     {
                         "role": "system",
                         "content": (
-                            "You are an MLOps incident advisor. Assess only the supplied "
+                            "You are an operations incident advisor. Assess only the supplied "
                             "telemetry evidence. Return a compact JSON object with: "
                             "`headline` (an imperative solution title, at most 80 "
                             "characters), `description` (one to three concise sentences), "
                             "and `verification` (one concise recovery check). Use a tool "
                             "call only when one of the supplied MLOX actions is relevant; "
+                            "when a supplied model-alias rollback is a credible response "
+                            "to a model deployment regression, prefer that concrete action. "
                             "never invent a tool. Tool calls are proposals only: never "
                             "claim an action was executed."
                         ),
@@ -343,6 +463,8 @@ def reason_about_operations_incident(
 def execute_operations_remediation(
     workspace,
     actions: list[dict[str, Any]],
+    *,
+    pipeline: dict[str, Any] | None = None,
 ) -> OperationResult:
     """Execute explicitly approved remediation actions selected by the user.
 
@@ -352,7 +474,7 @@ def execute_operations_remediation(
 
     offered = {
         tool["function"]["name"]: tool
-        for tool in operations_remediation_tools(workspace)
+        for tool in operations_remediation_tools(workspace, pipeline)
     }
     if not actions:
         return OperationResult(False, 49, "There are no proposed MLOX actions to execute.")
@@ -360,18 +482,35 @@ def execute_operations_remediation(
     for action in actions:
         name = str(action.get("name") or "")
         arguments = action.get("arguments") or {}
-        service_name = str(arguments.get("service_name") or "")
         tool = offered.get(name)
         if not tool:
             return OperationResult(False, 50, f"Unsupported remediation action: {name}.")
-        permitted_names = tool["function"]["parameters"]["properties"]["service_name"].get("enum", [])
-        if service_name not in permitted_names:
+        parameters = tool["function"]["parameters"]
+        required = parameters.get("required", [])
+        properties = parameters.get("properties", {})
+        if any(key not in arguments for key in required) or any(
+            key not in properties
+            or (
+                properties[key].get("enum")
+                and str(value) not in properties[key]["enum"]
+            )
+            for key, value in arguments.items()
+        ):
             return OperationResult(False, 51, "Remediation action has an invalid service target.")
+        valid_choices = tool.get("x-mlox-valid-choices")
+        if valid_choices and {
+            key: str(arguments[key]) for key in required
+        } not in valid_choices:
+            return OperationResult(False, 51, "Remediation action has an invalid rollback target.")
         try:
             if name == "check_service_health":
-                result = workspace.check_service_health(name=service_name)
+                result = workspace.check_service_health(
+                    name=str(arguments["service_name"])
+                )
             elif name == "restart_service":
-                result = workspace.restart_service(name=service_name)
+                result = workspace.restart_service(name=str(arguments["service_name"]))
+            elif name == "rollback_model_alias":
+                result = _rollback_model_alias(workspace, arguments)
             else:  # Defensive guard if the advertised registry grows later.
                 return OperationResult(False, 50, f"Unsupported remediation action: {name}.")
         except Exception as exc:
@@ -380,6 +519,48 @@ def execute_operations_remediation(
             return OperationResult(False, result.code, result.message)
         messages.append(result.message)
     return OperationResult(True, 0, " ".join(messages), {"actions": actions})
+
+
+def _rollback_model_alias(workspace, arguments: dict[str, Any]) -> OperationResult:
+    """Move one MLflow registry alias after explicit Operations approval."""
+
+    infrastructure = getattr(workspace, "infrastructure", None)
+    get_service = getattr(infrastructure, "get_service", None)
+    registry = (
+        get_service(str(arguments["registry_name"])) if callable(get_service) else None
+    )
+    if registry is None:
+        return OperationResult(False, 54, "The selected model registry is unavailable.")
+    try:
+        direct = getattr(registry, "set_registered_model_alias", None)
+        if callable(direct):
+            direct(
+                name=str(arguments["model_name"]),
+                alias=str(arguments["alias"]),
+                version=str(arguments["target_version"]),
+            )
+        else:
+            from mlox.services.mlflow.registry_client import create_mlflow_client
+
+            secrets = registry.get_secrets()
+            client = create_mlflow_client(
+                str(secrets.get("service_url") or ""),
+                str(secrets.get("username") or ""),
+                str(secrets.get("password") or ""),
+            )
+            client.set_registered_model_alias(
+                name=str(arguments["model_name"]),
+                alias=str(arguments["alias"]),
+                version=str(arguments["target_version"]),
+            )
+    except Exception as exc:
+        return OperationResult(False, 55, f"Could not roll back the model alias: {exc}")
+    return OperationResult(
+        True,
+        0,
+        f"Moved {arguments['model_name']} alias {arguments['alias']} to version "
+        f"{arguments['target_version']}.",
+    )
 
 
 def get_operations_board(workspace, *, create: bool = False) -> OperationResult:
@@ -445,7 +626,7 @@ def save_operations_postmortem(
     save_entry = getattr(workspace, "save_entry", None)
     if not callable(save_entry):
         return OperationResult(False, 45, "Project knowledge base is unavailable.")
-    pipeline_name = str(pipeline.get("pipeline_name") or "model pipeline")
+    pipeline_name = str(pipeline.get("pipeline_name") or "observed workload")
     timestamp = datetime.now(timezone.utc)
     title_prefix = f"Postmortem - {pipeline_name} - {timestamp:%Y-%m-%d %H:%M:%S UTC}"
     existing_titles = {entry.title for entry in workspace.list_entries("wiki")}
@@ -464,7 +645,7 @@ def save_operations_postmortem(
     ) or "- No persisted incident events were available."
     body = (
         "## Summary\n\n"
-        f"Pipeline `{pipeline_name}` entered an anomalous state and later recovered.\n\n"
+        f"Workload `{pipeline_name}` entered an anomalous state and later recovered.\n\n"
         "## Impact\n\n"
         f"Latest {quality_name}: `{quality_value if quality_value is not None else '-'}`.\n\n"
         "## Likely origin\n\n"
@@ -551,6 +732,9 @@ class PipelineRun:
     model_name: str
     model_version: str
     model_alias: str
+    subject_kind: str
+    subject_name: str
+    subject_version: str
     pipeline_name: str
     request_id: str
     started_ns: int
@@ -560,7 +744,7 @@ class PipelineRun:
 
 @dataclass
 class OperationsWatchSession:
-    """Bounded, in-memory baseline and incident analysis for model pipelines."""
+    """Bounded, in-memory baseline and incident analysis for observed workloads."""
 
     baseline_runs: int = 10
     max_runs: int = 200
@@ -606,7 +790,10 @@ class OperationsWatchSession:
         completed: list[PipelineRun] = []
         for trace_id, spans_by_id in list(self._pending.items()):
             spans = list(spans_by_id.values())
-            if not any(span.get("name") == "mlox.model.live_predict" for span in spans):
+            if not any(
+                span.get("name") in {"mlox.model.live_predict", "mlox.workload.run"}
+                for span in spans
+            ):
                 continue
             run = self._pipeline_run(trace_id, spans)
             if run is None:
@@ -629,10 +816,14 @@ class OperationsWatchSession:
     def _pipeline_run(
         self, trace_id: str, spans: list[dict[str, Any]]
     ) -> PipelineRun | None:
-        roots = [span for span in spans if span.get("name") == "mlox.model.live_predict"]
+        roots = [
+            span
+            for span in spans
+            if span.get("name") in {"mlox.model.live_predict", "mlox.workload.run"}
+        ]
         steps: list[PipelineStepRun] = []
         for span in spans:
-            if span.get("name") != "mlox.model.step":
+            if span.get("name") not in {"mlox.model.step", "mlox.workload.step"}:
                 continue
             attrs = _attributes(span.get("attributes"))
             path = str(attrs.get("mlox.step.path") or "")
@@ -658,14 +849,41 @@ class OperationsWatchSession:
         root = min(roots, key=lambda span: int(span.get("startTimeUnixNano") or 0))
         attrs = _attributes(root.get("attributes"))
         steps.sort(key=lambda step: step.started_ns)
+        model_name = str(attrs.get("mlox.model.name") or "")
+        model_version = str(attrs.get("mlox.model.version") or "")
+        subject_name = str(
+            attrs.get("mlox.subject.name")
+            or attrs.get("mlox.workload.subject.name")
+            or model_name
+            or attrs.get("service.name")
+            or "unknown"
+        )
+        subject_version = str(
+            attrs.get("mlox.subject.version")
+            or attrs.get("mlox.workload.subject.version")
+            or model_version
+            or ""
+        )
+        subject_kind = str(
+            attrs.get("mlox.subject.kind")
+            or attrs.get("mlox.workload.subject.kind")
+            or ("model" if model_name else "workload")
+        )
         return PipelineRun(
             trace_id=trace_id,
             span_id=str(root.get("spanId") or ""),
             pipeline_id=str(attrs.get("mlox.pipeline.id") or ""),
-            model_name=str(attrs.get("mlox.model.name") or "unknown"),
-            model_version=str(attrs.get("mlox.model.version") or "unknown"),
+            model_name=model_name or "unknown",
+            model_version=model_version or "unknown",
             model_alias=str(attrs.get("mlox.model.alias") or ""),
-            pipeline_name=str(attrs.get("mlox.pipeline.name") or "model pipeline"),
+            subject_kind=subject_kind,
+            subject_name=subject_name,
+            subject_version=subject_version or "unknown",
+            pipeline_name=str(
+                attrs.get("mlox.pipeline.name")
+                or attrs.get("mlox.workload.name")
+                or "observed workload"
+            ),
             request_id=str(attrs.get("mlox.request.id") or ""),
             started_ns=int(root.get("startTimeUnixNano") or 0),
             labels=attrs,
@@ -674,7 +892,7 @@ class OperationsWatchSession:
 
     @staticmethod
     def _key(run: PipelineRun) -> tuple[str, str, str]:
-        return run.model_name, run.model_version, run.pipeline_name
+        return run.subject_name, run.subject_version, run.pipeline_name
 
     def _grouped_runs(self) -> dict[tuple[str, str, str], list[PipelineRun]]:
         grouped: dict[tuple[str, str, str], list[PipelineRun]] = defaultdict(list)
@@ -852,13 +1070,19 @@ class OperationsWatchSession:
             "",
         )
         quality = self._quality_metric(rows)
-        model_name, model_version, pipeline_name = key
+        subject_name, subject_version, pipeline_name = key
         latest = runs[-1]
         return {
             "id": "\x1f".join(key),
             "pipeline_name": pipeline_name,
-            "model_name": model_name,
-            "model_version": model_version,
+            # Legacy fields are retained for existing model callers. New user
+            # interfaces should use subject_* so the watcher also fits jobs,
+            # data pipelines, and other instrumented workloads.
+            "model_name": latest.model_name,
+            "model_version": latest.model_version,
+            "subject_kind": latest.subject_kind,
+            "subject_name": subject_name,
+            "subject_version": subject_version,
             "state": state,
             "runs": len(runs),
             "baseline_runs": min(len(runs), self.baseline_runs),
@@ -878,6 +1102,9 @@ class OperationsWatchSession:
                 "model_name": latest.model_name,
                 "model_version": latest.model_version,
                 "model_alias": latest.model_alias,
+                "subject_kind": latest.subject_kind,
+                "subject_name": latest.subject_name,
+                "subject_version": latest.subject_version,
                 "started_ns": latest.started_ns,
                 "labels": latest.labels,
                 "steps": [
@@ -900,7 +1127,7 @@ class OperationsWatchSession:
             self._pipeline_snapshot(key, runs)
             for key, runs in self._grouped_runs().items()
         ]
-        pipelines.sort(key=lambda item: (item["pipeline_name"], item["model_name"]))
+        pipelines.sort(key=lambda item: (item["pipeline_name"], item["subject_name"]))
         primary = pipelines[0] if pipelines else {}
         return {
             "active": self.active,
