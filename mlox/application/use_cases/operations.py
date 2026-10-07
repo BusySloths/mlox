@@ -237,6 +237,37 @@ def _recommendation_content(content: str) -> dict[str, str]:
     }
 
 
+def _tool_only_recommendation(actions: list[dict[str, Any]]) -> dict[str, str] | None:
+    """Provide a reviewable result for providers that omit text with tool calls."""
+
+    if not actions:
+        return None
+    action = actions[0]
+    name = str(action.get("name") or "")
+    arguments = action.get("arguments") or {}
+    if name == "rollback_model_alias":
+        headline = "Roll back model version"
+        description = (
+            f"Move {arguments.get('model_name', 'the model')} alias "
+            f"{arguments.get('alias', 'champion')} to version "
+            f"{arguments.get('target_version', '-')}."
+        )
+    elif name == "restart_service":
+        headline = "Restart service"
+        description = f"Restart {arguments.get('service_name', 'the selected service')}."
+    elif name == "check_service_health":
+        headline = "Check service health"
+        description = f"Check {arguments.get('service_name', 'the selected service')}."
+    else:
+        headline = "Review proposed MLOX action"
+        description = "The reasoning assistant proposed a supported MLOX action."
+    return {
+        "headline": headline,
+        "description": description,
+        "verification": "Verify recovery against the rolling telemetry windows.",
+    }
+
+
 def _requested_tools(
     message: dict[str, Any], available: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -402,37 +433,39 @@ def reason_about_operations_incident(
         headers["Authorization"] = f"Bearer {api_key}"
     request = post or requests.post
     tools = operations_remediation_tools(workspace, pipeline)
+    request_payload: dict[str, Any] = {
+        "model": model,
+        "temperature": 0.1,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are an operations incident advisor. Assess only the supplied "
+                    "telemetry evidence. Return a compact JSON object with: "
+                    "`headline` (an imperative solution title, at most 80 "
+                    "characters), `description` (one to three concise sentences), "
+                    "and `verification` (one concise recovery check). Use a tool "
+                    "call only when one of the supplied MLOX actions is relevant; "
+                    "when a supplied model-alias rollback is a credible response "
+                    "to a model deployment regression, prefer that concrete action. "
+                    "never invent a tool. Tool calls are proposals only: never "
+                    "claim an action was executed."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(evidence, sort_keys=True, default=str),
+            },
+        ],
+    }
+    if tools:
+        request_payload["tools"] = tools
+        request_payload["tool_choice"] = "auto"
     try:
         response = request(
             endpoint,
             headers=headers,
-            json={
-                "model": model,
-                "temperature": 0.1,
-                "tools": tools,
-                "tool_choice": "auto",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an operations incident advisor. Assess only the supplied "
-                            "telemetry evidence. Return a compact JSON object with: "
-                            "`headline` (an imperative solution title, at most 80 "
-                            "characters), `description` (one to three concise sentences), "
-                            "and `verification` (one concise recovery check). Use a tool "
-                            "call only when one of the supplied MLOX actions is relevant; "
-                            "when a supplied model-alias rollback is a credible response "
-                            "to a model deployment regression, prefer that concrete action. "
-                            "never invent a tool. Tool calls are proposals only: never "
-                            "claim an action was executed."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": json.dumps(evidence, sort_keys=True, default=str),
-                    },
-                ],
-            },
+            json=request_payload,
             timeout=30,
         )
         response.raise_for_status()
@@ -440,7 +473,10 @@ def reason_about_operations_incident(
         message = payload["choices"][0]["message"]
         if not isinstance(message, dict):
             raise ValueError("The model returned an invalid message.")
+        actions = _requested_tools(message, tools)
         recommendation = _recommendation_content(str(message.get("content") or ""))
+        if not recommendation["description"]:
+            recommendation = _tool_only_recommendation(actions) or recommendation
         if not recommendation["description"]:
             raise ValueError("The model returned an empty recommendation.")
     except Exception as exc:
@@ -453,7 +489,7 @@ def reason_about_operations_incident(
             "recommendation": recommendation["description"],
             "headline": recommendation["headline"],
             "verification": recommendation["verification"],
-            "actions": _requested_tools(message, tools),
+            "actions": actions,
             "mode": str(settings.get("mode") or "advisory"),
             "model": model,
         },

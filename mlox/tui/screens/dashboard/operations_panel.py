@@ -689,10 +689,11 @@ class OperationsPanel(Static):
             details = {"model": payload.get("model"), "execution": "manual"}
         else:
             headline = "Review the affected workload before remediation"
+            reason = str(result.message or "The provider did not return a usable response.")
             recommendation = (
                 "Preserve the current evidence snapshot and investigate "
                 f"{culprit}. No MLOX runtime action was proposed because the reasoning "
-                "assistant was unavailable."
+                f"assistant was unavailable: {reason}"
             )
             verification = "Verify that rolling observations return to their established baseline."
             actions = []

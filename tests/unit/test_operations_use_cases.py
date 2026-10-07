@@ -370,7 +370,8 @@ def test_reasoning_uses_openai_compatible_endpoint_without_exposing_key():
         "mode": "approval",
         "model": "reasoner",
     }
-    assert captured["json"]["tools"] == []
+    assert "tools" not in captured["json"]
+    assert "tool_choice" not in captured["json"]
     assert "top-secret" not in result.message
 
 
@@ -436,6 +437,55 @@ def test_reasoning_proposes_only_advertised_workspace_actions():
     executed = execute_operations_remediation(workspace, result.data["actions"])
     assert executed.success
     assert calls == ["gateway"]
+
+
+def test_reasoning_accepts_tool_only_response_from_openai_compatible_provider():
+    secret = {
+        "mode": "approval",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+    }
+    service = SimpleNamespace(name="gateway", state="running", restart=lambda: None)
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(load_secret=lambda _name: secret),
+        infrastructure=SimpleNamespace(services=lambda: iter([service])),
+    )
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "name": "restart_service",
+                                        "arguments": '{"service_name": "gateway"}',
+                                    }
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+
+    result = reason_about_operations_incident(
+        workspace,
+        {"pipeline_name": "demo", "steps": []},
+        post=lambda *_args, **_kwargs: Response(),
+    )
+
+    assert result.success
+    assert result.data["headline"] == "Restart service"
+    assert result.data["recommendation"] == "Restart gateway."
+    assert result.data["actions"] == [
+        {"name": "restart_service", "arguments": {"service_name": "gateway"}}
+    ]
 
 
 def test_model_rollback_tool_only_offers_and_executes_known_previous_version():
