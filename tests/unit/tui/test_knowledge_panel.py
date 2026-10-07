@@ -7,13 +7,9 @@ import time
 from types import SimpleNamespace
 
 from textual.app import App, ComposeResult
-from textual.widgets import Button, TabbedContent
-
 from mlox.project import ProjectWorkspace
 from mlox.project.entries import Entry, parse_board
 from mlox.tui.screens.dashboard.knowledge_panel import KnowledgePanel
-from mlox.tui.screens.dashboard.model import SelectionInfo
-from mlox.tui.screens.dashboard.operations_panel import OperationsPanel
 from mlox.tui.screens.dashboard.screen import DashboardScreen
 
 
@@ -73,50 +69,6 @@ def test_empty_board_column_ignores_card_actions(tmp_path) -> None:
     panel._linkify_card(0, 0, "Ignored")
 
     assert panel._board_entry.body_md == "## Open\n\n## Doing\n"
-
-
-def test_operations_plan_navigation_opens_knowledge_entry(tmp_path) -> None:
-    workspace = _make_workspace(tmp_path)
-    board = workspace.save_entry(
-        Entry(kind="board", title="Operations", body_md="## Open\n")
-    )
-    app = DashboardTestApp(workspace)
-
-    async def run():
-        async with app.run_test() as pilot:
-            screen = app.query_one(DashboardScreen)
-            operations = app.query_one(OperationsPanel)
-            # An active watcher must survive the cross-tab handoff without
-            # pulling the user back from Knowledge.
-            operations._session = SimpleNamespace(active=True)
-            tabs = app.query_one("#main-tabs", TabbedContent)
-            tabs.active = "operations-tab"
-            await pilot.pause()
-            operations._activate_operations_section("plan")
-            await pilot.pause()
-            button = operations.query_one(
-                "#operations-plan-open-knowledge", Button
-            )
-            assert not button.disabled
-            button.press()
-            await pilot.pause()
-            await pilot.pause()
-            # Reproduce a late focus-restoration activation from the originating
-            # Operations button. The navigation handoff must restore Knowledge.
-            tabs.active = "operations-tab"
-            await pilot.pause()
-            await pilot.pause()
-            # Repeated infrastructure-selection syncs happen while a live
-            # dashboard refreshes. They must not override explicit navigation.
-            for _ in range(3):
-                screen._apply_selection(SelectionInfo(type="root"))
-                await pilot.pause()
-            panel = app.query_one(KnowledgePanel)
-            assert tabs.active == "knowledge-tab"
-            assert operations.watching
-            assert panel._board_entry.title == "Operations"
-
-    asyncio.run(run())
 
 
 def test_knowledge_panel_survives_workspace_without_entries_api(tmp_path) -> None:

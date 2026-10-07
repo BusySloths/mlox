@@ -11,7 +11,6 @@ from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import (
@@ -231,13 +230,6 @@ class OperationsPanel(Static):
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
-    class OpenKnowledgeRequested(Message):
-        """Ask the dashboard to reveal a Knowledge entry after its tab is mounted."""
-
-        def __init__(self, title: str) -> None:
-            super().__init__()
-            self.title = title
-
     def __init__(self, *children, **kwargs) -> None:
         super().__init__(*children, **kwargs)
         self._session: OperationsWatchSession | None = None
@@ -247,7 +239,6 @@ class OperationsPanel(Static):
         self._selected_pipeline_id = ""
         self._pipeline_states: dict[str, str] = {}
         self._activity: list[OperationsEvent] = []
-        self._operations_board: Entry | None = None
         self._postmortem_saved_for: set[str] = set()
 
     def compose(self) -> ComposeResult:
@@ -332,15 +323,9 @@ class OperationsPanel(Static):
             with TabPane("Plan", id="operations-plan-tab"):
                 with Horizontal(id="operations-plan-actions"):
                     yield Static("Knowledge board: Operations", id="operations-plan-title")
-                    yield Button("Reload", id="operations-plan-reload")
                     yield Button(
                         "Create Operations Board",
                         id="operations-plan-create",
-                    )
-                    yield Button(
-                        "Open in Knowledge",
-                        id="operations-plan-open-knowledge",
-                        disabled=True,
                     )
                 yield OperationsPlanBoard(id="operations-plan-board")
                 yield Static("", id="operations-plan-status")
@@ -853,15 +838,9 @@ class OperationsPanel(Static):
         workspace = getattr(self.app, "workspace", None)
         result = get_operations_board(workspace)
         board = (result.data or {}).get("board") if result.success else None
-        self._operations_board = board
         self.query_one("#operations-plan-board", OperationsPlanBoard).show_entry(board)
         self.query_one("#operations-plan-status", Static).update(result.message)
         self.query_one("#operations-plan-create", Button).display = board is None
-        self.query_one("#operations-plan-open-knowledge", Button).disabled = board is None
-
-    @on(Button.Pressed, "#operations-plan-reload")
-    def handle_plan_reload(self, _: Button.Pressed) -> None:
-        self._load_plan()
 
     @on(Button.Pressed, "#operations-plan-create")
     def handle_plan_create(self, _: Button.Pressed) -> None:
@@ -878,12 +857,6 @@ class OperationsPanel(Static):
             target=OPERATIONS_BOARD_TITLE,
         )
         self.app.notify(result.message)
-
-    @on(Button.Pressed, "#operations-plan-open-knowledge")
-    def handle_plan_open_knowledge(self, _: Button.Pressed) -> None:
-        if self._operations_board is None:
-            return
-        self.post_message(self.OpenKnowledgeRequested(self._operations_board.title))
 
     def _load_activity(self) -> None:
         if not self.is_mounted:

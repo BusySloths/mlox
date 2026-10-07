@@ -299,9 +299,6 @@ def test_operations_plan_activity_and_reasoning_settings_share_project_state(
             await pilot.pause()
 
             assert workspace.find_entry_by_title("Operations", "board") is not None
-            assert not app.query_one(
-                "#operations-plan-open-knowledge", Button
-            ).disabled
 
             app.query_one("#operations-reasoning-mode", Select).value = "advisory"
             app.query_one("#operations-reasoning-endpoint", Input).value = (
