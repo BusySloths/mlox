@@ -32,11 +32,15 @@ def test_demonstration_batch_is_reproducible_and_labelled():
     assert list(first.columns) == ["feature_1", "feature_2", "feature_3", "target"]
 
 
-def test_registered_demo_signature_allows_an_optional_target_label():
-    fields = {field.name: field for field in _serving_signature().inputs}
+def test_registered_demo_signature_allows_an_optional_target_label_and_fault_toggle():
+    signature = _serving_signature()
+    fields = {field.name: field for field in signature.inputs}
 
     assert fields["target"].required is False
     assert {"feature_1", "feature_2", "feature_3"} <= set(fields)
+    assert signature.params.params[0].name == "corrupt"
+    assert signature.params.params[0].dtype.name == "boolean"
+    assert signature.params.params[0].default is False
 
 
 def test_demonstration_batch_supports_reproducible_sample_noise():

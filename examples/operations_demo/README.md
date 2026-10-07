@@ -74,7 +74,9 @@ uv run -m examples.operations_demo.traffic --gateway <gateway-uuid>
 ```
 
 Leave corruption off while the first ten runs for each observed pipeline
-establish its assumed-normal baseline. At the interactive prompt use:
+establish its assumed-normal baseline. A newly registered model version is a
+separate observed workload: start a fresh watch and establish its normal
+baseline before turning corruption on. At the interactive prompt use:
 
 ```text
 on      inject the PCA fault

@@ -4,7 +4,7 @@ from pathlib import Path
 import logging
 
 from mlflow.models import ModelSignature
-from mlflow.types.schema import ColSpec, Schema
+from mlflow.types.schema import ColSpec, ParamSchema, ParamSpec, Schema
 
 from examples.operations_demo.model import (
     FEATURE_COLUMNS,
@@ -26,6 +26,10 @@ def _serving_signature() -> ModelSignature:
             + [ColSpec("double", TARGET_COLUMN, required=False)]
         ),
         outputs=Schema([ColSpec("double", "prediction")]),
+        # A manually supplied input signature does not infer parameter types.
+        # Keep this in sync with ``live_predict`` so the gateway forwards the
+        # traffic script's fault toggle instead of silently using ``False``.
+        params=ParamSchema([ParamSpec("corrupt", "boolean", False)]),
     )
 
 
