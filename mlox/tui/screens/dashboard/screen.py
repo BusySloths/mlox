@@ -249,10 +249,19 @@ class DashboardScreen(Screen):
     def on_operations_panel_open_knowledge_requested(
         self, message: OperationsPanel.OpenKnowledgeRequested
     ) -> None:
-        """Reveal a requested Knowledge entry after switching to its lazy tab."""
+        """Reveal a Knowledge entry after the originating button event finishes.
 
+        Tab changes emitted synchronously while handling a button in a nested
+        pane can be overwritten by Textual's focus restoration for that pane.
+        Deferring the handoff by one message turn makes this a normal, durable
+        main-tab navigation rather than a race with the Operations button.
+        """
+
+        self.call_later(self._activate_operations_knowledge, message.title)
+
+    def _activate_operations_knowledge(self, title: str) -> None:
         self.query_one("#main-tabs", TabbedContent).active = KNOWLEDGE_TAB_ID
-        self.call_after_refresh(self._open_operations_knowledge_entry, message.title)
+        self.call_later(self._open_operations_knowledge_entry, title)
 
     def _open_operations_knowledge_entry(self, title: str) -> None:
         panel = self.query_one("#knowledge-panel", KnowledgePanel)

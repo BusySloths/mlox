@@ -7,7 +7,7 @@ import time
 from types import SimpleNamespace
 
 from textual.app import App, ComposeResult
-from textual.widgets import TabbedContent
+from textual.widgets import Button, TabbedContent
 
 from mlox.project import ProjectWorkspace
 from mlox.project.entries import Entry, parse_board
@@ -84,21 +84,26 @@ def test_operations_plan_navigation_opens_knowledge_entry(tmp_path) -> None:
 
     async def run():
         async with app.run_test() as pilot:
-            screen = app.query_one(DashboardScreen)
             operations = app.query_one(OperationsPanel)
-            # Simulate an active watcher: switching to Knowledge must not cause
-            # the lazy-panel sync to hide Operations and reselect its tab.
+            # An active watcher must survive the cross-tab handoff without
+            # pulling the user back from Knowledge.
             operations._session = SimpleNamespace(active=True)
-            operations.selection = SelectionInfo(type="root")
-            screen.on_operations_panel_open_knowledge_requested(
-                OperationsPanel.OpenKnowledgeRequested(board.title)
-            )
-            await pilot.pause()
-            await pilot.pause()
             tabs = app.query_one("#main-tabs", TabbedContent)
+            tabs.active = "operations-tab"
+            await pilot.pause()
+            operations._activate_operations_section("plan")
+            await pilot.pause()
+            button = operations.query_one(
+                "#operations-plan-open-knowledge", Button
+            )
+            assert not button.disabled
+            button.press()
+            await pilot.pause()
+            await pilot.pause()
+            await pilot.pause()
             panel = app.query_one(KnowledgePanel)
             assert tabs.active == "knowledge-tab"
-            assert operations.selection is not None
+            assert operations.watching
             assert panel._board_entry.title == "Operations"
 
     asyncio.run(run())
