@@ -2470,6 +2470,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
         secret_display,
         firewall_display,
         monitor_display,
+        operations_display,
         models_display,
         workflow_display,
         repository_display,
@@ -2481,6 +2482,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
     assert secret_display == "none"
     assert firewall_display == "none"
     assert monitor_display == "none"
+    assert operations_display == "none"
     assert models_display == "none"
     assert workflow_display == "none"
     assert repository_display == "none"
@@ -2513,6 +2515,7 @@ def test_server_selection_hides_template_tabs() -> None:
         secret_display,
         firewall_display,
         monitor_display,
+        operations_display,
         models_display,
         workflow_display,
         repository_display,
@@ -2524,6 +2527,7 @@ def test_server_selection_hides_template_tabs() -> None:
     assert secret_display == "none"
     assert firewall_display == "none"
     assert monitor_display == "none"
+    assert operations_display == "none"
     assert models_display == "none"
     assert workflow_display == "none"
     assert repository_display == "none"
@@ -2537,6 +2541,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
         secret_display,
         firewall_display,
         monitor_display,
+        operations_display,
         models_display,
         workflow_display,
         repository_display,
@@ -2548,6 +2553,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
     assert secret_display == "none"
     assert firewall_display == "none"
     assert monitor_display == "none"
+    assert operations_display == "none"
     assert models_display == "none"
     assert workflow_display == "none"
     assert repository_display == "none"
