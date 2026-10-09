@@ -36,6 +36,14 @@ type: Opaque
 stringData:
   users: @basic_auth_user
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: @runtime_secret_name
+  namespace: @namespace
+type: Opaque
+stringData: @runtime_environment
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -103,6 +111,9 @@ spec:
               value: @cache_size
             - name: MLOX_GATEWAY_CACHE_TTL_DAYS
               value: @cache_ttl
+          envFrom:
+            - secretRef:
+                name: @runtime_secret_name
           ports:
             - name: http
               containerPort: @container_port

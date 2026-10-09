@@ -70,8 +70,20 @@ class MLFlowGatewayManagedTlsK3sService(MLFlowGatewayK3sService):
         self._tls_hostname = hostname
         return certificate, private_key
 
-    def _render_gateway_manifest(self) -> str:
-        variables = self._gateway_manifest_variables()
+    def _render_gateway_manifest(
+        self,
+        *,
+        include_secret_manager: bool = True,
+        include_telemetry: bool = True,
+        secret_manager_environment: dict[str, str] | None = None,
+        telemetry_environment: dict[str, str] | None = None,
+    ) -> str:
+        variables = self._gateway_manifest_variables(
+            include_secret_manager=include_secret_manager,
+            include_telemetry=include_telemetry,
+            secret_manager_environment=secret_manager_environment,
+            telemetry_environment=telemetry_environment,
+        )
         variables.update(
             {
                 "tls_hostname": self.yaml_scalar(self._tls_hostname),

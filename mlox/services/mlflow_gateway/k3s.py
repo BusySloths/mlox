@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 import shlex
@@ -6,6 +7,11 @@ from dataclasses import dataclass, field
 from passlib.hash import apr_md5_crypt
 
 from mlox.executors import TaskGroup
+from mlox.service import (
+    AbstractSecretManagerBindingService,
+    AbstractTelemetryBindingService,
+    ServiceCapability,
+)
 from mlox.services.mlflow_gateway.base import (
     MLFlowGatewayService,
     _resolved_setting,
@@ -16,7 +22,25 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class MLFlowGatewayK3sService(MLFlowGatewayService):
+class MLFlowGatewayK3sService(
+    AbstractSecretManagerBindingService,
+    AbstractTelemetryBindingService,
+    MLFlowGatewayService,
+):
+    """MLflow Gateway deployed to an isolated Kubernetes namespace.
+
+    Provider bindings are materialized in a namespace-local Secret and exposed
+    only to the gateway pod.  This keeps secret-manager and telemetry access
+    scoped to the application rather than making it cluster-wide.
+    """
+
+    capabilities = {
+        ServiceCapability.MODEL_SERVER,
+        ServiceCapability.HEALTH,
+        ServiceCapability.SECRET_MANAGER_BINDING,
+        ServiceCapability.TELEMETRY_BINDING,
+    }
+
     kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"
     container_port: int = 8080
     ingress_port: int = 443
@@ -29,6 +53,7 @@ class MLFlowGatewayK3sService(MLFlowGatewayService):
     ingress_name: str = field(init=False, default="mlflow-gateway")
     ingress_path: str = field(init=False)
     basic_auth_secret: str = field(init=False, default="mlflow-gateway-basic-auth")
+    runtime_secret_name: str = field(init=False, default="mlflow-gateway-runtime")
     basic_auth_middleware: str = field(init=False, default="mlflow-gateway-auth")
     strip_prefix_middleware: str = field(
         init=False, default="mlflow-gateway-strip-prefix"
@@ -45,13 +70,32 @@ class MLFlowGatewayK3sService(MLFlowGatewayService):
     def _gateway_id(self) -> str:
         return re.sub(r"[^a-z0-9-]", "-", self.uuid[:8].lower()).strip("-")
 
-    def _render_gateway_manifest(self) -> str:
+    def _render_gateway_manifest(
+        self,
+        *,
+        include_secret_manager: bool = True,
+        include_telemetry: bool = True,
+        secret_manager_environment: dict[str, str] | None = None,
+        telemetry_environment: dict[str, str] | None = None,
+    ) -> str:
         return self.render_template(
             "gateway-manifest.yaml.tmpl",
-            self._gateway_manifest_variables(),
+            self._gateway_manifest_variables(
+                include_secret_manager=include_secret_manager,
+                include_telemetry=include_telemetry,
+                secret_manager_environment=secret_manager_environment,
+                telemetry_environment=telemetry_environment,
+            ),
         )
 
-    def _gateway_manifest_variables(self) -> dict[str, object]:
+    def _gateway_manifest_variables(
+        self,
+        *,
+        include_secret_manager: bool = True,
+        include_telemetry: bool = True,
+        secret_manager_environment: dict[str, str] | None = None,
+        telemetry_environment: dict[str, str] | None = None,
+    ) -> dict[str, object]:
         """Return variables shared by the standard and managed-TLS manifests."""
 
         serve_script_path = self.resolve_asset(self.serve_script)
@@ -60,6 +104,12 @@ class MLFlowGatewayK3sService(MLFlowGatewayService):
         cache_size = _resolved_setting(self.cache_max_models, "10")
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")
         password_hash = apr_md5_crypt.hash(self.pw)
+        runtime_environment = self._runtime_environment(
+            include_secret_manager=include_secret_manager,
+            include_telemetry=include_telemetry,
+            secret_manager_environment=secret_manager_environment,
+            telemetry_environment=telemetry_environment,
+        )
 
         return {
             "namespace": self.namespace,
@@ -68,6 +118,8 @@ class MLFlowGatewayK3sService(MLFlowGatewayService):
             "gateway_user": self.yaml_scalar(self.user),
             "gateway_password": self.yaml_scalar(self.pw),
             "basic_auth_secret": self.basic_auth_secret,
+            "runtime_secret_name": self.runtime_secret_name,
+            "runtime_environment": json.dumps(runtime_environment),
             "basic_auth_user": self.yaml_scalar(f"{self.user}:{password_hash}"),
             "basic_auth_middleware": self.basic_auth_middleware,
             "strip_prefix_middleware": self.strip_prefix_middleware,
@@ -82,6 +134,131 @@ class MLFlowGatewayK3sService(MLFlowGatewayService):
             "cache_ttl": self.yaml_scalar(cache_ttl),
             "service_name": self.service_name,
         }
+
+    def _runtime_environment(
+        self,
+        *,
+        include_secret_manager: bool,
+        include_telemetry: bool,
+        secret_manager_environment: dict[str, str] | None,
+        telemetry_environment: dict[str, str] | None,
+    ) -> dict[str, str]:
+        """Collect the runtime environment supplied by configured providers."""
+
+        bindings: list[tuple[str, dict[str, str] | None]] = []
+        if include_secret_manager and self.secret_manager_uuid:
+            bindings.append(
+                (
+                    "secret manager",
+                    secret_manager_environment
+                    if secret_manager_environment is not None
+                    else self.get_bound_secret_manager_env_binding(),
+                )
+            )
+        if include_telemetry and self.telemetry_uuid:
+            bindings.append(
+                (
+                    "telemetry",
+                    telemetry_environment
+                    if telemetry_environment is not None
+                    else self.get_bound_telemetry_env_binding(),
+                )
+            )
+
+        environment: dict[str, str] = {}
+        for source, values in bindings:
+            for key, value in (values or {}).items():
+                previous = environment.get(key)
+                if previous is not None and previous != value:
+                    raise ValueError(
+                        f"Conflicting runtime environment value for {key!r} "
+                        f"from {source}."
+                    )
+                environment[key] = value
+        return environment
+
+    def _refresh_runtime_bindings(
+        self,
+        conn,
+        *,
+        include_secret_manager: bool = True,
+        include_telemetry: bool = True,
+        secret_manager_environment: dict[str, str] | None = None,
+        telemetry_environment: dict[str, str] | None = None,
+    ) -> None:
+        """Apply changed provider bindings and restart the gateway deployment."""
+
+        self.exec.fs_write_file(
+            conn,
+            self.manifest_path,
+            self._render_gateway_manifest(
+                include_secret_manager=include_secret_manager,
+                include_telemetry=include_telemetry,
+                secret_manager_environment=secret_manager_environment,
+                telemetry_environment=telemetry_environment,
+            ),
+        )
+        if (
+            self.exec.k8s_apply_manifest(
+                conn, self.manifest_path, kubeconfig=self.kubeconfig
+            )
+            is None
+        ):
+            raise RuntimeError("Failed to apply MLflow Gateway runtime bindings.")
+
+        restarted = self.exec.execute(
+            conn,
+            self._kubectl(
+                f"rollout restart deployment/{self.deployment_name} "
+                f"--namespace {self.namespace}"
+            ),
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
+            description="Restart the MLflow Gateway deployment",
+        )
+        if restarted is None:
+            raise RuntimeError("Failed to restart the MLflow Gateway deployment.")
+        rollout = self.exec.execute(
+            conn,
+            self._kubectl(
+                f"rollout status deployment/{self.deployment_name} "
+                f"--namespace {self.namespace} "
+                f"--timeout={self.rollout_timeout_seconds}s"
+            ),
+            group=TaskGroup.KUBERNETES,
+            sudo=True,
+            description="Wait for MLflow Gateway runtime bindings",
+        )
+        if rollout is None:
+            raise RuntimeError(
+                "MLflow Gateway did not become ready after applying runtime bindings."
+            )
+
+    def _apply_secret_manager_binding(
+        self,
+        conn,
+        *,
+        manager_uuid: str,
+        environment: dict[str, str],
+    ) -> None:
+        self._refresh_runtime_bindings(
+            conn, secret_manager_environment=environment
+        )
+
+    def _remove_secret_manager_binding(self, conn) -> None:
+        self._refresh_runtime_bindings(conn, include_secret_manager=False)
+
+    def _apply_telemetry_binding(
+        self,
+        conn,
+        *,
+        telemetry_uuid: str,
+        environment: dict[str, str],
+    ) -> None:
+        self._refresh_runtime_bindings(conn, telemetry_environment=environment)
+
+    def _remove_telemetry_binding(self, conn) -> None:
+        self._refresh_runtime_bindings(conn, include_telemetry=False)
 
     def _kubectl(self, arguments: str) -> str:
         return f"kubectl --kubeconfig {shlex.quote(self.kubeconfig)} {arguments}"
