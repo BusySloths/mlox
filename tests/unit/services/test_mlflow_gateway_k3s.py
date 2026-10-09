@@ -214,6 +214,27 @@ def test_changing_runtime_bindings_reapplies_and_restarts_gateway(
     }
 
 
+def test_runtime_binding_rollout_timeout_keeps_binding_update_successful(
+    gateway: MLFlowGatewayK3sService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gateway.state = "running"
+    gateway.telemetry_uuid = "telemetry-uuid"
+    gateway.exec.rollout_result = None
+    monkeypatch.setattr(
+        gateway,
+        "get_bound_telemetry_env_binding",
+        lambda: {"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"},
+    )
+
+    gateway._apply_telemetry_binding(
+        SimpleNamespace(host="gateway.example"),
+        telemetry_uuid="telemetry-uuid",
+        environment={"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"},
+    )
+
+    assert gateway.exec.files[gateway.manifest_path]
+
+
 def test_renders_ingress_with_path_middlewares(
     gateway: MLFlowGatewayK3sService,
 ) -> None:

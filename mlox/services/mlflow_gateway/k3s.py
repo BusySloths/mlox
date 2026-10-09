@@ -230,8 +230,9 @@ class MLFlowGatewayK3sService(
             description="Wait for MLflow Gateway runtime bindings",
         )
         if rollout is None:
-            raise RuntimeError(
-                "MLflow Gateway did not become ready after applying runtime bindings."
+            logger.warning(
+                "MLflow Gateway is still starting after applying runtime bindings; "
+                "the provider binding has been saved."
             )
 
     def _apply_secret_manager_binding(
