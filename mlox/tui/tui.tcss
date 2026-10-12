@@ -1122,6 +1122,29 @@ ModelCallResultDialog {
 #operations-agent-workspace-messages {
   height: 1fr;
   border: round #35635bff;
+  padding: 1;
+  background: #0a1514;
+}
+
+.operations-agent-message {
+  width: 82%;
+  height: auto;
+  margin-bottom: 1;
+  padding: 0 1;
+  border: round #35635bff;
+  background: #152725;
+  color: #d8e7e2;
+}
+
+.operations-agent-message.user {
+  align-horizontal: right;
+  border: round #5b6ee1;
+  background: #20253f;
+}
+
+.operations-agent-message.error {
+  border: round #ef6b73;
+  background: #35191e;
 }
 
 #operations-agent-workspace-proposals {

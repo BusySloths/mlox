@@ -150,10 +150,7 @@ class OperationsAgentWorkspace(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("Latest conversation", classes="operations-agent-workspace-label")
-        messages = DataTable(id="operations-agent-workspace-messages")
-        messages.cursor_type = "row"
-        messages.add_columns("When", "From", "Type", "Message")
-        yield messages
+        yield VerticalScroll(id="operations-agent-workspace-messages")
         yield Static("Latest proposals", classes="operations-agent-workspace-label")
         proposals = DataTable(id="operations-agent-workspace-proposals")
         proposals.cursor_type = "row"
@@ -184,9 +181,9 @@ class OperationsAgentWorkspace(Vertical):
 
     def _load_history(self) -> None:
         agent_id = str((self.agent or {}).get("id") or "")
-        messages_table = self.query_one("#operations-agent-workspace-messages", DataTable)
+        messages_view = self.query_one("#operations-agent-workspace-messages", VerticalScroll)
         proposals_table = self.query_one("#operations-agent-workspace-proposals", DataTable)
-        messages_table.clear(columns=False)
+        messages_view.remove_children()
         proposals_table.clear(columns=False)
         workspace = getattr(self.app, "workspace", None)
         list_messages = getattr(workspace, "list_operations_agent_messages", None)
@@ -197,10 +194,18 @@ class OperationsAgentWorkspace(Vertical):
         except Exception:
             messages, proposals = [], []
         for message in reversed(messages):
-            messages_table.add_row(
-                str(message.created_at)[:19], message.author, message.kind,
-                message.content.replace("\n", " ")[:180],
+            is_user = message.author == "user"
+            speaker = "You" if is_user else str(
+                (self.agent or {}).get("name") or message.author
             )
+            text = Text()
+            text.append(speaker, style="bold")
+            text.append(f" · {str(message.created_at)[:19]}\n", style="dim")
+            text.append(message.content)
+            message_class = "operations-agent-message user" if is_user else "operations-agent-message agent"
+            if message.kind == "error":
+                message_class += " error"
+            messages_view.mount(Static(text, classes=message_class))
         for proposal in proposals:
             proposals_table.add_row(
                 str(proposal.created_at)[:19], proposal.headline, proposal.status,
