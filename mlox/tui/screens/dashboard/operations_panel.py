@@ -27,13 +27,16 @@ from mlox.application.use_cases.operations import (
     OPERATIONS_BOARD_TITLE,
     OperationsWatchSession,
     add_operations_plan_item,
+    archive_operations_agent,
     execute_operations_remediation,
     get_operations_board,
     list_operations_monitors,
+    list_operations_agents,
     load_operations_reasoning_settings,
     reason_about_operations_incident,
     refresh_operations_watch,
     save_operations_postmortem,
+    save_operations_agent,
     save_operations_reasoning_settings,
     start_operations_watch,
 )
@@ -69,7 +72,7 @@ def _pipeline_detail_rows(details: dict[str, Any]) -> list[tuple[str, str, str]]
         rows.append(("run label", str(key), value_text(value)))
     for index, step in enumerate(details.get("steps") or [], start=1):
         scope = f"step {index}: {step.get('name', '-')}"
-        for field in ("path", "span_id", "depth", "started_ns"):
+        for field in ("path", "span_id", "depth", "started_ns", "duration_ms"):
             rows.append((scope, field, value_text(step.get(field))))
         for key, value in sorted((step.get("labels") or {}).items()):
             rows.append((f"{scope} label", str(key), value_text(value)))
@@ -105,6 +108,35 @@ class PipelineDetailsDialog(ModalScreen[None]):
     @on(Button.Pressed, "#close-operations-details")
     def handle_close(self, _: Button.Pressed) -> None:
         self.dismiss(None)
+
+
+class OperationsAgentDialog(ModalScreen[dict[str, str] | None]):
+    """Create a stored role profile without activating an agent runtime."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="operations-agent-dialog"):
+            yield Static("ADD TEAM MEMBER", id="operations-agent-title")
+            yield Input(placeholder="Team member name", id="operations-agent-name")
+            yield Select(
+                [(role, role) for role in ("Investigator", "Planner", "Executor", "Auditor")],
+                prompt="Select role",
+                id="operations-agent-role",
+            )
+            with Horizontal(id="operations-agent-actions"):
+                yield Button("Cancel", id="operations-agent-cancel")
+                yield Button("Add inactive profile", id="operations-agent-save", variant="primary")
+
+    @on(Button.Pressed, "#operations-agent-cancel")
+    def handle_cancel(self, _: Button.Pressed) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#operations-agent-save")
+    def handle_save(self, _: Button.Pressed) -> None:
+        role = self.query_one("#operations-agent-role", Select).value
+        self.dismiss(
+            {"name": self.query_one("#operations-agent-name", Input).value,
+             "role": "" if role is Select.BLANK else str(role)}
+        )
 
 
 class RecommendationDialog(ModalScreen[str | None]):
@@ -243,6 +275,8 @@ class OperationsPanel(Static):
         self._observer_completed_for: set[str] = set()
         self._latest_recommendation: dict[str, Any] | None = None
         self._observer_status = "Standing by for a pipeline anomaly."
+        self._metric_view = "quality"
+        self._agent_rows: list[dict[str, Any]] = []
 
     def compose(self) -> ComposeResult:
         with Vertical(id="operations-content"):
@@ -275,6 +309,13 @@ class OperationsPanel(Static):
                 yield Static("PIPELINE OBSERVER", id="operations-team-eyebrow")
                 yield Static("Restricted operations agent", id="operations-team-title")
                 yield Static("", id="operations-team-status")
+                roster = DataTable(id="operations-team-roster")
+                roster.cursor_type = "row"
+                roster.add_columns("Member", "Role", "Authority", "Status")
+                yield roster
+                with Horizontal(id="operations-team-actions"):
+                    yield Button("Add agent", id="operations-team-add")
+                    yield Button("Archive selected", id="operations-team-archive")
                 yield Static("", id="operations-team-focus")
                 yield Static("", id="operations-team-recommendation")
                 yield Button(
@@ -290,6 +331,12 @@ class OperationsPanel(Static):
             with TabPane("Pipelines", id="operations-pipelines-tab"):
                 with Horizontal(id="operations-incident-actions"):
                     yield Static("Watcher is stopped.", id="operations-watch-summary")
+                    yield Select(
+                        [("Quality", "quality"), ("Execution time", "duration")],
+                        value="quality",
+                        allow_blank=False,
+                        id="operations-metric-view",
+                    )
                     yield Button(
                         "Get Details",
                         id="operations-get-details",
@@ -391,22 +438,10 @@ class OperationsPanel(Static):
                         yield Button("Reset", id="reset-operations")
                     yield Static("Reasoning assistant", classes="operations-heading")
                     yield Static(
-                        "Detection remains deterministic. The assistant is advisory "
-                        "and cannot execute remediation without approval.",
+                        "The Pipeline Observer is advisory-only. Saving a provider, "
+                        "endpoint, model and key enables recommendations.",
                         classes="operations-settings-help",
                     )
-                    with Horizontal(classes="operations-setting-row"):
-                        yield Static("Mode", classes="operations-setting-label")
-                        yield Select(
-                            [
-                                ("Disabled", "disabled"),
-                                ("Advisory", "advisory"),
-                                ("Approval required", "approval"),
-                            ],
-                            value="disabled",
-                            allow_blank=False,
-                            id="operations-reasoning-mode",
-                        )
                     with Horizontal(classes="operations-setting-row"):
                         yield Static("Provider", classes="operations-setting-label")
                         yield Select(
@@ -447,6 +482,7 @@ class OperationsPanel(Static):
         self._activate_operations_section("team")
         self._show_snapshot(self._empty_snapshot())
         self._show_observer_state()
+        self._load_agent_roster()
         self._load_plan()
         self._load_activity()
         self._load_reasoning_settings()
@@ -545,6 +581,46 @@ class OperationsPanel(Static):
             )
         self.query_one("#operations-team-recommendation", Static).update(recommendation)
         self.query_one("#operations-team-review", Button).disabled = proposal is None
+
+    def _load_agent_roster(self) -> None:
+        result = list_operations_agents(getattr(self.app, "workspace", None))
+        table = self.query_one("#operations-team-roster", DataTable)
+        table.clear(columns=False)
+        self._agent_rows = list((result.data or {}).get("agents") or []) if result.success else []
+        for agent in self._agent_rows:
+            table.add_row(
+                str(agent.get("name") or "-"),
+                str(agent.get("role") or "-"),
+                str(agent.get("scope") or "-"),
+                str(agent.get("status") or "-"),
+                key=str(agent.get("id") or "agent"),
+            )
+
+    @on(Button.Pressed, "#operations-team-add")
+    def handle_add_agent(self, _: Button.Pressed) -> None:
+        self.app.push_screen(OperationsAgentDialog(), self._finish_add_agent)
+
+    def _finish_add_agent(self, values: dict[str, str] | None) -> None:
+        if values is None:
+            return
+        result = save_operations_agent(getattr(self.app, "workspace", None), **values)
+        self.app.notify(result.message, severity="error" if not result.success else "information")
+        if result.success:
+            self._load_agent_roster()
+
+    @on(Button.Pressed, "#operations-team-archive")
+    def handle_archive_agent(self, _: Button.Pressed) -> None:
+        table = self.query_one("#operations-team-roster", DataTable)
+        if table.cursor_row is None or table.cursor_row < 0 or table.cursor_row >= len(self._agent_rows):
+            self.app.notify("Select a team member first.", severity="warning")
+            return
+        agent = self._agent_rows[table.cursor_row]
+        result = archive_operations_agent(
+            getattr(self.app, "workspace", None), agent_id=str(agent.get("id") or "")
+        )
+        self.app.notify(result.message, severity="error" if not result.success else "information")
+        if result.success:
+            self._load_agent_roster()
 
     def _load_monitor_options(self) -> None:
         workspace = getattr(self.app, "workspace", None)
@@ -662,6 +738,13 @@ class OperationsPanel(Static):
         self._update_incident_actions(pipeline)
         self._show_evidence(pipeline)
 
+    @on(Select.Changed, "#operations-metric-view")
+    def handle_metric_view_changed(self, event: Select.Changed) -> None:
+        self._metric_view = str(event.value)
+        pipeline = self._selected_pipeline()
+        if pipeline is not None:
+            self._populate_pipeline(pipeline.get("steps") or [])
+
     @on(Button.Pressed, "#operations-get-details")
     def handle_get_details(self, _: Button.Pressed) -> None:
         pipeline = self._pipeline_snapshots.get(self._selected_pipeline_id)
@@ -710,6 +793,7 @@ class OperationsPanel(Static):
         culprit = str(pipeline.get("culprit") or "the anomalous pipeline step")
         self._observer_status = f"Investigating {culprit}."
         self._show_observer_state(pipeline)
+        self.app.notify(f"Pipeline Observer is investigating {culprit}.")
         self._record_activity(
             "observer_investigation_started",
             f"Pipeline Observer started investigating {culprit}.",
@@ -786,6 +870,7 @@ class OperationsPanel(Static):
                 f"Proposal ready: {headline}"
             )
             self._show_observer_state(pipeline)
+            self.app.notify(f"Pipeline Observer proposal ready: {headline}")
             self._record_activity(
                 "remediation_proposed",
                 headline,
@@ -820,6 +905,7 @@ class OperationsPanel(Static):
             "Observer recorded an anomaly; no remediation was proposed."
         )
         self._show_observer_state(pipeline)
+        self.app.notify("Pipeline Observer recorded evidence; reasoning is unavailable.")
         self._record_activity(
             "observer_observation",
             f"Detected {quality_name} anomaly at {culprit}"
@@ -1058,9 +1144,6 @@ class OperationsPanel(Static):
         if not result.success:
             return
         settings = result.data or {}
-        self.query_one("#operations-reasoning-mode", Select).value = str(
-            settings.get("mode") or "disabled"
-        )
         self.query_one("#operations-reasoning-provider", Select).value = str(
             settings.get("provider") or "openai-compatible"
         )
@@ -1076,11 +1159,10 @@ class OperationsPanel(Static):
     @on(Button.Pressed, "#operations-save-reasoning")
     def handle_save_reasoning(self, _: Button.Pressed) -> None:
         workspace = getattr(self.app, "workspace", None)
-        mode = self.query_one("#operations-reasoning-mode", Select).value
         provider = self.query_one("#operations-reasoning-provider", Select).value
         result = save_operations_reasoning_settings(
             workspace,
-            mode=str(mode),
+            mode="advisory",
             provider=str(provider),
             endpoint=self.query_one("#operations-reasoning-endpoint", Input).value,
             model=self.query_one("#operations-reasoning-model", Input).value,
@@ -1093,7 +1175,7 @@ class OperationsPanel(Static):
             return
         self._record_activity(
             "reasoning_settings_updated",
-            f"Reasoning assistant mode set to {mode}.",
+            "Pipeline Observer reasoning settings updated.",
             actor="user",
             status="configured",
         )
@@ -1277,19 +1359,21 @@ class OperationsPanel(Static):
         table.clear(columns=False)
         for index, row in enumerate(rows):
             observations = row.get("observations") or []
+            if self._metric_view == "duration":
+                eligible = [
+                    item
+                    for item in observations
+                    if item.get("name") == "execution.duration_ms"
+                ]
+            else:
+                eligible = [
+                    item
+                    for item in observations
+                    if item.get("name") != "execution.duration_ms"
+                ]
             focus = next(
-                (item for item in observations if item.get("anomalous")),
-                next(
-                    (item for item in observations if item.get("name") == "rmse.value"),
-                    next(
-                        (
-                            item
-                            for item in observations
-                            if item.get("name") == "rmse.mean"
-                        ),
-                        observations[0] if observations else None,
-                    ),
-                ),
+                (item for item in eligible if item.get("anomalous")),
+                eligible[0] if eligible else None,
             )
             baseline = "-" if not focus else f"{float(focus['baseline']):.4f}"
             current = "-" if not focus else f"{float(focus['current']):.4f}"

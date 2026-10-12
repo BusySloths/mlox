@@ -191,7 +191,7 @@ class DashboardScreen(Screen):
                                     yield ServerInfoPanel(id="selection-server-info")
                                     yield ServerActions(id="selection-server-actions")
                                     yield ServiceActions(id="selection-service-actions")
-                            with TabPane("Operations", id=OPERATIONS_TAB_ID):
+                            with TabPane("Operations (EXPERIMENTAL)", id=OPERATIONS_TAB_ID):
                                 yield OperationsPanel(id="operations-panel")
                             with TabPane("Knowledge", id=KNOWLEDGE_TAB_ID):
                                 yield KnowledgePanel(id="knowledge-panel")

@@ -369,7 +369,7 @@ def test_reasoning_uses_openai_compatible_endpoint_without_exposing_key():
         "recommendation": "Disable corrupt traffic and verify recovery.",
         "verification": "Verify recovery against the rolling telemetry windows.",
         "actions": [],
-        "mode": "approval",
+        "mode": "advisory",
         "model": "reasoner",
     }
     assert "tools" not in captured["json"]

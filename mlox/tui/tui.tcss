@@ -1076,6 +1076,22 @@ ModelCallResultDialog {
   color: #f4e223ff;
 }
 
+#operations-team-roster {
+  height: 8;
+  margin-top: 1;
+  border: round #61d394ff;
+}
+
+#operations-team-actions {
+  height: 3;
+  margin-top: 1;
+}
+
+#operations-team-actions Button {
+  width: auto;
+  margin-right: 1;
+}
+
 #operations-team-focus,
 #operations-team-recommendation,
 #operations-team-help {

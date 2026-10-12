@@ -24,7 +24,88 @@ from mlox.project.operations import OperationsEvent
 OBSERVATION_PREFIX = "mlox.observation."
 OPERATIONS_BOARD_TITLE = "Operations"
 OPERATIONS_REASONING_SECRET = "mlox.operations.reasoning"
+OPERATIONS_AGENTS_SECRET = "mlox.operations.agents"
 REASONING_MODES = {"disabled", "advisory", "approval"}
+
+DEFAULT_OPERATIONS_AGENT = {
+    "id": "pipeline-observer",
+    "name": "Pipeline Observer",
+    "role": "Observer",
+    "status": "enabled",
+    "scope": "Watched pipelines",
+    "description": "Detects anomalies, gathers evidence and proposes reviewable actions.",
+    "runtime": "active",
+}
+
+
+def list_operations_agents(workspace) -> OperationResult:
+    """Return the durable experimental Operations roster."""
+
+    manager = getattr(workspace, "secrets", None)
+    if manager is None:
+        return OperationResult(
+            True, 0, "Using the default Operations roster.", {"agents": [DEFAULT_OPERATIONS_AGENT]}
+        )
+    try:
+        stored = manager.load_secret(OPERATIONS_AGENTS_SECRET)
+    except Exception as exc:
+        return OperationResult(False, 56, f"Could not load Operations agents: {exc}")
+    agents = [dict(DEFAULT_OPERATIONS_AGENT)]
+    if isinstance(stored, list):
+        agents.extend(item for item in stored if isinstance(item, dict))
+    return OperationResult(True, 0, "Operations roster loaded.", {"agents": agents})
+
+
+def save_operations_agent(workspace, *, name: str, role: str) -> OperationResult:
+    """Add an inactive role profile without granting runtime authority yet."""
+
+    name = str(name).strip()[:80]
+    role = str(role).strip()
+    if not name or role not in {"Investigator", "Planner", "Executor", "Auditor"}:
+        return OperationResult(False, 57, "Choose an agent name and supported role.")
+    manager = getattr(workspace, "secrets", None)
+    if manager is None:
+        return OperationResult(False, 40, "Project secret manager is unavailable.")
+    try:
+        stored = manager.load_secret(OPERATIONS_AGENTS_SECRET)
+        agents = list(stored) if isinstance(stored, list) else []
+        agent_id = f"{role.lower()}-{len(agents) + 1}"
+        agents.append(
+            {
+                "id": agent_id,
+                "name": name,
+                "role": role,
+                "status": "inactive",
+                "scope": "Not assigned",
+                "description": "Role profile saved; runtime is not implemented yet.",
+                "runtime": "planned",
+            }
+        )
+        manager.save_secret(OPERATIONS_AGENTS_SECRET, agents)
+    except Exception as exc:
+        return OperationResult(False, 58, f"Could not save Operations agent: {exc}")
+    return OperationResult(True, 0, f"Added {name} as an inactive {role}.", {"id": agent_id})
+
+
+def archive_operations_agent(workspace, *, agent_id: str) -> OperationResult:
+    """Archive a configurable agent profile while retaining its configuration."""
+
+    if agent_id == DEFAULT_OPERATIONS_AGENT["id"]:
+        return OperationResult(False, 59, "The built-in Pipeline Observer cannot be archived.")
+    manager = getattr(workspace, "secrets", None)
+    if manager is None:
+        return OperationResult(False, 40, "Project secret manager is unavailable.")
+    try:
+        stored = manager.load_secret(OPERATIONS_AGENTS_SECRET)
+        agents = list(stored) if isinstance(stored, list) else []
+        for agent in agents:
+            if isinstance(agent, dict) and agent.get("id") == agent_id:
+                agent["status"] = "archived"
+                manager.save_secret(OPERATIONS_AGENTS_SECRET, agents)
+                return OperationResult(True, 0, f"Archived {agent.get('name', 'agent')}.")
+    except Exception as exc:
+        return OperationResult(False, 60, f"Could not archive Operations agent: {exc}")
+    return OperationResult(False, 61, "Operations agent was not found.")
 
 
 def _services(workspace) -> list[Any]:
@@ -425,8 +506,8 @@ def reason_about_operations_incident(
         settings = manager.load_secret(OPERATIONS_REASONING_SECRET)
     except Exception as exc:
         return OperationResult(False, 41, f"Could not load reasoning settings: {exc}")
-    if not isinstance(settings, dict) or settings.get("mode") == "disabled":
-        return OperationResult(False, 46, "Reasoning assistant is disabled.")
+    if not isinstance(settings, dict):
+        return OperationResult(False, 46, "Reasoning assistant is not configured.")
     endpoint = str(settings.get("endpoint") or "").strip().rstrip("/")
     model = str(settings.get("model") or "").strip()
     if not endpoint or not model:
@@ -521,7 +602,7 @@ def reason_about_operations_incident(
             "headline": recommendation["headline"],
             "verification": recommendation["verification"],
             "actions": actions,
-            "mode": str(settings.get("mode") or "advisory"),
+            "mode": "advisory",
             "model": model,
         },
     )
@@ -787,6 +868,7 @@ class PipelineStepRun:
     name: str
     depth: int
     started_ns: int
+    duration_ms: float
     labels: dict[str, Any]
     observations: dict[str, float]
 
@@ -896,19 +978,26 @@ class OperationsWatchSession:
             path = str(attrs.get("mlox.step.path") or "")
             if not path:
                 continue
+            started_ns = int(span.get("startTimeUnixNano") or 0)
+            ended_ns = int(span.get("endTimeUnixNano") or 0)
+            duration_ms = max(0.0, (ended_ns - started_ns) / 1_000_000)
+            observations = _numeric_observations(attrs)
+            if ended_ns > started_ns:
+                observations["execution.duration_ms"] = duration_ms
             steps.append(
                 PipelineStepRun(
                     span_id=str(span.get("spanId") or ""),
                     path=path,
                     name=str(attrs.get("mlox.step.name") or path.rsplit("/", 1)[-1]),
                     depth=int(attrs.get("mlox.step.depth") or 1),
-                    started_ns=int(span.get("startTimeUnixNano") or 0),
+                    started_ns=started_ns,
+                    duration_ms=duration_ms,
                     labels={
                         key: value
                         for key, value in attrs.items()
                         if not key.startswith(OBSERVATION_PREFIX)
                     },
-                    observations=_numeric_observations(attrs),
+                    observations=observations,
                 )
             )
         if not roots or not steps:
@@ -1184,6 +1273,7 @@ class OperationsWatchSession:
                         "name": step.name,
                         "depth": step.depth,
                         "started_ns": step.started_ns,
+                        "duration_ms": step.duration_ms,
                         "labels": step.labels,
                         "observations": step.observations,
                     }

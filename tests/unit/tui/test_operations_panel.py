@@ -346,7 +346,6 @@ def test_operations_plan_activity_and_reasoning_settings_share_project_state(
 
             assert workspace.find_entry_by_title("Operations", "board") is not None
 
-            app.query_one("#operations-reasoning-mode", Select).value = "advisory"
             app.query_one("#operations-reasoning-endpoint", Input).value = (
                 "https://llm.example/v1"
             )
