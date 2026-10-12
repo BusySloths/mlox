@@ -1065,11 +1065,13 @@ ModelCallResultDialog {
 }
 
 #operations-team-context {
-  height: 2;
+  height: auto;
+  min-height: 3;
   margin-top: 1;
-  padding: 0 1;
+  padding: 1 2;
   color: #cbd5e1;
-  border-left: tall #35635bff;
+  border: round #35635bff;
+  background: #10211fff;
 }
 
 #operations-team-layout {
@@ -1115,18 +1117,6 @@ ModelCallResultDialog {
   background: #0d1918;
 }
 
-#operations-agent-workspace-eyebrow {
-  height: 1;
-  color: #61d394ff;
-  text-style: bold;
-}
-
-#operations-agent-workspace-title {
-  height: 2;
-  color: #f8fafc;
-  text-style: bold;
-}
-
 .operations-agent-workspace-label {
   height: 1;
   margin-top: 1;
@@ -1134,9 +1124,13 @@ ModelCallResultDialog {
   text-style: bold;
 }
 
-#operations-agent-workspace-messages,
+#operations-agent-workspace-messages {
+  height: 1fr;
+  border: round #35635bff;
+}
+
 #operations-agent-workspace-proposals {
-  height: 8;
+  height: 7;
   border: round #35635bff;
 }
 
@@ -1155,12 +1149,17 @@ ModelCallResultDialog {
 }
 
 #operations-agent-dialog {
-  width: 56;
+  width: 48;
   height: auto;
   max-width: 92%;
   padding: 1 2;
-  border: thick #61d394ff;
-  background: #0d1918;
+  border: round #a78bfa;
+  background: #10211fff;
+}
+
+OperationsAgentDialog {
+  align: center middle;
+  background: #000000 70%;
 }
 
 #operations-agent-title {
@@ -1177,11 +1176,11 @@ ModelCallResultDialog {
 #operations-agent-actions {
   height: 3;
   margin-top: 2;
+  align-horizontal: right;
 }
 
 #operations-agent-actions Button {
-  width: auto;
-  margin-right: 2;
+  width: 16;
 }
 
 .operations-heading {

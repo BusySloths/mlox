@@ -129,12 +129,7 @@ class OperationsAgentDialog(ModalScreen[dict[str, str] | None]):
                 id="operations-agent-role",
             )
             with Horizontal(id="operations-agent-actions"):
-                yield Button("Cancel", id="operations-agent-cancel")
-                yield Button("Add disabled profile", id="operations-agent-save", variant="primary")
-
-    @on(Button.Pressed, "#operations-agent-cancel")
-    def handle_cancel(self, _: Button.Pressed) -> None:
-        self.dismiss(None)
+                yield Button("Add agent", id="operations-agent-save", variant="primary")
 
     @on(Button.Pressed, "#operations-agent-save")
     def handle_save(self, _: Button.Pressed) -> None:
@@ -153,8 +148,6 @@ class OperationsAgentWorkspace(Vertical):
         self.agent: dict[str, Any] | None = None
 
     def compose(self) -> ComposeResult:
-        yield Static("WORKSPACE", id="operations-agent-workspace-eyebrow")
-        yield Static("Work history & proposals", id="operations-agent-workspace-title")
         yield Static("Latest conversation", classes="operations-agent-workspace-label")
         messages = DataTable(id="operations-agent-workspace-messages")
         messages.cursor_type = "row"
@@ -174,6 +167,9 @@ class OperationsAgentWorkspace(Vertical):
             yield Button(
                 "Assign work", id="operations-agent-workspace-assign", disabled=True
             )
+            yield Button(
+                "Ask question", id="operations-agent-workspace-question", disabled=True
+            )
 
     def show_agent(self, agent: dict[str, Any]) -> None:
         """Make a roster member active without navigating away from Team."""
@@ -182,6 +178,7 @@ class OperationsAgentWorkspace(Vertical):
         archived = agent.get("status") == "archived"
         self.query_one("#operations-agent-workspace-input", Input).disabled = archived
         self.query_one("#operations-agent-workspace-assign", Button).disabled = archived
+        self.query_one("#operations-agent-workspace-question", Button).disabled = archived
         self._load_history()
 
     def _load_history(self) -> None:
@@ -211,7 +208,8 @@ class OperationsAgentWorkspace(Vertical):
             )
 
     @on(Button.Pressed, "#operations-agent-workspace-assign")
-    def handle_assign(self, _: Button.Pressed) -> None:
+    @on(Button.Pressed, "#operations-agent-workspace-question")
+    def handle_assign(self, event: Button.Pressed) -> None:
         instruction = self.query_one("#operations-agent-workspace-input", Input).value.strip()
         if not instruction:
             self.app.notify("Describe the work package first.", severity="warning")
@@ -226,16 +224,20 @@ class OperationsAgentWorkspace(Vertical):
             self.app.notify("Project workspace is unavailable.", severity="error")
             return
         try:
+            is_question = event.button.id == "operations-agent-workspace-question"
             run = save_run(
                 OperationsAgentRun(
                     agent_id=str(self.agent.get("id") or ""),
-                    summary=instruction,
-                    status="queued",
+                    summary=("Question: " if is_question else "") + instruction,
+                    status="question" if is_question else "queued",
                 )
             )
             record_message(
                 OperationsAgentMessage(
-                    run_id=run.id, author="user", kind="instruction", content=instruction
+                    run_id=run.id,
+                    author="user",
+                    kind="question" if is_question else "instruction",
+                    content=instruction,
                 )
             )
         except Exception as exc:
@@ -243,7 +245,7 @@ class OperationsAgentWorkspace(Vertical):
             return
         self.query_one("#operations-agent-workspace-input", Input).value = ""
         self._load_history()
-        self.app.notify("Work package saved to the project.")
+        self.app.notify("Question saved to the project." if is_question else "Work package saved to the project.")
 
 
 class RecommendationDialog(ModalScreen[str | None]):
@@ -415,7 +417,6 @@ class OperationsPanel(Static):
         with TabbedContent(id="operations-tabs"):
             with TabPane("Team", id="operations-team-tab"):
                 yield Static("", id="operations-team-status")
-                yield Static("Select a team member.", id="operations-team-context")
                 with Horizontal(id="operations-team-layout"):
                     with Vertical(id="operations-team-roster-pane"):
                         roster = DataTable(id="operations-team-roster")
@@ -430,6 +431,7 @@ class OperationsPanel(Static):
                                 disabled=True,
                             )
                             yield Button("Archive selected", id="operations-team-archive")
+                        yield Static("Select a team member.", id="operations-team-context")
                         yield Static(
                             "Select a team member to see its project-backed workspace. "
                             "The observer only proposes; it never executes a remediation.",
@@ -646,7 +648,7 @@ class OperationsPanel(Static):
         headings = {
             "operations-team-tab": (
                 "Operations team",
-                "A restricted observer turns pipeline anomalies into reviewable evidence.",
+                "Review agent work, proposals, and questions without leaving Operations.",
             ),
             "operations-pipelines-tab": (
                 "Pipelines",
@@ -715,7 +717,7 @@ class OperationsPanel(Static):
         )
         status = str(agent.get("status") or "")
         toggle = self.query_one("#operations-team-toggle", Button)
-        toggle.disabled = status in {"archived", ""} or agent.get("id") == "pipeline-observer"
+        toggle.disabled = status in {"archived", ""}
         toggle.label = "Disable selected" if status == "enabled" else "Enable selected"
 
     @on(Button.Pressed, "#operations-team-add")
@@ -926,6 +928,14 @@ class OperationsPanel(Static):
         """Record an anomaly first, then optionally ask the configured advisor."""
 
         pipeline_id = str(pipeline.get("id") or "")
+        observer = next(
+            (agent for agent in self._agent_rows if agent.get("id") == "pipeline-observer"),
+            {},
+        )
+        if observer.get("status") == "disabled":
+            if not automatic:
+                self.app.notify("Pipeline Observer is disabled.", severity="warning")
+            return
         if automatic and (not pipeline_id or pipeline_id in self._observer_completed_for):
             return
         if pipeline_id:

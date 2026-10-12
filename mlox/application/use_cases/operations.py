@@ -49,8 +49,14 @@ def list_operations_agents(workspace) -> OperationResult:
         stored = list_agents()
     except Exception as exc:
         return OperationResult(False, 56, f"Could not load Operations agents: {exc}")
-    agents = [dict(DEFAULT_OPERATIONS_AGENT)]
-    for agent in stored:
+    overrides = {agent.id: agent for agent in stored if isinstance(agent, OperationsAgent)}
+    observer_override = overrides.pop(DEFAULT_OPERATIONS_AGENT["id"], None)
+    observer = dict(DEFAULT_OPERATIONS_AGENT)
+    if observer_override is not None:
+        observer["status"] = observer_override.status
+        observer["updated_at"] = observer_override.updated_at
+    agents = [observer]
+    for agent in overrides.values():
         if isinstance(agent, OperationsAgent):
             agents.append(
                 {
@@ -116,15 +122,19 @@ def archive_operations_agent(workspace, *, agent_id: str) -> OperationResult:
 def set_operations_agent_status(
     workspace, *, agent_id: str, enabled: bool
 ) -> OperationResult:
-    """Enable or disable a configurable profile without granting new authority."""
+    """Enable or disable a profile without granting new authority."""
 
-    if agent_id == DEFAULT_OPERATIONS_AGENT["id"]:
-        return OperationResult(False, 62, "The built-in Pipeline Observer is always enabled.")
     set_status = getattr(workspace, "set_operations_agent_status", None)
+    save_agent = getattr(workspace, "save_operations_agent", None)
     if not callable(set_status):
         return OperationResult(False, 40, "Project workspace is unavailable.")
     status = "enabled" if enabled else "disabled"
     try:
+        if agent_id == DEFAULT_OPERATIONS_AGENT["id"]:
+            if not callable(save_agent):
+                return OperationResult(False, 40, "Project workspace is unavailable.")
+            save_agent(OperationsAgent(**{**DEFAULT_OPERATIONS_AGENT, "status": status}))
+            return OperationResult(True, 0, f"Pipeline Observer {status}.")
         if set_status(agent_id, status):
             return OperationResult(True, 0, f"Operations agent {status}.")
     except Exception as exc:

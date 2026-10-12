@@ -11,6 +11,7 @@ from mlox.application.use_cases.operations import (
     add_operations_plan_item,
     execute_operations_remediation,
     get_operations_board,
+    list_operations_agents,
     list_operations_monitors,
     load_operations_reasoning_settings,
     operations_remediation_tools,
@@ -18,6 +19,7 @@ from mlox.application.use_cases.operations import (
     refresh_operations_watch,
     save_operations_postmortem,
     save_operations_reasoning_settings,
+    set_operations_agent_status,
     start_operations_watch,
 )
 from mlox.project import ProjectWorkspace
@@ -620,6 +622,20 @@ def test_add_operations_plan_item_reuses_the_knowledge_operations_board(tmp_path
     assert result.success
     board = workspace.find_entry_by_title("Operations", "board")
     assert "Rollback model gateway" in board.body_md
+
+
+def test_pipeline_observer_status_can_be_changed_and_persisted(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "observer-status"), "pw")
+
+    disabled = set_operations_agent_status(
+        workspace, agent_id="pipeline-observer", enabled=False
+    )
+
+    assert disabled.success
+    assert {
+        agent["id"]: agent["status"]
+        for agent in list_operations_agents(workspace).data["agents"]
+    }["pipeline-observer"] == "disabled"
 
 
 def test_operations_board_and_postmortem_reuse_knowledge(tmp_path):
