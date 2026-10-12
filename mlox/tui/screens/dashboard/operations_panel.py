@@ -28,6 +28,7 @@ from mlox.application.use_cases.operations import (
     OperationsWatchSession,
     add_operations_plan_item,
     archive_operations_agent,
+    ask_operations_agent,
     execute_operations_remediation,
     get_operations_board,
     list_operations_monitors,
@@ -175,10 +176,10 @@ class OperationsAgentWorkspace(Vertical):
         """Make a roster member active without navigating away from Team."""
 
         self.agent = deepcopy(agent)
-        archived = agent.get("status") == "archived"
-        self.query_one("#operations-agent-workspace-input", Input).disabled = archived
-        self.query_one("#operations-agent-workspace-assign", Button).disabled = archived
-        self.query_one("#operations-agent-workspace-question", Button).disabled = archived
+        unavailable = agent.get("status") in {"archived", "disabled", "inactive"}
+        self.query_one("#operations-agent-workspace-input", Input).disabled = unavailable
+        self.query_one("#operations-agent-workspace-assign", Button).disabled = unavailable
+        self.query_one("#operations-agent-workspace-question", Button).disabled = unavailable
         self._load_history()
 
     def _load_history(self) -> None:
@@ -245,7 +246,54 @@ class OperationsAgentWorkspace(Vertical):
             return
         self.query_one("#operations-agent-workspace-input", Input).value = ""
         self._load_history()
-        self.app.notify("Question saved to the project." if is_question else "Work package saved to the project.")
+        if not is_question:
+            self.app.notify("Work package saved to the project.")
+            return
+        self.query_one("#operations-agent-workspace-question", Button).disabled = True
+
+        def ask() -> None:
+            result = ask_operations_agent(
+                workspace, agent=deepcopy(self.agent or {}), question=instruction
+            )
+            self.app.call_from_thread(self._finish_question, run.id, result)
+
+        self.app.run_worker(
+            ask, thread=True, exclusive=True, group="operations-agent-question"
+        )
+
+    def _finish_question(self, run_id: str, result) -> None:
+        workspace = getattr(self.app, "workspace", None)
+        record_message = getattr(workspace, "record_operations_agent_message", None)
+        save_run = getattr(workspace, "save_operations_agent_run", None)
+        if callable(record_message):
+            answer = (
+                str((result.data or {}).get("answer") or "")
+                if result.success
+                else str(result.message)
+            )
+            try:
+                record_message(
+                    OperationsAgentMessage(
+                        run_id=run_id,
+                        author=str((self.agent or {}).get("id") or "agent"),
+                        kind="answer" if result.success else "error",
+                        content=answer,
+                    )
+                )
+                if callable(save_run):
+                    save_run(
+                        OperationsAgentRun(
+                            id=run_id,
+                            agent_id=str((self.agent or {}).get("id") or ""),
+                            summary=answer[:240],
+                            status="answered" if result.success else "failed",
+                        )
+                    )
+            except Exception as exc:
+                self.app.notify(f"Could not save agent answer: {exc}", severity="error")
+        self.query_one("#operations-agent-workspace-question", Button).disabled = False
+        self._load_history()
+        self.app.notify(result.message, severity="information" if result.success else "error")
 
 
 class RecommendationDialog(ModalScreen[str | None]):
@@ -416,7 +464,6 @@ class OperationsPanel(Static):
     def _compose_operations_tabs(self) -> ComposeResult:
         with TabbedContent(id="operations-tabs"):
             with TabPane("Team", id="operations-team-tab"):
-                yield Static("", id="operations-team-status")
                 with Horizontal(id="operations-team-layout"):
                     with Vertical(id="operations-team-roster-pane"):
                         roster = DataTable(id="operations-team-roster")
@@ -674,12 +721,9 @@ class OperationsPanel(Static):
     def _show_observer_state(self, pipeline: dict[str, Any] | None = None) -> None:
         """Project the bounded observer state into the persistent Team view."""
 
-        selected = pipeline or self._selected_pipeline() or {}
-        pipeline_name = str(selected.get("pipeline_name") or "No pipeline selected")
-        culprit = str(selected.get("culprit") or "No anomalous step identified")
-        self.query_one("#operations-team-status", Static).update(
-            f"{self._observer_status}  Focus: {pipeline_name} · {culprit}"
-        )
+        # The observer state remains available in Activity and Pipelines; Team is
+        # intentionally reserved for agent workspaces and their durable history.
+        del pipeline
 
     def _load_agent_roster(self) -> None:
         result = list_operations_agents(getattr(self.app, "workspace", None))
@@ -1089,6 +1133,14 @@ class OperationsPanel(Static):
             run_id = self._complete_observer_run(
                 pipeline, status="proposal-ready", content=f"Proposal: {headline}"
             )
+            if not run_id:
+                self._start_observer_run(
+                    pipeline,
+                    str(pipeline.get("culprit") or "the anomalous pipeline step"),
+                )
+                run_id = self._complete_observer_run(
+                    pipeline, status="proposal-ready", content=f"Proposal: {headline}"
+                )
             save_proposal = getattr(
                 getattr(self.app, "workspace", None), "save_operations_agent_proposal", None
             )
@@ -1105,8 +1157,10 @@ class OperationsPanel(Static):
                             actions=actions,
                         )
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.app.notify(f"Could not save observer proposal: {exc}", severity="error")
+                else:
+                    self._refresh_agent_workspace("pipeline-observer")
             self._observer_status = f"Proposal ready: {headline}"
             self.query_one("#operations-remediation", Static).update(
                 f"Proposal ready: {headline}"
@@ -1132,6 +1186,13 @@ class OperationsPanel(Static):
             return
 
         self._finish_observer_observation(pipeline, str(result.message))
+
+    def _refresh_agent_workspace(self, agent_id: str) -> None:
+        """Refresh the visible workspace when a selected agent gains new history."""
+
+        workspace = self.query_one(OperationsAgentWorkspace)
+        if workspace.agent and workspace.agent.get("id") == agent_id:
+            workspace.show_agent(workspace.agent)
 
     def _finish_observer_observation(
         self, pipeline: dict[str, Any], reason: str

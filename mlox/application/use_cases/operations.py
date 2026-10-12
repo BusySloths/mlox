@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import math
+import re
 import statistics
 from typing import Any
 
@@ -321,9 +322,9 @@ def operations_remediation_tools(
 def _strip_reasoning(content: str) -> str:
     """Keep the answer after a reasoning-model's optional ``<think>`` block."""
 
-    if "</think>" in content:
-        return content.rsplit("</think>", 1)[1].strip()
-    return content.strip()
+    answer = content.rsplit("</think>", 1)[-1].strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", answer, flags=re.DOTALL)
+    return fenced.group(1).strip() if fenced else answer
 
 
 def _recommendation_content(content: str) -> dict[str, str]:
@@ -640,6 +641,73 @@ def reason_about_operations_incident(
             "model": model,
         },
     )
+
+
+def ask_operations_agent(
+    workspace,
+    *,
+    agent: dict[str, Any],
+    question: str,
+    post=None,
+) -> OperationResult:
+    """Ask one configured Operations agent a non-mutating, project-scoped question."""
+
+    manager = getattr(workspace, "secrets", None)
+    if manager is None:
+        return OperationResult(False, 40, "Project secret manager is unavailable.")
+    try:
+        settings = manager.load_secret(OPERATIONS_REASONING_SECRET)
+    except Exception as exc:
+        return OperationResult(False, 41, f"Could not load reasoning settings: {exc}")
+    if not isinstance(settings, dict):
+        return OperationResult(False, 46, "Reasoning assistant is not configured.")
+    endpoint = str(settings.get("endpoint") or "").strip().rstrip("/")
+    model = str(settings.get("model") or "").strip()
+    if not endpoint or not model:
+        return OperationResult(False, 47, "Reasoning endpoint and model must be configured.")
+    if not endpoint.endswith("/chat/completions"):
+        endpoint += "/chat/completions"
+    api_key = str(settings.get("api_key") or "").strip()
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = post or requests.post
+    name = str(agent.get("name") or "Operations agent")
+    role = str(agent.get("role") or "Advisor")
+    scope = str(agent.get("scope") or "the configured operations scope")
+    description = str(agent.get("description") or "")
+    try:
+        response = request(
+            endpoint,
+            headers=headers,
+            json={
+                "model": model,
+                "temperature": 0.2,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            f"You are {name}, a restricted {role} in an MLOX Operations "
+                            f"team. Your focus is {scope}. {description} Give a concise, "
+                            "evidence-oriented answer. Do not claim to execute actions or "
+                            "invent project state; suggestions require human approval."
+                        ),
+                    },
+                    {"role": "user", "content": str(question).strip()},
+                ],
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        answer = _strip_reasoning(str(payload["choices"][0]["message"].get("content") or ""))
+        if not answer:
+            raise ValueError("The model returned an empty answer.")
+    except Exception as exc:
+        return OperationResult(
+            False, 64, f"Agent question failed: {_reasoning_error_message(exc, api_key)}"
+        )
+    return OperationResult(True, 0, "Agent answer received.", {"answer": answer[:2400], "model": model})
 
 
 def execute_operations_remediation(

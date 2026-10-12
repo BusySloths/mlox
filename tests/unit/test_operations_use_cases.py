@@ -9,6 +9,7 @@ from mlox.application.use_cases.operations import (
     OPERATIONS_REASONING_SECRET,
     OperationsWatchSession,
     add_operations_plan_item,
+    ask_operations_agent,
     execute_operations_remediation,
     get_operations_board,
     list_operations_agents,
@@ -441,6 +442,81 @@ def test_reasoning_proposes_only_advertised_workspace_actions():
     executed = execute_operations_remediation(workspace, result.data["actions"])
     assert executed.success
     assert calls == ["gateway"]
+
+
+def test_reasoning_accepts_fenced_json_response():
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(
+            load_secret=lambda _name: {
+                "endpoint": "https://llm.example/v1",
+                "model": "reasoner",
+            }
+        )
+    )
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "```json\n"
+                                '{"headline":"Roll back","description":"Use the known good version.",'
+                                '"verification":"Check the error rate."}\n```'
+                            )
+                        }
+                    }
+                ]
+            }
+
+    result = reason_about_operations_incident(
+        workspace, {"pipeline_name": "demo", "steps": []},
+        post=lambda *_args, **_kwargs: Response(),
+    )
+
+    assert result.success
+    assert result.data["headline"] == "Roll back"
+    assert result.data["recommendation"] == "Use the known good version."
+
+
+def test_agent_question_uses_configured_reasoning_assistant():
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(
+            load_secret=lambda _name: {
+                "endpoint": "https://llm.example/v1",
+                "model": "reasoner",
+                "api_key": "top-secret",
+            }
+        )
+    )
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Investigate the transform input."}}]}
+
+    def post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return Response()
+
+    result = ask_operations_agent(
+        workspace,
+        agent={"name": "Investigator", "role": "Investigator", "scope": "triage"},
+        question="What should we inspect first?",
+        post=post,
+    )
+
+    assert result.success
+    assert result.data == {"answer": "Investigate the transform input.", "model": "reasoner"}
+    assert captured["headers"]["Authorization"] == "Bearer top-secret"
 
 
 def test_reasoning_sends_only_public_tool_schema(monkeypatch):

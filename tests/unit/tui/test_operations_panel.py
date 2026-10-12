@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from textual.widgets import Button, DataTable, Input, Select, Static
 
 from mlox.application.use_cases.operations import OPERATIONS_REASONING_SECRET
+from mlox.application.result import OperationResult
 from mlox.project import ProjectWorkspace
 from mlox.project.operations import OperationsAgent
 from mlox.tui.screens.dashboard.operations_panel import (
@@ -84,6 +85,7 @@ def test_agent_workspace_assigns_durable_work_package(tmp_path) -> None:
         OperationsAgent(
             name="Investigator", role="Investigator", scope="Incident triage",
             description="Triages evidence and frames a bounded investigation.",
+            status="enabled",
         )
     )
     app = OperationsTestApp(workspace=workspace)
@@ -115,6 +117,46 @@ def test_agent_workspace_assigns_durable_work_package(tmp_path) -> None:
     assert message == summary
 
 
+def test_observer_proposal_is_persisted_and_shown_in_team_workspace(tmp_path) -> None:
+    workspace = ProjectWorkspace.create(str(tmp_path / "proposal"), "pw")
+    app = OperationsTestApp(workspace=workspace)
+    pipeline = {
+        "id": "pipeline-1",
+        "pipeline_name": "forecast",
+        "culprit": "forecast/transform",
+    }
+
+    async def run() -> tuple[str, str]:
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = app.query_one(OperationsPanel)
+            panel._start_observer_run(pipeline, "forecast/transform")
+            panel._finish_observer_investigation(
+                pipeline,
+                OperationResult(
+                    True,
+                    0,
+                    "ok",
+                    {
+                        "headline": "Roll back forecast",
+                        "recommendation": "Restore the known-good version.",
+                        "verification": "Check error rate.",
+                        "actions": [],
+                        "mode": "advisory",
+                        "model": "reasoner",
+                    },
+                ),
+                automatic=True,
+            )
+            await pilot.pause()
+            proposal = workspace.list_operations_agent_proposals("pipeline-observer")[0]
+            table = app.query_one("#operations-agent-workspace-proposals", DataTable)
+            return proposal.headline, " ".join(str(cell) for cell in table.get_row_at(0))
+
+    headline, row = asyncio.run(run())
+    assert headline == "Roll back forecast"
+    assert "Roll back forecast" in row
+
+
 def test_pipeline_observer_records_facts_without_reasoning_recommendation() -> None:
     app = OperationsTestApp()
 
@@ -144,7 +186,7 @@ def test_pipeline_observer_records_facts_without_reasoning_recommendation() -> N
             )
             await pilot.pause()
             return (
-                str(app.query_one("#operations-team-status", Static).content),
+                panel._observer_status,
                 {event.event_type for event in panel._activity},
             )
 

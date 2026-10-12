@@ -1059,11 +1059,6 @@ ModelCallResultDialog {
   padding: 1 2;
 }
 
-#operations-team-status {
-  height: 1;
-  color: #f4e223ff;
-}
-
 #operations-team-context {
   height: auto;
   min-height: 3;
