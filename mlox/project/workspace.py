@@ -293,6 +293,11 @@ class ProjectWorkspace:
 
         return self._repository.archive_operations_agent(agent_id)
 
+    def set_operations_agent_status(self, agent_id: str, status: str) -> bool:
+        """Enable or disable a configurable Operations agent profile."""
+
+        return self._repository.set_operations_agent_status(agent_id, status)
+
     def save_operations_agent_run(self, run: OperationsAgentRun) -> OperationsAgentRun:
         """Create or update an Operations agent work item."""
 

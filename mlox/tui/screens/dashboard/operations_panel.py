@@ -38,6 +38,7 @@ from mlox.application.use_cases.operations import (
     save_operations_postmortem,
     save_operations_agent,
     save_operations_reasoning_settings,
+    set_operations_agent_status,
     start_operations_watch,
 )
 from mlox.project.entries import Entry, lane_color, parse_board
@@ -129,7 +130,7 @@ class OperationsAgentDialog(ModalScreen[dict[str, str] | None]):
             )
             with Horizontal(id="operations-agent-actions"):
                 yield Button("Cancel", id="operations-agent-cancel")
-                yield Button("Add inactive profile", id="operations-agent-save", variant="primary")
+                yield Button("Add disabled profile", id="operations-agent-save", variant="primary")
 
     @on(Button.Pressed, "#operations-agent-cancel")
     def handle_cancel(self, _: Button.Pressed) -> None:
@@ -152,13 +153,8 @@ class OperationsAgentWorkspace(Vertical):
         self.agent: dict[str, Any] | None = None
 
     def compose(self) -> ComposeResult:
-        yield Static("AGENT WORKSPACE", id="operations-agent-workspace-eyebrow")
-        yield Static("Select a team member", id="operations-agent-workspace-title")
-        yield Static(
-            "Select an agent to see its purpose, work packages, evidence, and proposals.",
-            id="operations-agent-workspace-description",
-        )
-        yield Static("Focus: -", id="operations-agent-workspace-focus")
+        yield Static("WORKSPACE", id="operations-agent-workspace-eyebrow")
+        yield Static("Work history & proposals", id="operations-agent-workspace-title")
         yield Static("Latest conversation", classes="operations-agent-workspace-label")
         messages = DataTable(id="operations-agent-workspace-messages")
         messages.cursor_type = "row"
@@ -183,15 +179,6 @@ class OperationsAgentWorkspace(Vertical):
         """Make a roster member active without navigating away from Team."""
 
         self.agent = deepcopy(agent)
-        self.query_one("#operations-agent-workspace-title", Static).update(
-            f"{agent.get('name') or 'Operations agent'} · {agent.get('role') or 'Agent'}"
-        )
-        self.query_one("#operations-agent-workspace-description", Static).update(
-            str(agent.get("description") or "No description configured.")
-        )
-        self.query_one("#operations-agent-workspace-focus", Static).update(
-            f"Focus: {agent.get('scope') or 'Not assigned'}"
-        )
         archived = agent.get("status") == "archived"
         self.query_one("#operations-agent-workspace-input", Input).disabled = archived
         self.query_one("#operations-agent-workspace-assign", Button).disabled = archived
@@ -427,9 +414,8 @@ class OperationsPanel(Static):
     def _compose_operations_tabs(self) -> ComposeResult:
         with TabbedContent(id="operations-tabs"):
             with TabPane("Team", id="operations-team-tab"):
-                yield Static("PIPELINE OBSERVER", id="operations-team-eyebrow")
-                yield Static("Restricted operations agent", id="operations-team-title")
                 yield Static("", id="operations-team-status")
+                yield Static("Select a team member.", id="operations-team-context")
                 with Horizontal(id="operations-team-layout"):
                     with Vertical(id="operations-team-roster-pane"):
                         roster = DataTable(id="operations-team-roster")
@@ -438,12 +424,12 @@ class OperationsPanel(Static):
                         yield roster
                         with Horizontal(id="operations-team-actions"):
                             yield Button("Add agent", id="operations-team-add")
+                            yield Button(
+                                "Enable selected",
+                                id="operations-team-toggle",
+                                disabled=True,
+                            )
                             yield Button("Archive selected", id="operations-team-archive")
-                        yield Button(
-                            "Review latest proposal",
-                            id="operations-team-review",
-                            disabled=True,
-                        )
                         yield Static(
                             "Select a team member to see its project-backed workspace. "
                             "The observer only proposes; it never executes a remediation.",
@@ -692,8 +678,6 @@ class OperationsPanel(Static):
         self.query_one("#operations-team-status", Static).update(
             f"{self._observer_status}  Focus: {pipeline_name} · {culprit}"
         )
-        proposal = self._latest_recommendation
-        self.query_one("#operations-team-review", Button).disabled = proposal is None
 
     def _load_agent_roster(self) -> None:
         result = list_operations_agents(getattr(self.app, "workspace", None))
@@ -701,15 +685,38 @@ class OperationsPanel(Static):
         table.clear(columns=False)
         self._agent_rows = list((result.data or {}).get("agents") or []) if result.success else []
         for agent in self._agent_rows:
+            status = str(agent.get("status") or "-")
             table.add_row(
                 str(agent.get("name") or "-"),
                 str(agent.get("role") or "-"),
                 str(agent.get("scope") or "-"),
-                str(agent.get("status") or "-"),
+                self._status_label(status),
                 key=str(agent.get("id") or "agent"),
             )
         if self._agent_rows:
-            self.query_one(OperationsAgentWorkspace).show_agent(self._agent_rows[0])
+            self._select_agent(self._agent_rows[0])
+
+    @staticmethod
+    def _status_label(status: str) -> Text:
+        styles = {
+            "enabled": "bold #052e16 on #86efac",
+            "disabled": "bold #cbd5e1 on #334155",
+            "inactive": "bold #cbd5e1 on #334155",
+            "archived": "dim #94a3b8 on #1e293b",
+        }
+        return Text(status.upper(), style=styles.get(status, "#cbd5e1"))
+
+    def _select_agent(self, agent: dict[str, Any]) -> None:
+        self.query_one(OperationsAgentWorkspace).show_agent(agent)
+        self.query_one("#operations-team-context", Static).update(
+            f"{agent.get('name') or 'Operations agent'} · {agent.get('role') or 'Agent'}  —  "
+            f"{agent.get('description') or 'No description configured.'}\n"
+            f"Focus: {agent.get('scope') or 'Not assigned'}"
+        )
+        status = str(agent.get("status") or "")
+        toggle = self.query_one("#operations-team-toggle", Button)
+        toggle.disabled = status in {"archived", ""} or agent.get("id") == "pipeline-observer"
+        toggle.label = "Disable selected" if status == "enabled" else "Enable selected"
 
     @on(Button.Pressed, "#operations-team-add")
     def handle_add_agent(self, _: Button.Pressed) -> None:
@@ -730,7 +737,23 @@ class OperationsPanel(Static):
             (item for item in self._agent_rows if item.get("id") == agent_id), None
         )
         if agent is not None:
-            self.query_one(OperationsAgentWorkspace).show_agent(agent)
+            self._select_agent(agent)
+
+    @on(Button.Pressed, "#operations-team-toggle")
+    def handle_toggle_agent(self, _: Button.Pressed) -> None:
+        table = self.query_one("#operations-team-roster", DataTable)
+        if table.cursor_row is None or not (0 <= table.cursor_row < len(self._agent_rows)):
+            self.app.notify("Select a team member first.", severity="warning")
+            return
+        agent = self._agent_rows[table.cursor_row]
+        result = set_operations_agent_status(
+            getattr(self.app, "workspace", None),
+            agent_id=str(agent.get("id") or ""),
+            enabled=agent.get("status") != "enabled",
+        )
+        self.app.notify(result.message, severity="error" if not result.success else "information")
+        if result.success:
+            self._load_agent_roster()
 
     @on(Button.Pressed, "#operations-team-archive")
     def handle_archive_agent(self, _: Button.Pressed) -> None:
@@ -896,13 +919,6 @@ class OperationsPanel(Static):
         if pipeline is None:
             return
         self._launch_pipeline_observer(pipeline, automatic=False)
-
-    @on(Button.Pressed, "#operations-team-review")
-    def handle_review_observer_proposal(self, _: Button.Pressed) -> None:
-        proposal = self._latest_recommendation
-        if proposal is None:
-            return
-        self._show_recommendation_dialog(proposal)
 
     def _launch_pipeline_observer(
         self, pipeline: dict[str, Any], *, automatic: bool

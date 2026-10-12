@@ -28,7 +28,7 @@ class OperationsAgent:
     role: str
     scope: str
     description: str
-    status: str = "inactive"
+    status: str = "disabled"
     runtime: str = "planned"
     id: str = ""
     created_at: str = ""

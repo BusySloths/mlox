@@ -1056,24 +1056,20 @@ ModelCallResultDialog {
 }
 
 #operations-team-tab {
-  padding: 2 3;
-}
-
-#operations-team-eyebrow {
-  height: 1;
-  color: #61d394ff;
-  text-style: bold;
-}
-
-#operations-team-title {
-  height: 2;
-  color: #f8fafc;
-  text-style: bold;
+  padding: 1 2;
 }
 
 #operations-team-status {
-  height: 2;
+  height: 1;
   color: #f4e223ff;
+}
+
+#operations-team-context {
+  height: 2;
+  margin-top: 1;
+  padding: 0 1;
+  color: #cbd5e1;
+  border-left: tall #35635bff;
 }
 
 #operations-team-layout {
@@ -1111,11 +1107,6 @@ ModelCallResultDialog {
   background: #10211fff;
 }
 
-#operations-team-review {
-  width: auto;
-  margin-top: 1;
-}
-
 #operations-agent-workspace {
   width: 1fr;
   height: 1fr;
@@ -1134,16 +1125,6 @@ ModelCallResultDialog {
   height: 2;
   color: #f8fafc;
   text-style: bold;
-}
-
-#operations-agent-workspace-description,
-#operations-agent-workspace-focus {
-  height: auto;
-  min-height: 2;
-  margin-top: 1;
-  padding: 0 1;
-  color: #cbd5e1;
-  border-left: tall #35635bff;
 }
 
 .operations-agent-workspace-label {
@@ -1171,6 +1152,36 @@ ModelCallResultDialog {
 #operations-agent-workspace-actions Button {
   width: auto;
   margin-right: 1;
+}
+
+#operations-agent-dialog {
+  width: 56;
+  height: auto;
+  max-width: 92%;
+  padding: 1 2;
+  border: thick #61d394ff;
+  background: #0d1918;
+}
+
+#operations-agent-title {
+  height: 2;
+  color: #f8fafc;
+  text-style: bold;
+}
+
+#operations-agent-name,
+#operations-agent-role {
+  margin-top: 1;
+}
+
+#operations-agent-actions {
+  height: 3;
+  margin-top: 2;
+}
+
+#operations-agent-actions Button {
+  width: auto;
+  margin-right: 2;
 }
 
 .operations-heading {

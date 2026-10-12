@@ -246,5 +246,8 @@ def test_operations_agent_workspace_records_are_project_scoped(tmp_path):
     assert store.list_operations_agent_runs(agent.id)[0].id == run.id
     assert store.list_operations_agent_messages(agent.id)[0] == message
     assert store.list_operations_agent_proposals(agent.id)[0] == proposal
+    assert store.set_operations_agent_status(agent.id, "enabled")
+    assert store.list_operations_agents()[0].status == "enabled"
     assert store.archive_operations_agent(agent.id)
     assert store.list_operations_agents()[0].status == "archived"
+    assert not store.set_operations_agent_status(agent.id, "disabled")

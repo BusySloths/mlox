@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS operations_agents (
     role TEXT NOT NULL,
     scope TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'inactive',
+    status TEXT NOT NULL DEFAULT 'disabled',
     runtime TEXT NOT NULL DEFAULT 'planned',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -737,6 +737,19 @@ class SqlCipherRepository:
                 "UPDATE operations_agents SET status='archived', updated_at=? "
                 "WHERE id=? AND project_id=?",
                 (utcnow(), agent_id, self.project_id(conn)),
+            )
+        return bool(cursor.rowcount)
+
+    def set_operations_agent_status(self, agent_id: str, status: str) -> bool:
+        """Set the enabled state of a configurable Operations agent profile."""
+
+        if status not in {"enabled", "disabled"}:
+            raise ValueError("Operations agent status must be enabled or disabled.")
+        with self.connection() as conn:
+            cursor = conn.execute(
+                "UPDATE operations_agents SET status=?, updated_at=? "
+                "WHERE id=? AND project_id=? AND status != 'archived'",
+                (status, utcnow(), agent_id, self.project_id(conn)),
             )
         return bool(cursor.rowcount)
 

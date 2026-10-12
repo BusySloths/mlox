@@ -69,7 +69,7 @@ def list_operations_agents(workspace) -> OperationResult:
 
 
 def save_operations_agent(workspace, *, name: str, role: str) -> OperationResult:
-    """Add an inactive role profile without granting runtime authority yet."""
+    """Add a disabled role profile without granting runtime authority yet."""
 
     name = str(name).strip()[:80]
     role = str(role).strip()
@@ -86,7 +86,7 @@ def save_operations_agent(workspace, *, name: str, role: str) -> OperationResult
                 id=f"{role.lower()}-{count + 1}",
                 name=name,
                 role=role,
-                status="inactive",
+                status="disabled",
                 scope="Not assigned",
                 description="Role profile saved; runtime is not implemented yet.",
                 runtime="planned",
@@ -94,7 +94,7 @@ def save_operations_agent(workspace, *, name: str, role: str) -> OperationResult
         )
     except Exception as exc:
         return OperationResult(False, 58, f"Could not save Operations agent: {exc}")
-    return OperationResult(True, 0, f"Added {name} as an inactive {role}.", {"id": saved.id})
+    return OperationResult(True, 0, f"Added {name} as a disabled {role}.", {"id": saved.id})
 
 
 def archive_operations_agent(workspace, *, agent_id: str) -> OperationResult:
@@ -111,6 +111,25 @@ def archive_operations_agent(workspace, *, agent_id: str) -> OperationResult:
     except Exception as exc:
         return OperationResult(False, 60, f"Could not archive Operations agent: {exc}")
     return OperationResult(False, 61, "Operations agent was not found.")
+
+
+def set_operations_agent_status(
+    workspace, *, agent_id: str, enabled: bool
+) -> OperationResult:
+    """Enable or disable a configurable profile without granting new authority."""
+
+    if agent_id == DEFAULT_OPERATIONS_AGENT["id"]:
+        return OperationResult(False, 62, "The built-in Pipeline Observer is always enabled.")
+    set_status = getattr(workspace, "set_operations_agent_status", None)
+    if not callable(set_status):
+        return OperationResult(False, 40, "Project workspace is unavailable.")
+    status = "enabled" if enabled else "disabled"
+    try:
+        if set_status(agent_id, status):
+            return OperationResult(True, 0, f"Operations agent {status}.")
+    except Exception as exc:
+        return OperationResult(False, 63, f"Could not update Operations agent: {exc}")
+    return OperationResult(False, 61, "Operations agent was not found or is archived.")
 
 
 def _services(workspace) -> list[Any]:

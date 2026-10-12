@@ -118,7 +118,7 @@ def test_agent_workspace_assigns_durable_work_package(tmp_path) -> None:
 def test_pipeline_observer_records_facts_without_reasoning_recommendation() -> None:
     app = OperationsTestApp()
 
-    async def run() -> tuple[str, bool, set[str]]:
+    async def run() -> tuple[str, set[str]]:
         async with app.run_test(size=(160, 50)) as pilot:
             panel = app.query_one(OperationsPanel)
             panel._show_snapshot(
@@ -145,14 +145,12 @@ def test_pipeline_observer_records_facts_without_reasoning_recommendation() -> N
             await pilot.pause()
             return (
                 str(app.query_one("#operations-team-status", Static).content),
-                app.query_one("#operations-team-review", Button).disabled,
                 {event.event_type for event in panel._activity},
             )
 
-    status, review_disabled, events = asyncio.run(run())
+    status, events = asyncio.run(run())
 
     assert "Evidence recorded" in status
-    assert review_disabled
     assert "observer_observation" in events
     assert "remediation_proposed" not in events
 
