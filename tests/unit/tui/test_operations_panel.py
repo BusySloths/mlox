@@ -76,6 +76,52 @@ def test_operations_panel_visualizes_pipeline_culprit() -> None:
     assert "demo/pipeline/pca.transform" in evidence
 
 
+def test_pipeline_observer_records_facts_without_reasoning_recommendation() -> None:
+    app = OperationsTestApp()
+
+    async def run() -> tuple[str, str, bool, set[str]]:
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = app.query_one(OperationsPanel)
+            panel._show_snapshot(
+                {
+                    "active": True,
+                    "pipelines": [
+                        {
+                            "id": "demo-pipeline",
+                            "pipeline_name": "operations-demo",
+                            "subject_name": "mlox-operations-demo",
+                            "subject_version": "4",
+                            "state": "incident",
+                            "runs": 11,
+                            "baseline_runs": 10,
+                            "baseline_target": 10,
+                            "quality_name": "rmse.mean",
+                            "quality_value": 2.17,
+                            "culprit": "demo/pipeline/model.predict",
+                            "steps": [],
+                        }
+                    ],
+                }
+            )
+            await pilot.pause()
+            return (
+                str(app.query_one("#operations-team-status", Static).content),
+                str(
+                    app.query_one("#operations-team-recommendation", Static).content
+                ),
+                app.query_one("#operations-team-review", Button).disabled,
+                {event.event_type for event in panel._activity},
+            )
+
+    status, recommendation, review_disabled, events = asyncio.run(run())
+
+    assert "Evidence recorded" in status
+    assert "No remediation proposal" in recommendation
+    assert review_disabled
+    assert "observer_observation" in events
+    assert "remediation_proposed" not in events
+
+
 async def _monitor_selector() -> tuple[list[tuple[str, str]], str]:
     first = SimpleNamespace(
         name="Monitor A",
@@ -273,16 +319,16 @@ def test_operations_side_rail_switches_section_heading() -> None:
             return (
                 str(app.query_one("#operations-title", Static).content),
                 plan.has_class("operations-nav-active"),
-                app.query_one("#operations-nav-incidents", Button).has_class(
+                app.query_one("#operations-nav-team", Button).has_class(
                     "operations-nav-active"
                 ),
             )
 
-    title, plan_active, incidents_active = asyncio.run(run())
+    title, plan_active, team_active = asyncio.run(run())
 
     assert title == "Operational plan"
     assert plan_active
-    assert not incidents_active
+    assert not team_active
 
 
 def test_operations_plan_activity_and_reasoning_settings_share_project_state(

@@ -170,7 +170,7 @@ class RecommendationDialog(ModalScreen[str | None]):
                 arguments.get("service_name")
                 or (
                     f"{arguments.get('model_name', '-')}:"
-                    f"{arguments.get('alias', '-') } → v{arguments.get('target_version', '-')}"
+                    f"{arguments.get('alias', '-')} → v{arguments.get('target_version', '-')}"
                 )
             )
             table.add_row(title, target, effect)
@@ -226,7 +226,7 @@ class OperationsPlanBoard(Horizontal):
 
 
 class OperationsPanel(Static):
-    """Calibrate and watch telemetry-discovered workloads and their steps."""
+    """Calibrate and watch telemetry-discovered pipelines and their steps."""
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
@@ -240,6 +240,9 @@ class OperationsPanel(Static):
         self._pipeline_states: dict[str, str] = {}
         self._activity: list[OperationsEvent] = []
         self._postmortem_saved_for: set[str] = set()
+        self._observer_completed_for: set[str] = set()
+        self._latest_recommendation: dict[str, Any] | None = None
+        self._observer_status = "Standing by for a pipeline anomaly."
 
     def compose(self) -> ComposeResult:
         with Vertical(id="operations-content"):
@@ -247,11 +250,8 @@ class OperationsPanel(Static):
                 with Vertical(id="operations-nav"):
                     yield Static("OPERATIONS", id="operations-nav-title")
                     yield Static("CONTROL ROOM", id="operations-nav-subtitle")
-                    yield Button(
-                        "Incidents",
-                        id="operations-nav-incidents",
-                        classes="operations-nav-active",
-                    )
+                    yield Button("Team", id="operations-nav-team", classes="operations-nav-active")
+                    yield Button("Pipelines", id="operations-nav-pipelines")
                     yield Button("Plan", id="operations-nav-plan")
                     yield Button("Activity", id="operations-nav-activity")
                     yield Button("Settings", id="operations-nav-settings")
@@ -271,7 +271,23 @@ class OperationsPanel(Static):
 
     def _compose_operations_tabs(self) -> ComposeResult:
         with TabbedContent(id="operations-tabs"):
-            with TabPane("Incidents", id="operations-incidents-tab"):
+            with TabPane("Team", id="operations-team-tab"):
+                yield Static("PIPELINE OBSERVER", id="operations-team-eyebrow")
+                yield Static("Restricted operations agent", id="operations-team-title")
+                yield Static("", id="operations-team-status")
+                yield Static("", id="operations-team-focus")
+                yield Static("", id="operations-team-recommendation")
+                yield Button(
+                    "Review latest proposal",
+                    id="operations-team-review",
+                    disabled=True,
+                )
+                yield Static(
+                    "The observer records deterministic evidence first. A configured "
+                    "reasoning assistant may propose, but never execute, a remediation.",
+                    id="operations-team-help",
+                )
+            with TabPane("Pipelines", id="operations-pipelines-tab"):
                 with Horizontal(id="operations-incident-actions"):
                     yield Static("Watcher is stopped.", id="operations-watch-summary")
                     yield Button(
@@ -285,7 +301,7 @@ class OperationsPanel(Static):
                         disabled=True,
                     )
                     yield Button(
-                        "Recommend Action",
+                        "Investigate",
                         id="operations-recommend-action",
                         disabled=True,
                     )
@@ -428,8 +444,9 @@ class OperationsPanel(Static):
 
     def on_mount(self) -> None:
         self.watch_selection(self.selection)
-        self._activate_operations_section("incidents")
+        self._activate_operations_section("team")
         self._show_snapshot(self._empty_snapshot())
+        self._show_observer_state()
         self._load_plan()
         self._load_activity()
         self._load_reasoning_settings()
@@ -463,7 +480,8 @@ class OperationsPanel(Static):
             self._load_monitor_options()
         self._show_operations_hero(tab_id)
 
-    @on(Button.Pressed, "#operations-nav-incidents")
+    @on(Button.Pressed, "#operations-nav-team")
+    @on(Button.Pressed, "#operations-nav-pipelines")
     @on(Button.Pressed, "#operations-nav-plan")
     @on(Button.Pressed, "#operations-nav-activity")
     @on(Button.Pressed, "#operations-nav-settings")
@@ -476,15 +494,19 @@ class OperationsPanel(Static):
         tabs = self.query_one("#operations-tabs", TabbedContent)
         tabs.active = tab_id
         self._show_operations_hero(tab_id)
-        for name in ("incidents", "plan", "activity", "settings"):
+        for name in ("team", "pipelines", "plan", "activity", "settings"):
             button = self.query_one(f"#operations-nav-{name}", Button)
             button.set_class(name == section, "operations-nav-active")
 
     def _show_operations_hero(self, tab_id: str) -> None:
         headings = {
-            "operations-incidents-tab": (
-                "Incident detective",
-                "Live evidence, safe recommendations, and recovery tracking.",
+            "operations-team-tab": (
+                "Operations team",
+                "A restricted observer turns pipeline anomalies into reviewable evidence.",
+            ),
+            "operations-pipelines-tab": (
+                "Pipelines",
+                "Live pipeline evidence, step metrics, and anomaly detection.",
             ),
             "operations-plan-tab": (
                 "Operational plan",
@@ -499,9 +521,30 @@ class OperationsPanel(Static):
                 "Configure telemetry watching and an optional advisory reasoning model.",
             ),
         }
-        title, subtitle = headings.get(tab_id, headings["operations-incidents-tab"])
+        title, subtitle = headings.get(tab_id, headings["operations-team-tab"])
         self.query_one("#operations-title", Static).update(title)
         self.query_one("#operations-subtitle", Static).update(subtitle)
+
+    def _show_observer_state(self, pipeline: dict[str, Any] | None = None) -> None:
+        """Project the bounded observer state into the persistent Team view."""
+
+        selected = pipeline or self._selected_pipeline() or {}
+        pipeline_name = str(selected.get("pipeline_name") or "No pipeline selected")
+        culprit = str(selected.get("culprit") or "No anomalous step identified")
+        self.query_one("#operations-team-status", Static).update(self._observer_status)
+        self.query_one("#operations-team-focus", Static).update(
+            f"Focus: {pipeline_name}\nAffected step: {culprit}"
+        )
+        proposal = self._latest_recommendation
+        if proposal is None:
+            recommendation = "No remediation proposal. The observer only records evidence until reasoning is configured."
+        else:
+            recommendation = (
+                f"Latest proposal: {proposal['headline']}\n"
+                "Review it before adding work to the Operations plan or executing an approved action."
+            )
+        self.query_one("#operations-team-recommendation", Static).update(recommendation)
+        self.query_one("#operations-team-review", Button).disabled = proposal is None
 
     def _load_monitor_options(self) -> None:
         workspace = getattr(self.app, "workspace", None)
@@ -592,9 +635,13 @@ class OperationsPanel(Static):
         self._selected_pipeline_id = ""
         self._pipeline_states.clear()
         self._postmortem_saved_for.clear()
+        self._observer_completed_for.clear()
+        self._latest_recommendation = None
+        self._observer_status = "Standing by for a pipeline anomaly."
         self.query_one("#operations-get-details", Button).disabled = True
         self.query_one("#operations-monitor", Select).disabled = False
         self._show_snapshot(self._empty_snapshot())
+        self._show_observer_state()
         self._record_activity(
             "watch_reset",
             "Reset the in-memory baseline and incident state.",
@@ -628,7 +675,7 @@ class OperationsPanel(Static):
             return
         self._record_activity(
             "incident_acknowledged",
-                f"Acknowledged the incident for {pipeline.get('pipeline_name', 'workload')}.",
+            f"Acknowledged the incident for {pipeline.get('pipeline_name', 'workload')}.",
             actor="user",
             target=str(pipeline.get("id") or ""),
             status="acknowledged",
@@ -640,14 +687,65 @@ class OperationsPanel(Static):
         pipeline = self._selected_pipeline()
         if pipeline is None:
             return
+        self._launch_pipeline_observer(pipeline, automatic=False)
+
+    @on(Button.Pressed, "#operations-team-review")
+    def handle_review_observer_proposal(self, _: Button.Pressed) -> None:
+        proposal = self._latest_recommendation
+        if proposal is None:
+            return
+        self._show_recommendation_dialog(proposal)
+
+    def _launch_pipeline_observer(
+        self, pipeline: dict[str, Any], *, automatic: bool
+    ) -> None:
+        """Record an anomaly first, then optionally ask the configured advisor."""
+
+        pipeline_id = str(pipeline.get("id") or "")
+        if automatic and (not pipeline_id or pipeline_id in self._observer_completed_for):
+            return
+        if pipeline_id:
+            self._observer_completed_for.add(pipeline_id)
         self.query_one("#operations-recommend-action", Button).disabled = True
+        culprit = str(pipeline.get("culprit") or "the anomalous pipeline step")
+        self._observer_status = f"Investigating {culprit}."
+        self._show_observer_state(pipeline)
+        self._record_activity(
+            "observer_investigation_started",
+            f"Pipeline Observer started investigating {culprit}.",
+            actor="pipeline-observer",
+            target=pipeline_id,
+            status="investigating",
+            details={"culprit": culprit, "automatic": automatic},
+        )
+
+        settings = load_operations_reasoning_settings(
+            getattr(self.app, "workspace", None)
+        )
+        configured = bool(
+            settings.success
+            and (settings.data or {}).get("mode") != "disabled"
+            and (settings.data or {}).get("endpoint")
+            and (settings.data or {}).get("model")
+        )
+        if not configured:
+            reason = (
+                "The reasoning assistant is not configured."
+                if settings.success
+                else str(settings.message)
+            )
+            self._finish_observer_observation(pipeline, reason)
+            return
 
         def reason() -> None:
             result = reason_about_operations_incident(
                 getattr(self.app, "workspace", None), deepcopy(pipeline)
             )
             self.app.call_from_thread(
-                self._finish_recommend_action, deepcopy(pipeline), result
+                self._finish_observer_investigation,
+                deepcopy(pipeline),
+                result,
+                automatic,
             )
 
         self.app.run_worker(
@@ -657,8 +755,10 @@ class OperationsPanel(Static):
             group="operations-reasoning",
         )
 
-    def _finish_recommend_action(self, pipeline, result) -> None:
-        culprit = str(pipeline.get("culprit") or "the affected workload")
+    def _finish_observer_investigation(
+        self, pipeline: dict[str, Any], result, automatic: bool
+    ) -> None:
+        self.query_one("#operations-recommend-action", Button).disabled = False
         if result.success:
             payload = result.data or {}
             recommendation = str(payload.get("recommendation") or "")
@@ -672,56 +772,85 @@ class OperationsPanel(Static):
                 else "advisory"
             )
             details = {"model": payload.get("model"), "execution": "manual"}
-        else:
-            headline = "Review the affected workload before remediation"
-            reason = str(result.message or "The provider did not return a usable response.")
-            recommendation = (
-                "Preserve the current evidence snapshot and investigate "
-                f"{culprit}. No MLOX runtime action was proposed because the reasoning "
-                f"assistant was unavailable: {reason}"
-            )
-            verification = "Verify that rolling observations return to their established baseline."
-            actions = []
-            actor = "system"
-            status = "manual-runbook"
-            details = {
-                "culprit": culprit,
-                "execution": "manual",
-                "reasoning_fallback": result.message,
-            }
-        self.query_one("#operations-remediation", Static).update(
-            f"Recommendation ready: {headline}"
-        )
-        self._record_activity(
-            "remediation_proposed",
-            headline,
-            actor=actor,
-            target=str(pipeline.get("id") or ""),
-            status=status,
-            details={
-                **details,
+            proposal = {
+                "pipeline": deepcopy(pipeline),
+                "headline": headline,
                 "description": recommendation,
                 "verification": verification,
                 "actions": actions,
+                "mode": str(payload.get("mode") or "disabled"),
+            }
+            self._latest_recommendation = proposal
+            self._observer_status = f"Proposal ready: {headline}"
+            self.query_one("#operations-remediation", Static).update(
+                f"Proposal ready: {headline}"
+            )
+            self._show_observer_state(pipeline)
+            self._record_activity(
+                "remediation_proposed",
+                headline,
+                actor=actor,
+                target=str(pipeline.get("id") or ""),
+                status=status,
+                details={
+                    **details,
+                    "description": recommendation,
+                    "verification": verification,
+                    "actions": actions,
+                },
+            )
+            self._update_incident_actions(self._selected_pipeline())
+            if not automatic:
+                self._show_recommendation_dialog(proposal)
+            return
+
+        self._finish_observer_observation(pipeline, str(result.message))
+
+    def _finish_observer_observation(
+        self, pipeline: dict[str, Any], reason: str
+    ) -> None:
+        """Record deterministic evidence without inventing a remediation."""
+
+        culprit = str(pipeline.get("culprit") or "the anomalous pipeline step")
+        quality_name = str(pipeline.get("quality_name") or "quality metric")
+        quality_value = pipeline.get("quality_value")
+        self.query_one("#operations-recommend-action", Button).disabled = False
+        self._observer_status = "Evidence recorded; awaiting a configured reasoning assistant."
+        self.query_one("#operations-remediation", Static).update(
+            "Observer recorded an anomaly; no remediation was proposed."
+        )
+        self._show_observer_state(pipeline)
+        self._record_activity(
+            "observer_observation",
+            f"Detected {quality_name} anomaly at {culprit}"
+            + (f" ({quality_value:.4f})." if isinstance(quality_value, (int, float)) else "."),
+            actor="pipeline-observer",
+            target=str(pipeline.get("id") or ""),
+            status="awaiting-reasoning",
+            details={
+                "culprit": culprit,
+                "quality_name": quality_name,
+                "quality_value": quality_value,
+                "reasoning_status": reason,
             },
         )
         self._update_incident_actions(self._selected_pipeline())
+
+    def _show_recommendation_dialog(self, proposal: dict[str, Any]) -> None:
         self.app.push_screen(
             RecommendationDialog(
-                headline=headline,
-                description=recommendation,
-                verification=verification,
-                actions=actions,
-                mode=str((result.data or {}).get("mode") or "disabled")
-                if result.success
-                else "disabled",
+                headline=str(proposal["headline"]),
+                description=str(proposal["description"]),
+                verification=str(proposal["verification"]),
+                actions=list(proposal["actions"]),
+                mode=str(proposal["mode"]),
             ),
             lambda decision: self._handle_recommendation_decision(
                 decision,
-                pipeline=deepcopy(pipeline),
-                headline=headline,
-                description=recommendation,
-                actions=actions,
+                pipeline=deepcopy(proposal["pipeline"]),
+                headline=str(proposal["headline"]),
+                description=str(proposal["description"]),
+                actions=list(proposal["actions"]),
             ),
         )
 
@@ -1085,7 +1214,9 @@ class OperationsPanel(Static):
                     status="open",
                     details={"culprit": culprit},
                 )
+                self._launch_pipeline_observer(deepcopy(pipeline), automatic=True)
             elif state == "recovered":
+                self._observer_completed_for.discard(pipeline_id)
                 self._record_activity(
                     "incident_recovered",
                     f"Rolling observations for {name} returned to baseline.",

@@ -464,14 +464,17 @@ def reason_about_operations_incident(
             {
                 "role": "system",
                 "content": (
-                    "You are an operations incident advisor. Assess only the supplied "
-                    "telemetry evidence. Return a compact JSON object with: "
+                    "You are the restricted Pipeline Observer for an MLOX operations "
+                    "team. Assess only the supplied telemetry evidence. First identify "
+                    "the affected pipeline step and propose a focused investigation of "
+                    "that step. Return a compact JSON object with: "
                     "`headline` (an imperative solution title, at most 80 "
                     "characters), `description` (one to three concise sentences), "
                     "and `verification` (one concise recovery check). Use a tool "
                     "call only when one of the supplied MLOX actions is relevant; "
                     "when a supplied model-alias rollback is a credible response "
-                    "to a model deployment regression, prefer that concrete action. "
+                    "to a model deployment regression, propose that concrete action "
+                    "as an optional rollback, not as an executed fact. "
                     "never invent a tool. Tool calls are proposals only: never "
                     "claim an action was executed."
                 ),
@@ -1131,7 +1134,10 @@ class OperationsWatchSession:
                 if row["state"] == "anomalous"
                 and row["name"] != "quality.evaluate"
             ),
-            "",
+            next(
+                (row["path"] for row in rows if row["state"] == "anomalous"),
+                "",
+            ),
         )
         quality = self._quality_metric(rows)
         subject_name, subject_version, pipeline_name = key

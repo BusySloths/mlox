@@ -1033,7 +1033,8 @@ ModelCallResultDialog {
   display: none;
 }
 
-#operations-incidents-tab,
+#operations-team-tab,
+#operations-pipelines-tab,
 #operations-plan-tab,
 #operations-activity-tab,
 #operations-settings-tab {
@@ -1041,7 +1042,8 @@ ModelCallResultDialog {
   width: 1fr;
 }
 
-#operations-incidents-tab,
+#operations-team-tab,
+#operations-pipelines-tab,
 #operations-plan-tab,
 #operations-activity-tab {
   padding: 0;
@@ -1051,6 +1053,43 @@ ModelCallResultDialog {
   height: 1fr;
   width: 1fr;
   padding: 1 2;
+}
+
+#operations-team-tab {
+  padding: 2 3;
+}
+
+#operations-team-eyebrow {
+  height: 1;
+  color: #61d394ff;
+  text-style: bold;
+}
+
+#operations-team-title {
+  height: 2;
+  color: #f8fafc;
+  text-style: bold;
+}
+
+#operations-team-status {
+  height: 2;
+  color: #f4e223ff;
+}
+
+#operations-team-focus,
+#operations-team-recommendation,
+#operations-team-help {
+  height: auto;
+  min-height: 3;
+  margin-top: 1;
+  padding: 1 2;
+  border: round #35635bff;
+  background: #10211fff;
+}
+
+#operations-team-review {
+  width: auto;
+  margin-top: 1;
 }
 
 .operations-heading {
