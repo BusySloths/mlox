@@ -18,13 +18,12 @@ from mlox.application.use_cases.services import (
     service_has_health,
 )
 from mlox.project.entries import Entry, add_item, default_template, parse_board
-from mlox.project.operations import OperationsEvent
+from mlox.project.operations import OperationsAgent, OperationsEvent
 
 
 OBSERVATION_PREFIX = "mlox.observation."
 OPERATIONS_BOARD_TITLE = "Operations"
 OPERATIONS_REASONING_SECRET = "mlox.operations.reasoning"
-OPERATIONS_AGENTS_SECRET = "mlox.operations.agents"
 REASONING_MODES = {"disabled", "advisory", "approval"}
 
 DEFAULT_OPERATIONS_AGENT = {
@@ -41,18 +40,31 @@ DEFAULT_OPERATIONS_AGENT = {
 def list_operations_agents(workspace) -> OperationResult:
     """Return the durable experimental Operations roster."""
 
-    manager = getattr(workspace, "secrets", None)
-    if manager is None:
+    list_agents = getattr(workspace, "list_operations_agents", None)
+    if not callable(list_agents):
         return OperationResult(
             True, 0, "Using the default Operations roster.", {"agents": [DEFAULT_OPERATIONS_AGENT]}
         )
     try:
-        stored = manager.load_secret(OPERATIONS_AGENTS_SECRET)
+        stored = list_agents()
     except Exception as exc:
         return OperationResult(False, 56, f"Could not load Operations agents: {exc}")
     agents = [dict(DEFAULT_OPERATIONS_AGENT)]
-    if isinstance(stored, list):
-        agents.extend(item for item in stored if isinstance(item, dict))
+    for agent in stored:
+        if isinstance(agent, OperationsAgent):
+            agents.append(
+                {
+                    "id": agent.id,
+                    "name": agent.name,
+                    "role": agent.role,
+                    "scope": agent.scope,
+                    "description": agent.description,
+                    "status": agent.status,
+                    "runtime": agent.runtime,
+                    "created_at": agent.created_at,
+                    "updated_at": agent.updated_at,
+                }
+            )
     return OperationResult(True, 0, "Operations roster loaded.", {"agents": agents})
 
 
@@ -63,28 +75,26 @@ def save_operations_agent(workspace, *, name: str, role: str) -> OperationResult
     role = str(role).strip()
     if not name or role not in {"Investigator", "Planner", "Executor", "Auditor"}:
         return OperationResult(False, 57, "Choose an agent name and supported role.")
-    manager = getattr(workspace, "secrets", None)
-    if manager is None:
-        return OperationResult(False, 40, "Project secret manager is unavailable.")
+    save_agent = getattr(workspace, "save_operations_agent", None)
+    list_agents = getattr(workspace, "list_operations_agents", None)
+    if not callable(save_agent) or not callable(list_agents):
+        return OperationResult(False, 40, "Project workspace is unavailable.")
     try:
-        stored = manager.load_secret(OPERATIONS_AGENTS_SECRET)
-        agents = list(stored) if isinstance(stored, list) else []
-        agent_id = f"{role.lower()}-{len(agents) + 1}"
-        agents.append(
-            {
-                "id": agent_id,
-                "name": name,
-                "role": role,
-                "status": "inactive",
-                "scope": "Not assigned",
-                "description": "Role profile saved; runtime is not implemented yet.",
-                "runtime": "planned",
-            }
+        count = sum(1 for agent in list_agents() if agent.role == role)
+        saved = save_agent(
+            OperationsAgent(
+                id=f"{role.lower()}-{count + 1}",
+                name=name,
+                role=role,
+                status="inactive",
+                scope="Not assigned",
+                description="Role profile saved; runtime is not implemented yet.",
+                runtime="planned",
+            )
         )
-        manager.save_secret(OPERATIONS_AGENTS_SECRET, agents)
     except Exception as exc:
         return OperationResult(False, 58, f"Could not save Operations agent: {exc}")
-    return OperationResult(True, 0, f"Added {name} as an inactive {role}.", {"id": agent_id})
+    return OperationResult(True, 0, f"Added {name} as an inactive {role}.", {"id": saved.id})
 
 
 def archive_operations_agent(workspace, *, agent_id: str) -> OperationResult:
@@ -92,17 +102,12 @@ def archive_operations_agent(workspace, *, agent_id: str) -> OperationResult:
 
     if agent_id == DEFAULT_OPERATIONS_AGENT["id"]:
         return OperationResult(False, 59, "The built-in Pipeline Observer cannot be archived.")
-    manager = getattr(workspace, "secrets", None)
-    if manager is None:
-        return OperationResult(False, 40, "Project secret manager is unavailable.")
+    archive_agent = getattr(workspace, "archive_operations_agent", None)
+    if not callable(archive_agent):
+        return OperationResult(False, 40, "Project workspace is unavailable.")
     try:
-        stored = manager.load_secret(OPERATIONS_AGENTS_SECRET)
-        agents = list(stored) if isinstance(stored, list) else []
-        for agent in agents:
-            if isinstance(agent, dict) and agent.get("id") == agent_id:
-                agent["status"] = "archived"
-                manager.save_secret(OPERATIONS_AGENTS_SECRET, agents)
-                return OperationResult(True, 0, f"Archived {agent.get('name', 'agent')}.")
+        if archive_agent(agent_id):
+            return OperationResult(True, 0, "Archived Operations agent.")
     except Exception as exc:
         return OperationResult(False, 60, f"Could not archive Operations agent: {exc}")
     return OperationResult(False, 61, "Operations agent was not found.")

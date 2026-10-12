@@ -31,7 +31,13 @@ from mlox.config import (
 )
 from mlox.infra import Infrastructure
 from mlox.project.entries import Entry
-from mlox.project.operations import OperationsEvent
+from mlox.project.operations import (
+    OperationsAgent,
+    OperationsAgentMessage,
+    OperationsAgentProposal,
+    OperationsAgentRun,
+    OperationsEvent,
+)
 from mlox.project.repository import SqlCipherRepository
 from mlox.project.secrets import (
     EmbeddedSecretManager,
@@ -267,6 +273,65 @@ class ProjectWorkspace:
         """List the newest persisted project operations events."""
 
         return self._repository.list_operations_events(limit)
+
+    # ------------------------------------------------------------------
+    # Operations team workspace (profiles, work, conversation, proposals)
+    # ------------------------------------------------------------------
+
+    def save_operations_agent(self, agent: OperationsAgent) -> OperationsAgent:
+        """Create or update an Operations team profile in this project."""
+
+        return self._repository.save_operations_agent(agent)
+
+    def list_operations_agents(self) -> list[OperationsAgent]:
+        """List configurable Operations team profiles."""
+
+        return self._repository.list_operations_agents()
+
+    def archive_operations_agent(self, agent_id: str) -> bool:
+        """Archive an Operations profile while retaining its history."""
+
+        return self._repository.archive_operations_agent(agent_id)
+
+    def save_operations_agent_run(self, run: OperationsAgentRun) -> OperationsAgentRun:
+        """Create or update an Operations agent work item."""
+
+        return self._repository.save_operations_agent_run(run)
+
+    def list_operations_agent_runs(
+        self, agent_id: str, limit: int = 50
+    ) -> list[OperationsAgentRun]:
+        """List newest work items for one Operations agent."""
+
+        return self._repository.list_operations_agent_runs(agent_id, limit)
+
+    def record_operations_agent_message(
+        self, message: OperationsAgentMessage
+    ) -> OperationsAgentMessage:
+        """Append an immutable message to an Operations agent work item."""
+
+        return self._repository.record_operations_agent_message(message)
+
+    def list_operations_agent_messages(
+        self, agent_id: str, limit: int = 100
+    ) -> list[OperationsAgentMessage]:
+        """List newest conversation and evidence messages for one agent."""
+
+        return self._repository.list_operations_agent_messages(agent_id, limit)
+
+    def save_operations_agent_proposal(
+        self, proposal: OperationsAgentProposal
+    ) -> OperationsAgentProposal:
+        """Create or update a reviewable Operations agent proposal."""
+
+        return self._repository.save_operations_agent_proposal(proposal)
+
+    def list_operations_agent_proposals(
+        self, agent_id: str, limit: int = 50
+    ) -> list[OperationsAgentProposal]:
+        """List newest reviewable proposals for one Operations agent."""
+
+        return self._repository.list_operations_agent_proposals(agent_id, limit)
 
     def _resolve_secret_manager(self) -> AbstractSecretManager:
         if self._state.secret_manager_kind == "embedded":

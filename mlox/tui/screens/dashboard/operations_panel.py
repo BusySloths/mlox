@@ -41,7 +41,12 @@ from mlox.application.use_cases.operations import (
     start_operations_watch,
 )
 from mlox.project.entries import Entry, lane_color, parse_board
-from mlox.project.operations import OperationsEvent
+from mlox.project.operations import (
+    OperationsAgentMessage,
+    OperationsAgentRun,
+    OperationsAgentProposal,
+    OperationsEvent,
+)
 
 from .model import SelectionInfo
 
@@ -137,6 +142,110 @@ class OperationsAgentDialog(ModalScreen[dict[str, str] | None]):
             {"name": self.query_one("#operations-agent-name", Input).value,
              "role": "" if role is Select.BLANK else str(role)}
         )
+
+
+class OperationsAgentWorkspaceDialog(ModalScreen[None]):
+    """A durable, focused conversation and proposal view for one team member."""
+
+    def __init__(self, workspace: Any, agent: dict[str, Any]) -> None:
+        super().__init__()
+        self.workspace = workspace
+        self.agent = deepcopy(agent)
+
+    def compose(self) -> ComposeResult:
+        name = str(self.agent.get("name") or "Operations agent")
+        role = str(self.agent.get("role") or "Agent")
+        with Vertical(id="operations-agent-workspace-dialog"):
+            yield Static("AGENT WORKSPACE", id="operations-agent-workspace-eyebrow")
+            yield Static(f"{name} · {role}", id="operations-agent-workspace-title")
+            yield Static(
+                str(self.agent.get("description") or "No description configured."),
+                id="operations-agent-workspace-description",
+            )
+            yield Static(
+                f"Focus: {self.agent.get('scope') or 'Not assigned'}",
+                id="operations-agent-workspace-focus",
+            )
+            yield Static("Latest conversation", classes="operations-agent-workspace-label")
+            messages = DataTable(id="operations-agent-workspace-messages")
+            messages.cursor_type = "row"
+            messages.add_columns("When", "From", "Type", "Message")
+            yield messages
+            yield Static("Latest proposals", classes="operations-agent-workspace-label")
+            proposals = DataTable(id="operations-agent-workspace-proposals")
+            proposals.cursor_type = "row"
+            proposals.add_columns("When", "Proposal", "Status", "Summary")
+            yield proposals
+            yield Input(
+                placeholder="Assign a focused work package or leave a question…",
+                id="operations-agent-workspace-input",
+            )
+            with Horizontal(id="operations-agent-workspace-actions"):
+                yield Button("Assign work", id="operations-agent-workspace-assign")
+                yield Button("Close", id="operations-agent-workspace-close", variant="primary")
+
+    def on_mount(self) -> None:
+        self._load_history()
+
+    def _load_history(self) -> None:
+        agent_id = str(self.agent.get("id") or "")
+        messages_table = self.query_one("#operations-agent-workspace-messages", DataTable)
+        proposals_table = self.query_one("#operations-agent-workspace-proposals", DataTable)
+        messages_table.clear(columns=False)
+        proposals_table.clear(columns=False)
+        list_messages = getattr(self.workspace, "list_operations_agent_messages", None)
+        list_proposals = getattr(self.workspace, "list_operations_agent_proposals", None)
+        try:
+            messages = list_messages(agent_id) if callable(list_messages) else []
+            proposals = list_proposals(agent_id) if callable(list_proposals) else []
+        except Exception:
+            messages, proposals = [], []
+        for message in reversed(messages):
+            messages_table.add_row(
+                str(message.created_at)[:19], message.author, message.kind,
+                message.content.replace("\n", " ")[:180],
+            )
+        for proposal in proposals:
+            proposals_table.add_row(
+                str(proposal.created_at)[:19], proposal.headline, proposal.status,
+                proposal.description.replace("\n", " ")[:180],
+                key=proposal.id,
+            )
+
+    @on(Button.Pressed, "#operations-agent-workspace-assign")
+    def handle_assign(self, _: Button.Pressed) -> None:
+        instruction = self.query_one("#operations-agent-workspace-input", Input).value.strip()
+        if not instruction:
+            self.app.notify("Describe the work package first.", severity="warning")
+            return
+        save_run = getattr(self.workspace, "save_operations_agent_run", None)
+        record_message = getattr(self.workspace, "record_operations_agent_message", None)
+        if not callable(save_run) or not callable(record_message):
+            self.app.notify("Project workspace is unavailable.", severity="error")
+            return
+        try:
+            run = save_run(
+                OperationsAgentRun(
+                    agent_id=str(self.agent.get("id") or ""),
+                    summary=instruction,
+                    status="queued",
+                )
+            )
+            record_message(
+                OperationsAgentMessage(
+                    run_id=run.id, author="user", kind="instruction", content=instruction
+                )
+            )
+        except Exception as exc:
+            self.app.notify(f"Could not assign work: {exc}", severity="error")
+            return
+        self.query_one("#operations-agent-workspace-input", Input).value = ""
+        self._load_history()
+        self.app.notify("Work package saved to the project.")
+
+    @on(Button.Pressed, "#operations-agent-workspace-close")
+    def handle_close(self, _: Button.Pressed) -> None:
+        self.dismiss(None)
 
 
 class RecommendationDialog(ModalScreen[str | None]):
@@ -277,6 +386,7 @@ class OperationsPanel(Static):
         self._observer_status = "Standing by for a pipeline anomaly."
         self._metric_view = "quality"
         self._agent_rows: list[dict[str, Any]] = []
+        self._observer_runs: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="operations-content"):
@@ -314,6 +424,7 @@ class OperationsPanel(Static):
                 roster.add_columns("Member", "Role", "Authority", "Status")
                 yield roster
                 with Horizontal(id="operations-team-actions"):
+                    yield Button("Open workspace", id="operations-team-open", variant="primary")
                     yield Button("Add agent", id="operations-team-add")
                     yield Button("Archive selected", id="operations-team-archive")
                 yield Static("", id="operations-team-focus")
@@ -608,6 +719,18 @@ class OperationsPanel(Static):
         if result.success:
             self._load_agent_roster()
 
+    @on(Button.Pressed, "#operations-team-open")
+    def handle_open_agent_workspace(self, _: Button.Pressed) -> None:
+        table = self.query_one("#operations-team-roster", DataTable)
+        if table.cursor_row is None or not (0 <= table.cursor_row < len(self._agent_rows)):
+            self.app.notify("Select a team member first.", severity="warning")
+            return
+        self.app.push_screen(
+            OperationsAgentWorkspaceDialog(
+                getattr(self.app, "workspace", None), self._agent_rows[table.cursor_row]
+            )
+        )
+
     @on(Button.Pressed, "#operations-team-archive")
     def handle_archive_agent(self, _: Button.Pressed) -> None:
         table = self.query_one("#operations-team-roster", DataTable)
@@ -713,6 +836,7 @@ class OperationsPanel(Static):
         self._postmortem_saved_for.clear()
         self._observer_completed_for.clear()
         self._latest_recommendation = None
+        self._observer_runs.clear()
         self._observer_status = "Standing by for a pipeline anomaly."
         self.query_one("#operations-get-details", Button).disabled = True
         self.query_one("#operations-monitor", Select).disabled = False
@@ -802,6 +926,7 @@ class OperationsPanel(Static):
             status="investigating",
             details={"culprit": culprit, "automatic": automatic},
         )
+        self._start_observer_run(pipeline, culprit)
 
         settings = load_operations_reasoning_settings(
             getattr(self.app, "workspace", None)
@@ -839,6 +964,75 @@ class OperationsPanel(Static):
             group="operations-reasoning",
         )
 
+    def _start_observer_run(self, pipeline: dict[str, Any], culprit: str) -> None:
+        """Persist the agent's bounded investigation before reasoning starts."""
+
+        workspace = getattr(self.app, "workspace", None)
+        save_run = getattr(workspace, "save_operations_agent_run", None)
+        record_message = getattr(workspace, "record_operations_agent_message", None)
+        if not callable(save_run) or not callable(record_message):
+            return
+        pipeline_id = str(pipeline.get("id") or "")
+        try:
+            run = save_run(
+                OperationsAgentRun(
+                    agent_id="pipeline-observer",
+                    pipeline_id=pipeline_id,
+                    status="investigating",
+                    summary=f"Investigate anomaly at {culprit}.",
+                )
+            )
+            record_message(
+                OperationsAgentMessage(
+                    run_id=run.id,
+                    author="pipeline-observer",
+                    kind="observation",
+                    content=f"Started investigation of anomalous step: {culprit}.",
+                    details={"pipeline_id": pipeline_id, "culprit": culprit},
+                )
+            )
+            if pipeline_id:
+                self._observer_runs[pipeline_id] = run.id
+        except Exception:
+            # The live watcher still works for lightweight or pre-workspace hosts.
+            return
+
+    def _complete_observer_run(
+        self, pipeline: dict[str, Any], *, status: str, content: str
+    ) -> str:
+        """Update the current run and append an immutable agent response."""
+
+        pipeline_id = str(pipeline.get("id") or "")
+        run_id = self._observer_runs.get(pipeline_id, "")
+        if not run_id:
+            return ""
+        workspace = getattr(self.app, "workspace", None)
+        save_run = getattr(workspace, "save_operations_agent_run", None)
+        record_message = getattr(workspace, "record_operations_agent_message", None)
+        if not callable(save_run) or not callable(record_message):
+            return run_id
+        try:
+            save_run(
+                OperationsAgentRun(
+                    id=run_id,
+                    agent_id="pipeline-observer",
+                    pipeline_id=pipeline_id,
+                    status=status,
+                    summary=content,
+                )
+            )
+            record_message(
+                OperationsAgentMessage(
+                    run_id=run_id,
+                    author="pipeline-observer",
+                    kind="proposal" if status == "proposal-ready" else "observation",
+                    content=content,
+                )
+            )
+        except Exception:
+            pass
+        return run_id
+
     def _finish_observer_investigation(
         self, pipeline: dict[str, Any], result, automatic: bool
     ) -> None:
@@ -865,6 +1059,27 @@ class OperationsPanel(Static):
                 "mode": str(payload.get("mode") or "disabled"),
             }
             self._latest_recommendation = proposal
+            run_id = self._complete_observer_run(
+                pipeline, status="proposal-ready", content=f"Proposal: {headline}"
+            )
+            save_proposal = getattr(
+                getattr(self.app, "workspace", None), "save_operations_agent_proposal", None
+            )
+            if run_id and callable(save_proposal):
+                try:
+                    save_proposal(
+                        OperationsAgentProposal(
+                            agent_id="pipeline-observer",
+                            run_id=run_id,
+                            pipeline_id=str(pipeline.get("id") or ""),
+                            headline=headline,
+                            description=recommendation,
+                            verification=verification,
+                            actions=actions,
+                        )
+                    )
+                except Exception:
+                    pass
             self._observer_status = f"Proposal ready: {headline}"
             self.query_one("#operations-remediation", Static).update(
                 f"Proposal ready: {headline}"
@@ -901,6 +1116,11 @@ class OperationsPanel(Static):
         quality_value = pipeline.get("quality_value")
         self.query_one("#operations-recommend-action", Button).disabled = False
         self._observer_status = "Evidence recorded; awaiting a configured reasoning assistant."
+        self._complete_observer_run(
+            pipeline,
+            status="awaiting-reasoning",
+            content=f"Evidence recorded; reasoning unavailable: {reason}",
+        )
         self.query_one("#operations-remediation", Static).update(
             "Observer recorded an anomaly; no remediation was proposed."
         )

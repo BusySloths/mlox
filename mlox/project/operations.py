@@ -18,3 +18,61 @@ class OperationsEvent:
     details: dict[str, Any] = field(default_factory=dict)
     id: str = ""
     created_at: str = ""
+
+
+@dataclass(frozen=True)
+class OperationsAgent:
+    """A project-scoped Operations team member and its bounded authority."""
+
+    name: str
+    role: str
+    scope: str
+    description: str
+    status: str = "inactive"
+    runtime: str = "planned"
+    id: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+
+@dataclass(frozen=True)
+class OperationsAgentRun:
+    """One durable unit of work assigned to an Operations agent."""
+
+    agent_id: str
+    summary: str
+    status: str = "queued"
+    pipeline_id: str = ""
+    id: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+
+@dataclass(frozen=True)
+class OperationsAgentMessage:
+    """An instruction, observation, or response attached to an agent run."""
+
+    run_id: str
+    author: str
+    kind: str
+    content: str
+    details: dict[str, Any] = field(default_factory=dict)
+    id: str = ""
+    created_at: str = ""
+
+
+@dataclass(frozen=True)
+class OperationsAgentProposal:
+    """A reviewable recommendation produced by an Operations agent."""
+
+    agent_id: str
+    run_id: str
+    headline: str
+    description: str
+    verification: str = ""
+    actions: list[dict[str, Any]] = field(default_factory=list)
+    status: str = "open"
+    pipeline_id: str = ""
+    id: str = ""
+    created_at: str = ""
+    updated_at: str = ""

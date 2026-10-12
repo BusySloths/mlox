@@ -10,8 +10,10 @@ from textual.widgets import Button, DataTable, Input, Select, Static
 
 from mlox.application.use_cases.operations import OPERATIONS_REASONING_SECRET
 from mlox.project import ProjectWorkspace
+from mlox.project.operations import OperationsAgent
 from mlox.tui.screens.dashboard.operations_panel import (
     OperationsPanel,
+    OperationsAgentWorkspaceDialog,
     PipelineDetailsDialog,
     RecommendationDialog,
 )
@@ -74,6 +76,46 @@ def test_operations_panel_visualizes_pipeline_culprit() -> None:
     assert "pca.transform" in row
     assert "ANOMALOUS" in row
     assert "demo/pipeline/pca.transform" in evidence
+
+
+def test_agent_workspace_assigns_durable_work_package(tmp_path) -> None:
+    workspace = ProjectWorkspace.create(str(tmp_path / "team"), "pw")
+    agent = workspace.save_operations_agent(
+        OperationsAgent(
+            name="Investigator", role="Investigator", scope="Incident triage",
+            description="Triages evidence and frames a bounded investigation.",
+        )
+    )
+    app = OperationsTestApp(workspace=workspace)
+
+    async def run() -> tuple[str, str]:
+        async with app.run_test(size=(160, 50)) as pilot:
+            app.push_screen(
+                OperationsAgentWorkspaceDialog(
+                    workspace,
+                    {
+                        "id": agent.id,
+                        "name": agent.name,
+                        "role": agent.role,
+                        "scope": agent.scope,
+                        "description": agent.description,
+                    },
+                )
+            )
+            await pilot.pause()
+            dialog = app.screen
+            instruction = dialog.query_one("#operations-agent-workspace-input", Input)
+            instruction.value = "Check the anomalous transform step."
+            button = dialog.query_one("#operations-agent-workspace-assign", Button)
+            dialog.handle_assign(Button.Pressed(button))
+            return (
+                workspace.list_operations_agent_runs(agent.id)[0].summary,
+                workspace.list_operations_agent_messages(agent.id)[0].content,
+            )
+
+    summary, message = asyncio.run(run())
+    assert summary == "Check the anomalous transform step."
+    assert message == summary
 
 
 def test_pipeline_observer_records_facts_without_reasoning_recommendation() -> None:

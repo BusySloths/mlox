@@ -1108,6 +1108,65 @@ ModelCallResultDialog {
   margin-top: 1;
 }
 
+#operations-agent-workspace-dialog {
+  width: 92;
+  height: 42;
+  max-width: 94%;
+  max-height: 90%;
+  padding: 1 2;
+  border: thick #61d394ff;
+  background: #0d1918;
+}
+
+#operations-agent-workspace-eyebrow {
+  height: 1;
+  color: #61d394ff;
+  text-style: bold;
+}
+
+#operations-agent-workspace-title {
+  height: 2;
+  color: #f8fafc;
+  text-style: bold;
+}
+
+#operations-agent-workspace-description,
+#operations-agent-workspace-focus {
+  height: auto;
+  min-height: 2;
+  margin-top: 1;
+  padding: 0 1;
+  color: #cbd5e1;
+  border-left: tall #35635bff;
+}
+
+.operations-agent-workspace-label {
+  height: 1;
+  margin-top: 1;
+  color: #c4b5fd;
+  text-style: bold;
+}
+
+#operations-agent-workspace-messages,
+#operations-agent-workspace-proposals {
+  height: 8;
+  border: round #35635bff;
+}
+
+#operations-agent-workspace-input {
+  margin-top: 1;
+}
+
+#operations-agent-workspace-actions {
+  height: 3;
+  margin-top: 1;
+}
+
+#operations-agent-workspace-actions Button {
+  width: auto;
+  margin-right: 1;
+}
+
 .operations-heading {
   height: 2;
   margin-top: 1;
