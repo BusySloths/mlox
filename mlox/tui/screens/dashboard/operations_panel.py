@@ -144,57 +144,68 @@ class OperationsAgentDialog(ModalScreen[dict[str, str] | None]):
         )
 
 
-class OperationsAgentWorkspaceDialog(ModalScreen[None]):
-    """A durable, focused conversation and proposal view for one team member."""
+class OperationsAgentWorkspace(Vertical):
+    """The selected team member's durable conversation and proposal workspace."""
 
-    def __init__(self, workspace: Any, agent: dict[str, Any]) -> None:
-        super().__init__()
-        self.workspace = workspace
-        self.agent = deepcopy(agent)
+    def __init__(self, *children, **kwargs) -> None:
+        super().__init__(*children, **kwargs)
+        self.agent: dict[str, Any] | None = None
 
     def compose(self) -> ComposeResult:
-        name = str(self.agent.get("name") or "Operations agent")
-        role = str(self.agent.get("role") or "Agent")
-        with Vertical(id="operations-agent-workspace-dialog"):
-            yield Static("AGENT WORKSPACE", id="operations-agent-workspace-eyebrow")
-            yield Static(f"{name} · {role}", id="operations-agent-workspace-title")
-            yield Static(
-                str(self.agent.get("description") or "No description configured."),
-                id="operations-agent-workspace-description",
+        yield Static("AGENT WORKSPACE", id="operations-agent-workspace-eyebrow")
+        yield Static("Select a team member", id="operations-agent-workspace-title")
+        yield Static(
+            "Select an agent to see its purpose, work packages, evidence, and proposals.",
+            id="operations-agent-workspace-description",
+        )
+        yield Static("Focus: -", id="operations-agent-workspace-focus")
+        yield Static("Latest conversation", classes="operations-agent-workspace-label")
+        messages = DataTable(id="operations-agent-workspace-messages")
+        messages.cursor_type = "row"
+        messages.add_columns("When", "From", "Type", "Message")
+        yield messages
+        yield Static("Latest proposals", classes="operations-agent-workspace-label")
+        proposals = DataTable(id="operations-agent-workspace-proposals")
+        proposals.cursor_type = "row"
+        proposals.add_columns("When", "Proposal", "Status", "Summary")
+        yield proposals
+        yield Input(
+            placeholder="Assign a focused work package or leave a question…",
+            id="operations-agent-workspace-input",
+            disabled=True,
+        )
+        with Horizontal(id="operations-agent-workspace-actions"):
+            yield Button(
+                "Assign work", id="operations-agent-workspace-assign", disabled=True
             )
-            yield Static(
-                f"Focus: {self.agent.get('scope') or 'Not assigned'}",
-                id="operations-agent-workspace-focus",
-            )
-            yield Static("Latest conversation", classes="operations-agent-workspace-label")
-            messages = DataTable(id="operations-agent-workspace-messages")
-            messages.cursor_type = "row"
-            messages.add_columns("When", "From", "Type", "Message")
-            yield messages
-            yield Static("Latest proposals", classes="operations-agent-workspace-label")
-            proposals = DataTable(id="operations-agent-workspace-proposals")
-            proposals.cursor_type = "row"
-            proposals.add_columns("When", "Proposal", "Status", "Summary")
-            yield proposals
-            yield Input(
-                placeholder="Assign a focused work package or leave a question…",
-                id="operations-agent-workspace-input",
-            )
-            with Horizontal(id="operations-agent-workspace-actions"):
-                yield Button("Assign work", id="operations-agent-workspace-assign")
-                yield Button("Close", id="operations-agent-workspace-close", variant="primary")
 
-    def on_mount(self) -> None:
+    def show_agent(self, agent: dict[str, Any]) -> None:
+        """Make a roster member active without navigating away from Team."""
+
+        self.agent = deepcopy(agent)
+        self.query_one("#operations-agent-workspace-title", Static).update(
+            f"{agent.get('name') or 'Operations agent'} · {agent.get('role') or 'Agent'}"
+        )
+        self.query_one("#operations-agent-workspace-description", Static).update(
+            str(agent.get("description") or "No description configured.")
+        )
+        self.query_one("#operations-agent-workspace-focus", Static).update(
+            f"Focus: {agent.get('scope') or 'Not assigned'}"
+        )
+        archived = agent.get("status") == "archived"
+        self.query_one("#operations-agent-workspace-input", Input).disabled = archived
+        self.query_one("#operations-agent-workspace-assign", Button).disabled = archived
         self._load_history()
 
     def _load_history(self) -> None:
-        agent_id = str(self.agent.get("id") or "")
+        agent_id = str((self.agent or {}).get("id") or "")
         messages_table = self.query_one("#operations-agent-workspace-messages", DataTable)
         proposals_table = self.query_one("#operations-agent-workspace-proposals", DataTable)
         messages_table.clear(columns=False)
         proposals_table.clear(columns=False)
-        list_messages = getattr(self.workspace, "list_operations_agent_messages", None)
-        list_proposals = getattr(self.workspace, "list_operations_agent_proposals", None)
+        workspace = getattr(self.app, "workspace", None)
+        list_messages = getattr(workspace, "list_operations_agent_messages", None)
+        list_proposals = getattr(workspace, "list_operations_agent_proposals", None)
         try:
             messages = list_messages(agent_id) if callable(list_messages) else []
             proposals = list_proposals(agent_id) if callable(list_proposals) else []
@@ -218,8 +229,12 @@ class OperationsAgentWorkspaceDialog(ModalScreen[None]):
         if not instruction:
             self.app.notify("Describe the work package first.", severity="warning")
             return
-        save_run = getattr(self.workspace, "save_operations_agent_run", None)
-        record_message = getattr(self.workspace, "record_operations_agent_message", None)
+        if self.agent is None:
+            self.app.notify("Select a team member first.", severity="warning")
+            return
+        workspace = getattr(self.app, "workspace", None)
+        save_run = getattr(workspace, "save_operations_agent_run", None)
+        record_message = getattr(workspace, "record_operations_agent_message", None)
         if not callable(save_run) or not callable(record_message):
             self.app.notify("Project workspace is unavailable.", severity="error")
             return
@@ -242,10 +257,6 @@ class OperationsAgentWorkspaceDialog(ModalScreen[None]):
         self.query_one("#operations-agent-workspace-input", Input).value = ""
         self._load_history()
         self.app.notify("Work package saved to the project.")
-
-    @on(Button.Pressed, "#operations-agent-workspace-close")
-    def handle_close(self, _: Button.Pressed) -> None:
-        self.dismiss(None)
 
 
 class RecommendationDialog(ModalScreen[str | None]):
@@ -419,26 +430,26 @@ class OperationsPanel(Static):
                 yield Static("PIPELINE OBSERVER", id="operations-team-eyebrow")
                 yield Static("Restricted operations agent", id="operations-team-title")
                 yield Static("", id="operations-team-status")
-                roster = DataTable(id="operations-team-roster")
-                roster.cursor_type = "row"
-                roster.add_columns("Member", "Role", "Authority", "Status")
-                yield roster
-                with Horizontal(id="operations-team-actions"):
-                    yield Button("Open workspace", id="operations-team-open", variant="primary")
-                    yield Button("Add agent", id="operations-team-add")
-                    yield Button("Archive selected", id="operations-team-archive")
-                yield Static("", id="operations-team-focus")
-                yield Static("", id="operations-team-recommendation")
-                yield Button(
-                    "Review latest proposal",
-                    id="operations-team-review",
-                    disabled=True,
-                )
-                yield Static(
-                    "The observer records deterministic evidence first. A configured "
-                    "reasoning assistant may propose, but never execute, a remediation.",
-                    id="operations-team-help",
-                )
+                with Horizontal(id="operations-team-layout"):
+                    with Vertical(id="operations-team-roster-pane"):
+                        roster = DataTable(id="operations-team-roster")
+                        roster.cursor_type = "row"
+                        roster.add_columns("Member", "Role", "Authority", "Status")
+                        yield roster
+                        with Horizontal(id="operations-team-actions"):
+                            yield Button("Add agent", id="operations-team-add")
+                            yield Button("Archive selected", id="operations-team-archive")
+                        yield Button(
+                            "Review latest proposal",
+                            id="operations-team-review",
+                            disabled=True,
+                        )
+                        yield Static(
+                            "Select a team member to see its project-backed workspace. "
+                            "The observer only proposes; it never executes a remediation.",
+                            id="operations-team-help",
+                        )
+                    yield OperationsAgentWorkspace(id="operations-agent-workspace")
             with TabPane("Pipelines", id="operations-pipelines-tab"):
                 with Horizontal(id="operations-incident-actions"):
                     yield Static("Watcher is stopped.", id="operations-watch-summary")
@@ -678,19 +689,10 @@ class OperationsPanel(Static):
         selected = pipeline or self._selected_pipeline() or {}
         pipeline_name = str(selected.get("pipeline_name") or "No pipeline selected")
         culprit = str(selected.get("culprit") or "No anomalous step identified")
-        self.query_one("#operations-team-status", Static).update(self._observer_status)
-        self.query_one("#operations-team-focus", Static).update(
-            f"Focus: {pipeline_name}\nAffected step: {culprit}"
+        self.query_one("#operations-team-status", Static).update(
+            f"{self._observer_status}  Focus: {pipeline_name} · {culprit}"
         )
         proposal = self._latest_recommendation
-        if proposal is None:
-            recommendation = "No remediation proposal. The observer only records evidence until reasoning is configured."
-        else:
-            recommendation = (
-                f"Latest proposal: {proposal['headline']}\n"
-                "Review it before adding work to the Operations plan or executing an approved action."
-            )
-        self.query_one("#operations-team-recommendation", Static).update(recommendation)
         self.query_one("#operations-team-review", Button).disabled = proposal is None
 
     def _load_agent_roster(self) -> None:
@@ -706,6 +708,8 @@ class OperationsPanel(Static):
                 str(agent.get("status") or "-"),
                 key=str(agent.get("id") or "agent"),
             )
+        if self._agent_rows:
+            self.query_one(OperationsAgentWorkspace).show_agent(self._agent_rows[0])
 
     @on(Button.Pressed, "#operations-team-add")
     def handle_add_agent(self, _: Button.Pressed) -> None:
@@ -719,17 +723,14 @@ class OperationsPanel(Static):
         if result.success:
             self._load_agent_roster()
 
-    @on(Button.Pressed, "#operations-team-open")
-    def handle_open_agent_workspace(self, _: Button.Pressed) -> None:
-        table = self.query_one("#operations-team-roster", DataTable)
-        if table.cursor_row is None or not (0 <= table.cursor_row < len(self._agent_rows)):
-            self.app.notify("Select a team member first.", severity="warning")
-            return
-        self.app.push_screen(
-            OperationsAgentWorkspaceDialog(
-                getattr(self.app, "workspace", None), self._agent_rows[table.cursor_row]
-            )
+    @on(DataTable.RowSelected, "#operations-team-roster")
+    def handle_agent_selected(self, event: DataTable.RowSelected) -> None:
+        agent_id = str(event.row_key.value)
+        agent = next(
+            (item for item in self._agent_rows if item.get("id") == agent_id), None
         )
+        if agent is not None:
+            self.query_one(OperationsAgentWorkspace).show_agent(agent)
 
     @on(Button.Pressed, "#operations-team-archive")
     def handle_archive_agent(self, _: Button.Pressed) -> None:

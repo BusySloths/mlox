@@ -1076,9 +1076,19 @@ ModelCallResultDialog {
   color: #f4e223ff;
 }
 
-#operations-team-roster {
-  height: 8;
+#operations-team-layout {
+  height: 1fr;
   margin-top: 1;
+}
+
+#operations-team-roster-pane {
+  width: 37%;
+  min-width: 34;
+  margin-right: 2;
+}
+
+#operations-team-roster {
+  height: 1fr;
   border: round #61d394ff;
 }
 
@@ -1092,8 +1102,6 @@ ModelCallResultDialog {
   margin-right: 1;
 }
 
-#operations-team-focus,
-#operations-team-recommendation,
 #operations-team-help {
   height: auto;
   min-height: 3;
@@ -1108,13 +1116,11 @@ ModelCallResultDialog {
   margin-top: 1;
 }
 
-#operations-agent-workspace-dialog {
-  width: 92;
-  height: 42;
-  max-width: 94%;
-  max-height: 90%;
+#operations-agent-workspace {
+  width: 1fr;
+  height: 1fr;
   padding: 1 2;
-  border: thick #61d394ff;
+  border: round #61d394ff;
   background: #0d1918;
 }
 

@@ -13,7 +13,7 @@ from mlox.project import ProjectWorkspace
 from mlox.project.operations import OperationsAgent
 from mlox.tui.screens.dashboard.operations_panel import (
     OperationsPanel,
-    OperationsAgentWorkspaceDialog,
+    OperationsAgentWorkspace,
     PipelineDetailsDialog,
     RecommendationDialog,
 )
@@ -90,24 +90,21 @@ def test_agent_workspace_assigns_durable_work_package(tmp_path) -> None:
 
     async def run() -> tuple[str, str]:
         async with app.run_test(size=(160, 50)) as pilot:
-            app.push_screen(
-                OperationsAgentWorkspaceDialog(
-                    workspace,
-                    {
-                        "id": agent.id,
-                        "name": agent.name,
-                        "role": agent.role,
-                        "scope": agent.scope,
-                        "description": agent.description,
-                    },
-                )
+            agent_workspace = app.query_one(OperationsAgentWorkspace)
+            agent_workspace.show_agent(
+                {
+                    "id": agent.id,
+                    "name": agent.name,
+                    "role": agent.role,
+                    "scope": agent.scope,
+                    "description": agent.description,
+                }
             )
             await pilot.pause()
-            dialog = app.screen
-            instruction = dialog.query_one("#operations-agent-workspace-input", Input)
+            instruction = agent_workspace.query_one("#operations-agent-workspace-input", Input)
             instruction.value = "Check the anomalous transform step."
-            button = dialog.query_one("#operations-agent-workspace-assign", Button)
-            dialog.handle_assign(Button.Pressed(button))
+            button = agent_workspace.query_one("#operations-agent-workspace-assign", Button)
+            agent_workspace.handle_assign(Button.Pressed(button))
             return (
                 workspace.list_operations_agent_runs(agent.id)[0].summary,
                 workspace.list_operations_agent_messages(agent.id)[0].content,
@@ -121,7 +118,7 @@ def test_agent_workspace_assigns_durable_work_package(tmp_path) -> None:
 def test_pipeline_observer_records_facts_without_reasoning_recommendation() -> None:
     app = OperationsTestApp()
 
-    async def run() -> tuple[str, str, bool, set[str]]:
+    async def run() -> tuple[str, bool, set[str]]:
         async with app.run_test(size=(160, 50)) as pilot:
             panel = app.query_one(OperationsPanel)
             panel._show_snapshot(
@@ -148,17 +145,13 @@ def test_pipeline_observer_records_facts_without_reasoning_recommendation() -> N
             await pilot.pause()
             return (
                 str(app.query_one("#operations-team-status", Static).content),
-                str(
-                    app.query_one("#operations-team-recommendation", Static).content
-                ),
                 app.query_one("#operations-team-review", Button).disabled,
                 {event.event_type for event in panel._activity},
             )
 
-    status, recommendation, review_disabled, events = asyncio.run(run())
+    status, review_disabled, events = asyncio.run(run())
 
     assert "Evidence recorded" in status
-    assert "No remediation proposal" in recommendation
     assert review_disabled
     assert "observer_observation" in events
     assert "remediation_proposed" not in events
