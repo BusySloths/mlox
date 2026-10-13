@@ -33,6 +33,16 @@ It's for engineers who prefer thoughtful systems over chaos. Backed by open sour
 
 > **Status, roadmap, and decisions** — see [docs/DOCTRINE.md](docs/DOCTRINE.md), the single point of truth.
 
+## See It In Action
+
+<p align="center">
+  <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/tui-demo.gif?raw=true" alt="MLOX TUI demo — loading a project and browsing tabs" width="960px"/>
+</p>
+
+<p align="center">
+  <img src="https://github.com/BusySloths/mlox/blob/main/mlox/resources/tui-overview.png?raw=true" alt="MLOX TUI — infrastructure overview" width="960px"/>
+</p>
+
 ---
 
 ## Current Status

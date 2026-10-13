@@ -176,3 +176,7 @@ CLAUDE.md
 *.mlox
 *.mlox-wal
 *.mlox-shm
+
+# Tutorial pipeline: source recordings stay out of git
+recordings/
+*.mkv
