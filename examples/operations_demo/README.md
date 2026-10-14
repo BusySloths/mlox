@@ -6,11 +6,10 @@ This demonstrator runs one instrumented model pipeline:
 input.normalize -> pca.transform -> regression.predict -> quality.evaluate
 ```
 
-The traffic generator sends reproducible labelled batches with small feature and
-label noise through the MLflow Gateway. Its interactive `on` command injects a
-deterministic fault into the PCA output; `off` restores normal behavior. The
-fault flag is not exported as diagnosis evidence. Operations derives the likely
-origin from step observations and rolling model-quality statistics.
+The traffic generator sends reproducible, lightly noisy batches through MLflow
+Gateway. `on` injects a deterministic PCA fault and `off` restores normal
+behaviour. Operations infers the likely origin from step observations and
+rolling quality statistics; the fault flag itself is not exported.
 
 ## Prerequisites
 
@@ -50,17 +49,12 @@ Use prediction-only traffic when labels are delayed or unavailable:
 uv run -m examples.operations_demo.traffic --without-labels
 ```
 
-The version currently selected by `champion` must have been registered with the
-optional-target signature. Run `uv run -m examples.operations_demo.register`
-once to register that version and advance `champion`; the gateway then resolves
-the new alias without a service redeploy. Older demonstrator versions require
-the `target` column. The traffic script detects that response, restores labels,
-and explains the next step instead of continuing to send failing requests.
+Prediction-only traffic requires the `champion` version with the optional-target
+signature. Re-run registration to advance the alias; no gateway redeploy is
+needed. Older versions require the `target` column, which the script detects.
 
-The script selects the first running MLflow Gateway by default. Use `status` to
-see the exact gateway endpoint and its bound registry, telemetry, and secret
-manager services. If the project contains multiple gateways, list and select
-them interactively:
+The script selects the first running gateway. `status` shows its endpoint and
+bound registry, telemetry, and secret manager. With multiple gateways:
 
 ```text
 gateways
@@ -73,10 +67,8 @@ You can also select one at startup (an unambiguous UUID prefix is accepted):
 uv run -m examples.operations_demo.traffic --gateway <gateway-uuid>
 ```
 
-Leave corruption off while the first ten runs for each observed pipeline
-establish its assumed-normal baseline. A newly registered model version is a
-separate observed workload: start a fresh watch and establish its normal
-baseline before turning corruption on. At the interactive prompt use:
+Leave corruption off for the first ten runs of each observed workload. A new
+model version needs a new watch and baseline. At the prompt:
 
 ```text
 on      inject the PCA fault
@@ -88,24 +80,17 @@ use ID  send subsequent requests through gateway ID
 quit    stop traffic
 ```
 
-Operations contains four focused views:
+Operations has five focused views:
 
-- **Incidents** summarizes every observed workload and provides baseline,
-  current, 1-minute/5-sample, and 5-minute/10-sample values. **Get Details**
-  opens a frozen snapshot; **Recommend Action** records a manual, approval-gated
-  remediation; and a recovered incident can be saved as a Knowledge postmortem.
-  Recommendations open in a review dialog with a concise headline, explanation,
-  verification step, and any proposed MLOX actions. **Add to Plan** writes the
-  reviewed proposal to the Operations board. **Execute** is enabled only in
-  *Approval required* mode and only for tool calls that MLOX explicitly offered
-  to the model; it never executes free-form model text. When the active model
-  registry exposes an earlier version, the assistant can propose moving the
-  observed model alias (for example `champion`) back to that known version.
-- **Plan** projects the Knowledge board titled `Operations`, creating it on
-  demand and linking generated postmortem follow-ups into its first lane.
-- **Activity** shows the persisted, append-only operations audit trail.
-- **Settings** controls the watcher and stores optional OpenAI-compatible
-  reasoning-assistant configuration through the active project secret manager.
+- **Team** holds project-backed agent profiles, conversations, and proposals.
+  The Pipeline Observer is advisory-only.
+- **Pipelines** shows baselines, rolling quality or duration metrics, incidents,
+  and frozen details. It can investigate and save a recovered incident as a
+  Knowledge postmortem.
+- **Plan** projects the Knowledge board titled `Operations`.
+- **Activity** is the append-only Operations audit trail.
+- **Settings** selects a telemetry monitor, controls watching, and stores an
+  optional OpenAI-compatible reasoning provider in the active secret manager.
 
 The incident view should first highlight `pca.transform`, show the downstream
 regression/RMSE deviation, and report recovery after corrupted samples leave the

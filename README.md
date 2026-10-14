@@ -51,6 +51,7 @@ We welcome contributors, users, and honest feedback. If you hit something broken
 | **Services** | Deploy, manage, and remove services; centralize secrets; connect service dependencies |
 | **Connectors** | Integrate externally hosted services such as BigQuery, Cloud Storage, Sheets, and GCP Secret Manager |
 | **Applications** | Import repositories and deploy your product alongside its supporting services |
+| **Operations** | Experimental telemetry watching, incident evidence, planning, and advisory agent workspaces |
 | **Code** | `busysloths-mlox` PyPI package with client integrations, SDK helpers, and example snippets |
 | **Lifecycle Management** | Migrate, upgrade, export, and decommission services *(planned)* |
 
