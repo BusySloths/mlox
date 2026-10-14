@@ -1,0 +1,35 @@
+# Content registry — the metadata source of truth for every media piece.
+# Sources (script.md) are committed; recordings and intermediates stay local.
+
+defaults:
+  recording:
+    min_height: 1080
+    max_fps: 30
+    terminal: 120x36
+    font: "JetBrainsMono Nerd Font"
+  redact:
+    ip_replacement_prefix: 198.51.100
+    literals:
+      nicococo: demo
+      ooitflow: demoflow
+      tootflow: demoflow
+    prefixes:
+      airtime-event: demo-event-recommender
+      airtime-recom: demo-recommender
+      airtime-ml: demo-ml
+  gif:
+    max_seconds: 15
+    fps: 12
+    width: 960
+
+pieces:
+  - slug: install-to-first-service
+    type: tutorial
+    title: "Install MLOX, open the TUI, deploy your first service"
+    status: draft
+    services: []
+    outputs:
+      - type: article
+        dest: docs/tutorial-install-to-first-service.md
+      - type: readme_gif
+        dest: mlox/resources/tui-demo.gif

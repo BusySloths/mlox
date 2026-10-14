@@ -1,0 +1,168 @@
+"""Content pipeline CLI.
+
+    uv run python -m scripts.content_pipeline <stage> …
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from scripts.content_pipeline import config, cut, ingest, redact, render, verify
+
+DEFAULT_REGISTRY = "content/registry.yaml"
+
+
+def repo_root(args: argparse.Namespace) -> Path:
+    return Path(args.repo_root).resolve()
+
+
+def work_dir(args: argparse.Namespace) -> Path:
+    return repo_root(args) / "content" / ".work" / args.slug
+
+
+def piece_config(args: argparse.Namespace) -> config.Piece:
+    registry = config.load_registry(repo_root(args) / args.registry)
+    return registry.piece(args.slug), registry
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    data = ingest.probe(args.video)
+    registry = config.load_registry(Path(args.registry))
+    warnings = ingest.check(data, registry.defaults)
+    print(f"{args.video}: {data['width']}x{data['height']} @ {data['fps']} fps, "
+          f"{data['duration']:.1f}s, {data['codec']}/{data['pix_fmt']}, "
+          f"{data['bit_rate'] // 1000} kbit/s")
+    for warning in warnings:
+        print(f"WARN: {warning}")
+    return 0
+
+
+def cmd_redact(args: argparse.Namespace) -> int:
+    piece, registry = piece_config(args)
+    piece_redact = {
+        **registry.defaults.get("redact", {}),
+        **piece.redact,
+    }
+    payload = redact.detect(
+        args.video, work_dir(args),
+        literals=piece_redact.get("literals"),
+        prefixes=piece_redact.get("prefixes"),
+        ip_prefix=piece_redact.get("ip_replacement_prefix", redact.DEFAULT_IP_PREFIX),
+    )
+    mapping = {p["replacement"] for p in payload["patches"]}
+    print(f"{len(payload['patches'])} patches, originals: "
+          f"{len(payload['originals'])}, replacements: {sorted(mapping)}")
+    if not args.yes:
+        answer = input("Apply this mapping? [y/N] ")
+        if answer.strip().lower() not in ("y", "yes"):
+            print("Aborted — review content/.work/"
+                  f"{args.slug}/redaction.json and re-run with --yes.")
+            return 1
+    out = redact.apply(args.video, work_dir(args))
+    print(f"wrote {out}")
+    return 0
+
+
+def cmd_cut(args: argparse.Namespace) -> int:
+    wd = work_dir(args)
+    made = []
+    if args.shots:
+        for at in args.shots:
+            made.append(cut.screenshot(
+                args.video, at, Path(args.out) / f"shot-{at:.0f}s.png", wd))
+    if args.gif:
+        start, end = float(args.gif[0]), float(args.gif[1])
+        registry = config.load_registry(Path(args.registry))
+        gif_preset = registry.defaults.get("gif", {})
+        made.append(cut.gif(
+            args.video, start, end, Path(args.out) / "demo.gif", wd,
+            fps=int(gif_preset.get("fps", 12)),
+            width=int(gif_preset.get("width", 960))))
+    for item in made:
+        print(f"wrote {item}")
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    leaks = verify.verify(args.artifacts, work_dir(args))
+    if leaks:
+        for leak in leaks:
+            print(f"LEAK: {leak}")
+        return 1
+    print("verify gate passed: no original entities found.")
+    return 0
+
+
+def cmd_render(args: argparse.Namespace) -> int:
+    piece, _ = piece_config(args)
+    timeline_path = work_dir(args) / "timeline.json"
+    timeline = None
+    if timeline_path.exists():
+        import json
+
+        timeline = json.loads(timeline_path.read_text())
+    for output in piece.outputs:
+        if output.get("type") == "article":
+            dest = render.publish_article(args.script, output["dest"])
+            print(f"wrote {dest}")
+            return 0
+    print("Piece has no article output.")
+    return 1
+
+
+def cmd_align(args: argparse.Namespace) -> int:
+    from scripts.content_pipeline import align as align_mod
+
+    align_mod.align(args.video, args.script, str(work_dir(args) / "timeline.json"))
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="content_pipeline")
+    parser.add_argument("--repo-root", default=".")
+    parser.add_argument("--registry", default=DEFAULT_REGISTRY)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("ingest")
+    p.add_argument("video")
+    p.set_defaults(func=cmd_ingest)
+
+    p = sub.add_parser("redact")
+    p.add_argument("video")
+    p.add_argument("--slug", required=True)
+    p.add_argument("--yes", action="store_true",
+                   help="apply without interactive confirmation")
+    p.set_defaults(func=cmd_redact)
+
+    p = sub.add_parser("cut")
+    p.add_argument("video")
+    p.add_argument("--slug", required=True)
+    p.add_argument("--shots", type=float, nargs="*", default=[])
+    p.add_argument("--gif", nargs=2, metavar=("START", "END"))
+    p.add_argument("--out", required=True)
+    p.set_defaults(func=cmd_cut)
+
+    p = sub.add_parser("verify")
+    p.add_argument("artifacts", nargs="+")
+    p.add_argument("--slug", required=True)
+    p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("render")
+    p.add_argument("--slug", required=True)
+    p.add_argument("--script", required=True)
+    p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser("align")
+    p.add_argument("video")
+    p.add_argument("--slug", required=True)
+    p.add_argument("--script", required=True)
+    p.set_defaults(func=cmd_align)
+
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

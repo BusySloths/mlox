@@ -180,3 +180,6 @@ CLAUDE.md
 # Tutorial pipeline: source recordings stay out of git
 recordings/
 *.mkv
+
+# Content pipeline: local intermediates
+content/.work/
