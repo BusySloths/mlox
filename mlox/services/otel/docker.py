@@ -60,11 +60,21 @@ class OtelDockerService(
     port_health: str | int
     grafana_cloud_endpoint: str = ""
     grafana_cloud_key: str = ""
+    diagnostic_exporter: bool | str = False
     service_url: str = field(init=False, default="")
     compose_service_names: Dict[str, str] = field(
         init=False,
         default_factory=lambda: {"OpenTelemetry Collector": "otel-collector"},
     )
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.diagnostic_exporter = str(self.diagnostic_exporter).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
     def _has_new_relic_exporter(self) -> bool:
         return len(self.relic_key) > 4 and len(self.relic_endpoint) > 4
@@ -81,7 +91,9 @@ class OtelDockerService(
         return normalized
 
     def _pipeline_exporter_list(self) -> str:
-        exporters = ["debug", "file"]
+        exporters = ["file"]
+        if self.diagnostic_exporter:
+            exporters.insert(0, "debug")
         if self._has_new_relic_exporter():
             exporters.append("otlphttp/new_relic")
         if self._has_grafana_cloud_exporter():

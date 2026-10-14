@@ -252,6 +252,21 @@ def otel(infra, bundle, config=None) -> TemplateFormSpec:
                 "Grafana Cloud OTLP endpoint",
                 required=False,
             ),
+            TemplateFieldSpec(
+                "diagnostic_exporter",
+                "Detailed diagnostic exporter",
+                kind="select",
+                default="false",
+                required=True,
+                options=[
+                    ("Disabled (recommended)", "false"),
+                    ("Enabled — high-volume collector output", "true"),
+                ],
+                help=(
+                    "Use only while diagnosing collector behaviour. It can produce "
+                    "a high volume of container logs."
+                ),
+            ),
         ],
         submit_label="Add Service",
         materialize=lambda values, infra: {
@@ -260,6 +275,9 @@ def otel(infra, bundle, config=None) -> TemplateFormSpec:
             "${MLOX_GRAFANA_CLOUD_KEY}": values.get("grafana_cloud_key", ""),
             "${MLOX_GRAFANA_CLOUD_ENDPOINT}": values.get(
                 "grafana_cloud_endpoint", ""
+            ),
+            "${MLOX_OTEL_DIAGNOSTIC_EXPORTER}": values.get(
+                "diagnostic_exporter", "false"
             ),
         },
     )

@@ -59,7 +59,7 @@ extensions:
 service:
   telemetry:
     logs:
-      level: debug
+      level: info
   extensions: [health_check]
   pipelines:
     traces:
