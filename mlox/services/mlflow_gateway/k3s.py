@@ -342,7 +342,7 @@ class MLFlowGatewayK3sService(
             description="Check MLflow Gateway deployment readiness",
         )
         if ready is None or ready.strip() != "1":
-            self.state = "running"
+            self.state = "starting"
             return {"status": "starting", "ready_replicas": (ready or "0").strip()}
 
         status = self.exec.execute(

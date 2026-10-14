@@ -338,7 +338,7 @@ def test_check_uses_deployment_and_authenticated_health(
 
     gateway.exec.ready_result = ""
     assert gateway.check(conn)["status"] == "starting"
-    assert gateway.state == "running"
+    assert gateway.state == "starting"
 
 
 def test_get_health_normalizes_gateway_readiness(

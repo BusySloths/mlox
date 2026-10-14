@@ -626,9 +626,19 @@ class AbstractService(ABC):
     service_ports: Dict[str, int] = field(default_factory=dict, init=False)
     compose_service_names: Dict[str, str] = field(default_factory=dict, init=False)
 
-    state: Literal["un-initialized", "running", "stopped", "unknown"] = field(
-        default="un-initialized", init=False
-    )
+    # Keep this in sync with ``SERVICE_HEALTH_STATUSES``. Health checks persist
+    # their normalized lifecycle result, so transitional and failure states must
+    # remain deserializable when a project is reopened.
+    state: Literal[
+        "un-initialized",
+        "starting",
+        "running",
+        "stopped",
+        "terminating",
+        "failed",
+        "error",
+        "unknown",
+    ] = field(default="un-initialized", init=False)
 
     certificate: str = field(default="", init=False)
 

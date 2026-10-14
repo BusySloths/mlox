@@ -374,3 +374,17 @@ def test_service_provider_bindings_survive_infrastructure_round_trip():
     assert restored_service.secret_manager_uuid == "secret-provider-uuid"
     assert restored_service.telemetry_uuid == "telemetry-provider-uuid"
     assert not hasattr(restored_service, "_secret_manager_cache")
+
+
+def test_infrastructure_round_trip_preserves_transitional_service_state():
+    server = make_server(DummyServer, "10.0.0.1")
+    service = make_service("gateway", "gateway", "gateway-uuid")
+    service.state = "starting"
+    bundle = Bundle(name="gateway-bundle", server=server)
+    bundle.services = [service]
+
+    restored = Infrastructure.from_dict(
+        make_infra(bundles=[bundle]).to_dict(), configs=[]
+    )
+
+    assert restored.bundles[0].services[0].state == "starting"
