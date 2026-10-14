@@ -205,7 +205,7 @@ class KBBoard(Horizontal, can_focus=True):
         self._sel_col = min(self._sel_col, len(self._columns) - 1)
         column = self._columns[self._sel_col]
         if not column.items:
-            return (self._sel_col, 0)
+            return None
         self._sel_item = min(self._sel_item, len(column.items) - 1)
         return (self._sel_col, self._sel_item)
 
@@ -514,17 +514,16 @@ class KnowledgePanel(Container):
         self.board.show_body(body)
 
     def toggle_card(self, col_idx: int, item_idx: int) -> None:
-        if self._board_entry is None:
+        item = self._board_item(col_idx, item_idx)
+        if item is None:
             return
-        columns = parse_board(self._board_entry.body_md)
-        item = columns[col_idx].items[item_idx]
         self._save_board_body(toggle_item(self._board_entry.body_md, item.line_no))
 
     def move_card(self, col_idx: int, item_idx: int, offset: int) -> None:
-        if self._board_entry is None:
+        item = self._board_item(col_idx, item_idx)
+        if item is None or self._board_entry is None:
             return
         columns = parse_board(self._board_entry.body_md)
-        item = columns[col_idx].items[item_idx]
         target_idx = col_idx + offset
         if not (0 <= target_idx < len(columns)):
             return
@@ -538,7 +537,7 @@ class KnowledgePanel(Container):
                 return
 
     def delete_card(self, col_idx: int, item_idx: int) -> None:
-        if self._board_entry is None:
+        if self._board_item(col_idx, item_idx) is None or self._board_entry is None:
             return
         self._save_board_body(
             remove_item(self._board_entry.body_md, col_idx, item_idx)
@@ -548,7 +547,9 @@ class KnowledgePanel(Container):
         if self._board_entry is None:
             return
         columns = parse_board(self._board_entry.body_md)
-        column_name = columns[col_idx].name if col_idx < len(columns) else ""
+        if not 0 <= col_idx < len(columns):
+            return
+        column_name = columns[col_idx].name
         self.app.push_screen(
             NewCardDialog(f"New card in '{column_name}'"),
             lambda text: text and self._add_card(col_idx, text),
@@ -560,10 +561,9 @@ class KnowledgePanel(Container):
         self._save_board_body(add_item(self._board_entry.body_md, col_idx, text))
 
     def open_card(self, col_idx: int, item_idx: int) -> None:
-        if self._board_entry is None:
+        item = self._board_item(col_idx, item_idx)
+        if item is None:
             return
-        columns = parse_board(self._board_entry.body_md)
-        item = columns[col_idx].items[item_idx]
         if item.links:
             self.open_entry_by_title(item.links[0])
             return
@@ -573,10 +573,9 @@ class KnowledgePanel(Container):
         )
 
     def _linkify_card(self, col_idx: int, item_idx: int, title: str) -> None:
-        if self._board_entry is None:
+        item = self._board_item(col_idx, item_idx)
+        if item is None or self._board_entry is None:
             return
-        columns = parse_board(self._board_entry.body_md)
-        item = columns[col_idx].items[item_idx]
         workspace = self._workspace()
         find = getattr(workspace, "find_entry_by_title", None)
         entry = find(title) if callable(find) else None
@@ -585,6 +584,16 @@ class KnowledgePanel(Container):
         self._save_board_body(
             linkify_item(self._board_entry.body_md, item.line_no, entry.title)
         )
+
+    def _board_item(self, col_idx: int, item_idx: int):
+        """Return a selected board card, or ``None`` for an empty/stale selection."""
+
+        if self._board_entry is None or col_idx < 0 or item_idx < 0:
+            return None
+        columns = parse_board(self._board_entry.body_md)
+        if col_idx >= len(columns) or item_idx >= len(columns[col_idx].items):
+            return None
+        return columns[col_idx].items[item_idx]
 
     def edit_board_markdown(self) -> None:
         if self._board_entry is None:

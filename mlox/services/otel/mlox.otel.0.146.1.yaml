@@ -50,6 +50,7 @@ build:
     relic_key: ${MLOX_RELIC_KEY}
     grafana_cloud_endpoint: ${MLOX_GRAFANA_CLOUD_ENDPOINT}
     grafana_cloud_key: ${MLOX_GRAFANA_CLOUD_KEY}
+    diagnostic_exporter: ${MLOX_OTEL_DIAGNOSTIC_EXPORTER}
     port_grpc: ${MLOX_AUTO_PORT_GRPC}
     port_http: ${MLOX_AUTO_PORT_HTTP}
     port_health: ${MLOX_AUTO_PORT_HEALTH}

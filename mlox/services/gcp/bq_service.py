@@ -1,12 +1,14 @@
 import logging
 
 from dataclasses import dataclass, field
-from typing import Dict, cast
+from typing import TYPE_CHECKING, Dict, cast
 
 from mlox.service import AbstractSecretManagerService
 from mlox.service import AbstractService, ServiceCapability
 from mlox.infra import Infrastructure
-from mlox.services.gcp.bigquery import BigQuery
+
+if TYPE_CHECKING:
+    from mlox.services.gcp.bigquery import BigQuery
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -25,7 +27,9 @@ class GCPBigQueryService(AbstractService):
     def __post_init__(self):
         self.state = "running"
 
-    def get_bq(self, infra: Infrastructure) -> BigQuery:
+    def get_bq(self, infra: Infrastructure) -> "BigQuery":
+        from mlox.services.gcp.bigquery import BigQuery
+
         keyfile_dict = dict()
         service = infra.get_service_by_uuid(self.secret_manager_uuid)
         if not service:

@@ -45,6 +45,7 @@ from mlox.tui.screens.dashboard.screen import (
     LOGS_TAB_ID,
     MODELS_TAB_ID,
     MONITOR_TAB_ID,
+    OPERATIONS_TAB_ID,
     REPOSITORY_TAB_ID,
     SECRET_MANAGER_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
@@ -196,28 +197,31 @@ def _secret_detail_text(panel: SecretManagerPanel) -> str:
 
 async def _visible_tabs_for(
     selection: SelectionInfo,
-) -> tuple[str, str, str, str, str, str, str, str, str]:
+) -> tuple[str, str, str, str, str, str, str, str, str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
         screen._update_template_tabs(selection)
-        await pilot.pause()
+        await pilot.pause(0.05)
 
         tabs = screen.query_one("#main-tabs", TabbedContent)
         server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
         secret_tab = tabs.get_tab(SECRET_MANAGER_TAB_ID)
         firewall_tab = tabs.get_tab(FIREWALL_TAB_ID)
         monitor_tab = tabs.get_tab(MONITOR_TAB_ID)
+        operations_tab = tabs.get_tab(OPERATIONS_TAB_ID)
         models_tab = tabs.get_tab(MODELS_TAB_ID)
         workflow_tab = tabs.get_tab(WORKFLOW_TAB_ID)
         repository_tab = tabs.get_tab(REPOSITORY_TAB_ID)
         service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
+        await asyncio.to_thread(lambda: None)
         return (
             server_tab.styles.display,
             secret_tab.styles.display,
             firewall_tab.styles.display,
             monitor_tab.styles.display,
+            operations_tab.styles.display,
             models_tab.styles.display,
             workflow_tab.styles.display,
             repository_tab.styles.display,
@@ -232,6 +236,7 @@ def test_root_selection_shows_project_tabs() -> None:
         secret_display,
         firewall_display,
         monitor_display,
+        operations_display,
         models_display,
         workflow_display,
         repository_display,
@@ -245,6 +250,7 @@ def test_root_selection_shows_project_tabs() -> None:
     assert secret_display == "block"
     assert firewall_display == "block"
     assert monitor_display == "block"
+    assert operations_display == "block"
     assert models_display == "block"
     assert workflow_display == "block"
     assert repository_display == "block"
@@ -2464,6 +2470,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
         secret_display,
         firewall_display,
         monitor_display,
+        operations_display,
         models_display,
         workflow_display,
         repository_display,
@@ -2475,6 +2482,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
     assert secret_display == "none"
     assert firewall_display == "none"
     assert monitor_display == "none"
+    assert operations_display == "none"
     assert models_display == "none"
     assert workflow_display == "none"
     assert repository_display == "none"
@@ -2507,6 +2515,7 @@ def test_server_selection_hides_template_tabs() -> None:
         secret_display,
         firewall_display,
         monitor_display,
+        operations_display,
         models_display,
         workflow_display,
         repository_display,
@@ -2518,6 +2527,7 @@ def test_server_selection_hides_template_tabs() -> None:
     assert secret_display == "none"
     assert firewall_display == "none"
     assert monitor_display == "none"
+    assert operations_display == "none"
     assert models_display == "none"
     assert workflow_display == "none"
     assert repository_display == "none"
@@ -2531,6 +2541,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
         secret_display,
         firewall_display,
         monitor_display,
+        operations_display,
         models_display,
         workflow_display,
         repository_display,
@@ -2542,6 +2553,7 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
     assert secret_display == "none"
     assert firewall_display == "none"
     assert monitor_display == "none"
+    assert operations_display == "none"
     assert models_display == "none"
     assert workflow_display == "none"
     assert repository_display == "none"

@@ -117,6 +117,8 @@ class _Executor:
         self._record("execute", command, **kwargs)
         if "rollout status" in command:
             return "deployment successfully rolled out"
+        if "rollout restart" in command:
+            return "deployment restarted"
         raise AssertionError(f"Unexpected command: {command}")
 
 
@@ -157,7 +159,7 @@ def test_renders_host_tls_ingress_without_pem(managed_gateway) -> None:
     documents = list(yaml.safe_load_all(manifest))
     ingress = next(item for item in documents if item.get("kind") == "Ingress")
 
-    assert len(documents) == 9
+    assert len(documents) == 10
     assert ingress["spec"]["rules"][0]["host"] == "gateway.example.org"
     assert ingress["spec"]["tls"] == [
         {
@@ -167,6 +169,42 @@ def test_renders_host_tls_ingress_without_pem(managed_gateway) -> None:
     ]
     assert tls["tls.crt"] not in manifest
     assert tls["tls.key"] not in manifest
+
+
+def test_runtime_binding_refreshes_managed_tls_gateway(
+    managed_gateway, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, _, _, _, _ = managed_gateway
+    service._load_and_validate_tls_material()
+    service.state = "running"
+    service.telemetry_uuid = "telemetry-uuid"
+    monkeypatch.setattr(
+        service,
+        "get_bound_telemetry_env_binding",
+        lambda: {"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"},
+    )
+
+    service._apply_telemetry_binding(
+        SimpleNamespace(host="10.0.0.4"),
+        telemetry_uuid="telemetry-uuid",
+        environment={"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"},
+    )
+
+    documents = list(yaml.safe_load_all(service.exec.files[service.manifest_path]))
+    runtime_secret = next(
+        item
+        for item in documents
+        if item.get("kind") == "Secret"
+        and item["metadata"]["name"] == service.runtime_secret_name
+    )
+    assert runtime_secret["stringData"] == {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"
+    }
+    assert any(
+        "rollout restart deployment/mlflow-gateway" in call[1][0]
+        for call in service.exec.calls
+        if call[0] == "execute"
+    )
 
 
 def test_setup_uses_gateway_manifest_namespace_then_applies_tls_secret(

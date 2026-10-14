@@ -1,6 +1,6 @@
 # Encrypted MLOX Project Files
 
-MLOX projects are single, portable `.mlox` databases encrypted by SQLCipher. A project file contains project metadata, the active data-source descriptor, infrastructure state, and project secrets. The old split between an encrypted `.project` metadata document and infrastructure JSON in a secret manager is no longer used for newly created projects.
+MLOX projects are portable SQLCipher-encrypted `.mlox` databases. They contain project metadata, infrastructure, secrets, Knowledge, and Operations history. New projects no longer split encrypted `.project` metadata from infrastructure JSON in a secret manager.
 
 ## Create and open
 
@@ -68,6 +68,11 @@ workspace.use_embedded_secret_manager()
 
 Embedded storage cannot export an application keyfile. An active secret-manager
 service cannot be removed until another manager is selected.
+
+Operations stores its optional reasoning-provider endpoint, model, and API key
+in the active secret manager. A blank API-key field preserves the stored key;
+the key is never returned to the TUI. The Pipeline Observer can investigate and
+propose work, but is advisory-only: it never executes MLOX actions.
 
 For OpenBao, application keyfiles are separate renewable credentials for the
 same project-level KV mount, not separate per-application secret namespaces. A

@@ -457,6 +457,16 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict[str, str]:
         key="grafana_cloud_endpoint",
         value="",
     )
+    params["${MLOX_OTEL_DIAGNOSTIC_EXPORTER}"] = str(
+        st.checkbox(
+            "Enable detailed diagnostic exporter",
+            value=False,
+            help=(
+                "Use only during diagnosis. It can produce a high volume of "
+                "collector output."
+            ),
+        )
+    ).lower()
     return params
 
 

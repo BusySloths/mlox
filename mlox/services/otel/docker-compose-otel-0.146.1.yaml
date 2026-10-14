@@ -7,6 +7,12 @@ services:
     image: otel/opentelemetry-collector-contrib:0.146.1
     container_name: otel-collector
     restart: always
+    logging:
+      driver: local
+      options:
+        max-size: "20m"
+        max-file: "5"
+        compress: "true"
     environment:
       - MY_OTEL_RELIC_ENDPOINT=${OTEL_RELIC_ENDPOINT}
       - MY_OTEL_RELIC_KEY=${OTEL_RELIC_KEY}
