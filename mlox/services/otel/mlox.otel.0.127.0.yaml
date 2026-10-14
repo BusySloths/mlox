@@ -48,6 +48,7 @@ build:
     config: otel/otel-collector-config-0.146.1.yaml
     relic_endpoint: ${MLOX_RELIC_ENDPOINT}
     relic_key: ${MLOX_RELIC_KEY}
+    diagnostic_exporter: ${MLOX_OTEL_DIAGNOSTIC_EXPORTER}
     port_grpc: ${MLOX_AUTO_PORT_GRPC}
     port_http: ${MLOX_AUTO_PORT_HTTP}
     port_health: ${MLOX_AUTO_PORT_HEALTH}

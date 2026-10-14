@@ -680,7 +680,7 @@ def test_otel_setup_check_and_read_telemetry(conn):
     ]
     assert len(pipeline_replacements) == 3
     for args in pipeline_replacements:
-        assert args[2] == "debug, file, otlphttp/new_relic, otlphttp/grafana_cloud"
+        assert args[2] == "file, otlphttp/new_relic, otlphttp/grafana_cloud"
     block_replacements = {args[1]: args[2] for _, args, _ in replacements}
     assert "otlphttp/new_relic" in block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"]
     assert "api-key" in block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"]
@@ -733,10 +733,42 @@ def test_otel_setup_without_relic_keeps_local_exporters(conn):
     ]
     assert len(pipeline_replacements) == 3
     for args in pipeline_replacements:
-        assert args[2] == "debug, file"
+        assert args[2] == "file"
     block_replacements = {args[1]: args[2] for _, args, _ in replacements}
     assert block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"] == ""
     assert block_replacements["__GRAFANA_CLOUD_EXPORTER_BLOCK__"] == ""
+
+
+def test_otel_setup_enables_diagnostic_exporter_only_when_requested(conn):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE,
+            relic_endpoint="",
+            relic_key="",
+            diagnostic_exporter="true",
+            config="otel/otel-collector-config-0.146.1.yaml",
+            port_grpc="4317",
+            port_http="4318",
+            port_health="13133",
+        ),
+        FakeExec(),
+    )
+
+    service.setup(conn)
+    replacements = [
+        args
+        for name, args, _ in service.exec.calls
+        if name == "fs_find_and_replace"
+        and args[0] == "/tmp/stack/otel-collector-config.yaml"
+        and args[1]
+        in {
+            "__TRACES_EXPORTER_LIST__",
+            "__METRICS_EXPORTER_LIST__",
+            "__LOGS_EXPORTER_LIST__",
+        }
+    ]
+    assert len(replacements) == 3
+    assert all(args[2] == "debug, file" for args in replacements)
 
 
 def test_otel_setup_with_grafana_cloud_only(conn):
@@ -775,7 +807,7 @@ def test_otel_setup_with_grafana_cloud_only(conn):
     ]
     assert len(pipeline_replacements) == 3
     for args in pipeline_replacements:
-        assert args[2] == "debug, file, otlphttp/grafana_cloud"
+        assert args[2] == "file, otlphttp/grafana_cloud"
     block_replacements = {args[1]: args[2] for _, args, _ in replacements}
     assert block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"] == ""
     assert "otlphttp/grafana_cloud" in block_replacements["__GRAFANA_CLOUD_EXPORTER_BLOCK__"]
@@ -846,11 +878,9 @@ def test_mlflow_setup_check_and_list_models(conn, monkeypatch):
         def search_model_versions(self, filter_string="", max_results=250):
             return [_Model("demo", "1")]
 
-    class _Tracking:
-        MlflowClient = _Client
-
-    monkeypatch.setattr("mlox.services.mlflow.docker.mlflow.set_registry_uri", lambda *_: None)
-    monkeypatch.setattr("mlox.services.mlflow.docker.mlflow.tracking", _Tracking)
+    monkeypatch.setattr(
+        "mlox.services.mlflow.docker.create_mlflow_client", lambda *_: _Client()
+    )
 
     out = service.check(conn)
     assert out["status"] == "running"
@@ -1103,6 +1133,10 @@ def test_mlflow_gateway_setup_check_and_is_model(conn):
     env_lines = service.exec.appended["/tmp/stack-8081/service.env"]
     assert "MLOX_GATEWAY_CACHE_MAX_MODELS=3" in env_lines
     assert "MLOX_GATEWAY_CACHE_TTL_DAYS=10" in env_lines
+    assert service.secret_manager_uuid is None
+    assert service.telemetry_uuid is None
+    assert not any("OTEL_EXPORTER_" in line for line in env_lines)
+    assert not any("MLOX_SECRET_MANAGER_" in line for line in env_lines)
 
     service.exec.service_states[service.compose_service_names["MLflow Gateway"]] = "running"
     service.exec.execute_result = "200"

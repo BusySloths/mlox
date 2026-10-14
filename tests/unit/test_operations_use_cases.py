@@ -1,0 +1,761 @@
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+import requests
+
+from mlox.application.use_cases.operations import (
+    OPERATIONS_REASONING_SECRET,
+    OperationsWatchSession,
+    add_operations_plan_item,
+    ask_operations_agent,
+    execute_operations_remediation,
+    get_operations_board,
+    list_operations_agents,
+    list_operations_monitors,
+    load_operations_reasoning_settings,
+    operations_remediation_tools,
+    reason_about_operations_incident,
+    refresh_operations_watch,
+    save_operations_postmortem,
+    save_operations_reasoning_settings,
+    set_operations_agent_status,
+    start_operations_watch,
+)
+from mlox.project import ProjectWorkspace
+from mlox.project.operations import OperationsEvent
+
+
+def _attribute(key, value):
+    if isinstance(value, int):
+        encoded = {"intValue": str(value)}
+    elif isinstance(value, float):
+        encoded = {"doubleValue": value}
+    else:
+        encoded = {"stringValue": value}
+    return {"key": key, "value": encoded}
+
+
+def _span(trace, span, name, started, **attrs):
+    return {
+        "traceId": trace,
+        "spanId": span,
+        "name": name,
+        "startTimeUnixNano": str(started),
+        "endTimeUnixNano": str(started + 10),
+        "attributes": [_attribute(key, value) for key, value in attrs.items()],
+    }
+
+
+def _run(
+    number,
+    *,
+    pca=1.0,
+    regression=2.0,
+    rmse=0.1,
+    model="demo",
+    version="1",
+    pipeline="operations-demo",
+):
+    trace = f"trace-{model}-{pipeline}-{number}"
+    common = {
+        "mlox.pipeline.id": f"pipeline-{model}-{pipeline}",
+        "mlox.model.name": model,
+        "mlox.model.version": version,
+        "mlox.model.alias": "champion",
+        "mlox.pipeline.name": pipeline,
+        "mlox.request.id": f"request-{model}-{number}",
+    }
+    spans = [
+        _span(
+            trace,
+            f"root-{model}-{pipeline}-{number}",
+            "mlox.model.live_predict",
+            number * 100,
+            **common,
+        )
+    ]
+    values = [
+        ("input.normalize", 0.0, "output.mean"),
+        ("pca.transform", pca, "output.mean"),
+        ("regression.predict", regression, "output.mean"),
+        ("quality.evaluate", rmse, "rmse.mean"),
+    ]
+    for index, (name, value, observation) in enumerate(values, start=1):
+        attrs = {
+            **common,
+            "mlox.step.path": f"{model}/pipeline/{name}",
+            "mlox.step.name": name,
+            "mlox.step.depth": 2,
+            f"mlox.observation.{observation}": value,
+        }
+        spans.append(
+            _span(
+                trace,
+                f"step-{model}-{pipeline}-{number}-{index}",
+                "mlox.model.step",
+                number * 100 + index,
+                **attrs,
+            )
+        )
+    return spans
+
+
+def _raw(*runs):
+    spans = [span for run in runs for span in run]
+    return json.dumps({"resourceSpans": [{"scopeSpans": [{"spans": spans}]}]})
+
+
+def test_watch_calibrates_detects_first_deviation_and_recovery():
+    session = OperationsWatchSession(baseline_runs=2)
+    session.start("")
+
+    assert session.ingest(_raw(_run(1))) == 1
+    assert session.snapshot()["state"] == "calibrating"
+
+    session.ingest(_raw(_run(1), _run(2)))
+    assert session.snapshot()["state"] == "watching"
+
+    session.ingest(_raw(_run(1), _run(2), _run(3, pca=10, regression=20, rmse=5)))
+    incident = session.snapshot()
+    assert incident["state"] == "incident"
+    assert incident["culprit"] == "demo/pipeline/pca.transform"
+    assert incident["baseline_rmse"] == 0.1
+    assert incident["latest_rmse"] == 5
+
+    session.ingest(_raw(*(_run(number) for number in range(1, 14))))
+    assert session.snapshot()["state"] == "recovered"
+    session.stop()
+    assert session.snapshot()["state"] == "recovered"
+    assert not session.snapshot()["active"]
+
+
+def test_start_uses_existing_telemetry_as_watermark():
+    telemetry = _raw(_run(1))
+    service = SimpleNamespace(get_telemetry_data=lambda bundle: telemetry)
+    infra = SimpleNamespace(
+        bundles=[SimpleNamespace(name="demo", services=[service])]
+    )
+
+    result = start_operations_watch(infra, baseline_runs=1)
+
+    assert result.success
+    session = result.data["session"]
+    assert refresh_operations_watch(infra, session).data["snapshot"]["runs"] == 0
+
+
+def test_start_requires_a_telemetry_source():
+    result = start_operations_watch(SimpleNamespace(bundles=[]))
+
+    assert not result.success
+    assert "telemetry collector" in result.message
+
+
+def test_watch_uses_selected_monitor_for_start_and_refresh():
+    readings = {
+        "wrong": [_raw(_run(1))],
+        "right": ["", _raw(_run(2))],
+    }
+
+    def monitor(name, uuid):
+        def read(_bundle):
+            values = readings[name]
+            return values.pop(0) if len(values) > 1 else values[0]
+
+        return SimpleNamespace(
+            name=name,
+            uuid=uuid,
+            state="running",
+            get_telemetry_data=read,
+        )
+
+    wrong = monitor("wrong", "monitor-wrong")
+    right = monitor("right", "monitor-right")
+    infra = SimpleNamespace(
+        bundles=[
+            SimpleNamespace(
+                name="first",
+                server=SimpleNamespace(ip="10.0.0.1"),
+                services=[wrong],
+            ),
+            SimpleNamespace(
+                name="second",
+                server=SimpleNamespace(ip="10.0.0.2"),
+                services=[right],
+            ),
+        ]
+    )
+
+    monitors = list_operations_monitors(infra)
+    result = start_operations_watch(
+        infra, baseline_runs=1, monitor_uuid="monitor-right"
+    )
+    session = result.data["session"]
+    refreshed = refresh_operations_watch(infra, session)
+
+    assert [item["uuid"] for item in monitors] == ["monitor-wrong", "monitor-right"]
+    assert monitors[1]["server"] == "10.0.0.2"
+    assert result.success
+    assert session.monitor_uuid == "monitor-right"
+    assert session.monitor_name == "right"
+    assert refreshed.data["snapshot"]["runs"] == 1
+
+
+def test_start_rejects_missing_selected_monitor():
+    result = start_operations_watch(
+        SimpleNamespace(bundles=[]), monitor_uuid="missing-monitor"
+    )
+
+    assert not result.success
+    assert "selected telemetry monitor" in result.message
+
+
+def test_watch_calculates_bounded_rolling_averages():
+    session = OperationsWatchSession(baseline_runs=2)
+    session.start("")
+    session.ingest(
+        _raw(*(_run(number, pca=float(number)) for number in range(1, 13)))
+    )
+
+    pipeline = session.snapshot()["pipelines"][0]
+    pca = next(step for step in pipeline["steps"] if step["name"] == "pca.transform")
+    observation = next(
+        item for item in pca["observations"] if item["name"] == "output.mean"
+    )
+
+    assert observation["current"] == 12.0
+    assert observation["short_window"] == 10.0
+    assert observation["long_window"] == 7.5
+
+
+def test_watch_keeps_independent_pipeline_summaries():
+    session = OperationsWatchSession(baseline_runs=1)
+    session.start("")
+    session.ingest(
+        _raw(
+            _run(1, model="forecast", version="2", pipeline="forecasting"),
+            _run(1, model="ranking", version="7", pipeline="ranking"),
+        )
+    )
+
+    snapshot = session.snapshot()
+    pipelines = {item["pipeline_name"]: item for item in snapshot["pipelines"]}
+
+    assert snapshot["runs"] == 2
+    assert set(pipelines) == {"forecasting", "ranking"}
+    assert pipelines["forecasting"]["model_name"] == "forecast"
+    assert pipelines["ranking"]["model_version"] == "7"
+    assert pipelines["forecasting"]["quality_name"] == "rmse.mean"
+    details = pipelines["forecasting"]["details"]
+    assert details["pipeline_id"] == "pipeline-forecast-forecasting"
+    assert details["request_id"] == "request-forecast-1"
+    assert details["model_alias"] == "champion"
+    assert details["steps"][1]["path"] == "forecast/pipeline/pca.transform"
+    assert details["steps"][1]["observations"]["output.mean"] == 1.0
+
+
+def test_watch_accepts_generic_workload_telemetry():
+    spans = _run(1, model="ignored", pipeline="daily-etl")
+    for span in spans:
+        span["name"] = (
+            "mlox.workload.run"
+            if span["name"] == "mlox.model.live_predict"
+            else "mlox.workload.step"
+        )
+        for attribute in span["attributes"]:
+            if attribute["key"] == "mlox.model.name":
+                attribute["key"] = "mlox.subject.name"
+                attribute["value"] = {"stringValue": "customer-features"}
+            elif attribute["key"] == "mlox.model.version":
+                attribute["key"] = "mlox.subject.version"
+                attribute["value"] = {"stringValue": "2026-10-06"}
+            elif attribute["key"] == "mlox.model.alias":
+                attribute["key"] = "mlox.subject.kind"
+                attribute["value"] = {"stringValue": "data pipeline"}
+
+    session = OperationsWatchSession(baseline_runs=1)
+    session.start("")
+    assert session.ingest(_raw(spans)) == 1
+
+    workload = session.snapshot()["pipelines"][0]
+    assert workload["pipeline_name"] == "daily-etl"
+    assert workload["subject_kind"] == "data pipeline"
+    assert workload["subject_name"] == "customer-features"
+    assert workload["subject_version"] == "2026-10-06"
+
+
+def test_reasoning_settings_are_redacted_and_blank_key_preserves_secret():
+    class Secrets:
+        value = None
+
+        def load_secret(self, _name):
+            return self.value
+
+        def save_secret(self, name, value):
+            assert name == OPERATIONS_REASONING_SECRET
+            self.value = value
+
+    secrets = Secrets()
+    workspace = SimpleNamespace(secrets=secrets)
+
+    saved = save_operations_reasoning_settings(
+        workspace,
+        mode="advisory",
+        provider="openai-compatible",
+        endpoint="https://llm.example/v1",
+        model="reasoner",
+        api_key="top-secret",
+    )
+    updated = save_operations_reasoning_settings(
+        workspace,
+        mode="approval",
+        provider="openai-compatible",
+        endpoint="https://llm.example/v1",
+        model="reasoner-v2",
+        api_key="",
+    )
+    loaded = load_operations_reasoning_settings(workspace)
+
+    assert saved.success and updated.success and loaded.success
+    assert "api_key" not in saved.data
+    assert secrets.value["api_key"] == "top-secret"
+    assert loaded.data["api_key_configured"] is True
+    assert loaded.data["mode"] == "approval"
+
+
+def test_reasoning_uses_openai_compatible_endpoint_without_exposing_key():
+    secret = {
+        "mode": "approval",
+        "provider": "openai-compatible",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+        "api_key": "top-secret",
+    }
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(load_secret=lambda _name: secret)
+    )
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {"message": {"content": "Disable corrupt traffic and verify recovery."}}
+                ]
+            }
+
+    def post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return Response()
+
+    result = reason_about_operations_incident(
+        workspace,
+        {
+            "pipeline_name": "demo",
+            "state": "incident",
+            "culprit": "demo/pca.transform",
+            "steps": [],
+        },
+        post=post,
+    )
+
+    assert result.success
+    assert captured["url"] == "https://llm.example/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer top-secret"
+    assert result.data == {
+        "headline": "Disable corrupt traffic and verify recovery.",
+        "recommendation": "Disable corrupt traffic and verify recovery.",
+        "verification": "Verify recovery against the rolling telemetry windows.",
+        "actions": [],
+        "mode": "advisory",
+        "model": "reasoner",
+    }
+    assert "tools" not in captured["json"]
+    assert "tool_choice" not in captured["json"]
+    assert "top-secret" not in result.message
+
+
+def test_reasoning_proposes_only_advertised_workspace_actions():
+    secret = {
+        "mode": "approval",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+    }
+    service = SimpleNamespace(name="gateway", state="running", restart=lambda: None)
+    calls = []
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(load_secret=lambda _name: secret),
+        infrastructure=SimpleNamespace(services=lambda: iter([service])),
+        restart_service=lambda *, name: calls.append(name)
+        or SimpleNamespace(success=True, code=0, message=f"Restarted {name}."),
+    )
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "headline": "Restart model gateway",
+                                    "description": "Restart the gateway after preserving evidence.",
+                                    "verification": "Check that the error rate returns to baseline.",
+                                }
+                            ),
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "name": "restart_service",
+                                        "arguments": '{"service_name": "gateway"}',
+                                    }
+                                },
+                                {
+                                    "function": {
+                                        "name": "invent_a_rollback",
+                                        "arguments": "{}",
+                                    }
+                                },
+                            ],
+                        }
+                    }
+                ]
+            }
+
+    result = reason_about_operations_incident(
+        workspace, {"pipeline_name": "demo", "steps": []}, post=lambda *_args, **_kwargs: Response()
+    )
+
+    assert result.success
+    assert result.data["headline"] == "Restart model gateway"
+    assert result.data["actions"] == [
+        {"name": "restart_service", "arguments": {"service_name": "gateway"}}
+    ]
+    executed = execute_operations_remediation(workspace, result.data["actions"])
+    assert executed.success
+    assert calls == ["gateway"]
+
+
+def test_reasoning_accepts_fenced_json_response():
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(
+            load_secret=lambda _name: {
+                "endpoint": "https://llm.example/v1",
+                "model": "reasoner",
+            }
+        )
+    )
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "```json\n"
+                                '{"headline":"Roll back","description":"Use the known good version.",'
+                                '"verification":"Check the error rate."}\n```'
+                            )
+                        }
+                    }
+                ]
+            }
+
+    result = reason_about_operations_incident(
+        workspace, {"pipeline_name": "demo", "steps": []},
+        post=lambda *_args, **_kwargs: Response(),
+    )
+
+    assert result.success
+    assert result.data["headline"] == "Roll back"
+    assert result.data["recommendation"] == "Use the known good version."
+
+
+def test_agent_question_uses_configured_reasoning_assistant():
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(
+            load_secret=lambda _name: {
+                "endpoint": "https://llm.example/v1",
+                "model": "reasoner",
+                "api_key": "top-secret",
+            }
+        )
+    )
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Investigate the transform input."}}]}
+
+    def post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return Response()
+
+    result = ask_operations_agent(
+        workspace,
+        agent={"name": "Investigator", "role": "Investigator", "scope": "triage"},
+        question="What should we inspect first?",
+        post=post,
+    )
+
+    assert result.success
+    assert result.data == {"answer": "Investigate the transform input.", "model": "reasoner"}
+    assert captured["headers"]["Authorization"] == "Bearer top-secret"
+
+
+def test_reasoning_sends_only_public_tool_schema(monkeypatch):
+    secret = {
+        "mode": "advisory",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+    }
+    workspace = SimpleNamespace(secrets=SimpleNamespace(load_secret=lambda _name: secret))
+    offered_tool = {
+        "type": "function",
+        "function": {
+            "name": "restart_service",
+            "description": "Restart a service.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        "x-mlox-valid-choices": [{"service_name": "gateway"}],
+    }
+    monkeypatch.setattr(
+        "mlox.application.use_cases.operations.operations_remediation_tools",
+        lambda *_args, **_kwargs: [offered_tool],
+    )
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Review the service."}}]}
+
+    def post(_url, **kwargs):
+        captured.update(kwargs)
+        return Response()
+
+    result = reason_about_operations_incident(
+        workspace, {"pipeline_name": "demo", "steps": []}, post=post
+    )
+
+    assert result.success
+    assert captured["json"]["tools"] == [
+        {key: value for key, value in offered_tool.items() if not key.startswith("x-mlox-")}
+    ]
+
+
+def test_reasoning_includes_redacted_provider_error_body():
+    secret = {
+        "mode": "advisory",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+        "api_key": "top-secret",
+    }
+    workspace = SimpleNamespace(secrets=SimpleNamespace(load_secret=lambda _name: secret))
+
+    class Response:
+        text = '{"error": "unsupported tool schema"}'
+
+        def raise_for_status(self):
+            error = requests.HTTPError("400 Client Error: Bad Request")
+            error.response = self
+            raise error
+
+    result = reason_about_operations_incident(
+        workspace,
+        {"pipeline_name": "demo", "steps": []},
+        post=lambda *_args, **_kwargs: Response(),
+    )
+
+    assert not result.success
+    assert "unsupported tool schema" in result.message
+    assert "top-secret" not in result.message
+
+
+def test_reasoning_accepts_tool_only_response_from_openai_compatible_provider():
+    secret = {
+        "mode": "approval",
+        "endpoint": "https://llm.example/v1",
+        "model": "reasoner",
+    }
+    service = SimpleNamespace(name="gateway", state="running", restart=lambda: None)
+    workspace = SimpleNamespace(
+        secrets=SimpleNamespace(load_secret=lambda _name: secret),
+        infrastructure=SimpleNamespace(services=lambda: iter([service])),
+    )
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "name": "restart_service",
+                                        "arguments": '{"service_name": "gateway"}',
+                                    }
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+
+    result = reason_about_operations_incident(
+        workspace,
+        {"pipeline_name": "demo", "steps": []},
+        post=lambda *_args, **_kwargs: Response(),
+    )
+
+    assert result.success
+    assert result.data["headline"] == "Restart service"
+    assert result.data["recommendation"] == "Restart gateway."
+    assert result.data["actions"] == [
+        {"name": "restart_service", "arguments": {"service_name": "gateway"}}
+    ]
+
+
+def test_model_rollback_tool_only_offers_and_executes_known_previous_version():
+    calls = []
+    registry = SimpleNamespace(
+        name="MLflow",
+        list_models=lambda: [
+            {"Model": "operations-demo", "Version": "1"},
+            {"Model": "operations-demo", "Version": "2"},
+            {"Model": "operations-demo", "Version": "3"},
+        ],
+        set_registered_model_alias=lambda **kwargs: calls.append(kwargs),
+    )
+    infrastructure = SimpleNamespace(
+        services=lambda: iter([]),
+        filter_by_group=lambda group: [registry] if group == "model-registry" else [],
+        get_service=lambda name: registry if name == "MLflow" else None,
+    )
+    workspace = SimpleNamespace(infrastructure=infrastructure)
+    pipeline = {
+        "model_name": "operations-demo",
+        "model_version": "3",
+        "model_alias": "champion",
+    }
+
+    rollback = next(
+        tool
+        for tool in operations_remediation_tools(workspace, pipeline)
+        if tool["function"]["name"] == "rollback_model_alias"
+    )
+    action = {
+        "name": "rollback_model_alias",
+        "arguments": {
+            "registry_name": "MLflow",
+            "model_name": "operations-demo",
+            "alias": "champion",
+            "target_version": "2",
+        },
+    }
+
+    assert rollback["x-mlox-valid-choices"][-1]["target_version"] == "1"
+    result = execute_operations_remediation(workspace, [action], pipeline=pipeline)
+
+    assert result.success
+    assert calls == [
+        {"name": "operations-demo", "alias": "champion", "version": "2"}
+    ]
+
+
+def test_add_operations_plan_item_reuses_the_knowledge_operations_board(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "plan"), "pw")
+
+    result = add_operations_plan_item(
+        workspace,
+        headline="Rollback model gateway",
+        description="Restore the known-good deployment after checking evidence.",
+    )
+
+    assert result.success
+    board = workspace.find_entry_by_title("Operations", "board")
+    assert "Rollback model gateway" in board.body_md
+
+
+def test_pipeline_observer_status_can_be_changed_and_persisted(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "observer-status"), "pw")
+
+    disabled = set_operations_agent_status(
+        workspace, agent_id="pipeline-observer", enabled=False
+    )
+
+    assert disabled.success
+    assert {
+        agent["id"]: agent["status"]
+        for agent in list_operations_agents(workspace).data["agents"]
+    }["pipeline-observer"] == "disabled"
+
+
+def test_operations_board_and_postmortem_reuse_knowledge(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "operations"), "pw")
+
+    board_result = get_operations_board(workspace, create=True)
+    assert board_result.success
+    board = board_result.data["board"]
+    assert board.title == "Operations"
+
+    pipeline = {
+        "id": "demo\x1f1\x1foperations-demo",
+        "pipeline_name": "operations-demo",
+        "culprit": "demo/pipeline/pca.transform",
+        "quality_name": "rmse.mean",
+        "quality_value": 4.2,
+    }
+    event = OperationsEvent(
+        event_type="incident_recovered",
+        summary="Pipeline recovered.",
+        target=pipeline["id"],
+        created_at="2026-10-05T10:05:00+00:00",
+    )
+
+    result = save_operations_postmortem(workspace, pipeline, [event])
+
+    assert result.success
+    postmortem = result.data["entry"]
+    assert postmortem.kind == "wiki"
+    assert "pca.transform" in postmortem.body_md
+    assert "Pipeline recovered." in postmortem.body_md
+    updated_board = workspace.find_entry_by_title("Operations", "board")
+    assert postmortem.title in updated_board.body_md
+
+
+def test_postmortems_have_distinct_titles_and_plan_links(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "postmortems"), "pw")
+    pipeline = {"id": "pipeline-1", "pipeline_name": "forecast"}
+
+    first = save_operations_postmortem(workspace, pipeline, [])
+    second = save_operations_postmortem(workspace, pipeline, [])
+
+    assert first.success and second.success
+    assert first.data["entry"].title != second.data["entry"].title
+    board = workspace.find_entry_by_title("Operations", "board")
+    assert first.data["entry"].title in board.body_md
+    assert second.data["entry"].title in board.body_md

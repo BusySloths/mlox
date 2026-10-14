@@ -31,6 +31,7 @@ from .model import SelectionChanged, SelectionInfo, is_bundle_initialized
 from .models_panel import ModelsPanel
 from .monitor_panel import MonitorPanel
 from .overview_panel import OverviewPanel
+from .operations_panel import OperationsPanel
 from .project_actions import ProjectActions, RenameProjectDialog
 from .repository_panel import RepositoryPanel
 from .server_actions import ServerActions
@@ -87,6 +88,7 @@ FIREWALL_TAB_ID = "firewall-tab"
 DATABASES_TAB_ID = "databases-tab"
 KNOWLEDGE_TAB_ID = "knowledge-tab"
 MONITOR_TAB_ID = "monitor-tab"
+OPERATIONS_TAB_ID = "operations-tab"
 MODELS_TAB_ID = "models-tab"
 WORKFLOW_TAB_ID = "workflow-tab"
 SERVICE_TUI_TAB_ID = "service-tui-tab"
@@ -189,6 +191,8 @@ class DashboardScreen(Screen):
                                     yield ServerInfoPanel(id="selection-server-info")
                                     yield ServerActions(id="selection-server-actions")
                                     yield ServiceActions(id="selection-service-actions")
+                            with TabPane("Operations (EXPERIMENTAL)", id=OPERATIONS_TAB_ID):
+                                yield OperationsPanel(id="operations-panel")
                             with TabPane("Knowledge", id=KNOWLEDGE_TAB_ID):
                                 yield KnowledgePanel(id="knowledge-panel")
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
@@ -347,6 +351,12 @@ class DashboardScreen(Screen):
         self.query_one(SecretManagerPanel).selection = None
         self.query_one(FirewallPanel).selection = None
         self.query_one(MonitorPanel).selection = None
+        operations = self.query_one(OperationsPanel)
+        # A watcher must keep its live session mounted while the user reads the
+        # shared Knowledge plan. Hiding it here can make Textual reselect the
+        # Operations pane after a cross-tab navigation.
+        if not operations.watching:
+            operations.selection = None
         self.query_one(DatabasePanel).selection = None
         self.query_one(ModelsPanel).selection = None
         self.query_one(WorkflowPanel).selection = None
@@ -363,12 +373,16 @@ class DashboardScreen(Screen):
             SECRET_MANAGER_TAB_ID: self.query_one(SecretManagerPanel),
             FIREWALL_TAB_ID: self.query_one(FirewallPanel),
             MONITOR_TAB_ID: self.query_one(MonitorPanel),
+            OPERATIONS_TAB_ID: self.query_one(OperationsPanel),
             DATABASES_TAB_ID: self.query_one(DatabasePanel),
             MODELS_TAB_ID: self.query_one(ModelsPanel),
             WORKFLOW_TAB_ID: self.query_one(WorkflowPanel),
             REPOSITORY_TAB_ID: self.query_one(RepositoryPanel),
         }
+        operations = panel_by_tab[OPERATIONS_TAB_ID]
         for tab_id, panel in panel_by_tab.items():
+            if panel is operations and operations.watching:
+                continue
             panel.selection = selection if tabs.active == tab_id else None
 
     def action_copy_model_example(self) -> None:
@@ -1483,6 +1497,10 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             MONITOR_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
+            OPERATIONS_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(

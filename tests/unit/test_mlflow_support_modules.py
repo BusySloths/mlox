@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -97,6 +98,61 @@ def test_deployable_model_optional_runtime_providers(monkeypatch):
     with pytest.raises(ValueError, match="Model step names"):
         with model.model_step("invalid/step"):
             pass
+
+
+@pytest.mark.parametrize(
+    ("has_telemetry", "has_secret_manager"),
+    [(False, False), (True, False), (False, True), (True, True)],
+)
+def test_model_runtime_accepts_every_optional_provider_combination(
+    monkeypatch,
+    caplog,
+    has_telemetry,
+    has_secret_manager,
+):
+    monkeypatch.setenv("MLFLOW_URI", "https://mlflow.local")
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider(sampler=ALWAYS_ON)
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    telemetry = _model_telemetry_client(provider) if has_telemetry else None
+    monkeypatch.setattr(mlops, "get_process_telemetry_client", lambda: telemetry)
+
+    manager = object() if has_secret_manager else None
+    if has_secret_manager:
+        monkeypatch.setenv(mlops.SECRET_MANAGER_KEYFILE_ENV, "encrypted")
+        monkeypatch.setenv(mlops.SECRET_MANAGER_KEYFILE_PW_ENV, "password")
+        monkeypatch.setattr(mlops, "load_secret_manager_from_env", lambda: manager)
+    else:
+        monkeypatch.delenv(mlops.SECRET_MANAGER_KEYFILE_ENV, raising=False)
+        monkeypatch.delenv(mlops.SECRET_MANAGER_KEYFILE_PW_ENV, raising=False)
+
+    class _OptionalProviderModel(_TrackedModel):
+        def live_predict(self, input, params=None, artifacts=None):
+            assert (self.get_telemetry_client() is not None) is has_telemetry
+            assert (self.get_secret_manager() is not None) is has_secret_manager
+            with self.model_step("predict") as step:
+                step.observe_array("output", [1.0])
+            return pd.DataFrame({"prediction": [1.0]})
+
+    caplog.set_level(logging.ERROR)
+    result = mlops.MLFlowDeployableModelService(
+        _OptionalProviderModel(), "optional-providers"
+    ).predict(None, np.array([[1.0]]))
+
+    assert result["prediction"].tolist() == [1.0]
+    assert not caplog.records
+
+
+def test_gateway_health_is_silent_without_optional_providers(monkeypatch, caplog):
+    monkeypatch.setattr(serve, "TELEMETRY_CLIENT", None)
+    caplog.set_level(logging.ERROR)
+
+    with serve._telemetry_span("gateway.without-telemetry") as span:
+        assert span is None
+    response = serve.health()
+
+    assert "timestamp" in response
+    assert not caplog.records
 
 
 def test_mlops_predict_emits_hierarchical_pipeline_spans(monkeypatch):

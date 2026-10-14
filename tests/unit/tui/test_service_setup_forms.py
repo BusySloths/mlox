@@ -34,6 +34,21 @@ def test_github_setup_spec_materializes_public_and_private_links() -> None:
     assert private["${GITHUB_PRIVATE}"] == "True"
 
 
+def test_otel_setup_spec_defaults_diagnostic_exporter_to_disabled() -> None:
+    spec = service_setup.otel(None, None, SimpleNamespace(name="OpenTelemetry"))
+    diagnostic = next(
+        field for field in spec.fields if field.name == "diagnostic_exporter"
+    )
+
+    assert diagnostic.kind == "select"
+    assert diagnostic.default == "false"
+    assert diagnostic.options == [
+        ("Disabled (recommended)", "false"),
+        ("Enabled — high-volume collector output", "true"),
+    ]
+    assert spec.params({}, None)["${MLOX_OTEL_DIAGNOSTIC_EXPORTER}"] == "false"
+
+
 def test_mlflow_gateway_setup_spec_uses_registry_secrets() -> None:
     registry = SimpleNamespace(
         uuid="registry-1",

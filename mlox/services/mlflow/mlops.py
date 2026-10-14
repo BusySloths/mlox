@@ -337,6 +337,7 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
         params: Dict | None = None,
         input_example: np.ndarray | pd.DataFrame | None = None,
         inference_params: Dict | None = None,
+        signature: Any | None = None,
     ) -> ModelInfo:
         mlflow.set_tracking_uri(self.tracking_uri)
         mlflow.set_registry_uri(self.registry_uri)
@@ -350,22 +351,22 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
                 span.set_attribute("attrib1", "value1")
                 span.set_outputs({"artifacts": artifacts})
 
-            signature: mlflow.models.ModelSignature | None = None
-            if input_example is not None:
+            model_signature = signature
+            if model_signature is None and input_example is not None:
                 with mlflow.start_span("infer-signature") as span:
                     logger.info(
                         "Inferring signature for the model input with type %s",
                         type(input_example),
                     )
-                    signature = mlflow.models.infer_signature(
+                    model_signature = mlflow.models.infer_signature(
                         input_example,
                         self.model.live_predict(
                             input_example, params=params, artifacts=artifacts
                         ),
                         params=inference_params,
                     )
-                    logger.info("Signature inferred successfully: %s", signature)
-            else:
+                    logger.info("Signature inferred successfully: %s", model_signature)
+            elif model_signature is None:
                 logger.info("No input example provided; skipping signature inference.")
 
             if artifacts is None:
@@ -379,7 +380,7 @@ class MLFlowDeployableModelService(mlflow.pyfunc.PythonModel):  # type: ignore
                     python_model=self,
                     code_paths=prepared_code_paths or None,
                     conda_env=self.get_conda_env(),
-                    signature=signature,
+                    signature=model_signature,
                     input_example=input_example,
                     registered_model_name=self.registered_model_name,
                     artifacts=artifacts,

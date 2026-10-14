@@ -20,13 +20,20 @@ from uuid import uuid4
 
 from mlox.infra import Infrastructure
 from mlox.project.entries import Entry
+from mlox.project.operations import (
+    OperationsAgent,
+    OperationsAgentMessage,
+    OperationsAgentProposal,
+    OperationsAgentRun,
+    OperationsEvent,
+)
 
 if TYPE_CHECKING:
     from mlox.config import ServiceConfig
 
 PROJECT_SUFFIX = ".mlox"
 PROJECT_FORMAT_VERSION = 1
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 5
 PLAINTEXT_TEST_ENV = "MLOX_ALLOW_PLAINTEXT_SQLITE"
 
 ENTRIES_SCHEMA_SQL = """
@@ -41,6 +48,82 @@ CREATE TABLE IF NOT EXISTS entries (
 );
 CREATE INDEX IF NOT EXISTS idx_entries_project ON entries(project_id);
 CREATE INDEX IF NOT EXISTS idx_entries_kind ON entries(project_id, kind);
+"""
+
+OPERATIONS_EVENTS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS operations_events (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    target TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'recorded',
+    summary TEXT NOT NULL,
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_operations_events_project_time
+    ON operations_events(project_id, created_at);
+"""
+
+OPERATIONS_AGENTS_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS operations_agents (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'disabled',
+    runtime TEXT NOT NULL DEFAULT 'planned',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_operations_agents_project
+    ON operations_agents(project_id, created_at);
+
+CREATE TABLE IF NOT EXISTS operations_agent_runs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    agent_id TEXT NOT NULL,
+    pipeline_id TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'queued',
+    summary TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_operations_agent_runs_agent
+    ON operations_agent_runs(project_id, agent_id, created_at);
+
+CREATE TABLE IF NOT EXISTS operations_agent_messages (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    run_id TEXT NOT NULL REFERENCES operations_agent_runs(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    author TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    content TEXT NOT NULL,
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_operations_agent_messages_run
+    ON operations_agent_messages(project_id, run_id, created_at);
+
+CREATE TABLE IF NOT EXISTS operations_agent_proposals (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    agent_id TEXT NOT NULL,
+    run_id TEXT NOT NULL REFERENCES operations_agent_runs(id) ON DELETE CASCADE,
+    pipeline_id TEXT NOT NULL DEFAULT '',
+    headline TEXT NOT NULL,
+    description TEXT NOT NULL,
+    verification TEXT NOT NULL DEFAULT '',
+    actions_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_operations_agent_proposals_agent
+    ON operations_agent_proposals(project_id, agent_id, created_at);
 """
 
 
@@ -216,7 +299,7 @@ class SqlCipherRepository:
                 key_salt TEXT,
                 key_check TEXT
             );
-            INSERT INTO schema_info VALUES (1, 3, CURRENT_TIMESTAMP, NULL, NULL);
+            INSERT INTO schema_info VALUES (1, 5, CURRENT_TIMESTAMP, NULL, NULL);
 
             CREATE TABLE projects (
                 id TEXT PRIMARY KEY,
@@ -288,6 +371,8 @@ class SqlCipherRepository:
             """
         )
         conn.executescript(ENTRIES_SCHEMA_SQL)
+        conn.executescript(OPERATIONS_EVENTS_SCHEMA_SQL)
+        conn.executescript(OPERATIONS_AGENTS_SCHEMA_SQL)
 
     @staticmethod
     def _upgrade_schema(conn: Any, current_version: int) -> None:
@@ -301,6 +386,10 @@ class SqlCipherRepository:
             )
         if current_version < 3:
             conn.executescript(ENTRIES_SCHEMA_SQL)
+        if current_version < 4:
+            conn.executescript(OPERATIONS_EVENTS_SCHEMA_SQL)
+        if current_version < 5:
+            conn.executescript(OPERATIONS_AGENTS_SCHEMA_SQL)
         if current_version < SCHEMA_VERSION:
             conn.execute(
                 "UPDATE schema_info SET schema_version=?, applied_at=CURRENT_TIMESTAMP "
@@ -541,6 +630,263 @@ class SqlCipherRepository:
             conn.execute(
                 "DELETE FROM entries WHERE id=? AND project_id=?", (entry_id, pid)
             )
+
+    def record_operations_event(self, event: OperationsEvent) -> OperationsEvent:
+        """Append an immutable event to the operations audit trail."""
+
+        event_id = event.id or str(uuid4())
+        created_at = event.created_at or utcnow()
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT INTO operations_events "
+                "(id, project_id, created_at, actor, event_type, target, status, "
+                "summary, details_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    event_id,
+                    self.project_id(conn),
+                    created_at,
+                    event.actor,
+                    event.event_type,
+                    event.target,
+                    event.status,
+                    event.summary,
+                    json.dumps(event.details),
+                ),
+            )
+        return OperationsEvent(
+            id=event_id,
+            created_at=created_at,
+            actor=event.actor,
+            event_type=event.event_type,
+            target=event.target,
+            status=event.status,
+            summary=event.summary,
+            details=dict(event.details),
+        )
+
+    def list_operations_events(self, limit: int = 200) -> list[OperationsEvent]:
+        """Return newest operations events first, bounded by ``limit``."""
+
+        bounded_limit = max(1, min(int(limit), 1000))
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at, actor, event_type, target, status, summary, "
+                "details_json FROM operations_events WHERE project_id=? "
+                "ORDER BY created_at DESC, id DESC LIMIT ?",
+                (self.project_id(conn), bounded_limit),
+            ).fetchall()
+        return [
+            OperationsEvent(
+                id=row[0],
+                created_at=row[1],
+                actor=row[2],
+                event_type=row[3],
+                target=row[4],
+                status=row[5],
+                summary=row[6],
+                details=json.loads(row[7]),
+            )
+            for row in rows
+        ]
+
+    def save_operations_agent(self, agent: OperationsAgent) -> OperationsAgent:
+        """Create or update a durable Operations team profile."""
+
+        now = utcnow()
+        agent_id = agent.id or str(uuid4())
+        created_at = agent.created_at or now
+        with self.connection() as conn:
+            pid = self.project_id(conn)
+            conn.execute(
+                "INSERT INTO operations_agents "
+                "(id, project_id, name, role, scope, description, status, runtime, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET name=excluded.name, role=excluded.role, "
+                "scope=excluded.scope, description=excluded.description, "
+                "status=excluded.status, runtime=excluded.runtime, updated_at=excluded.updated_at",
+                (
+                    agent_id, pid, agent.name, agent.role, agent.scope,
+                    agent.description, agent.status, agent.runtime, created_at, now,
+                ),
+            )
+        return OperationsAgent(
+            id=agent_id, name=agent.name, role=agent.role, scope=agent.scope,
+            description=agent.description, status=agent.status, runtime=agent.runtime,
+            created_at=created_at, updated_at=now,
+        )
+
+    def list_operations_agents(self) -> list[OperationsAgent]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, name, role, scope, description, status, runtime, created_at, "
+                "updated_at FROM operations_agents WHERE project_id=? "
+                "ORDER BY created_at, id",
+                (self.project_id(conn),),
+            ).fetchall()
+        return [
+            OperationsAgent(
+                id=row[0], name=row[1], role=row[2], scope=row[3], description=row[4],
+                status=row[5], runtime=row[6], created_at=row[7], updated_at=row[8],
+            )
+            for row in rows
+        ]
+
+    def archive_operations_agent(self, agent_id: str) -> bool:
+        with self.connection() as conn:
+            cursor = conn.execute(
+                "UPDATE operations_agents SET status='archived', updated_at=? "
+                "WHERE id=? AND project_id=?",
+                (utcnow(), agent_id, self.project_id(conn)),
+            )
+        return bool(cursor.rowcount)
+
+    def set_operations_agent_status(self, agent_id: str, status: str) -> bool:
+        """Set the enabled state of a configurable Operations agent profile."""
+
+        if status not in {"enabled", "disabled"}:
+            raise ValueError("Operations agent status must be enabled or disabled.")
+        with self.connection() as conn:
+            cursor = conn.execute(
+                "UPDATE operations_agents SET status=?, updated_at=? "
+                "WHERE id=? AND project_id=? AND status != 'archived'",
+                (status, utcnow(), agent_id, self.project_id(conn)),
+            )
+        return bool(cursor.rowcount)
+
+    def save_operations_agent_run(self, run: OperationsAgentRun) -> OperationsAgentRun:
+        """Create or update a durable Operations agent work item."""
+
+        now = utcnow()
+        run_id = run.id or str(uuid4())
+        created_at = run.created_at or now
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT INTO operations_agent_runs "
+                "(id, project_id, agent_id, pipeline_id, status, summary, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
+                "agent_id=excluded.agent_id, pipeline_id=excluded.pipeline_id, "
+                "status=excluded.status, summary=excluded.summary, updated_at=excluded.updated_at",
+                (
+                    run_id, self.project_id(conn), run.agent_id, run.pipeline_id,
+                    run.status, run.summary, created_at, now,
+                ),
+            )
+        return OperationsAgentRun(
+            id=run_id, agent_id=run.agent_id, pipeline_id=run.pipeline_id,
+            status=run.status, summary=run.summary, created_at=created_at, updated_at=now,
+        )
+
+    def list_operations_agent_runs(
+        self, agent_id: str, limit: int = 50
+    ) -> list[OperationsAgentRun]:
+        bounded_limit = max(1, min(int(limit), 500))
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, agent_id, pipeline_id, status, summary, created_at, updated_at "
+                "FROM operations_agent_runs WHERE project_id=? AND agent_id=? "
+                "ORDER BY created_at DESC, id DESC LIMIT ?",
+                (self.project_id(conn), agent_id, bounded_limit),
+            ).fetchall()
+        return [
+            OperationsAgentRun(
+                id=row[0], agent_id=row[1], pipeline_id=row[2], status=row[3],
+                summary=row[4], created_at=row[5], updated_at=row[6],
+            )
+            for row in rows
+        ]
+
+    def record_operations_agent_message(
+        self, message: OperationsAgentMessage
+    ) -> OperationsAgentMessage:
+        message_id = message.id or str(uuid4())
+        created_at = message.created_at or utcnow()
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT INTO operations_agent_messages "
+                "(id, project_id, run_id, created_at, author, kind, content, details_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    message_id, self.project_id(conn), message.run_id, created_at,
+                    message.author, message.kind, message.content, json.dumps(message.details),
+                ),
+            )
+        return OperationsAgentMessage(
+            id=message_id, run_id=message.run_id, author=message.author,
+            kind=message.kind, content=message.content, details=dict(message.details),
+            created_at=created_at,
+        )
+
+    def list_operations_agent_messages(
+        self, agent_id: str, limit: int = 100
+    ) -> list[OperationsAgentMessage]:
+        bounded_limit = max(1, min(int(limit), 500))
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT m.id, m.run_id, m.created_at, m.author, m.kind, m.content, "
+                "m.details_json FROM operations_agent_messages m "
+                "JOIN operations_agent_runs r ON r.id=m.run_id "
+                "WHERE m.project_id=? AND r.agent_id=? "
+                "ORDER BY m.created_at DESC, m.id DESC LIMIT ?",
+                (self.project_id(conn), agent_id, bounded_limit),
+            ).fetchall()
+        return [
+            OperationsAgentMessage(
+                id=row[0], run_id=row[1], created_at=row[2], author=row[3],
+                kind=row[4], content=row[5], details=json.loads(row[6]),
+            )
+            for row in rows
+        ]
+
+    def save_operations_agent_proposal(
+        self, proposal: OperationsAgentProposal
+    ) -> OperationsAgentProposal:
+        now = utcnow()
+        proposal_id = proposal.id or str(uuid4())
+        created_at = proposal.created_at or now
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT INTO operations_agent_proposals "
+                "(id, project_id, agent_id, run_id, pipeline_id, headline, description, "
+                "verification, actions_json, status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
+                "headline=excluded.headline, description=excluded.description, "
+                "verification=excluded.verification, actions_json=excluded.actions_json, "
+                "status=excluded.status, updated_at=excluded.updated_at",
+                (
+                    proposal_id, self.project_id(conn), proposal.agent_id, proposal.run_id,
+                    proposal.pipeline_id, proposal.headline, proposal.description,
+                    proposal.verification, json.dumps(proposal.actions), proposal.status,
+                    created_at, now,
+                ),
+            )
+        return OperationsAgentProposal(
+            id=proposal_id, agent_id=proposal.agent_id, run_id=proposal.run_id,
+            pipeline_id=proposal.pipeline_id, headline=proposal.headline,
+            description=proposal.description, verification=proposal.verification,
+            actions=list(proposal.actions), status=proposal.status,
+            created_at=created_at, updated_at=now,
+        )
+
+    def list_operations_agent_proposals(
+        self, agent_id: str, limit: int = 50
+    ) -> list[OperationsAgentProposal]:
+        bounded_limit = max(1, min(int(limit), 500))
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, agent_id, run_id, pipeline_id, headline, description, "
+                "verification, actions_json, status, created_at, updated_at "
+                "FROM operations_agent_proposals WHERE project_id=? AND agent_id=? "
+                "ORDER BY created_at DESC, id DESC LIMIT ?",
+                (self.project_id(conn), agent_id, bounded_limit),
+            ).fetchall()
+        return [
+            OperationsAgentProposal(
+                id=row[0], agent_id=row[1], run_id=row[2], pipeline_id=row[3],
+                headline=row[4], description=row[5], verification=row[6],
+                actions=json.loads(row[7]), status=row[8], created_at=row[9], updated_at=row[10],
+            )
+            for row in rows
+        ]
 
     def record_legacy_import(self, source_path: str, source_sha256: str, resources: int, secrets: int) -> None:
         with self.connection() as conn:

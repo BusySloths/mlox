@@ -4,6 +4,7 @@ import inspect
 
 from mlox.project import ProjectWorkspace
 from mlox.project.entries import Entry
+from mlox.project.operations import OperationsEvent
 
 
 SUPPORTED_WORKSPACE_METHOD_SIGNATURES = {
@@ -121,3 +122,18 @@ def test_workspace_entry_pass_throughs_round_trip(tmp_path):
     workspace.delete_entry(saved.id)
     assert workspace.get_entry(saved.id) is None
     assert workspace.list_entries() == []
+
+
+def test_workspace_operations_activity_pass_throughs_round_trip(tmp_path):
+    workspace = ProjectWorkspace.create(str(tmp_path / "demo"), "pw")
+
+    saved = workspace.record_operations_event(
+        OperationsEvent(
+            event_type="watch_started",
+            summary="Watcher started.",
+            status="active",
+        )
+    )
+
+    assert saved.id
+    assert workspace.list_operations_events() == [saved]
