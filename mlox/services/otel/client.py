@@ -11,7 +11,7 @@ from typing import Dict, Any, Mapping, Optional
 
 # WORK IN PROGRESS: OTel client API is still being refined.
 
-from opentelemetry import metrics, propagate, trace
+from opentelemetry import propagate, trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
@@ -153,15 +153,19 @@ class OTelClient:
         self.meter_provider = MeterProvider(
             metric_readers=[self.metric_reader], resource=self.resource
         )
-        metrics.set_meter_provider(self.meter_provider)
-        self.meter = metrics.get_meter(__name__)
+        # Do not replace the process-wide provider. Serving runtimes such as
+        # MLflow may have already configured one, and OTel rejects a second
+        # global provider. MLOX owns and uses this provider directly instead.
+        self.meter = self.meter_provider.get_meter(__name__)
 
     def _setup_tracing(self):
         self.span_exporter = OTLPSpanExporter(**self._exporter_kwargs())
         self.tracer_provider = TracerProvider(resource=self.resource)
         self.tracer_provider.add_span_processor(BatchSpanProcessor(self.span_exporter))
-        trace.set_tracer_provider(self.tracer_provider)
-        self.tracer = trace.get_tracer(__name__)
+        # Keep MLOX telemetry independent of the process-wide tracer provider.
+        # A framework may have installed it before MLOX starts; using it here
+        # can otherwise silently turn MLOX model spans into no-ops.
+        self.tracer = self.tracer_provider.get_tracer(__name__)
 
     def send_metric(
         self, name: str, value: float, attributes: Optional[Dict[str, Any]] = None
