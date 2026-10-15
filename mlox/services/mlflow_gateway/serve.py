@@ -415,6 +415,54 @@ def _read_requirements(model_uri: str) -> List[str]:
         return []
 
 
+def _model_code_paths(entries: list[ModelCacheEntry]) -> list[Path]:
+    """Return artifact code paths added while loading cached models.
+
+    This supports the cache-clear mitigation for #106. It intentionally uses
+    only paths absent from the gateway's startup path, so application and
+    installed-package modules are never considered model-owned.
+    """
+
+    baseline = {Path(path or ".").resolve() for path in SYS_PATH}
+    paths: set[Path] = set()
+    for entry in entries:
+        for raw_path in entry.sys_path:
+            path = Path(raw_path or ".").resolve()
+            if path not in baseline:
+                paths.add(path)
+    return sorted(paths, key=lambda path: len(path.parts), reverse=True)
+
+
+def _clear_model_modules(entries: list[ModelCacheEntry]) -> int:
+    """Evict modules imported from cached model artifact paths.
+
+    This is a best-effort workaround for model module collisions (#106), not
+    process isolation. It runs only when an operator explicitly clears the
+    entire model cache; normal TTL/LRU eviction leaves active model imports
+    untouched.
+    """
+
+    code_paths = _model_code_paths(entries)
+    if not code_paths:
+        return 0
+
+    module_names: list[str] = []
+    for name, module in tuple(sys.modules.items()):
+        origin = getattr(module, "__file__", None)
+        if not origin:
+            continue
+        try:
+            module_path = Path(origin).resolve()
+        except OSError:
+            continue
+        if any(module_path.is_relative_to(code_path) for code_path in code_paths):
+            module_names.append(name)
+
+    for name in module_names:
+        sys.modules.pop(name, None)
+    return len(module_names)
+
+
 def _evict_cache(
     *, protected_uri: str | None = None, now: datetime | None = None
 ) -> Dict[str, List[str]]:
@@ -645,11 +693,22 @@ def list_cached_models():
 
 @app.delete("/cache")
 def clear_cached_models():
-    count = len(model_cache)
+    entries = list(model_cache.values())
+    count = len(entries)
+    unloaded_modules = _clear_model_modules(entries)
     model_cache.clear()
     MODEL_CACHE_ENTRIES.set(0)
     sys.path = list(SYS_PATH)
-    return {"cleared_models_count": count}
+    logger.info(
+        "Cleared %s cached model(s), restored sys.path, and unloaded %s "
+        "model artifact module(s).",
+        count,
+        unloaded_modules,
+    )
+    return {
+        "cleared_models_count": count,
+        "unloaded_model_modules_count": unloaded_modules,
+    }
 
 
 if __name__ == "__main__":
