@@ -134,6 +134,9 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
         def shutdown(self):
             self.shutdown_called = True
 
+        def get_meter(self, name):
+            return meter
+
     class _Counter:
         def __init__(self):
             self.calls = []
@@ -224,6 +227,9 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
         def shutdown(self):
             self.shutdown_called = True
 
+        def get_tracer(self, name):
+            return tracer
+
     class _BatchSpanProcessor:
         def __init__(self, exporter):
             self.exporter = exporter
@@ -271,17 +277,9 @@ def test_otel_client_sends_metrics_traces_logs_and_shutdown(monkeypatch):
     )
     monkeypatch.setattr("mlox.services.otel.client.LoggerProvider", _LoggerProvider)
     monkeypatch.setattr("mlox.services.otel.client.LoggingHandler", _LoggingHandler)
+    # A preconfigured global provider must not control MLOX telemetry.
     monkeypatch.setattr(
-        "mlox.services.otel.client.metrics.set_meter_provider", lambda provider: None
-    )
-    monkeypatch.setattr(
-        "mlox.services.otel.client.metrics.get_meter", lambda name: meter
-    )
-    monkeypatch.setattr(
-        "mlox.services.otel.client.trace.set_tracer_provider", lambda provider: None
-    )
-    monkeypatch.setattr(
-        "mlox.services.otel.client.trace.get_tracer", lambda name: tracer
+        "mlox.services.otel.client.trace.get_tracer", lambda name: object()
     )
 
     client = OTelClient(
@@ -349,6 +347,9 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
         def shutdown(self):
             pass
 
+        def get_meter(self, name):
+            return _Meter()
+
     class _TracerProvider:
         def __init__(self, resource):
             self.resource = resource
@@ -359,6 +360,9 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
 
         def shutdown(self):
             pass
+
+        def get_tracer(self, name):
+            return object()
 
     class _BatchSpanProcessor:
         def __init__(self, exporter):
@@ -416,18 +420,6 @@ def test_otel_client_init_from_service_secrets_dict(monkeypatch):
     )
     monkeypatch.setattr("mlox.services.otel.client.LoggerProvider", _LoggerProvider)
     monkeypatch.setattr("mlox.services.otel.client.LoggingHandler", _LoggingHandler)
-    monkeypatch.setattr(
-        "mlox.services.otel.client.metrics.set_meter_provider", lambda provider: None
-    )
-    monkeypatch.setattr(
-        "mlox.services.otel.client.metrics.get_meter", lambda name: _Meter()
-    )
-    monkeypatch.setattr(
-        "mlox.services.otel.client.trace.set_tracer_provider", lambda provider: None
-    )
-    monkeypatch.setattr(
-        "mlox.services.otel.client.trace.get_tracer", lambda name: object()
-    )
 
     service_secrets = {
         "otel_client_connection": {

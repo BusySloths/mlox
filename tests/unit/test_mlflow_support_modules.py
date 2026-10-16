@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime
 import logging
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -494,6 +495,35 @@ def test_serve_run_predict_and_list_models(monkeypatch):
     assert response["is_cached_model"] is False
     assert response["prediction_time_sec"] >= 0
     assert response["model"]["resolved_model_uri"] == "models:/Demo/1"
+
+
+def test_clearing_model_cache_unloads_artifact_modules(monkeypatch, tmp_path):
+    serve.model_cache.clear()
+    artifact_code = tmp_path / "model-artifact" / "code"
+    artifact_code.mkdir(parents=True)
+    module_file = artifact_code / "versioned_model.py"
+    module_file.write_text("VALUE = 'model'\n", encoding="utf-8")
+    module_name = "_mlox_gateway_test_versioned_model"
+    monkeypatch.setitem(
+        sys.modules,
+        module_name,
+        SimpleNamespace(__file__=str(module_file)),
+    )
+    serve.model_cache["models:/Demo/2"] = serve.ModelCacheEntry(
+        model=object(),
+        sys_path=[*serve.SYS_PATH, str(artifact_code)],
+        model_uri="models:/Demo/2",
+    )
+    monkeypatch.setattr(serve.sys, "path", [str(artifact_code)])
+
+    result = serve.clear_cached_models()
+
+    assert result == {
+        "cleared_models_count": 1,
+        "unloaded_model_modules_count": 1,
+    }
+    assert module_name not in sys.modules
+    assert serve.sys.path == serve.SYS_PATH
 
     class _Version:
         def __init__(self, version):
