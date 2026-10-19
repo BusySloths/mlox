@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -20,6 +21,19 @@ from scripts.content_pipeline import (
 )
 
 DEFAULT_REGISTRY = "content/registry.yaml"
+
+
+def load_env_file(repo_root: Path) -> None:
+    """Populate os.environ from a repo .env (existing env wins)."""
+    env_file = repo_root / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
 def repo_root(args: argparse.Namespace) -> Path:
@@ -133,6 +147,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         model=stt_conf.get("model", stt.DEFAULT_MODEL),
         language=stt_conf.get("language", stt.DEFAULT_LANGUAGE),
         chunk_seconds=float(stt_conf.get("chunk_seconds", 30.0)),
+        mode=stt_conf.get("mode", "chunked"),
         work_dir=work,
     )
     transcript, captions = stt.save_transcript(segments, work)
@@ -200,6 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_align)
 
     args = parser.parse_args(argv)
+    load_env_file(Path(args.repo_root).resolve())
     return args.func(args)
 
 

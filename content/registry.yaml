@@ -20,6 +20,7 @@ defaults:
   stt:
     provider: openai
     model: gpt-4o-mini-transcribe
+    mode: chunked
     language: en
     chunk_seconds: 30
   gif:

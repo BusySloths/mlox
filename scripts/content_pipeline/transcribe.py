@@ -96,32 +96,35 @@ def transcribe(
     model: str = DEFAULT_MODEL,
     language: str = DEFAULT_LANGUAGE,
     chunk_seconds: float = DEFAULT_CHUNK_SECONDS,
+    mode: str = "chunked",
     work_dir: Path | None = None,
     post_multipart=_post_multipart,
 ) -> list[Segment]:
     """Transcribe narration audio into timed segments.
 
-    Tries verbose_json first (segments with timestamps); falls back to
-    chunked plain-text transcription with synthesized boundaries.
+    mode="chunked" (default; required for gpt-4o-mini-transcribe, which
+    only returns json/text) slices the audio into chunk_seconds pieces
+    and synthesizes segment boundaries at chunk edges. mode="verbose"
+    reads structured segments from verbose_json (works for whisper-1).
     """
     api_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set.")
 
     audio = Path(audio)
-    verbose = post_multipart(api_key, audio, model, language)
-    segments = [
-        Segment(start=float(s["start"]), end=float(s["end"]),
-                text=str(s["text"]).strip())
-        for s in verbose.get("segments") or []
-    ]
-    if segments:
-        return segments
+    if mode == "verbose":
+        verbose = post_multipart(api_key, audio, model, language)
+        segments = [
+            Segment(start=float(s["start"]), end=float(s["end"]),
+                    text=str(s["text"]).strip())
+            for s in verbose.get("segments") or []
+        ]
+        if segments:
+            return segments
+        raise RuntimeError("verbose_json returned no segments.")
 
     if work_dir is None:
-        raise RuntimeError(
-            "verbose_json returned no segments; chunked mode needs work_dir."
-        )
+        raise RuntimeError("Chunked mode needs work_dir.")
     chunks = _slice_audio(audio, work_dir / "audio-chunks", chunk_seconds)
     segments = []
     for index, chunk in enumerate(chunks):
