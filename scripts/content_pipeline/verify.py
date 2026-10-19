@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.content_pipeline import redact
+from scripts.content_pipeline import redact, transcribe as stt
 
 
 def verify(artifacts: list[str | Path], work_dir: Path) -> list[str]:
@@ -14,6 +14,13 @@ def verify(artifacts: list[str | Path], work_dir: Path) -> list[str]:
     if not originals:
         return []
     leaks: list[str] = []
+    # audio track: narration mentioning an original entity
+    if (work_dir / "transcript.json").exists():
+        segments = stt.load_transcript(work_dir)
+        leaks.extend(
+            f"audio: mentioned '{original}'"
+            for original in stt.transcript_leaks(originals, segments)
+        )
     for artifact in artifacts:
         frames = redact.extract_frames(
             str(artifact), work_dir / "verify-frames", fps=0.5)

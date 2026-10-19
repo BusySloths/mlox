@@ -9,7 +9,15 @@ import argparse
 import sys
 from pathlib import Path
 
-from scripts.content_pipeline import config, cut, ingest, redact, render, verify
+from scripts.content_pipeline import (
+    config,
+    cut,
+    ingest,
+    redact,
+    render,
+    transcribe as stt,
+    verify,
+)
 
 DEFAULT_REGISTRY = "content/registry.yaml"
 
@@ -112,6 +120,32 @@ def cmd_render(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_transcribe(args: argparse.Namespace) -> int:
+    piece, registry = piece_config(args)
+    stt_conf = {
+        **registry.defaults.get("stt", {}),
+        **piece.redact.get("stt", {}),
+    }
+    work = work_dir(args)
+    audio = stt.extract_audio(args.video, work / "audio.ogg")
+    segments = stt.transcribe(
+        audio,
+        model=stt_conf.get("model", stt.DEFAULT_MODEL),
+        language=stt_conf.get("language", stt.DEFAULT_LANGUAGE),
+        chunk_seconds=float(stt_conf.get("chunk_seconds", 30.0)),
+        work_dir=work,
+    )
+    transcript, captions = stt.save_transcript(segments, work)
+    markers = stt.extract_markers(segments)
+    print(f"wrote {transcript} and {captions}")
+    for name, at in markers:
+        print(f"  chapter {name} @ {at:.0f}s")
+    if not markers:
+        print("No chapter markers heard — add spoken 'chapter <name>' cues "
+              "or edit timeline.json by hand.")
+    return 0
+
+
 def cmd_align(args: argparse.Namespace) -> int:
     from scripts.content_pipeline import align as align_mod
 
@@ -153,6 +187,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--slug", required=True)
     p.add_argument("--script", required=True)
     p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser("transcribe")
+    p.add_argument("video")
+    p.add_argument("--slug", required=True)
+    p.set_defaults(func=cmd_transcribe)
 
     p = sub.add_parser("align")
     p.add_argument("video")

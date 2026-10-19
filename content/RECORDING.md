@@ -24,7 +24,8 @@ Follow this before every recording; the pipeline validates against it.
   post-processing alone — the redact stage is a safety net, not a substitute
 - Never show public IPs you do not want published; all IPs are redacted
   regardless (same-length documentation-range swaps)
-- Speak a `chapter: <name>` marker before each chapter
+- Speak a `chapter: <name>` marker before each chapter (the STT stage
+  transcribes it via `gpt-4o-mini-transcribe` to build the timeline)
 - Move the mouse slowly; leave no typos on screen
 - Save as `content/recordings/<slug>.mkv` (gitignored)
 

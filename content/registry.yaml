@@ -17,6 +17,11 @@ defaults:
       airtime-event: demo-event-recommender
       airtime-recom: demo-recommender
       airtime-ml: demo-ml
+  stt:
+    provider: openai
+    model: gpt-4o-mini-transcribe
+    language: en
+    chunk_seconds: 30
   gif:
     max_seconds: 15
     fps: 12
