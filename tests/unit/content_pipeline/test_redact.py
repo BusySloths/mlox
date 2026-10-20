@@ -52,7 +52,8 @@ def test_cluster_patches_majority_vote_beats_single_misread():
     patches = cluster_patches(detections)
     assert len(patches) == 1
     assert patches[0].replacement == "198.51.100.142"
-    assert patches[0].windows == {(0, 5), (5, 11), (11, 15)}
+    # adjacent windows merge into one contiguous coverage run
+    assert patches[0].windows == {(0, 15)}
 
 
 def test_propagate_persistent_extends_sidebar_entities():

@@ -29,6 +29,21 @@ defaults:
     width: 960
 
 pieces:
+  - slug: pilot-demo
+    type: demo
+    title: "MLOX in two minutes: from command line to your infrastructure"
+    status: scripted
+    services: []
+    outputs:
+      - type: readme_gif
+        dest: mlox/resources/tui-demo.gif
+      - type: screenshot
+        dest: mlox/resources/tui-login.png
+      - type: screenshot
+        dest: mlox/resources/tui-overview.png
+      - type: screenshot
+        dest: mlox/resources/tui-tabs.png
+
   - slug: install-to-first-service
     type: tutorial
     title: "Install MLOX, open the TUI, deploy your first service"

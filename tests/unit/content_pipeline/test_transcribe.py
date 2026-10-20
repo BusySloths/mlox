@@ -52,7 +52,7 @@ def test_transcribe_uses_verbose_json_segments_when_present(tmp_path, monkeypatc
         ]}
 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    segments = transcribe(audio, api_key="k", work_dir=tmp_path,
+    segments = transcribe(audio, api_key="k", mode="verbose", work_dir=tmp_path,
                           post_multipart=fake_post)
     assert segments == [Segment(0.0, 2.0, "chapter intro")]
 

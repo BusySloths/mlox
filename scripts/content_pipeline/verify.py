@@ -22,8 +22,9 @@ def verify(artifacts: list[str | Path], work_dir: Path) -> list[str]:
             for original in stt.transcript_leaks(originals, segments)
         )
     for artifact in artifacts:
+        # upscale before OCR — small sidebar text is invisible at native size
         frames = redact.extract_frames(
-            str(artifact), work_dir / "verify-frames", fps=0.5)
+            str(artifact), work_dir / "verify-frames", fps=0.5, scale=3)
         for frame in frames:
             text = redact.run(
                 ["tesseract", str(frame), "-", "--psm", "6"]).stdout

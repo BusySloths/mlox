@@ -11,6 +11,7 @@ publish.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from collections import Counter
@@ -77,13 +78,32 @@ class Patch:
     replacement: str
     windows: set[tuple[float, float]] = field(default_factory=set)
     bg: str = "0x042527"
+    frame: Path | None = None
+
+
+def _merge_windows(
+    windows: set[tuple[float, float]], max_gap: float = 2.5
+) -> list[tuple[float, float]]:
+    """Merge overlapping/adjacent time windows into contiguous runs.
+
+    The gap tolerance bridges single-frame OCR misses (one missed frame at
+    0.5 fps would otherwise open a 2 s blink hole in the coverage).
+    """
+    merged: list[tuple[float, float]] = []
+    for ws, we in sorted(windows):
+        if merged and ws <= merged[-1][1] + max_gap:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], we))
+        else:
+            merged.append((ws, we))
+    return merged
 
 
 def cluster_patches(detections: list[Patch]) -> list[Patch]:
     """Merge detections at (roughly) the same position into canonical patches.
 
     The replacement is the majority vote across scenes, so a single OCR
-    misread cannot win; windows are unioned; geometry comes from first sight.
+    misread cannot win; windows are unioned (and merged into contiguous
+    runs); geometry comes from first sight.
     """
     clustered: dict[tuple[int, int], list[Patch]] = {}
     for det in detections:
@@ -100,7 +120,10 @@ def cluster_patches(detections: list[Patch]) -> list[Patch]:
                 w=first.w,
                 h=first.h,
                 replacement=counts.most_common(1)[0][0],
-                windows=set().union(*(p.windows for p in group)),
+                windows=set(_merge_windows(
+                    [w for p in group for w in p.windows]
+                )),
+                frame=first.frame,
             )
         )
     return patches
@@ -183,9 +206,16 @@ def probe_duration(video: str) -> float:
     return float(json.loads(proc.stdout)["format"]["duration"])
 
 
-def extract_frames(video: str, out_dir: Path, fps: int = 1) -> list[Path]:
+def extract_frames(
+    video: str, out_dir: Path, fps: float = 1, scale: int = 1
+) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    run(["ffmpeg", "-v", "error", "-i", video, "-vf", f"fps={fps}",
+    for stale in out_dir.glob("f*.png"):
+        stale.unlink()
+    vf = f"fps={fps}"
+    if scale > 1:
+        vf += f",scale=iw*{scale}:ih*{scale}:flags=lanczos"
+    run(["ffmpeg", "-v", "error", "-i", video, "-vf", vf,
          str(out_dir / "f%02d.png")])
     return sorted(out_dir.glob("f*.png"))
 
@@ -202,6 +232,18 @@ def sample_bg(frame: str, x: int, y: int, w: int, h: int) -> str:
     return "0x042527"
 
 
+def _frame_tsv(frame: Path) -> str:
+    """OCR one frame (psm 6, upscaled), cached on disk next to the frame."""
+    cache = frame.with_suffix(".tsv")
+    if cache.exists():
+        return cache.read_text()
+    proc = run(
+        ["tesseract", str(frame), "-", "--psm", "6", "tsv"],
+        env={**os.environ, "OMP_THREAD_LIMIT": "1"})
+    cache.write_text(proc.stdout)
+    return proc.stdout
+
+
 def detect(
     video: str,
     work_dir: Path,
@@ -210,28 +252,35 @@ def detect(
     prefixes: dict[str, str] | None = None,
     ip_prefix: str = DEFAULT_IP_PREFIX,
     min_conf: float = 40.0,
+    upscale: int = 2,
+    workers: int = 4,
+    fps: float = 0.5,
 ) -> dict:
-    """Full detection pass: frames → OCR → classify → clustered patches."""
-    duration = probe_duration(video)
-    scenes = scene_pairs(detect_scenes(video), duration)
-    frames = extract_frames(video, work_dir / "frames")
-    frame_for_scene: dict[tuple[float, float], Path] = {}
-    for frame in frames:
-        t = int(frame.stem[1:]) - 0.5
-        for pair in scenes:
-            if pair[0] <= t < pair[1]:
-                frame_for_scene.setdefault(pair, frame)
-                break
+    """Full detection pass: frames → OCR → classify → clustered patches.
+
+    Frames are upscaled before OCR — small sidebar text is invisible to
+    tesseract at native resolution (validated on real recordings). Every
+    second gets an OCR pass so patch coverage follows actual visibility;
+    per-position clusters vote on the canonical replacement and merge their
+    windows into contiguous ranges. TSV results are cached per frame, so
+    interrupted runs resume where they stopped.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    frames = extract_frames(video, work_dir / "frames", fps=fps, scale=upscale)
 
     literals = {**DEFAULT_LITERALS, **(literals or {})}
     prefixes = {**DEFAULT_PREFIXES, **(prefixes or {})}
     detections: list[Patch] = []
     originals: set[str] = set()
-    for (start, end), frame in sorted(frame_for_scene.items()):
-        tsv = ""
-        for psm in ("6", "11"):
-            proc = run(["tesseract", str(frame), "-", "--psm", psm, "tsv"])
-            tsv += proc.stdout
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        tsvs = list(pool.map(_frame_tsv, frames))
+
+    for frame, tsv in zip(frames, tsvs):
+        n = int(frame.stem[1:])
+        t = (n - 0.5) / fps
+        window = (t - 0.5 / fps, t + 0.5 / fps)
         for line in tsv.splitlines()[1:]:
             parts = line.split("\t")
             if len(parts) < 12:
@@ -247,19 +296,25 @@ def detect(
             if replacement is None or conf < min_conf or not word:
                 continue
             originals.add(word)
-            x, y, w, h = (int(parts[i]) for i in (6, 7, 8, 9))
+            x, y, w, h = (int(parts[i]) // upscale for i in (6, 7, 8, 9))
             detections.append(
                 Patch(x=x, y=y, w=w, h=h, replacement=replacement,
-                      windows={(start, end)})
+                      windows={window}, frame=frame)
             )
 
     patches = cluster_patches(detections)
-    propagate_persistent(patches, scenes, tui_start=min(s for s, _ in scenes[2:]))
+    frame_period = 1 / fps
     for patch in patches:
-        first_scene = sorted(patch.windows)[0]
-        frame = frame_for_scene.get(first_scene)
-        if frame is not None:
-            patch.bg = sample_bg(str(frame), patch.x, patch.y, patch.w, patch.h)
+        # a patch stays valid until the next sampled frame — pad the end by
+        # one frame period so the last visible second stays covered
+        patch.windows = {(ws, we + frame_period) for ws, we in patch.windows}
+    for patch in patches:
+        if patch.frame is None:
+            continue
+        patch.bg = sample_bg(
+            str(patch.frame),
+            patch.x * upscale, patch.y * upscale,
+            patch.w * upscale, patch.h * upscale)
 
     payload = {
         "originals": sorted(originals, key=str.lower),
