@@ -209,6 +209,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, milestone, and PR workflow
 | [Services Catalog](docs/SERVICES_CATALOG.md) | Generated service/server catalog |
 | [Architecture](docs/ARCHITECTURE.md) | Codebase walkthrough |
 | [Installation Guide](docs/INSTALLATION.md) | Setup from scratch |
+| [Content Pipeline Recipe](docs/CONTENT_PIPELINE.md) | Script, record, redact, verify, and publish demos/tutorial media |
 | [Project Files](docs/PROJECT_FILES.md) | Encrypted project files, backup, migration |
 | [Contributing Guide](CONTRIBUTING.md) | How to contribute |
 | [Plugin Guide](docs/PLUGIN_CONFIGS.md) | External service and server config plugins |

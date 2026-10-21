@@ -10,6 +10,7 @@ Guides live in the repo and are linked from the sidebar:
 
 - [Architecture](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE.md)
 - [Installation](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md)
+- [Content Pipeline](https://github.com/BusySloths/mlox/blob/main/docs/CONTENT_PIPELINE.md)
 - [Contributing](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md)
 - [Doctrine — status & roadmap](https://github.com/BusySloths/mlox/blob/main/docs/DOCTRINE.md)
 - [Troubleshooting](Troubleshooting)
