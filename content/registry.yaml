@@ -7,6 +7,12 @@ defaults:
     max_fps: 30
     terminal: 120x36
     font: "JetBrainsMono Nerd Font"
+  video:
+    # Keep native captures local; all visual stages use this normalized master.
+    # Limits preserve the source aspect ratio (e.g. 3000x2000 -> 1920x1280).
+    working_max_width: 1920
+    working_max_height: 1440
+    fps: 30
   redact:
     ip_replacement_prefix: 198.51.100
     literals:

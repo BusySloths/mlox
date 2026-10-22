@@ -14,6 +14,7 @@ from scripts.content_pipeline import (
     config,
     cut,
     ingest,
+    normalize,
     redact,
     render,
     transcribe as stt,
@@ -58,6 +59,20 @@ def cmd_ingest(args: argparse.Namespace) -> int:
           f"{data['bit_rate'] // 1000} kbit/s")
     for warning in warnings:
         print(f"WARN: {warning}")
+    return 0
+
+
+def cmd_normalize(args: argparse.Namespace) -> int:
+    registry = config.load_registry(repo_root(args) / args.registry)
+    video = registry.defaults.get("video", {})
+    out = normalize.normalize(
+        args.video,
+        work_dir(args) / "normalized.mp4",
+        max_width=int(video.get("working_max_width", 1920)),
+        max_height=int(video.get("working_max_height", 1440)),
+        fps=int(video.get("fps", 30)),
+    )
+    print(f"wrote {out}")
     return 0
 
 
@@ -177,6 +192,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("ingest")
     p.add_argument("video")
     p.set_defaults(func=cmd_ingest)
+
+    p = sub.add_parser("normalize")
+    p.add_argument("video")
+    p.add_argument("--slug", required=True)
+    p.set_defaults(func=cmd_normalize)
 
     p = sub.add_parser("redact")
     p.add_argument("video")

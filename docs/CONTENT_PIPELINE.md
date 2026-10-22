@@ -16,7 +16,7 @@ artifacts only.
 | Piece metadata and output destinations | `content/registry.yaml` | Yes |
 | Spoken/on-screen source script | `content/<slug>/script.md` | Yes |
 | Recording | `content/recordings/<slug>.<ext>` | No |
-| Transcript, timeline, redaction map, frames, redacted video | `content/.work/<slug>/` | No |
+| Normalized working video, transcript, timeline, redaction map, frames | `content/.work/<slug>/` | No |
 | Published screenshots, GIFs, articles | Registry `outputs[].dest` | Yes |
 
 Do not start from an unplanned recording: write and review the script first.
@@ -30,10 +30,11 @@ recording. See the [recording checklist](../content/RECORDING.md).
    unique destination; two pieces must not claim the same file.
 2. Create `content/<slug>/script.md`, including front matter and the chapter
    structure above.
-3. Record with the OBS preset in `content/RECORDING.md`: 1920×1080 canvas and
-   output, 30 fps, H.264/yuv420p, and 48 kHz audio. Use a disposable demo
-   project and do not put real identities, credentials, or server addresses on
-   screen.
+3. Record natively with the clearest available capture tool. High-resolution
+   macOS/Retina recordings are supported; keep the source aspect ratio and use
+   30 fps, H.264/yuv420p where available, and 48 kHz audio. Use a disposable
+   demo project and do not put real identities, credentials, or server
+   addresses on screen.
 4. Save the recording as `content/recordings/<slug>.mp4` (or `.mkv`). It is
    intentionally ignored by Git.
 
@@ -48,29 +49,36 @@ Python dependencies.
 # 1. Validate the recording preset. Fix warnings before continuing.
 uv run python -m scripts.content_pipeline ingest content/recordings/<slug>.mp4
 
-# 2. Create transcript.json and captions.srt; chapter markers are approximate.
-uv run python -m scripts.content_pipeline transcribe content/recordings/<slug>.mp4 --slug <slug>
+# 2. Create a local working master. It preserves aspect ratio and uses the
+#    registry limits (default: at most 1920x1440; 3000x2000 becomes 1920x1280).
+uv run python -m scripts.content_pipeline normalize content/recordings/<slug>.mp4 --slug <slug>
 
-# 3. Until automated visual alignment exists, review frames and create this
+# All remaining visual stages use the normalized working master.
+WORKING=content/.work/<slug>/normalized.mp4
+
+# 3. Create transcript.json and captions.srt; chapter markers are approximate.
+uv run python -m scripts.content_pipeline transcribe "$WORKING" --slug <slug>
+
+# 4. Until automated visual alignment exists, review frames and create this
 #    local timeline by hand. Do not estimate chapter bounds from memory.
 # content/.work/<slug>/timeline.json
 # {"chapters":[{"name":"intro","start":0,"end":42}]}
 
-# 4. Detect possible sensitive text, inspect redaction.json, then apply it.
-uv run python -m scripts.content_pipeline redact content/recordings/<slug>.mp4 --slug <slug>
+# 5. Detect possible sensitive text, inspect redaction.json, then apply it.
+uv run python -m scripts.content_pipeline redact "$WORKING" --slug <slug>
 
 # Re-run with --yes only after reviewing the mapping.
-uv run python -m scripts.content_pipeline redact content/recordings/<slug>.mp4 --slug <slug> --yes
+uv run python -m scripts.content_pipeline redact "$WORKING" --slug <slug> --yes
 
-# 5. Make screenshots and one GIF from explicit, reviewed timestamps.
-uv run python -m scripts.content_pipeline cut content/recordings/<slug>.mp4 \
+# 6. Make screenshots and one GIF from explicit, reviewed timestamps.
+uv run python -m scripts.content_pipeline cut "$WORKING" \
   --slug <slug> --shots 12 48 --gif 54 66 --out /tmp/<slug>-artifacts
 
-# 6. Check every final visual artifact before committing or publishing.
+# 7. Check every final visual artifact before committing or publishing.
 uv run python -m scripts.content_pipeline verify /tmp/<slug>-artifacts/*.png \
   /tmp/<slug>-artifacts/demo.gif --slug <slug>
 
-# 7. Render an article when the piece declares an article output.
+# 8. Render an article when the piece declares an article output.
 uv run python -m scripts.content_pipeline render --slug <slug> \
   --script content/<slug>/script.md
 ```
@@ -80,6 +88,11 @@ The `cut` command currently uses generic temporary filenames (`demo.gif` and
 `outputs[].dest` names in the registry, and copy them there before committing.
 Keep GIFs at or below 15 seconds, 12 fps, and 960 px wide. The helper function
 for MP4 clips exists, but clip creation is not yet exposed by the CLI.
+
+The normalization limits are in `defaults.video` in `content/registry.yaml`.
+They preserve aspect ratio and make dimensions even for yuv420p. Do not use the
+normalized copy as a replacement for the local source master; regenerate it
+when changing the working profile.
 
 ## Redaction and publishing gate
 
