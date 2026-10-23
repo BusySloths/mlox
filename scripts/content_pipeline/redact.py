@@ -212,6 +212,8 @@ def extract_frames(
     out_dir.mkdir(parents=True, exist_ok=True)
     for stale in out_dir.glob("f*.png"):
         stale.unlink()
+    for stale in out_dir.glob("f*.tsv"):
+        stale.unlink()
     vf = f"fps={fps}"
     if scale > 1:
         vf += f",scale=iw*{scale}:ih*{scale}:flags=lanczos"
