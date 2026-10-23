@@ -18,7 +18,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-IP_RE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+IP_RE = re.compile(r"^([^\w]*)(\d{1,3}(?:\.\d{1,3}){3})([^\w]*)$")
 DEFAULT_MAX_FS = 14
 DEFAULT_MIN_FS = 10
 DEFAULT_CHAR_W = 0.62
@@ -51,8 +51,10 @@ def classify_word(
     low = word.strip().lower()
     if not low:
         return None
-    if IP_RE.match(low):
-        return f"{ip_prefix}.{low.rsplit('.', 1)[1]}"
+    ip = IP_RE.match(low)
+    if ip:
+        lead, addr, trail = ip.groups()
+        return f"{lead}{ip_prefix}.{addr.rsplit('.', 1)[1]}{trail}"
     for prefix, repl in (prefixes if prefixes is not None else DEFAULT_PREFIXES).items():
         if low.startswith(prefix):
             return repl
