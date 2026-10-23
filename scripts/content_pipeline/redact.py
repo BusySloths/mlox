@@ -351,4 +351,3 @@ def apply(video: str, work_dir: Path, out: str | Path | None = None) -> Path:
          "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-c:a", "copy",
          "-y", str(out)])
     return out
-
