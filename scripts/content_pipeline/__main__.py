@@ -53,7 +53,7 @@ def piece_config(args: argparse.Namespace) -> config.Piece:
 
 def cmd_ingest(args: argparse.Namespace) -> int:
     data = ingest.probe(args.video)
-    registry = config.load_registry(Path(args.registry))
+    registry = config.load_registry(repo_root(args) / args.registry)
     warnings = ingest.check(data, registry.defaults)
     print(f"{args.video}: {data['width']}x{data['height']} @ {data['fps']} fps, "
           f"{data['duration']:.1f}s, {data['codec']}/{data['pix_fmt']}, "
