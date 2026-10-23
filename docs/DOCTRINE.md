@@ -269,6 +269,7 @@ never duplicate the list in both places.
 | Doctrine (status/roadmap/decisions) | `docs/DOCTRINE.md` | **Source of truth.** |
 | Service/service catalog | `mlox*/**/*.yaml` → `docs/SERVICES_CATALOG.md` | Generated, never hand-edited. |
 | Architecture + invariants (humans & agents) | `docs/ARCHITECTURE.md` | Single entry; no status/roadmap. |
+| Content-production procedure | `docs/CONTENT_PIPELINE.md` | Recipe for script-derived tutorial/demo media; sources live in `content/`. |
 | Contributor process | `CONTRIBUTING.md` | Issues, labels, milestones, PRs. |
 | Marketing/quickstart | `README.md` | Links only; no catalogs or status lists. |
 | GitHub Wiki | `wiki/` | Derived; catalog page is generated. |

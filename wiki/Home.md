@@ -131,6 +131,7 @@ We welcome contributors, users, and honest feedback.
 | Services Catalog | [Services Catalog](Services-Catalog) wiki page |
 | Architecture | [`docs/ARCHITECTURE.md`](https://github.com/BusySloths/mlox/blob/main/docs/ARCHITECTURE.md) |
 | Installation Guide | [`docs/INSTALLATION.md`](https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md) |
+| Content Pipeline Recipe | [`docs/CONTENT_PIPELINE.md`](https://github.com/BusySloths/mlox/blob/main/docs/CONTENT_PIPELINE.md) |
 | Contributing Guide | [`CONTRIBUTING.md`](https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md) |
 | Plugin Guide | [`docs/PLUGIN_CONFIGS.md`](https://github.com/BusySloths/mlox/blob/main/docs/PLUGIN_CONFIGS.md) |
 | Project Files | [`docs/PROJECT_FILES.md`](https://github.com/BusySloths/mlox/blob/main/docs/PROJECT_FILES.md) |

@@ -1,0 +1,62 @@
+# Content registry — the metadata source of truth for every media piece.
+# Sources (script.md) are committed; recordings and intermediates stay local.
+
+defaults:
+  recording:
+    min_height: 1080
+    max_fps: 30
+    terminal: 120x36
+    font: "JetBrainsMono Nerd Font"
+  video:
+    # Keep native captures local; all visual stages use this normalized master.
+    # Limits preserve the source aspect ratio (e.g. 3000x2000 -> 1920x1280).
+    working_max_width: 1920
+    working_max_height: 1440
+    fps: 30
+  redact:
+    ip_replacement_prefix: 198.51.100
+    literals:
+      nicococo: demo
+      ooitflow: demoflow
+      tootflow: demoflow
+    prefixes:
+      airtime-event: demo-event-recommender
+      airtime-recom: demo-recommender
+      airtime-ml: demo-ml
+  stt:
+    provider: openai
+    model: gpt-4o-mini-transcribe
+    mode: chunked
+    language: en
+    chunk_seconds: 30
+  gif:
+    max_seconds: 15
+    fps: 12
+    width: 960
+
+pieces:
+  - slug: pilot-demo
+    type: demo
+    title: "MLOX in two minutes: from command line to your infrastructure"
+    status: scripted
+    services: []
+    outputs:
+      - type: readme_gif
+        dest: mlox/resources/tui-demo.gif
+      - type: screenshot
+        dest: mlox/resources/tui-login.png
+      - type: screenshot
+        dest: mlox/resources/tui-overview.png
+      - type: screenshot
+        dest: mlox/resources/tui-tabs.png
+
+  - slug: install-to-first-service
+    type: tutorial
+    title: "Install MLOX, open the TUI, deploy your first service"
+    status: draft
+    services: []
+    outputs:
+      - type: article
+        dest: docs/tutorial-install-to-first-service.md
+      - type: readme_gif
+        dest: mlox/resources/tui-demo.gif
