@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -82,12 +83,18 @@ def cmd_redact(args: argparse.Namespace) -> int:
         **registry.defaults.get("redact", {}),
         **piece.redact,
     }
-    payload = redact.detect(
-        args.video, work_dir(args),
-        literals=piece_redact.get("literals"),
-        prefixes=piece_redact.get("prefixes"),
-        ip_prefix=piece_redact.get("ip_replacement_prefix", redact.DEFAULT_IP_PREFIX),
-    )
+    wd = work_dir(args)
+    saved = wd / "redaction.json"
+    if args.yes and saved.exists():
+        # Apply the map the contributor already reviewed; do not regenerate it.
+        payload = json.loads(saved.read_text())
+    else:
+        payload = redact.detect(
+            args.video, wd,
+            literals=piece_redact.get("literals"),
+            prefixes=piece_redact.get("prefixes"),
+            ip_prefix=piece_redact.get("ip_replacement_prefix", redact.DEFAULT_IP_PREFIX),
+        )
     mapping = {p["replacement"] for p in payload["patches"]}
     print(f"{len(payload['patches'])} patches, originals: "
           f"{len(payload['originals'])}, replacements: {sorted(mapping)}")
@@ -97,7 +104,7 @@ def cmd_redact(args: argparse.Namespace) -> int:
             print("Aborted — review content/.work/"
                   f"{args.slug}/redaction.json and re-run with --yes.")
             return 1
-    out = redact.apply(args.video, work_dir(args))
+    out = redact.apply(args.video, wd)
     print(f"wrote {out}")
     return 0
 
@@ -137,8 +144,6 @@ def cmd_render(args: argparse.Namespace) -> int:
     timeline_path = work_dir(args) / "timeline.json"
     timeline = None
     if timeline_path.exists():
-        import json
-
         timeline = json.loads(timeline_path.read_text())
     for output in piece.outputs:
         if output.get("type") == "article":
