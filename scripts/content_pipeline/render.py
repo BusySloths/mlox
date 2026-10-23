@@ -41,7 +41,7 @@ def render_article(script_path: str | Path, timeline: dict | None = None) -> str
             start = chapter.get("start", "")
             out.append(f"- `{start}` {label}")
         out.append("")
-    out.append(script.body)
+    out.append(script.body.removeprefix(f"# {title}\n").lstrip())
     return "\n".join(out).strip() + "\n"
 
 
