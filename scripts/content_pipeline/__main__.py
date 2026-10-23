@@ -147,7 +147,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         timeline = json.loads(timeline_path.read_text())
     for output in piece.outputs:
         if output.get("type") == "article":
-            dest = render.publish_article(args.script, output["dest"])
+            dest = render.publish_article(args.script, repo_root(args) / output["dest"])
             print(f"wrote {dest}")
             return 0
     print("Piece has no article output.")
