@@ -822,7 +822,11 @@ def test_otel_destination_update_validates_restarts_and_rolls_back(conn):
     )
     service.exec.service_states["otel-collector"] = "running"
     result = service.update_destinations(conn, file_destination=False)
-    assert result == {"updated": False, "rolled_back": True, "error": "collector destination update failed"}
+    assert result == {
+        "updated": False,
+        "rolled_back": True,
+        "error": "At least one OpenTelemetry destination must be enabled.",
+    }
     assert any(call[0] == "docker_restart" for call in service.exec.calls)
     assert service.file_destination is True
 

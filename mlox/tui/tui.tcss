@@ -2436,6 +2436,12 @@ OtelDestinationDialog {
   margin-left: 1;
 }
 
+#otel-destination-status {
+  height: auto;
+  color: #cbd5e1;
+  margin-top: 1;
+}
+
 #rename-service-dialog,
 #runtime-providers-dialog,
 #remove-service-dialog {

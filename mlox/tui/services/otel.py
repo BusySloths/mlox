@@ -1330,6 +1330,7 @@ class OtelDestinationSettingsPanel(Vertical):
             id="otel-open-destinations",
             variant="primary",
         )
+        yield Static("", id="otel-destination-status")
 
     @on(Button.Pressed, "#otel-open-destinations")
     def open_destinations(self, _: Button.Pressed) -> None:
@@ -1348,6 +1349,9 @@ class OtelDestinationSettingsPanel(Vertical):
         button = self.query_one("#otel-open-destinations", Button)
         button.disabled = True
         button.label = "Applying collector destinations…"
+        self.query_one("#otel-destination-status", Static).update(
+            "Applying collector destinations…"
+        )
         app = self.app
 
         def apply() -> None:
@@ -1382,19 +1386,22 @@ class OtelDestinationSettingsPanel(Vertical):
                 for name, value in destinations.items()
                 if value
             )
-            self.notify(
-                f"Collector updated. Active destinations: {enabled or 'none'}."
+            message = f"Collector updated. Active destinations: {enabled or 'none'}."
+            self.query_one("#otel-destination-status", Static).update(
+                Text(message, style="bold #86efac")
             )
+            self.notify(message)
         else:
             suffix = (
                 "; previous configuration restored"
                 if result.get("rolled_back")
                 else ""
             )
-            self.notify(
-                f"Update failed: {result.get('error', 'unknown error')}{suffix}",
-                severity="error",
+            message = f"Update failed: {result.get('error', 'unknown error')}{suffix}"
+            self.query_one("#otel-destination-status", Static).update(
+                Text(message, style="bold #ff9b9b")
             )
+            self.notify(message, severity="error")
 
 
 class OtelServicePanel(Vertical):

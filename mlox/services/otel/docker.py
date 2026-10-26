@@ -470,6 +470,17 @@ class OtelDockerService(
             "new_relic": self._has_new_relic_exporter(),
         }
 
+    def _destination_failure_message(self, error: Exception) -> str:
+        """Return an actionable failure reason without exposing credentials."""
+
+        detail = str(error).strip() or "collector destination update failed"
+        sensitive_values = [self.relic_key, self.grafana_cloud_key]
+        sensitive_values.extend((self._influx_binding or {}).values())
+        for value in sensitive_values:
+            if value and len(value) >= 5:
+                detail = detail.replace(value, "[redacted]")
+        return detail[:500]
+
     def update_destinations(self, conn, **destinations: Any) -> Dict[str, Any]:
         """Render, validate, restart, health-check, and roll back destinations.
 
@@ -511,7 +522,9 @@ class OtelDockerService(
                 raise RuntimeError("collector did not become healthy")
             self._discard_collector_backup(conn)
             return {"updated": True, "destinations": self.collector_destinations()}
-        except Exception:
+        except Exception as error:
+            failure_message = self._destination_failure_message(error)
+            logging.exception("OpenTelemetry collector destination update failed")
             for name, value in previous.items():
                 setattr(self, name, value)
             self._normalize_destination_flags()
@@ -533,7 +546,7 @@ class OtelDockerService(
             return {
                 "updated": False,
                 "rolled_back": restored,
-                "error": "collector destination update failed",
+                "error": failure_message,
             }
 
     def _backup_collector_files(self, conn) -> None:

@@ -239,6 +239,7 @@ async def _mounted_otel_service_panel_has_destination_button() -> str:
     async with app.run_test() as pilot:
         await pilot.pause(0.2)
         label = str(app.query_one("#otel-open-destinations", Button).label)
+        app.query_one("#otel-destination-status", Static)
     return label
 
 
