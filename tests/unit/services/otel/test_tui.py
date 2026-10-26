@@ -7,12 +7,13 @@ from types import SimpleNamespace
 
 import pytest
 from textual.app import App, ComposeResult
-from textual.widgets import Checkbox, Select
+from textual.widgets import Button, Input, Static
 
 from mlox.tui.services.otel import (
     MetricGroup,
     OtelServicePanel,
     OtelTelemetryPanel,
+    _destination_validation_error,
     _influx_service_options,
     _destination_update_values,
     _build_resource_snapshot,
@@ -34,8 +35,10 @@ class DummyService:
     influx_service_uuid: str | None = None
     grafana_cloud_destination: bool = False
     grafana_cloud_endpoint: str = ""
+    grafana_cloud_key: str = ""
     new_relic_destination: bool = False
     relic_endpoint: str = ""
+    relic_key: str = ""
     diagnostic_exporter: bool = False
 
     def get_telemetry_data(self, bundle):  # pragma: no cover - simple passthrough
@@ -215,7 +218,18 @@ def test_influx_service_options_only_list_binding_capable_databases() -> None:
     ]
 
 
-async def _mounted_otel_service_panel_has_destination_form() -> tuple[bool, str]:
+def test_destination_validation_requires_hosted_destination_api_keys() -> None:
+    assert _destination_validation_error(
+        {
+            "grafana_cloud_destination": True,
+            "grafana_cloud_endpoint": "https://grafana.example/otlp",
+            "grafana_cloud_key": "",
+            "new_relic_destination": False,
+        }
+    ) == "Grafana Cloud needs both an OTLP endpoint and an API key."
+
+
+async def _mounted_otel_service_panel_has_destination_button() -> str:
     panel = settings(
         infra=None,  # type: ignore[arg-type]
         bundle=DummyBundle(),  # type: ignore[arg-type]
@@ -224,16 +238,37 @@ async def _mounted_otel_service_panel_has_destination_form() -> tuple[bool, str]
     app = OtelPanelTestApp(panel)  # type: ignore[arg-type]
     async with app.run_test() as pilot:
         await pilot.pause(0.2)
-        enabled = app.query_one("#otel-file-destination", Checkbox).value
-        prompt = app.query_one("#otel-influx-service", Select).prompt
-    return enabled, prompt
+        label = str(app.query_one("#otel-open-destinations", Button).label)
+    return label
 
 
-def test_otel_service_panel_mounts_destination_form() -> None:
-    enabled, prompt = asyncio.run(_mounted_otel_service_panel_has_destination_form())
+def test_otel_service_panel_mounts_destination_button() -> None:
+    label = asyncio.run(_mounted_otel_service_panel_has_destination_button())
 
-    assert enabled is True
-    assert "disable InfluxDB" in prompt
+    assert label == "Configure Collector Destinations"
+
+
+async def _opened_destination_dialog_has_api_key_controls() -> tuple[str, str]:
+    panel = settings(
+        infra=None,  # type: ignore[arg-type]
+        bundle=DummyBundle(),  # type: ignore[arg-type]
+        service=DummyService(telemetry=_jsonl({"resourceMetrics": []})),
+    )
+    app = OtelPanelTestApp(panel)  # type: ignore[arg-type]
+    async with app.run_test() as pilot:
+        await pilot.click("#otel-open-destinations")
+        await pilot.pause(0.1)
+        title = app.screen.query_one("#otel-destinations-title", Static).render()
+        grafana_key = app.screen.query_one("#otel-grafana-key", Input).placeholder
+        relic_key = app.screen.query_one("#otel-relic-key", Input).placeholder
+    return str(title), f"{grafana_key}|{relic_key}"
+
+
+def test_otel_destination_dialog_exposes_hosted_destination_api_keys() -> None:
+    title, key_placeholders = asyncio.run(_opened_destination_dialog_has_api_key_controls())
+
+    assert title == "COLLECTOR DESTINATIONS"
+    assert "Required when enabled" in key_placeholders
 
 
 async def _mounted_otel_panel_snapshot() -> tuple[int, int | None]:

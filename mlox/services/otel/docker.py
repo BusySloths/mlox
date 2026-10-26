@@ -74,6 +74,10 @@ class OtelDockerService(
     def __post_init__(self) -> None:
         super().__post_init__()
         self._normalize_destination_flags()
+        # Historical deployments supplied provider credentials directly and did
+        # not persist explicit destination toggles.  Keep those destinations
+        # enabled when complete, but do not present incomplete defaults as on.
+        self._disable_unconfigured_hosted_destinations()
         # Runtime-only material resolved from the selected InfluxDB service.
         # It is intentionally not a dataclass field and is never persisted.
         self._influx_binding: Dict[str, str] | None = None
@@ -91,10 +95,45 @@ class OtelDockerService(
             setattr(self, name, enabled)
 
     def _has_new_relic_exporter(self) -> bool:
-        return self.new_relic_destination and len(self.relic_key) > 4 and len(self.relic_endpoint) > 4
+        return (
+            self.new_relic_destination
+            and len(self.relic_key) > 4
+            and len(self.relic_endpoint) > 4
+        )
 
     def _has_grafana_cloud_exporter(self) -> bool:
-        return self.grafana_cloud_destination and len(self.grafana_cloud_key) > 4 and len(self.grafana_cloud_endpoint) > 4
+        return (
+            self.grafana_cloud_destination
+            and len(self.grafana_cloud_key) > 4
+            and len(self.grafana_cloud_endpoint) > 4
+        )
+
+    def _disable_unconfigured_hosted_destinations(self) -> None:
+        if not self._has_grafana_cloud_exporter():
+            self.grafana_cloud_destination = False
+        if not self._has_new_relic_exporter():
+            self.new_relic_destination = False
+
+    def _validate_hosted_destinations(self) -> None:
+        """Reject enabled hosted destinations that lack their credentials."""
+
+        destinations = (
+            (
+                "Grafana Cloud",
+                self.grafana_cloud_destination,
+                self.grafana_cloud_endpoint,
+                self.grafana_cloud_key,
+            ),
+            (
+                "New Relic",
+                self.new_relic_destination,
+                self.relic_endpoint,
+                self.relic_key,
+            ),
+        )
+        for name, enabled, endpoint, api_key in destinations:
+            if enabled and (len(endpoint.strip()) < 5 or len(api_key.strip()) < 5):
+                raise ValueError(f"{name} requires an OTLP endpoint and API key.")
 
     def _resolve_influx_binding(self) -> Dict[str, str] | None:
         """Resolve the selected InfluxDB service without persisting credentials."""
@@ -454,6 +493,7 @@ class OtelDockerService(
             for name, value in destinations.items():
                 setattr(self, name, value)
             self._normalize_destination_flags()
+            self._validate_hosted_destinations()
             self._resolve_influx_binding()
             # This catches an empty destination set before replacing the config.
             self._pipeline_exporter_list()
