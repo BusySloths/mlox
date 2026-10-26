@@ -564,16 +564,16 @@ class OtelDockerService(
             execute(conn, f"rm -f {config}.previous {env}.previous", description="Remove OTel config backup")
 
     def _validate_rendered_config(self, conn) -> None:
-        """Ask the pinned Collector image to parse the rendered configuration."""
+        """Validate through Compose so config interpolation sees its runtime env."""
         execute = getattr(self.exec, "execute", None)
         if not callable(execute):
             raise RuntimeError("Executor cannot validate collector configuration.")
-        config_path = f"{self.target_path}/otel-collector-config.yaml"
+        compose_path = f"{self.target_path}/{self.target_docker_script}"
+        env_path = f"{self.target_path}/{self.target_docker_env}"
         command = (
-            "docker run --rm "
-            f"-v {self.target_path}:{self.target_path}:ro "
-            "otel/opentelemetry-collector-contrib:0.146.1 "
-            f"validate --config={config_path}"
+            f"docker compose --env-file {env_path} -f {compose_path} "
+            "run --rm --no-deps otel-collector "
+            "validate --config=/etc/otel-collector-config.yaml"
         )
         result = execute(conn, command, description="Validate OTel collector config")
         if result is None:

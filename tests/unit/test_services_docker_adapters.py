@@ -842,6 +842,8 @@ def test_otel_destination_update_backs_up_validates_and_restarts(conn):
     commands = [call[1][0] for call in service.exec.calls if call[0] == "execute"]
     assert any("Back up" in str(call[1][2]) for call in service.exec.calls if call[0] == "execute")
     assert any("validate --config=" in command for command in commands)
+    assert any("docker compose --env-file" in command for command in commands)
+    assert any("run --rm --no-deps otel-collector" in command for command in commands)
     assert any(call[0] == "docker_restart" for call in service.exec.calls)
 
 
