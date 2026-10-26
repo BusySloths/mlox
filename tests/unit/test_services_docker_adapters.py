@@ -118,7 +118,7 @@ class FakeExec:
         self._record("sys_user_id")
         return self.user_id
 
-    def execute(self, conn, command, group=None, description="", **kwargs):
+    def execute(self, conn, command, *, group, description="", **kwargs):
         self._record("execute", command, group, description, kwargs)
         return self.execute_result
 
@@ -849,6 +849,32 @@ def test_otel_destination_update_backs_up_validates_and_restarts(conn):
     assert any("docker compose --env-file" in command for command in commands)
     assert any("run --rm --no-deps otel-collector" in command for command in commands)
     assert any(call[0] == "docker_restart" for call in service.exec.calls)
+
+
+def test_otel_destination_validation_failure_restores_backup(conn, monkeypatch):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE, relic_endpoint="", relic_key="",
+            config="otel/otel-collector-config-0.146.1.yaml",
+            port_grpc="4317", port_http="4318", port_health="13133",
+        ),
+        FakeExec(),
+    )
+    service.exec.service_states["otel-collector"] = "running"
+
+    def reject_config(connection):
+        raise RuntimeError("Collector configuration validation failed.")
+
+    monkeypatch.setattr(service, "_validate_rendered_config", reject_config)
+    result = service.update_destinations(conn, diagnostic_exporter=True)
+
+    assert result["updated"] is False
+    assert result["rolled_back"] is True
+    assert service.diagnostic_exporter is False
+    assert any(
+        call[0] == "execute" and call[1][2] == "Restore OTel collector config"
+        for call in service.exec.calls
+    )
 
 
 def test_otel_influx_destination_uses_contrib_influx_exporter(conn):

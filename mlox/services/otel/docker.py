@@ -17,6 +17,7 @@ Related modules (plain-text links):
 
 import logging
 import base64
+from shlex import quote
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping
@@ -31,6 +32,7 @@ from mlox.service import (
     service_health_payload,
 )
 from mlox.services.otel.constants import MLOX_OTEL_CERTIFICATE_B64_ENV
+from mlox.execution.base import TaskGroup
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -524,7 +526,7 @@ class OtelDockerService(
             return {"updated": True, "destinations": self.collector_destinations()}
         except Exception as error:
             failure_message = self._destination_failure_message(error)
-            logging.exception("OpenTelemetry collector destination update failed")
+            logging.error("OpenTelemetry collector destination update failed: %s", failure_message)
             for name, value in previous.items():
                 setattr(self, name, value)
             self._normalize_destination_flags()
@@ -555,8 +557,8 @@ class OtelDockerService(
             raise RuntimeError("Executor cannot stage collector configuration.")
         config = f"{self.target_path}/otel-collector-config.yaml"
         env = f"{self.target_path}/{self.target_docker_env}"
-        command = f"cp {config} {config}.previous && cp {env} {env}.previous"
-        if execute(conn, command, description="Back up OTel collector config") is None:
+        command = f"cp {quote(config)} {quote(config + '.previous')} && cp {quote(env)} {quote(env + '.previous')}"
+        if execute(conn, command, group=TaskGroup.FILESYSTEM, description="Back up OTel collector config") is None:
             raise RuntimeError("Could not back up collector configuration.")
 
     def _restore_collector_backup(self, conn) -> None:
@@ -565,8 +567,8 @@ class OtelDockerService(
             raise RuntimeError("Executor cannot restore collector configuration.")
         config = f"{self.target_path}/otel-collector-config.yaml"
         env = f"{self.target_path}/{self.target_docker_env}"
-        command = f"mv {config}.previous {config} && mv {env}.previous {env}"
-        if execute(conn, command, description="Restore OTel collector config") is None:
+        command = f"mv {quote(config + '.previous')} {quote(config)} && mv {quote(env + '.previous')} {quote(env)}"
+        if execute(conn, command, group=TaskGroup.FILESYSTEM, description="Restore OTel collector config") is None:
             raise RuntimeError("Could not restore collector configuration.")
 
     def _discard_collector_backup(self, conn) -> None:
@@ -574,7 +576,7 @@ class OtelDockerService(
         if callable(execute):
             config = f"{self.target_path}/otel-collector-config.yaml"
             env = f"{self.target_path}/{self.target_docker_env}"
-            execute(conn, f"rm -f {config}.previous {env}.previous", description="Remove OTel config backup")
+            execute(conn, f"rm -f {quote(config + '.previous')} {quote(env + '.previous')}", group=TaskGroup.FILESYSTEM, description="Remove OTel config backup")
 
     def _validate_rendered_config(self, conn) -> None:
         """Validate through Compose so config interpolation sees its runtime env."""
@@ -584,11 +586,11 @@ class OtelDockerService(
         compose_path = f"{self.target_path}/{self.target_docker_script}"
         env_path = f"{self.target_path}/{self.target_docker_env}"
         command = (
-            f"docker compose --env-file {env_path} -f {compose_path} "
+            f"docker compose --env-file {quote(env_path)} -f {quote(compose_path)} "
             "run --rm --no-deps otel-collector "
             "validate --config=/etc/otel-collector-config.yaml"
         )
-        result = execute(conn, command, description="Validate OTel collector config")
+        result = execute(conn, command, group=TaskGroup.CONTAINER_RUNTIME, sudo=True, description="Validate OTel collector config")
         if result is None:
             raise RuntimeError("Collector configuration validation failed.")
 

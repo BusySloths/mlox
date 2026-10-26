@@ -12,6 +12,7 @@ from textual.widgets import Button, Input, Static
 from mlox.tui.services.otel import (
     MetricGroup,
     OtelServicePanel,
+    OtelDestinationSettingsPanel,
     OtelTelemetryPanel,
     _destination_validation_error,
     _influx_service_options,
@@ -240,6 +241,9 @@ async def _mounted_otel_service_panel_has_destination_button() -> str:
         await pilot.pause(0.2)
         label = str(app.query_one("#otel-open-destinations", Button).label)
         app.query_one("#otel-destination-status", Static)
+        launcher = app.query_one(OtelDestinationSettingsPanel)
+        assert launcher.size.height <= 5
+        assert app.query_one(OtelTelemetryPanel).region.y == launcher.region.bottom
     return label
 
 

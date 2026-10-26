@@ -1313,6 +1313,10 @@ class OtelDestinationDialog(ModalScreen[dict[str, Any] | None]):
 class OtelDestinationSettingsPanel(Vertical):
     """Compact launcher for the collector-destination editor."""
 
+    DEFAULT_CSS = """
+    OtelDestinationSettingsPanel { height: auto; }
+    """
+
     def __init__(
         self,
         infra: Infrastructure | None,
