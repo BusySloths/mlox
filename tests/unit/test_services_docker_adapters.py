@@ -851,6 +851,38 @@ def test_otel_destination_update_backs_up_validates_and_restarts(conn):
     assert any(call[0] == "docker_restart" for call in service.exec.calls)
 
 
+def test_otel_telemetry_missing_before_setup_is_empty(conn, monkeypatch):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE, relic_endpoint="", relic_key="",
+            config="otel/otel-collector-config-0.146.1.yaml",
+            port_grpc="4317", port_http="4318", port_health="13133",
+        ),
+        FakeExec(),
+    )
+
+    @contextmanager
+    def connection():
+        yield conn
+
+    bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=connection))
+
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("No telemetry yet")
+
+    monkeypatch.setattr(service.exec, "fs_read_file", missing)
+    assert service.get_telemetry_data(bundle) == ""
+
+    def denied(*args, **kwargs):
+        raise PermissionError("Unreadable telemetry")
+
+    monkeypatch.setattr(service.exec, "fs_read_file", denied)
+    with pytest.raises(PermissionError):
+        service.get_telemetry_data(bundle)
+    service.file_destination = False
+    assert service.get_telemetry_data(bundle) == ""
+
+
 def test_otel_destination_validation_failure_restores_backup(conn, monkeypatch):
     service = _set_exec(
         OtelDockerService(

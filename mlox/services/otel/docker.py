@@ -243,10 +243,16 @@ class OtelDockerService(
         )
 
     def get_telemetry_data(self, bundle) -> Any:
+        if not self.file_destination:
+            return ""
         with bundle.server.get_server_connection() as conn:
-            data = self.exec.fs_read_file(
-                conn, f"{self.target_path}/otel-data/telemetry.json", format="txt/plain"
-            )
+            try:
+                data = self.exec.fs_read_file(
+                    conn, f"{self.target_path}/otel-data/telemetry.json", format="txt/plain"
+                )
+            except FileNotFoundError:
+                # A newly added collector has not produced local output yet.
+                return ""
         return data
 
     def get_monitor_snapshot(self, bundle) -> Dict[str, Any]:

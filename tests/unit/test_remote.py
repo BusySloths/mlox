@@ -1,4 +1,5 @@
 import json
+import subprocess
 from dataclasses import dataclass
 from io import BytesIO
 from unittest.mock import ANY, MagicMock, call
@@ -200,6 +201,27 @@ def test_fs_find_and_replace(
         "sed -i 's!old!new!g' /test/file",
         hide=True,
     )
+
+
+def test_fs_find_and_replace_multiline_literal_text(executor, mock_connection, tmp_path):
+    from mlox.services.otel.docker import OtelDockerService
+
+    service = object.__new__(OtelDockerService)
+    service._influx_binding = {
+        "MLOX_INFLUX_V2_WRITE_ENDPOINT": "https://influx.example/api/v2/write",
+        "MLOX_INFLUX_TOKEN": "test-token",
+        "MLOX_INFLUX_DATABASE": "telemetry",
+    }
+    replacement = service._influx_exporter_block()
+    replacement += "\n# literal 'quotes' & ! \\ $(false) `false`"
+    target = tmp_path / "collector config.yaml"
+    target.write_text("exporters:\n__INFLUX_EXPORTER_BLOCK__\n", encoding="utf-8")
+    executor.fs_find_and_replace(
+        mock_connection, str(target), "__INFLUX_EXPORTER_BLOCK__", replacement
+    )
+    command = mock_connection.run.call_args.args[0]
+    subprocess.run(["/bin/sh", "-c", command], check=True, capture_output=True)
+    assert target.read_text(encoding="utf-8") == f"exporters:\n{replacement}\n"
 
 
 def test_fs_write_file(
