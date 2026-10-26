@@ -3,10 +3,12 @@ import argparse
 import hmac
 import json
 import os
+import shlex
 
 import requests
 
 from mlox.project import ProjectWorkspace
+from mlox.execution.base import TaskGroup
 from mlox.services.influx.client import InfluxClient
 
 
@@ -38,10 +40,14 @@ def diagnose(bundle, service):
     lines = [f"Workspace token query: {query_status(connection, token)}"]
     try:
         with bundle.server.get_server_connection() as conn:
-            content = service.exec.fs_read_file(
-                conn, f"{service.target_path}/.influxdb3-admin-token.json",
-                format="txt/plain",
+            path = f"{service.target_path}/.influxdb3-admin-token.json"
+            content = service.exec.execute(
+                conn, f"sudo cat -- {shlex.quote(path)}",
+                group=TaskGroup.SECURITY_ASSETS, sudo=True,
+                description="Read Influx bootstrap token for authentication diagnosis",
             )
+        if not content:
+            raise ValueError("Could not read Influx bootstrap token file")
         bootstrap_token = json.loads(content)["token"]
         matches = hmac.compare_digest(token.encode(), bootstrap_token.encode())
     except Exception:

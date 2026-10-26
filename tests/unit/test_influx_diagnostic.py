@@ -19,14 +19,24 @@ def test_diagnostic_compares_tokens_without_printing_them(monkeypatch, same):
         return "HTTP 401"
 
     monkeypatch.setattr(diagnostic, "query_status", query)
+    commands = []
+
+    def execute(conn, command, *, group, sudo, description):
+        from mlox.execution.base import TaskGroup
+        assert group == TaskGroup.SECURITY_ASSETS
+        assert sudo is True
+        commands.append(command)
+        return json.dumps({"token": deployed})
+
     service = SimpleNamespace(
         target_path="/srv/influx",
         get_secrets=lambda: {"influx_connection": {"token": stored}},
-        exec=SimpleNamespace(fs_read_file=lambda *args, **kwargs: json.dumps({"token": deployed})),
+        exec=SimpleNamespace(execute=execute),
     )
     bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=lambda: nullcontext(None)))
     output = "\n".join(diagnostic.diagnose(bundle, service))
     assert calls == [stored, deployed]
+    assert "sudo cat -- /srv/influx/.influxdb3-admin-token.json" == commands[0]
     assert f"tokens match: {'yes' if same else 'NO'}" in output
     assert stored not in output and deployed not in output
 
