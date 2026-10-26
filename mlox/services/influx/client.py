@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import base64
 import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from dataclasses import dataclass, field
 from typing import Any, Mapping
@@ -99,11 +101,24 @@ class InfluxClient:
     def _request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
         headers = dict(kwargs.pop("headers", {}))
         headers["Authorization"] = f"Bearer {self.token}"
-        response = requests.request(
-            method, f"{self.url}{path}", headers=headers,
-            timeout=min(max(self.timeout_seconds, 1.0), 30.0),
-            verify=self.certificate or True, **kwargs,
+        options = dict(
+            headers=headers, timeout=min(max(self.timeout_seconds, 1.0), 30.0),
+            **kwargs,
         )
+        if self.certificate:
+            # Requests expects a CA bundle filename, not PEM bytes. Close the
+            # file before opening it through Requests (also works on Windows),
+            # and keep it available until the response has been downloaded.
+            with TemporaryDirectory(prefix="mlox-influx-ca-") as directory:
+                ca_path = Path(directory) / "ca.pem"
+                ca_path.write_bytes(self.certificate)
+                response = requests.request(
+                    method, f"{self.url}{path}", verify=str(ca_path), **options,
+                )
+        else:
+            response = requests.request(
+                method, f"{self.url}{path}", verify=True, **options,
+            )
         response.raise_for_status()
         return response
 
