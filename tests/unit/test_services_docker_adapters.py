@@ -896,6 +896,20 @@ def test_otel_influx_destination_uses_contrib_influx_exporter(conn):
     assert not any("secret-token" in str(call) for call in service.get_secrets().values())
 
 
+def test_otel_compose_passes_all_influx_exporter_environment():
+    """The rendered exporter resolves its org and bucket from container env."""
+
+    compose = (
+        Path(__file__).parents[2]
+        / "mlox/services/otel/docker-compose-otel-0.146.1.yaml"
+    ).read_text(encoding="utf-8")
+
+    assert "MY_OTEL_INFLUX_ENDPOINT=${OTEL_INFLUX_ENDPOINT}" in compose
+    assert "MY_OTEL_INFLUX_TOKEN=${OTEL_INFLUX_TOKEN}" in compose
+    assert "MY_OTEL_INFLUX_ORG=${OTEL_INFLUX_ORG}" in compose
+    assert "MY_OTEL_INFLUX_BUCKET=${OTEL_INFLUX_BUCKET}" in compose
+
+
 def test_otel_check_falls_back_to_underscored_name(conn):
     service = _set_exec(
         OtelDockerService(
