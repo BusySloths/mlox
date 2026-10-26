@@ -926,6 +926,13 @@ def save_operations_postmortem(
 
 
 def _attributes(attributes: Any) -> dict[str, Any]:
+    if isinstance(attributes, str):
+        try:
+            attributes = json.loads(attributes)
+        except json.JSONDecodeError:
+            return {}
+    if isinstance(attributes, dict):
+        return {str(key): value for key, value in attributes.items()}
     values: dict[str, Any] = {}
     for item in attributes or []:
         if not isinstance(item, dict) or not item.get("key"):
@@ -934,6 +941,66 @@ def _attributes(attributes: Any) -> dict[str, Any]:
         value = next(iter(encoded.values()), None) if isinstance(encoded, dict) else None
         values[str(item["key"])] = value
     return values
+
+
+def _influx_span_to_otlp(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize an Influx exporter span row to the OTLP shape Operations uses."""
+    trace_id = str(row.get("traceId") or row.get("trace_id") or "")
+    span_id = str(row.get("spanId") or row.get("span_id") or "")
+    name = str(row.get("name") or row.get("span.name") or "")
+    if not trace_id or not span_id or not name:
+        return None
+
+    attributes = _attributes(row.get("attributes"))
+    for key in ("service.name", "span.kind"):
+        if key in row:
+            attributes.setdefault(key, row[key])
+
+    try:
+        end_ns = int(
+            row.get("endTimeUnixNano") or row.get("end_time_unix_nano") or 0
+        )
+    except (TypeError, ValueError):
+        end_ns = 0
+    try:
+        start_ns = int(
+            row.get("startTimeUnixNano") or row.get("start_time_unix_nano") or 0
+        )
+    except (TypeError, ValueError):
+        start_ns = 0
+    try:
+        duration_ns = int(row.get("durationNano") or row.get("duration_nano") or 0)
+    except (TypeError, ValueError):
+        duration_ns = 0
+
+    if not start_ns and end_ns and duration_ns:
+        start_ns = end_ns - duration_ns
+    if not end_ns and start_ns and duration_ns:
+        end_ns = start_ns + duration_ns
+    if not start_ns and row.get("time"):
+        try:
+            timestamp = datetime.fromisoformat(
+                str(row["time"]).replace("Z", "+00:00")
+            )
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            start_ns = (
+                int(timestamp.timestamp()) * 1_000_000_000
+                + timestamp.microsecond * 1_000
+            )
+        except (TypeError, ValueError, OverflowError):
+            start_ns = 0
+    if not end_ns:
+        end_ns = start_ns + max(duration_ns, 0)
+
+    return {
+        "traceId": trace_id,
+        "spanId": span_id,
+        "name": name,
+        "startTimeUnixNano": str(start_ns),
+        "endTimeUnixNano": str(end_ns),
+        "attributes": attributes,
+    }
 
 
 def _spans(raw: str | None) -> list[dict[str, Any]]:
@@ -1446,8 +1513,9 @@ def _query_spans(service, *, since_seconds: int = 86_400) -> str:
     rows = backend.recent_spans(since_seconds=since_seconds, limit=500)
     payloads: list[str] = []
     for row in rows:
-        # Influx exporters may retain an OTLP span document in ``span``/``data``;
-        # accepting either keeps the adapter isolated from the watcher logic.
+        # Influx stores spans as flattened rows (snake_case IDs/timestamps,
+        # span.name, and JSON attributes); convert those rows back to the
+        # normalized OTLP shape consumed by OperationsWatchSession.
         document = row.get("span") or row.get("data") or row
         if isinstance(document, str):
             try:
@@ -1456,8 +1524,18 @@ def _query_spans(service, *, since_seconds: int = 86_400) -> str:
                 continue
         if isinstance(document, dict) and "resourceSpans" in document:
             payloads.append(json.dumps(document))
-        elif isinstance(document, dict) and document.get("spanId"):
-            payloads.append(json.dumps({"resourceSpans": [{"scopeSpans": [{"spans": [document]}]}]}))
+        elif isinstance(document, dict):
+            span = (
+                document
+                if document.get("spanId")
+                else _influx_span_to_otlp(document)
+            )
+            if span is not None:
+                payloads.append(
+                    json.dumps(
+                        {"resourceSpans": [{"scopeSpans": [{"spans": [span]}]}]}
+                    )
+                )
     return "\n".join(payloads)
 
 

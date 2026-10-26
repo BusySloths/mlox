@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+import requests
+
 from mlox.services.influx.client import InfluxClient
 
 
@@ -31,26 +33,67 @@ class InfluxTelemetryQueryService:
         )
 
     def summary(self) -> dict[str, Any]:
-        """Return safe, bounded metadata and activity counts for the TUI."""
-        tables = self.client.query(
-            "SELECT table_name FROM information_schema.tables ORDER BY table_name",
-            max_rows=100,
-        )
-        measurements = [str(row.get("table_name")) for row in tables if row.get("table_name")]
-        activity: dict[str, int | None] = {}
-        for measurement in ("spans", "logs"):
+        """Return a bounded snapshot of stored metrics, spans, and logs."""
+        errors: dict[str, str] = {}
+
+        def load_signal(name: str, loader):
             try:
-                rows = self.client.query(
-                    f"SELECT COUNT(*) AS count FROM {measurement} "
-                    "WHERE time >= now() - INTERVAL '300 seconds'",
-                    max_rows=1,
-                )
-                activity[measurement] = int(rows[0].get("count", 0)) if rows else 0
+                return loader()
+            except requests.HTTPError as exc:
+                status = exc.response.status_code if exc.response is not None else 0
+                table = getattr(exc, "influx_table", None)
+                if status in {401, 403}:
+                    errors[name] = f"InfluxDB rejected access (HTTP {status})."
+                elif status == 400:
+                    target = f" for table {table!r}" if table else ""
+                    errors[name] = (
+                        f"InfluxDB rejected the {name} query{target} (HTTP 400)."
+                    )
+                else:
+                    errors[name] = f"InfluxDB {name} query failed (HTTP {status})."
+                return []
             except Exception:
-                activity[measurement] = None
+                errors[name] = f"Could not query recent {name}."
+                return []
+
+        measurements = load_signal(
+            "measurements", lambda: self.client.measurements(max_rows=500)
+        )
+        metrics = load_signal(
+            "metrics",
+            lambda: self.client.recent_metrics(
+                since_seconds=self.timeout_seconds,
+                limit=min(self.max_rows, 100),
+                measurement_names=measurements,
+            ),
+        )
+        signal_row_limit = min(self.max_rows, 25)
+        spans = load_signal(
+            "spans",
+            lambda: self.client.recent_spans(
+                since_seconds=self.timeout_seconds,
+                limit=signal_row_limit,
+            ),
+        )
+        logs = load_signal(
+            "logs",
+            lambda: self.client.recent_logs(
+                since_seconds=self.timeout_seconds,
+                limit=signal_row_limit,
+            ),
+        )
+        health = load_signal("health", self.client.health)
         return {
-            "health": self.client.health(),
+            "health": health if isinstance(health, dict) else {"status": "unknown"},
             "measurements": measurements,
-            "activity": activity,
+            "activity": {
+                "metrics": len(metrics),
+                "spans": len(spans),
+                "logs": len(logs),
+            },
+            "metrics": metrics,
+            "spans": spans,
+            "logs": logs,
+            "errors": errors,
             "limits": {"rows": self.max_rows, "window_seconds": self.timeout_seconds},
         }

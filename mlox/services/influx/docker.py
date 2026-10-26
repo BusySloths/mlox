@@ -46,6 +46,7 @@ class InfluxDockerService(AbstractService, AbstractHealthService):
     port: str | int
     token: str
     database: str = "telemetry"
+    retention_period: str = "7d"
     compose_service_names: Dict[str, str] = field(
         init=False,
         default_factory=lambda: {"InfluxDB": "influxdb3"},
@@ -107,7 +108,30 @@ class InfluxDockerService(AbstractService, AbstractHealthService):
         self.exec.fs_delete_dir(conn, self.target_path)
 
     def spin_up(self, conn) -> bool:
-        return self.compose_up(conn)
+        started = self.compose_up(conn)
+        if started:
+            self._ensure_database(conn)
+        return started
+
+    def _ensure_database(self, conn) -> None:
+        """Create the telemetry database with the configured retention policy."""
+        from mlox.services.influx.client import InfluxClient
+
+        client = InfluxClient(
+            url=f"https://{conn.host}:{self.port}",
+            token=self.token,
+            database=self.database,
+            certificate=str(self.certificate or "").encode("utf-8"),
+        )
+        try:
+            client.create_database(retention_period=self.retention_period)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not create InfluxDB database '{self.database}' with "
+                f"{self.retention_period} retention. InfluxDB 3 Core does not "
+                "change retention on an existing database; create a new database "
+                "with this retention and migrate or discard the old database."
+            ) from exc
 
     def spin_down(self, conn) -> bool:
         return self.compose_down(conn)

@@ -1,7 +1,8 @@
 # InfluxDB telemetry
 
 MLOX deploys `influxdb:3.12.0-core` with persistent Docker storage, TLS, a health
-check, and token authentication. The deployment intentionally does not migrate,
+check, token authentication, and a seven-day retention period for its telemetry
+database. The deployment intentionally does not migrate,
 back up, or run compatibility services for the retired Influx 1.x definition.
 
 Service secrets are collected into the selected MLOX secret manager. Managed
@@ -20,6 +21,8 @@ Collector configuration, restart it, wait for health, and restore the previous
 rendered destination settings when validation or health fails.
 
 Operations uses the Influx query backend and has fixed limits: a 300-second query
-window, 500 rows, and a 30-second request timeout. The TUI reads bounded health,
-measurement, and recent span/log activity summaries; it omits tokens,
-certificates, arbitrary SQL, and unbounded data views.
+window, 500 rows, and a 30-second request timeout. The service TUI shows bounded
+recent metric, span, and log rows alongside health and measurements. Metric rows
+are sampled from at most 12 metric measurements, with MLOX measurements shown
+first. The TUI omits tokens, certificates, arbitrary SQL, and unbounded data
+views.

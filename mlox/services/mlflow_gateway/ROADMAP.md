@@ -1,7 +1,12 @@
-# MLflow Gateway Roadmap
+# MLflow Gateway implementation notes
 
-This document collects ideas for evolving the MLflow Gateway into a more
-professional, observable, reliable, and generally useful model-serving service.
+This document records detailed engineering options for evolving the MLflow
+Gateway into a more professional, observable, reliable, and generally useful
+model-serving service. It is subordinate to the product roadmap in
+[`docs/DOCTRINE.md`](../../../docs/DOCTRINE.md): Doctrine sets priority and
+status, while these notes explain possible implementation and operational
+trade-offs. This document does not make release commitments or establish a
+second roadmap.
 
 The gateway already provides a useful foundation:
 
@@ -218,7 +223,7 @@ Useful lifecycle features include:
 - Tracking model-load errors separately from prediction errors.
 - Exposing model build, runtime, and environment metadata.
 
-## Suggested implementation order
+## Recommended engineering sequence
 
 1. Correct and separate request metrics from model-cache metadata.
 2. Add request IDs, structured logs, latency/error metrics, and `/metrics`.
@@ -232,4 +237,5 @@ Useful lifecycle features include:
 
 Observability, concurrency safety, operational limits, and security form the
 professionalization baseline. Prediction caching and A/B routing are valuable
-features, but are safer to build once that baseline is established.
+features, but are safer to build once that baseline is established. This is a
+dependency-aware engineering sequence, not a statement of product priority.

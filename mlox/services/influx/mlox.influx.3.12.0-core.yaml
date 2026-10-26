@@ -37,4 +37,5 @@ build:
     pw: ${MLOX_AUTO_PW}
     token: apiv3_${MLOX_AUTO_PW}
     database: telemetry
+    retention_period: 7d
     port: ${MLOX_AUTO_PORT_WEB_UI}

@@ -26,6 +26,9 @@ INFLUX_TOKEN_ENV = "MLOX_INFLUX_TOKEN"
 INFLUX_DATABASE_ENV = "MLOX_INFLUX_DATABASE"
 INFLUX_CERTIFICATE_B64_ENV = "MLOX_INFLUX_CERTIFICATE_B64"
 INFLUX_SERVICE_ENV = "MLOX_INFLUX_SERVICE"
+MAX_TELEMETRY_WINDOW_SECONDS = 86_400
+MAX_TELEMETRY_ROWS = 500
+MAX_METRIC_TABLES = 20
 
 
 class _BearerAuth(requests.auth.AuthBase):
@@ -141,6 +144,23 @@ class InfluxClient:
         except ValueError:
             return {"status": response.text.strip() or "ok"}
 
+    def create_database(self, *, retention_period: str) -> dict[str, Any]:
+        """Create this database with a fixed retention period.
+
+        InfluxDB 3 Core only accepts retention when a database is created; an
+        existing database is never silently modified by this helper.
+        """
+        response = self._request(
+            "POST",
+            "/api/v3/configure/database",
+            json={"db": self.database, "retention_period": retention_period},
+        )
+        try:
+            payload = response.json()
+        except ValueError:
+            return {"status": response.text.strip() or "created"}
+        return dict(payload) if isinstance(payload, dict) else {"data": payload}
+
     def query(self, sql: str, *, max_rows: int = 500) -> list[dict[str, Any]]:
         """Run a SELECT-only bounded SQL query and return at most ``max_rows`` rows."""
         statement = sql.strip().rstrip(";")
@@ -156,6 +176,94 @@ class InfluxClient:
         payload = response.json()
         rows = payload if isinstance(payload, list) else payload.get("data", [])
         return [dict(row) for row in rows[:limit] if isinstance(row, dict)]
+
+    def measurements(self, *, max_rows: int = 100) -> list[str]:
+        """List bounded user measurements, excluding Influx metadata views."""
+        rows = self.query(
+            "SELECT table_name, table_schema, table_type "
+            "FROM information_schema.tables ORDER BY table_name",
+            max_rows=min(max(int(max_rows), 1), 500),
+        )
+        return [
+            str(row["table_name"])
+            for row in rows
+            if row.get("table_name") is not None
+            and str(row.get("table_schema", "iox")).lower() == "iox"
+            and str(row.get("table_type", "BASE TABLE")).upper() == "BASE TABLE"
+        ]
+
+    def recent_spans(
+        self, *, since_seconds: int = 300, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Return recent span records from the Collector's ``spans`` table."""
+        return self._recent_signal_rows("spans", since_seconds=since_seconds, limit=limit)
+
+    def recent_logs(
+        self, *, since_seconds: int = 300, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Return recent log records from the Collector's ``logs`` table."""
+        return self._recent_signal_rows("logs", since_seconds=since_seconds, limit=limit)
+
+    def recent_metrics(
+        self,
+        *,
+        since_seconds: int = 300,
+        limit: int = 100,
+        max_tables: int = 12,
+        measurement_names: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Read bounded recent points from metric measurements.
+
+        The Collector's default Influx schema stores each metric name as its
+        own measurement. Prioritize MLOX metrics, then sample other tables so
+        this convenience view makes a bounded number of queries.
+        """
+        table_names = [
+            name
+            for name in (
+                measurement_names
+                if measurement_names is not None
+                else self.measurements(max_rows=500)
+            )
+            if name.lower() not in {"spans", "logs"}
+            and not name.lower().startswith(("system.", "_"))
+        ]
+        table_names.sort(key=lambda name: (not name.lower().startswith("mlox."), name))
+        table_cap = min(max(int(max_tables), 1), MAX_METRIC_TABLES)
+        total_cap = min(max(int(limit), 1), MAX_TELEMETRY_ROWS)
+        selected = table_names[:table_cap]
+        if not selected:
+            return []
+        per_table = max(1, min(10, total_cap // len(selected)))
+        rows: list[dict[str, Any]] = []
+        for measurement in selected:
+            for row in self._recent_signal_rows(
+                measurement,
+                since_seconds=since_seconds,
+                limit=per_table,
+            ):
+                rows.append({"measurement": measurement, **row})
+        return rows[:total_cap]
+
+    def _recent_signal_rows(
+        self, table: str, *, since_seconds: int, limit: int
+    ) -> list[dict[str, Any]]:
+        window = min(max(int(since_seconds), 1), MAX_TELEMETRY_WINDOW_SECONDS)
+        rows = min(max(int(limit), 1), MAX_TELEMETRY_ROWS)
+        # Quote table identifiers from information_schema, including any
+        # embedded quotes, rather than interpolating them as bare SQL.
+        identifier = '"' + str(table).replace('"', '""') + '"'
+        try:
+            return self.query(
+                f"SELECT * FROM {identifier} WHERE time >= now() - INTERVAL "
+                f"'{window} seconds' ORDER BY time DESC LIMIT {rows}",
+                max_rows=rows,
+            )
+        except requests.HTTPError as exc:
+            # Keep the server response private, but let the TUI identify which
+            # signal table InfluxDB rejected.
+            exc.influx_table = str(table)
+            raise
 
     def write_line_protocol(self, line_protocol: str) -> None:
         if not line_protocol.strip():
