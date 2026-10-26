@@ -9,6 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 from textual import on
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Static
 
@@ -95,6 +96,16 @@ class InfluxSettingsPanel(Vertical):
         self._refresh()
 
     def _refresh(self) -> None:
+        if not self._widgets_available():
+            return
+        connection = getattr(self.service, "service_urls", {}).get("InfluxDB")
+        if not connection or getattr(self.service, "state", "") != "running":
+            summary = influx_summary(self.service)
+            self._apply_summary(
+                summary,
+                "InfluxDB is not deployed yet. Run Setup Service to initialize it.",
+            )
+            return
         button = self.query_one("#influx-refresh", Button)
         button.disabled = True
         button.label = "Loading…"
@@ -118,7 +129,7 @@ class InfluxSettingsPanel(Vertical):
         )
 
     def _apply_summary(self, summary: dict[str, Any], message: str) -> None:
-        if not self.is_attached:
+        if not self._widgets_available():
             return
         button = self.query_one("#influx-refresh", Button)
         button.disabled = False
@@ -140,6 +151,17 @@ class InfluxSettingsPanel(Vertical):
             Panel(table, title="InfluxDB telemetry")
         )
         self.query_one("#influx-message", Static).update(message)
+
+    def _widgets_available(self) -> bool:
+        """An attached panel may already be composing or detaching its children."""
+
+        try:
+            self.query_one("#influx-refresh", Button)
+            self.query_one("#influx-summary", Static)
+            self.query_one("#influx-message", Static)
+        except NoMatches:
+            return False
+        return True
 
 
 def settings(
