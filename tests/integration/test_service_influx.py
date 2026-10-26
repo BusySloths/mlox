@@ -1,7 +1,7 @@
 from tests.integration.helpers import add_service, remove_service
 import logging
 import pytest
-from influxdb import InfluxDBClient
+import requests
 
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
@@ -56,29 +56,39 @@ def test_influx_service_is_running(install_influx_service):
     assert status.get("status", None) == "running"
 
 
-def test_influxdb_write_and_read(install_influx_service):
+def test_influxdb_accepts_collector_signal_measurements(install_influx_service):
+    """Core accepts the line protocol emitted for metrics, logs, and traces.
+
+    The contrib InfluxDB exporter uses Core's v2-compatible write endpoint;
+    the bucket parameter maps directly to the Core database.
+    """
     bundle, service = install_influx_service
     wait_for_service_ready(service, bundle, retries=60, interval=10)
 
-    host = bundle.server.ip
-    port = service.port
-    user = service.user
-    password = service.pw
-    dbname = "test_integration_db"
-
-    client = InfluxDBClient(
-        host, port, user, password, dbname, ssl=True, verify_ssl=False
+    connection = service.get_secrets()["influx_connection"]
+    endpoint = f"{connection['url']}/api/v2/write"
+    payload = "\n".join(
+        (
+            "collector_metric,service.name=integration value=1i",
+            "logs,service.name=integration body=\"log\"",
+            "spans,service.name=integration name=\"span\"",
+        )
     )
-    client.create_database(dbname)
+    response = requests.post(
+        endpoint,
+        params={"org": "mlox", "bucket": connection["database"], "precision": "ns"},
+        headers={"Authorization": f"Bearer {connection['token']}", "Content-Type": "text/plain"},
+        data=payload.encode(), verify=False, timeout=20,
+    )
+    assert response.status_code == 204, response.text
 
-    json_body = [
-        {
-            "measurement": "cpu_load_short",
-            "tags": {"host": "server01", "region": "us-west"},
-            "fields": {"Float_value": 0.64},
-        }
-    ]
-    client.write_points(json_body)
-
-    result = list(client.query("select * from cpu_load_short").get_points())
-    assert result, "Expected at least one data point from InfluxDB"
+    query = requests.post(
+        f"{connection['url']}/api/v3/query_sql",
+        headers={"Authorization": f"Bearer {connection['token']}"},
+        json={"db": connection["database"], "q": "SELECT table_name FROM information_schema.tables", "format": "json"},
+        verify=False, timeout=20,
+    )
+    query.raise_for_status()
+    rows = query.json()
+    names = {row["table_name"] for row in rows}
+    assert {"collector_metric", "logs", "spans"} <= names

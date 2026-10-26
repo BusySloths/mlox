@@ -65,6 +65,8 @@ class OtelDockerService(
     influx_destination: bool | str = False
     influx_endpoint: str = ""
     influx_token: str = ""
+    influx_org: str = ""
+    influx_bucket: str = ""
     grafana_cloud_destination: bool | str = True
     new_relic_destination: bool | str = True
     service_url: str = field(init=False, default="")
@@ -94,7 +96,12 @@ class OtelDockerService(
         return self.grafana_cloud_destination and len(self.grafana_cloud_key) > 4 and len(self.grafana_cloud_endpoint) > 4
 
     def _has_influx_exporter(self) -> bool:
-        return self.influx_destination and len(self.influx_endpoint) > 4 and len(self.influx_token) > 4
+        return (
+            self.influx_destination
+            and len(self.influx_endpoint) > 4
+            and len(self.influx_token) > 4
+            and bool(self.influx_bucket.strip())
+        )
 
     @staticmethod
     def _normalize_auth_header(value: str) -> str:
@@ -113,7 +120,7 @@ class OtelDockerService(
         if self._has_grafana_cloud_exporter():
             exporters.append("otlphttp/grafana_cloud")
         if self._has_influx_exporter():
-            exporters.append("otlphttp/influx")
+            exporters.append("influxdb/influx")
         if not exporters:
             raise ValueError("At least one OpenTelemetry destination must be enabled.")
         return ", ".join(exporters)
@@ -137,9 +144,21 @@ class OtelDockerService(
     def _influx_exporter_block(self) -> str:
         if not self._has_influx_exporter():
             return ""
-        return (
-            '  otlphttp/influx: { endpoint: "${env:MY_OTEL_INFLUX_ENDPOINT}", '
-            'headers: {Authorization: "Bearer ${env:MY_OTEL_INFLUX_TOKEN}"} }'
+        # InfluxDB 3 Core implements the v2 line-protocol compatibility API.
+        # ``org`` is required by the Collector exporter but ignored by Core;
+        # ``bucket`` maps to the Core database.  This exporter supports all
+        # three signals, unlike the generic OTLP HTTP exporter.
+        return "\n".join(
+            (
+                "  influxdb/influx:",
+                '    endpoint: "${env:MY_OTEL_INFLUX_ENDPOINT}"',
+                '    org: "${env:MY_OTEL_INFLUX_ORG}"',
+                '    bucket: "${env:MY_OTEL_INFLUX_BUCKET}"',
+                '    token: "${env:MY_OTEL_INFLUX_TOKEN}"',
+                "    precision: ns",
+                "    payload_max_lines: 1000",
+                "    payload_max_bytes: 1000000",
+            )
         )
 
     def get_telemetry_data(self, bundle) -> Any:
@@ -239,6 +258,8 @@ class OtelDockerService(
         )
         self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_ENDPOINT={self.influx_endpoint}")
         self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_TOKEN={self.influx_token}")
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_ORG={self.influx_org}")
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_BUCKET={self.influx_bucket}")
         self.service_url = f"https://{conn.host}:{self.port_grpc}"
         self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
         self.service_ports["OTLP HTTP receiver"] = int(self.port_http)
@@ -318,7 +339,11 @@ class OtelDockerService(
                 "endpoint": self.grafana_cloud_endpoint,
             }
         if self._has_influx_exporter():
-            secrets["influx_destination"] = {"endpoint": self.influx_endpoint, "configured": True}
+            secrets["influx_destination"] = {
+                "endpoint": self.influx_endpoint,
+                "bucket": self.influx_bucket,
+                "configured": True,
+            }
 
         return secrets
 
@@ -330,6 +355,113 @@ class OtelDockerService(
             "grafana_cloud": self._has_grafana_cloud_exporter(),
             "new_relic": self._has_new_relic_exporter(),
         }
+
+    def update_destinations(self, conn, **destinations: Any) -> Dict[str, Any]:
+        """Render, validate, restart, health-check, and roll back destinations.
+
+        The configuration is rendered from the same declarative fields as setup.
+        A failed restart or health check is immediately followed by a render and
+        restart of the last known-good fields; secrets remain in the protected
+        env file and are never returned in this result.
+        """
+        allowed = {
+            "file_destination", "influx_destination", "influx_endpoint",
+            "influx_token", "influx_org", "influx_bucket",
+            "grafana_cloud_destination", "grafana_cloud_endpoint",
+            "grafana_cloud_key", "new_relic_destination", "relic_endpoint",
+            "relic_key", "diagnostic_exporter",
+        }
+        unknown = set(destinations) - allowed
+        if unknown:
+            raise ValueError("Unsupported collector destination setting.")
+        previous = {name: getattr(self, name) for name in allowed}
+        backed_up = False
+        try:
+            for name, value in destinations.items():
+                setattr(self, name, value)
+            self.__post_init__()
+            # This catches an empty destination set before replacing the config.
+            self._pipeline_exporter_list()
+            self._backup_collector_files(conn)
+            backed_up = True
+            self.setup(conn)
+            self._validate_rendered_config(conn)
+            self.exec.docker_restart(
+                conn,
+                f"{self.target_path}/{self.target_docker_script}",
+                f"{self.target_path}/{self.target_docker_env}",
+            )
+            health = self.check(conn)
+            if health.get("status") != "running":
+                raise RuntimeError("collector did not become healthy")
+            self._discard_collector_backup(conn)
+            return {"updated": True, "destinations": self.collector_destinations()}
+        except Exception:
+            for name, value in previous.items():
+                setattr(self, name, value)
+            # Render and recreate the previous healthy configuration.  A second
+            # failure is deliberately surfaced instead of hiding an outage.
+            try:
+                if backed_up:
+                    self._restore_collector_backup(conn)
+                else:
+                    self.setup(conn)
+                self.exec.docker_restart(
+                    conn,
+                    f"{self.target_path}/{self.target_docker_script}",
+                    f"{self.target_path}/{self.target_docker_env}",
+                )
+                restored = self.check(conn).get("status") == "running"
+            except Exception:
+                restored = False
+            return {
+                "updated": False,
+                "rolled_back": restored,
+                "error": "collector destination update failed",
+            }
+
+    def _backup_collector_files(self, conn) -> None:
+        execute = getattr(self.exec, "execute", None)
+        if not callable(execute):
+            raise RuntimeError("Executor cannot stage collector configuration.")
+        config = f"{self.target_path}/otel-collector-config.yaml"
+        env = f"{self.target_path}/{self.target_docker_env}"
+        command = f"cp {config} {config}.previous && cp {env} {env}.previous"
+        if execute(conn, command, description="Back up OTel collector config") is None:
+            raise RuntimeError("Could not back up collector configuration.")
+
+    def _restore_collector_backup(self, conn) -> None:
+        execute = getattr(self.exec, "execute", None)
+        if not callable(execute):
+            raise RuntimeError("Executor cannot restore collector configuration.")
+        config = f"{self.target_path}/otel-collector-config.yaml"
+        env = f"{self.target_path}/{self.target_docker_env}"
+        command = f"mv {config}.previous {config} && mv {env}.previous {env}"
+        if execute(conn, command, description="Restore OTel collector config") is None:
+            raise RuntimeError("Could not restore collector configuration.")
+
+    def _discard_collector_backup(self, conn) -> None:
+        execute = getattr(self.exec, "execute", None)
+        if callable(execute):
+            config = f"{self.target_path}/otel-collector-config.yaml"
+            env = f"{self.target_path}/{self.target_docker_env}"
+            execute(conn, f"rm -f {config}.previous {env}.previous", description="Remove OTel config backup")
+
+    def _validate_rendered_config(self, conn) -> None:
+        """Ask the pinned Collector image to parse the rendered configuration."""
+        execute = getattr(self.exec, "execute", None)
+        if not callable(execute):
+            raise RuntimeError("Executor cannot validate collector configuration.")
+        config_path = f"{self.target_path}/otel-collector-config.yaml"
+        command = (
+            "docker run --rm "
+            f"-v {self.target_path}:{self.target_path}:ro "
+            "otel/opentelemetry-collector-contrib:0.146.1 "
+            f"validate --config={config_path}"
+        )
+        result = execute(conn, command, description="Validate OTel collector config")
+        if result is None:
+            raise RuntimeError("Collector configuration validation failed.")
 
     def get_telemetry_env_binding(self) -> Dict[str, str]:
         """Export a complete environment-only OTLP client configuration."""

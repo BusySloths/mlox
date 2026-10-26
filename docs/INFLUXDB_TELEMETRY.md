@@ -12,7 +12,14 @@ External clients can call `InfluxClient.from_keyfile(service_name, keyfile, pass
 instead of embedding a token.
 
 Collector destinations are all-signal: an enabled destination receives metrics,
-logs, and traces. File output is optional diagnostics only. Operations uses the
-Influx query backend and has fixed limits: a 300-second query window, 500 rows,
-and a 30-second request timeout. The TUI status view intentionally omits tokens,
+logs, and traces. For Influx 3 Core, the Collector uses its `influxdb` exporter
+against the `/api/v2/write` compatibility endpoint: `bucket` is the Core database
+and the exporter-required `org` is `mlox` (Core ignores it). File output is
+optional diagnostics only. Destination updates render and validate the pinned
+Collector configuration, restart it, wait for health, and restore the previous
+rendered destination settings when validation or health fails.
+
+Operations uses the Influx query backend and has fixed limits: a 300-second query
+window, 500 rows, and a 30-second request timeout. The TUI reads bounded health,
+measurement, and recent span/log activity summaries; it omits tokens,
 certificates, arbitrary SQL, and unbounded data views.

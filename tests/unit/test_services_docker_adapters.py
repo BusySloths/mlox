@@ -796,9 +796,67 @@ def test_otel_setup_with_grafana_cloud_only(conn):
         and call[1][0] == "/tmp/stack/otel-collector-config.yaml"
     ]
     assert len(replacements) == 6
+
+
+def test_otel_destination_update_validates_restarts_and_rolls_back(conn):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE,
+            relic_endpoint="", relic_key="",
+            config="otel/otel-collector-config-0.146.1.yaml",
+            port_grpc="4317", port_http="4318", port_health="13133",
+        ),
+        FakeExec(),
+    )
+    service.exec.service_states["otel-collector"] = "running"
+    result = service.update_destinations(conn, file_destination=False)
+    assert result == {"updated": False, "rolled_back": True, "error": "collector destination update failed"}
+    assert any(call[0] == "docker_restart" for call in service.exec.calls)
+    assert service.file_destination is True
+
+
+def test_otel_destination_update_backs_up_validates_and_restarts(conn):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE, relic_endpoint="", relic_key="",
+            config="otel/otel-collector-config-0.146.1.yaml",
+            port_grpc="4317", port_http="4318", port_health="13133",
+        ),
+        FakeExec(),
+    )
+    service.exec.service_states["otel-collector"] = "running"
+    result = service.update_destinations(conn, diagnostic_exporter=True)
+    assert result["updated"] is True
+    commands = [call[1][0] for call in service.exec.calls if call[0] == "execute"]
+    assert any("Back up" in str(call[1][2]) for call in service.exec.calls if call[0] == "execute")
+    assert any("validate --config=" in command for command in commands)
+    assert any(call[0] == "docker_restart" for call in service.exec.calls)
+
+
+def test_otel_influx_destination_uses_contrib_influx_exporter(conn):
+    service = _set_exec(
+        OtelDockerService(
+            **BASE, relic_endpoint="", relic_key="",
+            config="otel/otel-collector-config-0.146.1.yaml",
+            port_grpc="4317", port_http="4318", port_health="13133",
+            influx_destination=True,
+            influx_endpoint="https://influx.example/api/v2/write",
+            influx_token="secret-token", influx_org="mlox", influx_bucket="telemetry",
+        ),
+        FakeExec(),
+    )
+    service.setup(conn)
+    assert service._pipeline_exporter_list() == "file, influxdb/influx"
+    replacement = next(
+        call[1][2] for call in service.exec.calls
+        if call[0] == "fs_find_and_replace" and call[1][1] == "__INFLUX_EXPORTER_BLOCK__"
+    )
+    assert "influxdb/influx" in replacement
+    assert "bucket:" in replacement and "token:" in replacement
     pipeline_replacements = [
         args
-        for _, args, _ in replacements
+        for name, args, _ in service.exec.calls
+        if name == "fs_find_and_replace"
         if args[1]
         in {
             "__TRACES_EXPORTER_LIST__",
@@ -808,10 +866,7 @@ def test_otel_setup_with_grafana_cloud_only(conn):
     ]
     assert len(pipeline_replacements) == 3
     for args in pipeline_replacements:
-        assert args[2] == "file, otlphttp/grafana_cloud"
-    block_replacements = {args[1]: args[2] for _, args, _ in replacements}
-    assert block_replacements["__NEW_RELIC_EXPORTER_BLOCK__"] == ""
-    assert "otlphttp/grafana_cloud" in block_replacements["__GRAFANA_CLOUD_EXPORTER_BLOCK__"]
+        assert args[2] == "file, influxdb/influx"
 
 
 def test_otel_check_falls_back_to_underscored_name(conn):

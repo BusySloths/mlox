@@ -111,6 +111,11 @@ class InfluxDockerService(AbstractService):
             "MLOX_INFLUX_URL": str(connection["url"]),
             "MLOX_INFLUX_TOKEN": str(connection["token"]),
             "MLOX_INFLUX_DATABASE": str(connection["database"]),
+            # Collector's Influx exporter speaks the v2 compatibility API.
+            "MLOX_INFLUX_V2_WRITE_ENDPOINT": str(connection["url"]).rstrip("/")
+            + "/api/v2/write",
+            # Core ignores org for v2 compatibility, but the exporter validates it.
+            "MLOX_INFLUX_ORG": "mlox",
         }
         if certificate:
             binding["MLOX_INFLUX_CERTIFICATE_B64"] = base64.b64encode(

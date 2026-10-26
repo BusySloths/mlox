@@ -29,3 +29,28 @@ class InfluxTelemetryQueryService:
             f"'{window} seconds' ORDER BY time ASC",
             max_rows=rows,
         )
+
+    def summary(self) -> dict[str, Any]:
+        """Return safe, bounded metadata and activity counts for the TUI."""
+        tables = self.client.query(
+            "SELECT table_name FROM information_schema.tables ORDER BY table_name",
+            max_rows=100,
+        )
+        measurements = [str(row.get("table_name")) for row in tables if row.get("table_name")]
+        activity: dict[str, int | None] = {}
+        for measurement in ("spans", "logs"):
+            try:
+                rows = self.client.query(
+                    f"SELECT COUNT(*) AS count FROM {measurement} "
+                    "WHERE time >= now() - INTERVAL '300 seconds'",
+                    max_rows=1,
+                )
+                activity[measurement] = int(rows[0].get("count", 0)) if rows else 0
+            except Exception:
+                activity[measurement] = None
+        return {
+            "health": self.client.health(),
+            "measurements": measurements,
+            "activity": activity,
+            "limits": {"rows": self.max_rows, "window_seconds": self.timeout_seconds},
+        }
