@@ -27,6 +27,7 @@ services:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
       - ./cert.pem:/etc/cert.pem
       - ./key.pem:/etc/key.pem
+      - ./influx-ca.pem:/etc/influx-ca.pem:ro
     ports:
       - "${OTEL_PORT_GRPC}:4317"   # OTLP gRPC receiver
       - "${OTEL_PORT_HTTP}:4318"   # OTLP HTTP receiver

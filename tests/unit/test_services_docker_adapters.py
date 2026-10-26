@@ -846,16 +846,30 @@ def test_otel_destination_update_backs_up_validates_and_restarts(conn):
 
 
 def test_otel_influx_destination_uses_contrib_influx_exporter(conn):
+    influx = SimpleNamespace(
+        capabilities={ServiceCapability.DATABASE},
+        get_influx_env_binding=lambda: {
+            "MLOX_INFLUX_V2_WRITE_ENDPOINT": "https://influx.example/api/v2/write",
+            "MLOX_INFLUX_TOKEN": "secret-token",
+            "MLOX_INFLUX_ORG": "mlox",
+            "MLOX_INFLUX_DATABASE": "telemetry",
+        },
+    )
     service = _set_exec(
         OtelDockerService(
             **BASE, relic_endpoint="", relic_key="",
             config="otel/otel-collector-config-0.146.1.yaml",
             port_grpc="4317", port_http="4318", port_health="13133",
-            influx_destination=True,
-            influx_endpoint="https://influx.example/api/v2/write",
-            influx_token="secret-token", influx_org="mlox", influx_bucket="telemetry",
+            influx_service_uuid="influx-service",
         ),
         FakeExec(),
+    )
+    service.bind_service_lookup(
+        SimpleNamespace(
+            get_service_by_uuid=lambda service_uuid: (
+                influx if service_uuid == "influx-service" else None
+            )
+        )
     )
     service.setup(conn)
     assert service._pipeline_exporter_list() == "file, influxdb/influx"
@@ -879,6 +893,7 @@ def test_otel_influx_destination_uses_contrib_influx_exporter(conn):
     assert len(pipeline_replacements) == 3
     for args in pipeline_replacements:
         assert args[2] == "file, influxdb/influx"
+    assert not any("secret-token" in str(call) for call in service.get_secrets().values())
 
 
 def test_otel_check_falls_back_to_underscored_name(conn):

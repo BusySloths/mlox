@@ -52,11 +52,7 @@ build:
     grafana_cloud_key: ${MLOX_GRAFANA_CLOUD_KEY}
     diagnostic_exporter: ${MLOX_OTEL_DIAGNOSTIC_EXPORTER}
     file_destination: ${MLOX_OTEL_FILE_DESTINATION}
-    influx_destination: ${MLOX_OTEL_INFLUX_DESTINATION}
-    influx_endpoint: ${MLOX_INFLUX_V2_WRITE_ENDPOINT}
-    influx_token: ${MLOX_INFLUX_TOKEN}
-    influx_org: ${MLOX_INFLUX_ORG}
-    influx_bucket: ${MLOX_INFLUX_DATABASE}
+    influx_service_uuid: null
     grafana_cloud_destination: ${MLOX_OTEL_GRAFANA_CLOUD_DESTINATION}
     new_relic_destination: ${MLOX_OTEL_NEW_RELIC_DESTINATION}
     port_grpc: ${MLOX_AUTO_PORT_GRPC}

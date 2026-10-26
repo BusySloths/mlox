@@ -7,12 +7,13 @@ from types import SimpleNamespace
 
 import pytest
 from textual.app import App, ComposeResult
-from textual.widgets import Checkbox, Input
+from textual.widgets import Checkbox, Select
 
 from mlox.tui.services.otel import (
     MetricGroup,
     OtelServicePanel,
     OtelTelemetryPanel,
+    _influx_service_options,
     _destination_update_values,
     _build_resource_snapshot,
     _build_snapshot,
@@ -30,10 +31,7 @@ class DummyService:
     telemetry: str
     calls: int = 0
     file_destination: bool = True
-    influx_destination: bool = False
-    influx_endpoint: str = ""
-    influx_org: str = ""
-    influx_bucket: str = ""
+    influx_service_uuid: str | None = None
     grafana_cloud_destination: bool = False
     grafana_cloud_endpoint: str = ""
     new_relic_destination: bool = False
@@ -176,21 +174,15 @@ def test_tui_settings_returns_panel() -> None:
     assert service.calls == 0
 
 
-def test_destination_update_keeps_blank_secret_inputs_stored() -> None:
+def test_destination_update_stores_only_the_selected_influx_service_uuid() -> None:
     service = SimpleNamespace(
-        influx_token="stored-influx-token",
-        grafana_cloud_key="stored-grafana-key",
-        relic_key="stored-relic-key",
+        grafana_cloud_key="stored-grafana-key", relic_key="stored-relic-key"
     )
 
     values = _destination_update_values(
         service,
         file_destination=True,
-        influx_destination=True,
-        influx_endpoint=" https://influx ",
-        influx_token="",
-        influx_org=" mlox ",
-        influx_bucket=" telemetry ",
+        influx_service_uuid="influx-service-uuid",
         grafana_cloud_destination=True,
         grafana_cloud_endpoint=" https://grafana ",
         grafana_cloud_key="",
@@ -200,31 +192,48 @@ def test_destination_update_keeps_blank_secret_inputs_stored() -> None:
         diagnostic_exporter=False,
     )
 
-    assert values["influx_token"] == "stored-influx-token"
+    assert values["influx_service_uuid"] == "influx-service-uuid"
     assert values["grafana_cloud_key"] == "stored-grafana-key"
     assert values["relic_key"] == "stored-relic-key"
-    assert values["influx_endpoint"] == "https://influx"
+    assert not {"influx_token", "influx_endpoint", "influx_bucket"} & set(values)
+
+
+def test_influx_service_options_only_list_binding_capable_databases() -> None:
+    influx = SimpleNamespace(
+        name="Telemetry Influx",
+        uuid="influx-uuid",
+        capabilities={"database"},
+        get_influx_env_binding=lambda: {},
+    )
+    unrelated = SimpleNamespace(
+        name="PostgreSQL", uuid="postgres-uuid", capabilities={"database"}
+    )
+    infra = SimpleNamespace(bundles=[SimpleNamespace(services=[influx, unrelated])])
+
+    assert _influx_service_options(infra, None) == [
+        ("Telemetry Influx (influx-u)", "influx-uuid")
+    ]
 
 
 async def _mounted_otel_service_panel_has_destination_form() -> tuple[bool, str]:
     panel = settings(
         infra=None,  # type: ignore[arg-type]
         bundle=DummyBundle(),  # type: ignore[arg-type]
-        service=DummyService(telemetry=_jsonl({"resourceMetrics": []})),  # type: ignore[arg-type]
+        service=DummyService(telemetry=_jsonl({"resourceMetrics": []})),
     )
     app = OtelPanelTestApp(panel)  # type: ignore[arg-type]
     async with app.run_test() as pilot:
         await pilot.pause(0.2)
         enabled = app.query_one("#otel-file-destination", Checkbox).value
-        placeholder = app.query_one("#otel-influx-token", Input).placeholder
-    return enabled, placeholder
+        prompt = app.query_one("#otel-influx-service", Select).prompt
+    return enabled, prompt
 
 
 def test_otel_service_panel_mounts_destination_form() -> None:
-    enabled, placeholder = asyncio.run(_mounted_otel_service_panel_has_destination_form())
+    enabled, prompt = asyncio.run(_mounted_otel_service_panel_has_destination_form())
 
     assert enabled is True
-    assert "unchanged when blank" in placeholder
+    assert "disable InfluxDB" in prompt
 
 
 async def _mounted_otel_panel_snapshot() -> tuple[int, int | None]:

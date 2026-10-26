@@ -16,9 +16,10 @@ from textual import on
 from textual.app import ComposeResult
 from textual.css.query import NoMatches
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, Checkbox, Input, Static
+from textual.widgets import Button, Checkbox, Input, Select, Static
 
 from mlox.infra import Bundle, Infrastructure
+from mlox.service import ServiceCapability
 from mlox.services.otel.docker import OtelDockerService
 from mlox.view.services.otel import (
     STANDARD_METRIC_GROUPS,
@@ -1078,15 +1079,43 @@ class OtelTelemetryPanel(VerticalScroll):
         return Panel(table, title="Collector Output", border_style="blue")
 
 
+def _influx_service_options(
+    infra: Infrastructure | None, current_uuid: str | None
+) -> list[tuple[str, str]]:
+    """List infrastructure services that can export an Influx runtime binding."""
+
+    options: list[tuple[str, str]] = []
+    for bundle in getattr(infra, "bundles", []) or []:
+        for candidate in getattr(bundle, "services", []) or []:
+            capabilities = {
+                capability.value if hasattr(capability, "value") else str(capability)
+                for capability in getattr(candidate, "capabilities", set()) or set()
+            }
+            service_uuid = str(getattr(candidate, "uuid", "") or "")
+            if (
+                service_uuid
+                and ServiceCapability.DATABASE.value in capabilities
+                and callable(getattr(candidate, "get_influx_env_binding", None))
+            ):
+                name = str(getattr(candidate, "name", "InfluxDB") or "InfluxDB")
+                options.append((f"{name} ({service_uuid[:8]})", service_uuid))
+    if current_uuid and current_uuid not in {value for _, value in options}:
+        options.insert(
+            0,
+            (f"Unavailable InfluxDB service ({current_uuid[:8]})", current_uuid),
+        )
+    return sorted(options, key=lambda option: option[0].lower())
+
+
+def _select_value(select: Select) -> str | None:
+    return None if select.value is Select.NULL else str(select.value)
+
+
 def _destination_update_values(
     service: OtelDockerService,
     *,
     file_destination: bool,
-    influx_destination: bool,
-    influx_endpoint: str,
-    influx_token: str,
-    influx_org: str,
-    influx_bucket: str,
+    influx_service_uuid: str | None,
     grafana_cloud_destination: bool,
     grafana_cloud_endpoint: str,
     grafana_cloud_key: str,
@@ -1095,20 +1124,15 @@ def _destination_update_values(
     relic_key: str,
     diagnostic_exporter: bool,
 ) -> dict[str, Any]:
-    """Build a destination update without ever reading secret values into the UI.
+    """Build a destination update without ever reading Influx credentials.
 
-    Blank secret inputs deliberately retain the currently stored value.  Operators
-    remove a destination by disabling its toggle, rather than exposing credentials
-    merely to submit an otherwise unrelated configuration change.
+    The Influx selector stores only a service UUID. Its endpoint, token, and
+    database are resolved from the selected service at apply time.
     """
 
     return {
         "file_destination": file_destination,
-        "influx_destination": influx_destination,
-        "influx_endpoint": influx_endpoint.strip(),
-        "influx_token": influx_token or service.influx_token,
-        "influx_org": influx_org.strip(),
-        "influx_bucket": influx_bucket.strip(),
+        "influx_service_uuid": (influx_service_uuid or "").strip() or None,
         "grafana_cloud_destination": grafana_cloud_destination,
         "grafana_cloud_endpoint": grafana_cloud_endpoint.strip(),
         "grafana_cloud_key": grafana_cloud_key or service.grafana_cloud_key,
@@ -1122,8 +1146,14 @@ def _destination_update_values(
 class OtelDestinationSettingsPanel(Vertical):
     """Editable all-signal collector destinations for the Operations service tab."""
 
-    def __init__(self, bundle: Bundle | None, service: OtelDockerService) -> None:
+    def __init__(
+        self,
+        infra: Infrastructure | None,
+        bundle: Bundle | None,
+        service: OtelDockerService,
+    ) -> None:
         super().__init__()
+        self.infra = infra
         self.bundle = bundle
         self.service = service
 
@@ -1131,38 +1161,21 @@ class OtelDestinationSettingsPanel(Vertical):
         yield Static("Collector destinations", classes="otel-destination-title")
         yield Static(
             "Each enabled destination receives traces, metrics, and logs. "
-            "Existing keys are kept when their secret fields are blank.",
+            "Influx credentials are resolved from the selected service.",
             id="otel-destination-help",
         )
         yield Checkbox(
             "Local diagnostics file", value=bool(self.service.file_destination),
             id="otel-file-destination",
         )
-        yield Checkbox(
-            "InfluxDB", value=bool(self.service.influx_destination),
-            id="otel-influx-destination",
+        yield Static("InfluxDB service", classes="otel-destination-label")
+        yield Select(
+            _influx_service_options(self.infra, self.service.influx_service_uuid),
+            value=self.service.influx_service_uuid or Select.NULL,
+            prompt="None (disable InfluxDB)",
+            allow_blank=True,
+            id="otel-influx-service",
         )
-        with Horizontal(classes="otel-destination-fields"):
-            yield Input(
-                value=self.service.influx_endpoint,
-                placeholder="Influx endpoint (https://host:port)",
-                id="otel-influx-endpoint",
-            )
-            yield Input(
-                value=self.service.influx_org,
-                placeholder="Influx organization",
-                id="otel-influx-org",
-            )
-            yield Input(
-                value=self.service.influx_bucket,
-                placeholder="Influx bucket/database",
-                id="otel-influx-bucket",
-            )
-            yield Input(
-                placeholder="Influx token (unchanged when blank)",
-                password=True,
-                id="otel-influx-token",
-            )
         yield Checkbox(
             "Grafana Cloud", value=bool(self.service.grafana_cloud_destination),
             id="otel-grafana-destination",
@@ -1218,13 +1231,9 @@ class OtelDestinationSettingsPanel(Vertical):
             file_destination=self.query_one(
                 "#otel-file-destination", Checkbox
             ).value,
-            influx_destination=self.query_one(
-                "#otel-influx-destination", Checkbox
-            ).value,
-            influx_endpoint=self.query_one("#otel-influx-endpoint", Input).value,
-            influx_token=self.query_one("#otel-influx-token", Input).value,
-            influx_org=self.query_one("#otel-influx-org", Input).value,
-            influx_bucket=self.query_one("#otel-influx-bucket", Input).value,
+            influx_service_uuid=_select_value(
+                self.query_one("#otel-influx-service", Select)
+            ),
             grafana_cloud_destination=self.query_one(
                 "#otel-grafana-destination", Checkbox
             ).value,
@@ -1310,7 +1319,7 @@ class OtelServicePanel(Vertical):
         self.service = service
 
     def compose(self) -> ComposeResult:
-        yield OtelDestinationSettingsPanel(self.bundle, self.service)
+        yield OtelDestinationSettingsPanel(self.infra, self.bundle, self.service)
         yield OtelTelemetryPanel(self.infra, self.bundle, self.service)
 
 

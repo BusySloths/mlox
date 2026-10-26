@@ -19,7 +19,7 @@ import logging
 import base64
 
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Any, Dict, Mapping
 from urllib.parse import unquote
 
 from mlox.service import (
@@ -62,11 +62,7 @@ class OtelDockerService(
     grafana_cloud_key: str = ""
     diagnostic_exporter: bool | str = False
     file_destination: bool | str = True
-    influx_destination: bool | str = False
-    influx_endpoint: str = ""
-    influx_token: str = ""
-    influx_org: str = ""
-    influx_bucket: str = ""
+    influx_service_uuid: str | None = None
     grafana_cloud_destination: bool | str = True
     new_relic_destination: bool | str = True
     service_url: str = field(init=False, default="")
@@ -77,10 +73,15 @@ class OtelDockerService(
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        self._normalize_destination_flags()
+        # Runtime-only material resolved from the selected InfluxDB service.
+        # It is intentionally not a dataclass field and is never persisted.
+        self._influx_binding: Dict[str, str] | None = None
+
+    def _normalize_destination_flags(self) -> None:
         for name in (
             "diagnostic_exporter",
             "file_destination",
-            "influx_destination",
             "grafana_cloud_destination",
             "new_relic_destination",
         ):
@@ -95,12 +96,49 @@ class OtelDockerService(
     def _has_grafana_cloud_exporter(self) -> bool:
         return self.grafana_cloud_destination and len(self.grafana_cloud_key) > 4 and len(self.grafana_cloud_endpoint) > 4
 
+    def _resolve_influx_binding(self) -> Dict[str, str] | None:
+        """Resolve the selected InfluxDB service without persisting credentials."""
+
+        service_uuid = str(self.influx_service_uuid or "").strip()
+        if not service_uuid:
+            self._influx_binding = None
+            return None
+        provider = self.get_dependent_service(
+            service_uuid,
+            required_capabilities={ServiceCapability.DATABASE},
+        )
+        if provider is None:
+            raise ValueError(
+                f"InfluxDB service {service_uuid!r} was not found."
+            )
+        get_binding = getattr(provider, "get_influx_env_binding", None)
+        if not callable(get_binding):
+            raise ValueError(
+                f"Service {service_uuid!r} does not provide an Influx binding."
+            )
+        binding = get_binding()
+        required = {
+            "MLOX_INFLUX_V2_WRITE_ENDPOINT",
+            "MLOX_INFLUX_TOKEN",
+            "MLOX_INFLUX_ORG",
+            "MLOX_INFLUX_DATABASE",
+        }
+        if not isinstance(binding, Mapping) or not required.issubset(binding):
+            raise ValueError(
+                "Selected InfluxDB service returned an incomplete binding."
+            )
+        self._influx_binding = {
+            str(key): str(value) for key, value in binding.items()
+        }
+        return self._influx_binding
+
     def _has_influx_exporter(self) -> bool:
-        return (
-            self.influx_destination
-            and len(self.influx_endpoint) > 4
-            and len(self.influx_token) > 4
-            and bool(self.influx_bucket.strip())
+        binding = self._influx_binding
+        return bool(
+            binding
+            and len(binding.get("MLOX_INFLUX_V2_WRITE_ENDPOINT", "")) > 4
+            and len(binding.get("MLOX_INFLUX_TOKEN", "")) > 4
+            and bool(binding.get("MLOX_INFLUX_DATABASE", "").strip())
         )
 
     @staticmethod
@@ -155,6 +193,8 @@ class OtelDockerService(
                 '    org: "${env:MY_OTEL_INFLUX_ORG}"',
                 '    bucket: "${env:MY_OTEL_INFLUX_BUCKET}"',
                 '    token: "${env:MY_OTEL_INFLUX_TOKEN}"',
+                "    tls:",
+                "      ca_file: /etc/influx-ca.pem",
                 "    precision: ns",
                 "    payload_max_lines: 1000",
                 "    payload_max_bytes: 1000000",
@@ -187,11 +227,28 @@ class OtelDockerService(
 
     def setup(self, conn) -> None:
         self.grafana_cloud_key = self._normalize_auth_header(self.grafana_cloud_key)
+        self._resolve_influx_binding()
 
         self.exec.fs_create_dir(conn, self.target_path)
         self.exec.fs_create_dir(conn, f"{self.target_path}/otel-data")
         telemetry_file = f"{self.target_path}/otel-data/telemetry.json"
         self.exec.fs_touch(conn, telemetry_file)
+        influx_certificate_path = f"{self.target_path}/influx-ca.pem"
+        influx_certificate_b64 = str(
+            (self._influx_binding or {}).get("MLOX_INFLUX_CERTIFICATE_B64", "")
+        )
+        if influx_certificate_b64:
+            try:
+                certificate = base64.b64decode(influx_certificate_b64, validate=True)
+            except (ValueError, TypeError) as exc:
+                raise ValueError(
+                    "Selected InfluxDB service returned an invalid certificate."
+                ) from exc
+            self.exec.fs_write_file(
+                conn, influx_certificate_path, certificate.decode("utf-8")
+            )
+        else:
+            self.exec.fs_create_empty_file(conn, influx_certificate_path)
         self.exec.fs_set_permissions(
             conn,
             f"{self.target_path}/otel-data",
@@ -199,6 +256,7 @@ class OtelDockerService(
             sudo=True,
         )
         self.exec.fs_set_permissions(conn, telemetry_file, "777", sudo=True)
+        self.exec.fs_set_permissions(conn, influx_certificate_path, "600", sudo=True)
 
         template = self.resolve_asset(self.template)
         self.exec.fs_copy(
@@ -256,10 +314,28 @@ class OtelDockerService(
             env_path,
             f"OTEL_GRAFANA_CLOUD_ENDPOINT={self.grafana_cloud_endpoint}",
         )
-        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_ENDPOINT={self.influx_endpoint}")
-        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_TOKEN={self.influx_token}")
-        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_ORG={self.influx_org}")
-        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_BUCKET={self.influx_bucket}")
+        influx_binding = self._influx_binding or {}
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            "OTEL_INFLUX_ENDPOINT="
+            f"{influx_binding.get('MLOX_INFLUX_V2_WRITE_ENDPOINT', '')}",
+        )
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_INFLUX_TOKEN={influx_binding.get('MLOX_INFLUX_TOKEN', '')}",
+        )
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_INFLUX_ORG={influx_binding.get('MLOX_INFLUX_ORG', '')}",
+        )
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_INFLUX_BUCKET={influx_binding.get('MLOX_INFLUX_DATABASE', '')}",
+        )
         self.service_url = f"https://{conn.host}:{self.port_grpc}"
         self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
         self.service_ports["OTLP HTTP receiver"] = int(self.port_http)
@@ -338,11 +414,10 @@ class OtelDockerService(
                 "api_key": self.grafana_cloud_key,
                 "endpoint": self.grafana_cloud_endpoint,
             }
-        if self._has_influx_exporter():
+        if self.influx_service_uuid:
             secrets["influx_destination"] = {
-                "endpoint": self.influx_endpoint,
-                "bucket": self.influx_bucket,
-                "configured": True,
+                "service_uuid": self.influx_service_uuid,
+                "configured": self._has_influx_exporter(),
             }
 
         return secrets
@@ -351,7 +426,7 @@ class OtelDockerService(
         """Declarative all-signal destination state, safe for TUI display."""
         return {
             "file": bool(self.file_destination),
-            "influx": self._has_influx_exporter(),
+            "influx": bool(self.influx_service_uuid),
             "grafana_cloud": self._has_grafana_cloud_exporter(),
             "new_relic": self._has_new_relic_exporter(),
         }
@@ -365,8 +440,7 @@ class OtelDockerService(
         env file and are never returned in this result.
         """
         allowed = {
-            "file_destination", "influx_destination", "influx_endpoint",
-            "influx_token", "influx_org", "influx_bucket",
+            "file_destination", "influx_service_uuid",
             "grafana_cloud_destination", "grafana_cloud_endpoint",
             "grafana_cloud_key", "new_relic_destination", "relic_endpoint",
             "relic_key", "diagnostic_exporter",
@@ -379,7 +453,8 @@ class OtelDockerService(
         try:
             for name, value in destinations.items():
                 setattr(self, name, value)
-            self.__post_init__()
+            self._normalize_destination_flags()
+            self._resolve_influx_binding()
             # This catches an empty destination set before replacing the config.
             self._pipeline_exporter_list()
             self._backup_collector_files(conn)
@@ -399,6 +474,7 @@ class OtelDockerService(
         except Exception:
             for name, value in previous.items():
                 setattr(self, name, value)
+            self._normalize_destination_flags()
             # Render and recreate the previous healthy configuration.  A second
             # failure is deliberately surfaced instead of hiding an outage.
             try:
