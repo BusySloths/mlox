@@ -492,7 +492,7 @@ SETUP_HANDLERS = {
     "gcp-storage-0.1.0": gcp_secret_backed,
     "github-repo-0.1-beta-docker": github_repo,
     "headlamp-newest-k3s": no_params,
-    "influx-1.11.8-docker": no_params,
+    "influx-3.12.0-core-docker": no_params,
     "k8s-dashboard-newest-k3s": no_params,
     "kafka-3.7.0-docker": no_params,
     "kafka-4.1.0-docker": no_params,

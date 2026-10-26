@@ -25,6 +25,7 @@ receivers:
 exporters:
 __NEW_RELIC_EXPORTER_BLOCK__
 __GRAFANA_CLOUD_EXPORTER_BLOCK__
+__INFLUX_EXPORTER_BLOCK__
   file:
     path: /etc/otelcol/telemetry.json # Path inside the container where data will be written
     rotation:

@@ -61,6 +61,12 @@ class OtelDockerService(
     grafana_cloud_endpoint: str = ""
     grafana_cloud_key: str = ""
     diagnostic_exporter: bool | str = False
+    file_destination: bool | str = True
+    influx_destination: bool | str = False
+    influx_endpoint: str = ""
+    influx_token: str = ""
+    grafana_cloud_destination: bool | str = True
+    new_relic_destination: bool | str = True
     service_url: str = field(init=False, default="")
     compose_service_names: Dict[str, str] = field(
         init=False,
@@ -69,18 +75,26 @@ class OtelDockerService(
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        self.diagnostic_exporter = str(self.diagnostic_exporter).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        for name in (
+            "diagnostic_exporter",
+            "file_destination",
+            "influx_destination",
+            "grafana_cloud_destination",
+            "new_relic_destination",
+        ):
+            enabled = str(getattr(self, name)).strip().lower() in {
+                "1", "true", "yes", "on"
+            }
+            setattr(self, name, enabled)
 
     def _has_new_relic_exporter(self) -> bool:
-        return len(self.relic_key) > 4 and len(self.relic_endpoint) > 4
+        return self.new_relic_destination and len(self.relic_key) > 4 and len(self.relic_endpoint) > 4
 
     def _has_grafana_cloud_exporter(self) -> bool:
-        return len(self.grafana_cloud_key) > 4 and len(self.grafana_cloud_endpoint) > 4
+        return self.grafana_cloud_destination and len(self.grafana_cloud_key) > 4 and len(self.grafana_cloud_endpoint) > 4
+
+    def _has_influx_exporter(self) -> bool:
+        return self.influx_destination and len(self.influx_endpoint) > 4 and len(self.influx_token) > 4
 
     @staticmethod
     def _normalize_auth_header(value: str) -> str:
@@ -91,13 +105,17 @@ class OtelDockerService(
         return normalized
 
     def _pipeline_exporter_list(self) -> str:
-        exporters = ["file"]
+        exporters = ["file"] if self.file_destination else []
         if self.diagnostic_exporter:
             exporters.insert(0, "debug")
         if self._has_new_relic_exporter():
             exporters.append("otlphttp/new_relic")
         if self._has_grafana_cloud_exporter():
             exporters.append("otlphttp/grafana_cloud")
+        if self._has_influx_exporter():
+            exporters.append("otlphttp/influx")
+        if not exporters:
+            raise ValueError("At least one OpenTelemetry destination must be enabled.")
         return ", ".join(exporters)
 
     def _new_relic_exporter_block(self) -> str:
@@ -114,6 +132,14 @@ class OtelDockerService(
         return (
             '  otlphttp/grafana_cloud: { endpoint: "${env:MY_OTEL_GRAFANA_CLOUD_ENDPOINT}", '
             'headers: {Authorization: "${env:MY_OTEL_GRAFANA_CLOUD_KEY}"} }'
+        )
+
+    def _influx_exporter_block(self) -> str:
+        if not self._has_influx_exporter():
+            return ""
+        return (
+            '  otlphttp/influx: { endpoint: "${env:MY_OTEL_INFLUX_ENDPOINT}", '
+            'headers: {Authorization: "Bearer ${env:MY_OTEL_INFLUX_TOKEN}"} }'
         )
 
     def get_telemetry_data(self, bundle) -> Any:
@@ -182,6 +208,12 @@ class OtelDockerService(
             "__GRAFANA_CLOUD_EXPORTER_BLOCK__",
             self._grafana_cloud_exporter_block(),
         )
+        self.exec.fs_find_and_replace(
+            conn,
+            config_path,
+            "__INFLUX_EXPORTER_BLOCK__",
+            self._influx_exporter_block(),
+        )
 
         self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
@@ -205,6 +237,8 @@ class OtelDockerService(
             env_path,
             f"OTEL_GRAFANA_CLOUD_ENDPOINT={self.grafana_cloud_endpoint}",
         )
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_ENDPOINT={self.influx_endpoint}")
+        self.exec.fs_append_line(conn, env_path, f"OTEL_INFLUX_TOKEN={self.influx_token}")
         self.service_url = f"https://{conn.host}:{self.port_grpc}"
         self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
         self.service_ports["OTLP HTTP receiver"] = int(self.port_http)
@@ -283,8 +317,19 @@ class OtelDockerService(
                 "api_key": self.grafana_cloud_key,
                 "endpoint": self.grafana_cloud_endpoint,
             }
+        if self._has_influx_exporter():
+            secrets["influx_destination"] = {"endpoint": self.influx_endpoint, "configured": True}
 
         return secrets
+
+    def collector_destinations(self) -> Dict[str, bool]:
+        """Declarative all-signal destination state, safe for TUI display."""
+        return {
+            "file": bool(self.file_destination),
+            "influx": self._has_influx_exporter(),
+            "grafana_cloud": self._has_grafana_cloud_exporter(),
+            "new_relic": self._has_new_relic_exporter(),
+        }
 
     def get_telemetry_env_binding(self) -> Dict[str, str]:
         """Export a complete environment-only OTLP client configuration."""

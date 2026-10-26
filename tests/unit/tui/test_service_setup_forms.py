@@ -190,7 +190,7 @@ def test_all_builtin_service_configs_have_tui_setup_handlers() -> None:
         "gcp-storage-0.1.0",
         "github-repo-0.1-beta-docker",
         "headlamp-newest-k3s",
-        "influx-1.11.8-docker",
+        "influx-3.12.0-core-docker",
         "k8s-dashboard-newest-k3s",
         "kafka-3.7.0-docker",
         "kafka-4.1.0-docker",

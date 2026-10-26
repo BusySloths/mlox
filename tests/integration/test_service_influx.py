@@ -21,7 +21,7 @@ def install_influx_service(ubuntu_docker_server):
     bundle = Bundle(name=ubuntu_docker_server.ip, server=ubuntu_docker_server)
     infra.bundles.append(bundle)
 
-    config = load_config(get_stacks_path(), "/influx", "mlox.influx.1.11.8.yaml")
+    config = load_config(get_stacks_path(), "/influx", "mlox.influx.3.12.0-core.yaml")
 
     bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:

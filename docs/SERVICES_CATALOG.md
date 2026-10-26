@@ -31,7 +31,7 @@ The authoritative, exhaustive list of services and servers bundled with MLOX. Ge
 | **GCP Storage** | 0.1.0 | connector | GCP Storage is a secure and scalable service for managing storage in Google Cloud Platform. |
 | **Github Repository** | 0.1-beta | docker, kubernetes, native | Clone and pull Github Repositories on your servers. |
 | **Headlamp Dashboard** | newest | kubernetes | Headlamp is a web-based UI for managing Kubernetes clusters. |
-| **InfluxDB** | 1.11.8 | docker | InfluxDB is a time-series database designed for high-performance data storage and retrieval. |
+| **InfluxDB 3 Core** | 3.12.0-core | docker | Version-pinned InfluxDB 3 Core telemetry database. |
 | **KubeApps** | 3.0.0 | kubernetes | KubeApps is a web-based UI for managing Kubernetes applications. |
 | **Kubeflow** | 1.10.1 | kubernetes | A Kubernetes-native platform for machine learning workflows. |
 | **Kubernetes Dashboard** | 7.13.0 | kubernetes | Kubernetes Dashboard is a web-based UI for managing Kubernetes clusters. |

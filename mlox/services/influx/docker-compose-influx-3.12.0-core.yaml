@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  influxdb:
+    container_name: influxdb3
+    image: influxdb:3.12.0-core
+    restart: unless-stopped
+    command: >-
+      influxdb3 serve --node-id mlox-influx --object-store file
+      --data-dir /var/lib/influxdb3 --http-bind 0.0.0.0:8181
+      --tls-cert /etc/influxdb/cert.pem --tls-key /etc/influxdb/key.pem
+    environment:
+      INFLUXDB3_AUTH_TOKEN_FILE: /run/secrets/influxdb3-auth-token
+    ports:
+      - ${INFLUXDB_PORT}:8181
+    volumes:
+      - influxdb3-data:/var/lib/influxdb3
+      - ./cert.pem:/etc/influxdb/cert.pem:ro
+      - ./key.pem:/etc/influxdb/key.pem:ro
+    secrets:
+      - influxdb3-auth-token
+    healthcheck:
+      test: ["CMD", "influxdb3", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+secrets:
+  influxdb3-auth-token:
+    file: ./.env.influxdb3-auth-token
+volumes:
+  influxdb3-data:

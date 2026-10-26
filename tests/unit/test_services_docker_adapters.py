@@ -175,13 +175,14 @@ def test_influx_setup_and_check(conn):
     assert service.service_urls["InfluxDB"] == "https://example.test:8086"
     assert service.check(conn) == {"status": "stopped"}
     assert service.get_secrets() == {
-        "username": "inf",
-        "password": "pw",
-        "token": "tok",
-        "certificate": "CERT",
-        "port": "8086",
-        "url": "https://example.test:8086",
-        "ip": "example.test",
+        "influx_connection": {
+            "token": "tok",
+            "certificate": "CERT",
+            "port": "8086",
+            "url": "https://example.test:8086",
+            "ip": "example.test",
+            "database": "telemetry",
+        }
     }
 
 
@@ -667,7 +668,7 @@ def test_otel_setup_check_and_read_telemetry(conn):
         if call[0] == "fs_find_and_replace"
         and call[1][0] == "/tmp/stack/otel-collector-config.yaml"
     ]
-    assert len(replacements) == 5
+    assert len(replacements) == 6
     pipeline_replacements = [
         args
         for _, args, _ in replacements
@@ -720,7 +721,7 @@ def test_otel_setup_without_relic_keeps_local_exporters(conn):
         if call[0] == "fs_find_and_replace"
         and call[1][0] == "/tmp/stack/otel-collector-config.yaml"
     ]
-    assert len(replacements) == 5
+    assert len(replacements) == 6
     pipeline_replacements = [
         args
         for _, args, _ in replacements
@@ -794,7 +795,7 @@ def test_otel_setup_with_grafana_cloud_only(conn):
         if call[0] == "fs_find_and_replace"
         and call[1][0] == "/tmp/stack/otel-collector-config.yaml"
     ]
-    assert len(replacements) == 5
+    assert len(replacements) == 6
     pipeline_replacements = [
         args
         for _, args, _ in replacements

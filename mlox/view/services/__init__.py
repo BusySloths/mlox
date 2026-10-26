@@ -36,7 +36,7 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "function_names": ("settings", "setup"),
     },
     "mlox.view.services.influx": {
-        "config_ids": ("influx-1.11.8-docker",),
+        "config_ids": ("influx-3.12.0-core-docker",),
         "function_names": ("settings",),
     },
     "mlox.view.services.k8s_dashboard": {

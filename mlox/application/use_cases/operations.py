@@ -1407,12 +1407,12 @@ class OperationsWatchSession:
 
 
 def list_operations_monitors(infra) -> list[dict[str, str]]:
-    """Return services that can provide raw telemetry for operations analysis."""
+    """Return services with a bounded telemetry-query backend for Operations."""
 
     monitors: list[dict[str, str]] = []
     for bundle in getattr(infra, "bundles", []) or []:
         for service in getattr(bundle, "services", []) or []:
-            if callable(getattr(service, "get_telemetry_data", None)):
+            if callable(getattr(service, "get_telemetry_query_service", None)):
                 monitors.append(
                     {
                         "uuid": str(getattr(service, "uuid", "")),
@@ -1432,12 +1432,33 @@ def _telemetry_source(
 ) -> tuple[Any, Any] | tuple[None, None]:
     for bundle in getattr(infra, "bundles", []) or []:
         for service in getattr(bundle, "services", []) or []:
-            if not callable(getattr(service, "get_telemetry_data", None)):
+            if not callable(getattr(service, "get_telemetry_query_service", None)):
                 continue
             if monitor_uuid and str(getattr(service, "uuid", "")) != monitor_uuid:
                 continue
             return bundle, service
     return None, None
+
+
+def _query_spans(service, *, since_seconds: int = 86_400) -> str:
+    """Fetch Operations evidence through its backend, never collector files."""
+    backend = service.get_telemetry_query_service()
+    rows = backend.recent_spans(since_seconds=since_seconds, limit=500)
+    payloads: list[str] = []
+    for row in rows:
+        # Influx exporters may retain an OTLP span document in ``span``/``data``;
+        # accepting either keeps the adapter isolated from the watcher logic.
+        document = row.get("span") or row.get("data") or row
+        if isinstance(document, str):
+            try:
+                document = json.loads(document)
+            except json.JSONDecodeError:
+                continue
+        if isinstance(document, dict) and "resourceSpans" in document:
+            payloads.append(json.dumps(document))
+        elif isinstance(document, dict) and document.get("spanId"):
+            payloads.append(json.dumps({"resourceSpans": [{"scopeSpans": [{"spans": [document]}]}]}))
+    return "\n".join(payloads)
 
 
 def start_operations_watch(
@@ -1455,9 +1476,9 @@ def start_operations_watch(
         )
         return OperationResult(False, 30, message)
     try:
-        raw = service.get_telemetry_data(bundle)
+        raw = _query_spans(service)
     except Exception as exc:
-        return OperationResult(False, 31, f"Could not read telemetry: {exc}")
+        return OperationResult(False, 31, f"Could not query telemetry: {exc}")
     session = OperationsWatchSession(baseline_runs=baseline_runs)
     session.monitor_uuid = str(getattr(service, "uuid", ""))
     session.monitor_name = str(getattr(service, "name", "Telemetry monitor"))
@@ -1477,10 +1498,10 @@ def refresh_operations_watch(infra, session: OperationsWatchSession) -> Operatio
             False, 30, "The selected telemetry monitor is no longer available."
         )
     try:
-        raw = service.get_telemetry_data(bundle)
+        raw = _query_spans(service)
         ingested = session.ingest(raw)
     except Exception as exc:
-        return OperationResult(False, 31, f"Could not read telemetry: {exc}")
+        return OperationResult(False, 31, f"Could not query telemetry: {exc}")
     return OperationResult(
         True,
         0,
