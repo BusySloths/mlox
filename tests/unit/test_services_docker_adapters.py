@@ -173,7 +173,12 @@ def test_influx_setup_and_check(conn):
 
     service.setup(conn)
     assert service.service_urls["InfluxDB"] == "https://example.test:8086"
-    assert service.check(conn) == {"status": "stopped"}
+    assert service.check(conn) == {"status": "stopped", "docker_state": "stopped"}
+    assert ServiceCapability.HEALTH in service.capabilities
+    health = service.get_health(conn)
+    assert health["status"] == "stopped"
+    assert health["healthy"] is False
+    assert health["health_url"] == "https://example.test:8086/health"
     assert service.get_secrets() == {
         "influx_connection": {
             "token": "tok",

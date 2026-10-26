@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from mlox.tui.services.influx import influx_summary
+from mlox.tui.services.influx import InfluxSettingsPanel, influx_summary, settings
 
 
 def test_influx_summary_reads_bounded_query_metadata_without_credentials():
@@ -20,3 +20,11 @@ def test_influx_summary_reads_bounded_query_metadata_without_credentials():
     assert summary["measurements"] == ["spans", "logs", "cpu"]
     assert summary["activity"] == {"spans": 2, "logs": 1}
     assert "token" not in repr(summary).lower()
+
+
+def test_influx_settings_returns_dedicated_service_panel():
+    service = SimpleNamespace()
+
+    panel = settings(infra=None, bundle=None, service=service)
+
+    assert isinstance(panel, InfluxSettingsPanel)

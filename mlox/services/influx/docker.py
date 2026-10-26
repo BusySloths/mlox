@@ -19,7 +19,12 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import (
+    AbstractHealthService,
+    AbstractService,
+    ServiceCapability,
+    service_health_payload,
+)
 
 
 # Configure logging (optional, but recommended)
@@ -31,8 +36,8 @@ logging.basicConfig(
 
 
 @dataclass
-class InfluxDockerService(AbstractService):
-    capabilities = {ServiceCapability.DATABASE}
+class InfluxDockerService(AbstractService, AbstractHealthService):
+    capabilities = {ServiceCapability.DATABASE, ServiceCapability.HEALTH}
     user: str
     pw: str
     port: str | int
@@ -83,11 +88,18 @@ class InfluxDockerService(AbstractService):
     def check(self, conn) -> Dict:
         try:
             state = self.exec.docker_service_state(conn, "influxdb3")
-            return {"status": state}
+            return {"status": state, "docker_state": state}
         except Exception as e:
             logging.error(f"Error checking InfluxDB service status: {e}")
             self.state = "unknown"
         return {"status": "unknown"}
+
+    def get_health(self, conn) -> Dict:
+        """Return the standard health payload used by the TUI health action."""
+
+        payload = self.check(conn)
+        payload["health_url"] = f"{self.service_urls.get('InfluxDB', '')}/health"
+        return service_health_payload(self, payload)
 
     def get_secrets(self) -> Dict[str, Dict]:
         credentials = {

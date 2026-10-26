@@ -3,13 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 from textual.app import App, ComposeResult
+from textual.widgets import Checkbox, Input
 
 from mlox.tui.services.otel import (
     MetricGroup,
+    OtelServicePanel,
     OtelTelemetryPanel,
+    _destination_update_values,
     _build_resource_snapshot,
     _build_snapshot,
     settings,
@@ -25,6 +29,16 @@ class DummyBundle:
 class DummyService:
     telemetry: str
     calls: int = 0
+    file_destination: bool = True
+    influx_destination: bool = False
+    influx_endpoint: str = ""
+    influx_org: str = ""
+    influx_bucket: str = ""
+    grafana_cloud_destination: bool = False
+    grafana_cloud_endpoint: str = ""
+    new_relic_destination: bool = False
+    relic_endpoint: str = ""
+    diagnostic_exporter: bool = False
 
     def get_telemetry_data(self, bundle):  # pragma: no cover - simple passthrough
         self.calls += 1
@@ -158,8 +172,59 @@ def test_tui_settings_returns_panel() -> None:
         service=service,
     )
 
-    assert isinstance(panel, OtelTelemetryPanel)
+    assert isinstance(panel, OtelServicePanel)
     assert service.calls == 0
+
+
+def test_destination_update_keeps_blank_secret_inputs_stored() -> None:
+    service = SimpleNamespace(
+        influx_token="stored-influx-token",
+        grafana_cloud_key="stored-grafana-key",
+        relic_key="stored-relic-key",
+    )
+
+    values = _destination_update_values(
+        service,
+        file_destination=True,
+        influx_destination=True,
+        influx_endpoint=" https://influx ",
+        influx_token="",
+        influx_org=" mlox ",
+        influx_bucket=" telemetry ",
+        grafana_cloud_destination=True,
+        grafana_cloud_endpoint=" https://grafana ",
+        grafana_cloud_key="",
+        new_relic_destination=False,
+        relic_endpoint=" https://newrelic ",
+        relic_key="",
+        diagnostic_exporter=False,
+    )
+
+    assert values["influx_token"] == "stored-influx-token"
+    assert values["grafana_cloud_key"] == "stored-grafana-key"
+    assert values["relic_key"] == "stored-relic-key"
+    assert values["influx_endpoint"] == "https://influx"
+
+
+async def _mounted_otel_service_panel_has_destination_form() -> tuple[bool, str]:
+    panel = settings(
+        infra=None,  # type: ignore[arg-type]
+        bundle=DummyBundle(),  # type: ignore[arg-type]
+        service=DummyService(telemetry=_jsonl({"resourceMetrics": []})),  # type: ignore[arg-type]
+    )
+    app = OtelPanelTestApp(panel)  # type: ignore[arg-type]
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+        enabled = app.query_one("#otel-file-destination", Checkbox).value
+        placeholder = app.query_one("#otel-influx-token", Input).placeholder
+    return enabled, placeholder
+
+
+def test_otel_service_panel_mounts_destination_form() -> None:
+    enabled, placeholder = asyncio.run(_mounted_otel_service_panel_has_destination_form())
+
+    assert enabled is True
+    assert "unchanged when blank" in placeholder
 
 
 async def _mounted_otel_panel_snapshot() -> tuple[int, int | None]:
