@@ -173,6 +173,13 @@ def test_influx_setup_and_check(conn):
 
     service.setup(conn)
     assert service.service_urls["InfluxDB"] == "https://example.test:8086"
+    assert service.exec.files["/tmp/stack/.influxdb3-admin-token.json"] == json.dumps(
+        {
+            "token": "tok",
+            "name": "mlox-admin",
+            "description": "MLOX-managed InfluxDB 3 Core admin token",
+        }
+    )
     assert service.check(conn) == {"status": "stopped", "docker_state": "stopped"}
     assert ServiceCapability.HEALTH in service.capabilities
     health = service.get_health(conn)

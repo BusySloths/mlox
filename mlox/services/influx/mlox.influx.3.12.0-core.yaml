@@ -22,7 +22,7 @@ groups:
 capabilities:
   service:
   - database
-  - observability
+  - health
   backend:
   - docker
 ports:
@@ -35,6 +35,6 @@ build:
     target_path: ${MLOX_USER_HOME}/influx-3.12.0-core
     user: ${MLOX_AUTO_USER}
     pw: ${MLOX_AUTO_PW}
-    token: ${MLOX_AUTO_PW}
+    token: apiv3_${MLOX_AUTO_PW}
     database: telemetry
     port: ${MLOX_AUTO_PORT_WEB_UI}

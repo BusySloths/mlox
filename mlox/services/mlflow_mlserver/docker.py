@@ -20,8 +20,9 @@ import logging
 import os
 import shlex
 
+import bcrypt
+
 from typing import Any, Dict, List, cast
-from passlib.hash import apr_md5_crypt  # type: ignore
 from dataclasses import dataclass, field
 
 from mlox.executors import TaskGroup
@@ -67,11 +68,11 @@ class MLFlowMLServerDockerService(
         }
 
     def _generate_htpasswd_entry(self) -> None:
-        """Generates an APR1-MD5 htpasswd entry, escaped for Traefik."""
-        # Generate APR1-MD5 hash
-        apr1_hash = apr_md5_crypt.hash(self.pw)
-        # Escape '$' for Traefik: "$apr1$..." becomes "$$apr1$$..."
-        self.hashed_pw = apr1_hash.replace("$", "$$")
+        """Generate a bcrypt htpasswd entry, escaped for Docker Compose."""
+        hashed = bcrypt.hashpw(self.pw.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        self.hashed_pw = hashed.replace("$", "$$")
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)

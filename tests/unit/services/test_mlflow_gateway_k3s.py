@@ -94,7 +94,7 @@ def test_renders_gateway_manifest(gateway: MLFlowGatewayK3sService) -> None:
     assert "xgboost==2.1.0" in manifest
     assert "kind: Secret" in manifest
     assert "name: mlflow-gateway-basic-auth" in manifest
-    assert "gateway-user:$apr1$" in manifest
+    assert "gateway-user:$2b$" in manifest
     assert 'gateway-user: "gateway-user"' in manifest
     assert 'gateway-password: "gateway-password"' in manifest
     assert 'tracking-password: "tracking-password"' in manifest

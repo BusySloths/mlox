@@ -56,7 +56,9 @@ def test_influx_service_is_running(install_influx_service):
     assert status.get("status", None) == "running"
 
 
-def test_influxdb_accepts_collector_signal_measurements(install_influx_service):
+def test_influxdb_accepts_collector_signal_measurements(
+    install_influx_service, tmp_path
+):
     """Core accepts the line protocol emitted for metrics, logs, and traces.
 
     The contrib InfluxDB exporter uses Core's v2-compatible write endpoint;
@@ -67,6 +69,8 @@ def test_influxdb_accepts_collector_signal_measurements(install_influx_service):
 
     connection = service.get_secrets()["influx_connection"]
     endpoint = f"{connection['url']}/api/v2/write"
+    certificate_path = tmp_path / "influx-ca.pem"
+    certificate_path.write_text(connection["certificate"], encoding="utf-8")
     payload = "\n".join(
         (
             "collector_metric,service.name=integration value=1i",
@@ -77,8 +81,13 @@ def test_influxdb_accepts_collector_signal_measurements(install_influx_service):
     response = requests.post(
         endpoint,
         params={"org": "mlox", "bucket": connection["database"], "precision": "ns"},
-        headers={"Authorization": f"Bearer {connection['token']}", "Content-Type": "text/plain"},
-        data=payload.encode(), verify=False, timeout=20,
+        headers={
+            "Authorization": f"Token {connection['token']}",
+            "Content-Type": "text/plain",
+        },
+        data=payload.encode(),
+        verify=str(certificate_path),
+        timeout=20,
     )
     assert response.status_code == 204, response.text
 
@@ -86,7 +95,8 @@ def test_influxdb_accepts_collector_signal_measurements(install_influx_service):
         f"{connection['url']}/api/v3/query_sql",
         headers={"Authorization": f"Bearer {connection['token']}"},
         json={"db": connection["database"], "q": "SELECT table_name FROM information_schema.tables", "format": "json"},
-        verify=False, timeout=20,
+        verify=str(certificate_path),
+        timeout=20,
     )
     query.raise_for_status()
     rows = query.json()

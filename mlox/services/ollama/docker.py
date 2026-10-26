@@ -4,10 +4,10 @@ import json
 import logging
 import shlex
 
+import bcrypt
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
-
-from passlib.hash import apr_md5_crypt  # type: ignore
 
 from mlox.executors import TaskGroup
 from mlox.service import (
@@ -42,7 +42,10 @@ class OllamaDockerService(AbstractService, AbstractModelServerService):
         }
 
     def _generate_htpasswd_entry(self) -> None:
-        self.hashed_pw = apr_md5_crypt.hash(self.pw).replace("$", "$$")
+        hashed = bcrypt.hashpw(self.pw.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+        self.hashed_pw = hashed.replace("$", "$$")
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)

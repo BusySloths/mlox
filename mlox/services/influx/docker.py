@@ -14,6 +14,7 @@ Related modules (plain-text links):
 - mlox.services.influx.ui
 """
 
+import json
 import logging
 
 from dataclasses import dataclass, field
@@ -63,10 +64,22 @@ class InfluxDockerService(AbstractService, AbstractHealthService):
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_append_line(conn, env_path, f"INFLUXDB_PORT={self.port}")
 
-        # InfluxDB 3 Core authenticates with an API token.  Keep it in a Docker
-        # secret rather than in the compose environment or process listing.
-        token_path = f"{self.target_path}/.env.influxdb3-auth-token"
-        self.exec.fs_append_line(conn, token_path, self.token)
+        # Core bootstraps authorization only from an offline admin-token JSON
+        # document. Docker Compose exposes it as a secret, never an environment
+        # variable or command-line value.
+        token_path = f"{self.target_path}/.influxdb3-admin-token.json"
+        self.exec.fs_write_file(
+            conn,
+            token_path,
+            json.dumps(
+                {
+                    "token": self.token,
+                    "name": "mlox-admin",
+                    "description": "MLOX-managed InfluxDB 3 Core admin token",
+                }
+            ),
+        )
+        self.exec.fs_set_permissions(conn, token_path, "600", sudo=True)
 
         self.service_ports["InfluxDB"] = int(self.port)
         self.service_urls["InfluxDB"] = f"https://{conn.host}:{self.port}"

@@ -4,7 +4,7 @@ import re
 import shlex
 from dataclasses import dataclass, field
 
-from passlib.hash import apr_md5_crypt
+import bcrypt
 
 from mlox.executors import TaskGroup
 from mlox.service import (
@@ -103,7 +103,9 @@ class MLFlowGatewayK3sService(
         requirements = _resolved_text(self.requirements_txt)
         cache_size = _resolved_setting(self.cache_max_models, "10")
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")
-        password_hash = apr_md5_crypt.hash(self.pw)
+        password_hash = bcrypt.hashpw(
+            self.pw.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
         runtime_environment = self._runtime_environment(
             include_secret_manager=include_secret_manager,
             include_telemetry=include_telemetry,

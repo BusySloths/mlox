@@ -8,8 +8,7 @@ services:
       influxdb3 serve --node-id mlox-influx --object-store file
       --data-dir /var/lib/influxdb3 --http-bind 0.0.0.0:8181
       --tls-cert /etc/influxdb/cert.pem --tls-key /etc/influxdb/key.pem
-    environment:
-      INFLUXDB3_AUTH_TOKEN_FILE: /run/secrets/influxdb3-auth-token
+      --admin-token-file /run/secrets/influxdb3-admin-token
     ports:
       - ${INFLUXDB_PORT}:8181
     volumes:
@@ -17,7 +16,7 @@ services:
       - ./cert.pem:/etc/influxdb/cert.pem:ro
       - ./key.pem:/etc/influxdb/key.pem:ro
     secrets:
-      - influxdb3-auth-token
+      - influxdb3-admin-token
     healthcheck:
       test: ["CMD", "influxdb3", "health"]
       interval: 15s
@@ -25,7 +24,7 @@ services:
       retries: 8
       start_period: 15s
 secrets:
-  influxdb3-auth-token:
-    file: ./.env.influxdb3-auth-token
+  influxdb3-admin-token:
+    file: ./.influxdb3-admin-token.json
 volumes:
   influxdb3-data:
