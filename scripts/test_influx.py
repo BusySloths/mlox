@@ -3,6 +3,7 @@ import argparse
 import hmac
 import json
 import os
+import shlex
 
 import requests
 
@@ -39,24 +40,58 @@ def diagnose(bundle, service):
     lines = [f"Workspace token query: {query_status(connection, token)}"]
     try:
         with bundle.server.get_server_connection() as conn:
-            # Read what the running container actually sees: the compose secret
-            # may not have the same host path as the current service metadata.
-            content = service.exec.execute(
+            inspect = service.exec.execute(
                 conn,
-                "sudo docker exec influxdb3 cat -- "
-                "/run/secrets/influxdb3-admin-token",
+                "sudo docker inspect --format "
+                "'{{json .Config.Labels}}|{{json .Mounts}}|{{json .Config.Cmd}}' "
+                "influxdb3",
+                group=TaskGroup.SECURITY_ASSETS, sudo=True,
+                description="Inspect Influx container mounts for authentication diagnosis",
+            )
+        labels_raw, mounts_raw, command_raw = inspect.split("|", maxsplit=2)
+        labels = json.loads(labels_raw)
+        mounts = json.loads(mounts_raw)
+        command = json.loads(command_raw)
+        lines.append(
+            "Container Compose project: "
+            f"{labels.get('com.docker.compose.project', 'unknown')}"
+        )
+        lines.append(
+            "Container Compose directory: "
+            f"{labels.get('com.docker.compose.project.working_dir', 'unknown')}"
+        )
+        lines.append("Container mount points: " + ", ".join(
+            f"{mount.get('Destination')} <- {mount.get('Source')}"
+            for mount in mounts
+        ))
+        secret_mount = next(
+            (mount for mount in mounts
+             if mount.get("Destination") == "/run/secrets/influxdb3-admin-token"),
+            None,
+        )
+        if secret_mount is None:
+            lines.append("Container has no Influx admin-token secret mount.")
+            lines.append(
+                "Container command references admin-token-file: "
+                f"{'yes' if any('admin-token-file' in arg for arg in command) else 'no'}"
+            )
+            return lines
+        source = secret_mount.get("Source")
+        if not source:
+            lines.append("Influx token secret mount has no host source path.")
+            return lines
+        with bundle.server.get_server_connection() as conn:
+            content = service.exec.execute(
+                conn, f"sudo cat -- {shlex.quote(source)}",
                 group=TaskGroup.SECURITY_ASSETS, sudo=True,
                 description="Read mounted Influx token for authentication diagnosis",
             )
         if not content:
-            raise ValueError("Could not read Influx bootstrap token file")
+            raise ValueError("Could not read the mounted Influx token source")
         bootstrap_token = json.loads(content)["token"]
         matches = hmac.compare_digest(token.encode(), bootstrap_token.encode())
     except Exception:
-        lines.append(
-            "Could not read the token mounted in container influxdb3. "
-            "Check whether this service points to the running container."
-        )
+        lines.append("Could not inspect the running Influx container or token mount.")
         return lines
     lines.append(f"Workspace and deployed bootstrap tokens match: {'yes' if matches else 'NO'}")
     lines.append(f"Bootstrap token query: {query_status(connection, bootstrap_token)}")

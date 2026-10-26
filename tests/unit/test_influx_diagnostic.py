@@ -20,12 +20,23 @@ def test_diagnostic_compares_tokens_without_printing_them(monkeypatch, same):
 
     monkeypatch.setattr(diagnostic, "query_status", query)
     commands = []
+    inspect = {
+        "com.docker.compose.project": "mlox",
+        "com.docker.compose.project.working_dir": "/srv/influx",
+    }
+    mounts = [{
+        "Destination": "/run/secrets/influxdb3-admin-token",
+        "Source": "/srv/influx/.influxdb3-admin-token.json",
+    }]
+    command = ["influxdb3", "serve", "--admin-token-file", "/run/secrets/influxdb3-admin-token"]
 
     def execute(conn, command, *, group, sudo, description):
         from mlox.execution.base import TaskGroup
         assert group == TaskGroup.SECURITY_ASSETS
         assert sudo is True
         commands.append(command)
+        if "docker inspect" in command:
+            return "|".join(json.dumps(value) for value in (inspect, mounts, command))
         return json.dumps({"token": deployed})
 
     service = SimpleNamespace(
@@ -36,10 +47,8 @@ def test_diagnostic_compares_tokens_without_printing_them(monkeypatch, same):
     bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=lambda: nullcontext(None)))
     output = "\n".join(diagnostic.diagnose(bundle, service))
     assert calls == [stored, deployed]
-    assert commands[0] == (
-        "sudo docker exec influxdb3 cat -- "
-        "/run/secrets/influxdb3-admin-token"
-    )
+    assert "docker inspect" in commands[0]
+    assert commands[1] == "sudo cat -- /srv/influx/.influxdb3-admin-token.json"
     assert f"tokens match: {'yes' if same else 'NO'}" in output
     assert stored not in output and deployed not in output
 
