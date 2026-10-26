@@ -28,6 +28,17 @@ INFLUX_CERTIFICATE_B64_ENV = "MLOX_INFLUX_CERTIFICATE_B64"
 INFLUX_SERVICE_ENV = "MLOX_INFLUX_SERVICE"
 
 
+class _BearerAuth(requests.auth.AuthBase):
+    """Explicit auth prevents Requests replacing the token with netrc auth."""
+
+    def __init__(self, token: str) -> None:
+        self._token = token
+
+    def __call__(self, request):
+        request.headers["Authorization"] = f"Bearer {self._token}"
+        return request
+
+
 @dataclass(repr=False)
 class InfluxClient:
     """Bounded InfluxDB 3 client whose representation never includes a token."""
@@ -103,6 +114,7 @@ class InfluxClient:
         headers["Authorization"] = f"Bearer {self.token}"
         options = dict(
             headers=headers, timeout=min(max(self.timeout_seconds, 1.0), 30.0),
+            auth=_BearerAuth(self.token),
             **kwargs,
         )
         if self.certificate:

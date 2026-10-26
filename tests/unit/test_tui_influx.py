@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import requests
 
 from mlox.tui.services.influx import InfluxSettingsPanel, influx_summary, settings
 
@@ -28,3 +29,16 @@ def test_influx_settings_returns_dedicated_service_panel():
     panel = settings(infra=None, bundle=None, service=service)
 
     assert isinstance(panel, InfluxSettingsPanel)
+
+
+def test_influx_summary_reports_unauthorized_instead_of_empty_data():
+    class QueryService:
+        def summary(self):
+            response = requests.Response()
+            response.status_code = 401
+            raise requests.HTTPError("sensitive response details", response=response)
+
+    summary = influx_summary(SimpleNamespace(state="running"), QueryService())
+    assert "HTTP 401" in summary["error"]
+    assert "sensitive response details" not in repr(summary)
+    assert summary["health"]["status"] == "unavailable"

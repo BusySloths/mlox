@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import requests
 
 from rich.panel import Panel
 from rich.table import Table
@@ -33,10 +34,17 @@ def influx_summary(service: Any, query_service: Any | None = None) -> dict[str, 
             summary["measurements"] = list(stored.get("measurements", []))[:100]
             summary["activity"] = dict(stored.get("activity", {}))
             summary["health"] = dict(stored.get("health", {}))
-        except Exception:
+        except Exception as exc:
             summary["measurements"] = []
             summary["activity"] = {}
             summary["health"] = {"status": "unavailable"}
+            if isinstance(exc, requests.HTTPError) and exc.response is not None:
+                summary["error"] = (
+                    f"InfluxDB rejected the data request (HTTP {exc.response.status_code}). "
+                    "Container running does not confirm API authentication."
+                )
+            else:
+                summary["error"] = "Could not query InfluxDB data."
     return summary
 
 
@@ -96,7 +104,7 @@ class InfluxSettingsPanel(Vertical):
             try:
                 backend = self.service.get_telemetry_query_service()
                 summary = influx_summary(self.service, backend)
-                message = "InfluxDB data refreshed."
+                message = summary.get("error", "InfluxDB data refreshed.")
             except Exception as exc:  # pragma: no cover - remote IO defensive path
                 summary = influx_summary(self.service)
                 message = f"Could not load InfluxDB data: {exc}"

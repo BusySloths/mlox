@@ -49,6 +49,20 @@ def test_request_without_custom_ca_keeps_verification_enabled(monkeypatch):
     assert InfluxClient("https://influx.example", "secret").health() == {"status": "ok"}
 
 
+def test_explicit_token_cannot_be_overridden_by_netrc(monkeypatch):
+    monkeypatch.setattr(requests.sessions, "get_netrc_auth", lambda url: ("other", "password"))
+
+    def send(session, prepared, **kwargs):
+        assert prepared.headers["Authorization"] == "Bearer intended-token"
+        response = requests.Response()
+        response.status_code = 200
+        response._content = b'{"status": "ok"}'
+        return response
+
+    monkeypatch.setattr(requests.Session, "send", send)
+    assert InfluxClient("https://influx.example", "intended-token").health() == {"status": "ok"}
+
+
 def test_from_env_returns_none_without_runtime_binding():
     assert InfluxClient.from_env({}) is None
 
