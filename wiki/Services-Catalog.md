@@ -4,7 +4,7 @@
 
 The authoritative, exhaustive list of services and servers bundled with MLOX. Generated from the YAML plugin configs; the single source of truth is those configs, not this page.
 
-**36 service configs, 9 server configs.**
+**35 service configs, 9 server configs.**
 
 ---
 
@@ -48,7 +48,6 @@ The authoritative, exhaustive list of services and servers bundled with MLOX. Ge
 | **MLFlow-MLServer** | 3.8.1 | docker | MLServer is an open-source Python library for building production-ready asynchronous APIs for machine learning models. |
 | **Ollama** | 0.23.3 | docker | Standalone Ollama service with HTTPS and BasicAuth via Traefik. |
 | **OpenBao** | 2.5.4 | docker | OpenBao provides a Vault-compatible secret management server. |
-| **OpenTelemetry Collector** | 0.127.0 | docker | OpenTelemetry Collector is a service for collecting and exporting telemetry data. |
 | **OpenTelemetry Collector** | 0.146.1 | docker | OpenTelemetry Collector is a service for collecting and exporting telemetry data. |
 | **Postgres** | 16-bullseye | docker | Postgres is a powerful, open-source object-relational database system. |
 | **Private Registry** | 3 | docker | Secure, private Docker distribution registry with TLS and htpasswd auth. |

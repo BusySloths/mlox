@@ -8,7 +8,7 @@ _REGISTERED = False
 
 _TUI_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
     "mlox.tui.services.otel": {
-        "config_ids": ("otel-0.127.0-docker", "otel-0.146.1-docker"),
+        "config_ids": ("otel-0.146.1-docker",),
         "function_names": ("settings",),
     },
     "mlox.tui.services.openbao": {
