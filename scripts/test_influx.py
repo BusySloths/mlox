@@ -1,93 +1,77 @@
+"""Read-only Core 3 token diagnostic; requires MLOX_PROJECT_PATH/PASSWORD."""
+import argparse
+import hmac
+import json
 import os
 
-from influxdb import InfluxDBClient  # type: ignore
+import requests
 
 from mlox.project import ProjectWorkspace
+from mlox.services.influx.client import InfluxClient
+
+
+def query_status(connection, token):
+    certificate = connection.get("certificate") or None
+    if isinstance(certificate, str):
+        certificate = certificate.encode()
+    try:
+        client = InfluxClient(
+            url=connection["url"], token=token, database=connection["database"],
+            certificate=certificate,
+        )
+        client.query("SELECT 1 AS authenticated", max_rows=1)
+        return "OK"
+    except requests.HTTPError as error:
+        status = error.response.status_code if error.response is not None else "unknown"
+        return f"HTTP {status}"
+    except requests.exceptions.SSLError:
+        return "TLS verification failed"
+    except requests.RequestException:
+        return "Connection failed"
+    except (ValueError, KeyError):
+        return "Invalid connection configuration"
+
+
+def diagnose(bundle, service):
+    connection = service.get_secrets()["influx_connection"]
+    token = connection["token"]
+    lines = [f"Workspace token query: {query_status(connection, token)}"]
+    try:
+        with bundle.server.get_server_connection() as conn:
+            content = service.exec.fs_read_file(
+                conn, f"{service.target_path}/.influxdb3-admin-token.json",
+                format="txt/plain",
+            )
+        bootstrap_token = json.loads(content)["token"]
+        matches = hmac.compare_digest(token.encode(), bootstrap_token.encode())
+    except Exception:
+        lines.append("Could not read deployed bootstrap token file; check server access.")
+        return lines
+    lines.append(f"Workspace and deployed bootstrap tokens match: {'yes' if matches else 'NO'}")
+    lines.append(f"Bootstrap token query: {query_status(connection, bootstrap_token)}")
+    return lines
 
 
 def main():
-    mlox_path = os.environ.get("MLOX_PROJECT_PATH", None)
-    mlox_password = os.environ.get("MLOX_PROJECT_PASSWORD", None)
-    # Make sure your environment variable is set!
-    if not mlox_password or not mlox_path:
-        print(
-            "Error: MLOX_PROJECT_PASSWORD or MLOX_PROJECT_PATH environment variable is not set."
-        )
-        exit(1)
-    workspace = ProjectWorkspace.open(mlox_path, mlox_password)
-    infra = workspace.infrastructure
-
-    dbs = infra.filter_by_group("database")
-    my_influx = None
-    for db in dbs:
-        print(f"Database: {db}")
-        if "influx" in db.name.lower():
-            my_influx = db
-
-    if not my_influx:
-        print("No InfluxDB service found in the infrastructure.")
-        exit(1)
-
-    influx_secrets = my_influx.get_secrets()
-
-    """Instantiate a connection to the InfluxDB."""
-    host = influx_secrets.get("ip", None)
-    port = influx_secrets.get("port", None)
-    user = influx_secrets.get("username", None)
-    password = influx_secrets.get("password", None)
-    dbname = "test_02_db"
-    # dbuser = "smly"
-    # dbuser_password = "my_secret_password"
-    # query = "select Float_value from cpu_load_short;"
-    # query_where = "select Int_value from cpu_load_short where host=$host;"
-    # bind_params = {"host": "server01"}
-    json_body = [
-        {
-            "measurement": "cpu_load_short",
-            "tags": {"host": "server01", "region": "us-west"},
-            "time": "2009-11-10T23:00:00Z",
-            "fields": {
-                "Float_value": 0.64,
-                "Int_value": 3,
-                "String_value": "Text",
-                "Bool_value": True,
-            },
-        }
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--service-uuid")
+    args = parser.parse_args()
+    path = os.environ.get("MLOX_PROJECT_PATH")
+    password = os.environ.get("MLOX_PROJECT_PASSWORD")
+    if not path or not password:
+        parser.error("Set MLOX_PROJECT_PATH and MLOX_PROJECT_PASSWORD.")
+    workspace = ProjectWorkspace.open(path, password)
+    candidates = [
+        (bundle, service)
+        for bundle in workspace.infrastructure.bundles
+        for service in bundle.services
+        if callable(getattr(service, "get_influx_env_binding", None))
+        and (not args.service_uuid or str(service.uuid) == args.service_uuid)
     ]
-
-    client = InfluxDBClient(
-        host, port, user, password, dbname, ssl=True, verify_ssl=False
-    )
-    print(client.get_list_database())
-
-    print("Create database: " + dbname)
-    client.create_database(dbname)
-
-    #     print("Create a retention policy")
-    #     client.create_retention_policy("awesome_policy", "3d", 3, default=True)
-
-    #     print("Switch user: " + dbuser)
-    #     client.switch_user(dbuser, dbuser_password)
-
-    print("Write points: {0}".format(json_body))
-    client.write_points(json_body)
-
-
-#     print("Querying data: " + query)
-#     result = client.query(query)
-
-#     print("Result: {0}".format(result))
-
-#     print("Querying data: " + query_where)
-#     result = client.query(query_where, bind_params=bind_params)
-
-#     print("Result: {0}".format(result))
-
-#     print("Switch user: " + user)
-#     client.switch_user(user, password)
-
-#     print("Drop database: " + dbname)
-#     client.drop_database(dbname)
+    if len(candidates) != 1:
+        parser.error("Expected one InfluxDB service; use --service-uuid to select it.")
+    for line in diagnose(*candidates[0]):
+        print(line)
 
 
 if __name__ == "__main__":
