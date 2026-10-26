@@ -16,6 +16,7 @@ Related modules (plain-text links):
 
 import json
 import logging
+import shlex
 
 from dataclasses import dataclass, field
 from typing import Dict
@@ -26,6 +27,7 @@ from mlox.service import (
     ServiceCapability,
     service_health_payload,
 )
+from mlox.execution.base import TaskGroup
 
 
 # Configure logging (optional, but recommended)
@@ -79,7 +81,19 @@ class InfluxDockerService(AbstractService, AbstractHealthService):
                 }
             ),
         )
-        self.exec.fs_set_permissions(conn, token_path, "600", sudo=True)
+        # InfluxDB 3 Core runs as UID/GID 1500. Compose mounts local secrets as
+        # bind files, so preserve private host access while allowing that group
+        # to read the token at /run/secrets/influxdb3-admin-token.
+        result = self.exec.execute(
+            conn,
+            f"chgrp 1500 -- {shlex.quote(token_path)}",
+            group=TaskGroup.SECURITY_ASSETS,
+            sudo=True,
+            description="Grant InfluxDB runtime group access to admin token",
+        )
+        if result is None:
+            raise RuntimeError("Could not set InfluxDB admin token group ownership.")
+        self.exec.fs_set_permissions(conn, token_path, "640", sudo=True)
 
         self.service_ports["InfluxDB"] = int(self.port)
         self.service_urls["InfluxDB"] = f"https://{conn.host}:{self.port}"
