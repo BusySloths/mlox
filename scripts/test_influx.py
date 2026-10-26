@@ -3,7 +3,6 @@ import argparse
 import hmac
 import json
 import os
-import shlex
 
 import requests
 
@@ -40,18 +39,24 @@ def diagnose(bundle, service):
     lines = [f"Workspace token query: {query_status(connection, token)}"]
     try:
         with bundle.server.get_server_connection() as conn:
-            path = f"{service.target_path}/.influxdb3-admin-token.json"
+            # Read what the running container actually sees: the compose secret
+            # may not have the same host path as the current service metadata.
             content = service.exec.execute(
-                conn, f"sudo cat -- {shlex.quote(path)}",
+                conn,
+                "sudo docker exec influxdb3 cat -- "
+                "/run/secrets/influxdb3-admin-token",
                 group=TaskGroup.SECURITY_ASSETS, sudo=True,
-                description="Read Influx bootstrap token for authentication diagnosis",
+                description="Read mounted Influx token for authentication diagnosis",
             )
         if not content:
             raise ValueError("Could not read Influx bootstrap token file")
         bootstrap_token = json.loads(content)["token"]
         matches = hmac.compare_digest(token.encode(), bootstrap_token.encode())
     except Exception:
-        lines.append("Could not read deployed bootstrap token file; check server access.")
+        lines.append(
+            "Could not read the token mounted in container influxdb3. "
+            "Check whether this service points to the running container."
+        )
         return lines
     lines.append(f"Workspace and deployed bootstrap tokens match: {'yes' if matches else 'NO'}")
     lines.append(f"Bootstrap token query: {query_status(connection, bootstrap_token)}")

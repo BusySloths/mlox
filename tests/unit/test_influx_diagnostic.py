@@ -36,7 +36,10 @@ def test_diagnostic_compares_tokens_without_printing_them(monkeypatch, same):
     bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=lambda: nullcontext(None)))
     output = "\n".join(diagnostic.diagnose(bundle, service))
     assert calls == [stored, deployed]
-    assert "sudo cat -- /srv/influx/.influxdb3-admin-token.json" == commands[0]
+    assert commands[0] == (
+        "sudo docker exec influxdb3 cat -- "
+        "/run/secrets/influxdb3-admin-token"
+    )
     assert f"tokens match: {'yes' if same else 'NO'}" in output
     assert stored not in output and deployed not in output
 
