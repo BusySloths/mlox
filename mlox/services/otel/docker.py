@@ -303,7 +303,10 @@ class OtelDockerService(
             sudo=True,
         )
         self.exec.fs_set_permissions(conn, telemetry_file, "777", sudo=True)
-        self.exec.fs_set_permissions(conn, influx_certificate_path, "600", sudo=True)
+        # The contrib Collector container runs unprivileged and must read the
+        # public CA certificate during TLS setup. The certificate is not secret;
+        # keep it read-only for all users and restrict modifications to root.
+        self.exec.fs_set_permissions(conn, influx_certificate_path, "644", sudo=True)
 
         template = self.resolve_asset(self.template)
         self.exec.fs_copy(
