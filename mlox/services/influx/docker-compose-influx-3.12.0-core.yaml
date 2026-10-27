@@ -18,7 +18,14 @@ services:
     secrets:
       - influxdb3-admin-token
     healthcheck:
-      test: ["CMD", "influxdb3", "health"]
+      test:
+        - CMD-SHELL
+        - >-
+          TOKEN=$$(awk -F'"' '/"token"/ {print $$4}'
+          /run/secrets/influxdb3-admin-token) && test -n "$$TOKEN" &&
+          curl --fail --silent --show-error --insecure
+          --header "Authorization: Bearer $$TOKEN"
+          https://127.0.0.1:8181/health >/dev/null
       interval: 15s
       timeout: 5s
       retries: 8

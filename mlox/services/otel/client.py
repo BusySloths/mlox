@@ -3,6 +3,7 @@ import base64
 import logging
 import os
 import threading
+import uuid
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -291,6 +292,34 @@ class OTelClient:
     ):
         level = getattr(logging, severity.upper(), logging.INFO)
         self.logger.log(level, message, extra=attributes or {})
+
+    def send_test_telemetry(self) -> Dict[str, bool]:
+        """Emit one small sample for each signal and flush it to the collector."""
+
+        probe_id = uuid.uuid4().hex
+        attributes = {"mlox.otel.probe_id": probe_id, "mlox.otel.probe": True}
+        with self.span("mlox.otel.connectivity_probe", attributes=attributes):
+            pass
+        self.send_metric(
+            "mlox.otel.connectivity_probe", 1, attributes=attributes
+        )
+        self.send_log(
+            "MLOX OpenTelemetry connectivity probe",
+            severity="INFO",
+            attributes=attributes,
+        )
+        # Force batch processors and the periodic metric reader to export now,
+        # so the button can report delivery instead of merely queueing signals.
+        log_flush_result = self.logger_provider.force_flush(timeout_millis=10_000)
+        return {
+            "traces": bool(self.tracer_provider.force_flush(timeout_millis=10_000)),
+            "metrics": bool(self.meter_provider.force_flush(timeout_millis=10_000)),
+            # BatchLogRecordProcessor implementations in supported SDK versions
+            # may return None after a successful synchronous export, despite the
+            # provider's bool return annotation. Treat only explicit False as a
+            # failed flush; otherwise the TUI reports a false negative for logs.
+            "logs": log_flush_result is not False,
+        }
 
     def shutdown(self):
         self.meter_provider.shutdown()

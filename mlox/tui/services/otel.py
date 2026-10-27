@@ -19,6 +19,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Select, Static
 
+from mlox.application.use_cases.services import send_otel_connectivity_probe
 from mlox.infra import Bundle, Infrastructure
 from mlox.service import ServiceCapability
 from mlox.services.otel.docker import OtelDockerService
@@ -1315,6 +1316,8 @@ class OtelDestinationSettingsPanel(Vertical):
 
     DEFAULT_CSS = """
     OtelDestinationSettingsPanel { height: auto; }
+    #otel-action-buttons { height: auto; width: 100%; }
+    #otel-action-buttons Button { width: auto; min-width: 24; margin-right: 1; }
     """
 
     def __init__(
@@ -1329,11 +1332,13 @@ class OtelDestinationSettingsPanel(Vertical):
         self.service = service
 
     def compose(self) -> ComposeResult:
-        yield Button(
-            "Configure Collector Destinations",
-            id="otel-open-destinations",
-            variant="primary",
-        )
+        with Horizontal(id="otel-action-buttons"):
+            yield Button(
+                "Configure Collector Destinations",
+                id="otel-open-destinations",
+                variant="primary",
+            )
+            yield Button("Send Test Telemetry", id="otel-send-probe")
         yield Static("", id="otel-destination-status")
 
     @on(Button.Pressed, "#otel-open-destinations")
@@ -1341,6 +1346,45 @@ class OtelDestinationSettingsPanel(Vertical):
         self.app.push_screen(
             OtelDestinationDialog(self.infra, self.service), self.apply_destinations
         )
+
+    @on(Button.Pressed, "#otel-send-probe")
+    def send_probe(self, _: Button.Pressed) -> None:
+        if self.bundle is None:
+            self.notify("This collector is not assigned to a server bundle.", severity="error")
+            return
+        button = self.query_one("#otel-send-probe", Button)
+        button.disabled = True
+        button.label = "Sending test telemetry…"
+        self.query_one("#otel-destination-status", Static).update(
+            "Sending one trace, metric, and log through the collector…"
+        )
+        app = self.app
+
+        def send() -> None:
+            result = send_otel_connectivity_probe(self.service, self.bundle)
+            app.call_from_thread(self._show_probe_result, result)
+
+        app.run_worker(
+            send,
+            thread=True,
+            exclusive=True,
+            group=f"otel-probe-{id(self)}",
+        )
+
+    def _show_probe_result(self, result) -> None:
+        if not self.is_attached:
+            return
+        button = self.query_one("#otel-send-probe", Button)
+        button.disabled = False
+        button.label = "Send Test Telemetry"
+        status = self.query_one("#otel-destination-status", Static)
+        if result.success:
+            message = result.message
+            status.update(Text(message, style="bold #86efac"))
+            self.notify(message)
+            return
+        status.update(Text(result.message, style="bold #ff9b9b"))
+        self.notify(result.message, severity="error")
 
     def apply_destinations(self, values: dict[str, Any] | None) -> None:
         if values is None:

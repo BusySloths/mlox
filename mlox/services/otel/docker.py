@@ -277,9 +277,22 @@ class OtelDockerService(
         self._resolve_influx_binding()
 
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_create_dir(conn, f"{self.target_path}/otel-data")
+        telemetry_dir = f"{self.target_path}/otel-data"
+        self.exec.fs_create_dir(conn, telemetry_dir)
+        self.exec.fs_set_permissions(conn, telemetry_dir, "777", sudo=True)
         telemetry_file = f"{self.target_path}/otel-data/telemetry.json"
-        self.exec.fs_touch(conn, telemetry_file)
+        execute = getattr(self.exec, "execute", None)
+        if not callable(execute):
+            raise RuntimeError("Executor cannot prepare collector telemetry output.")
+        result = execute(
+            conn,
+            f"if [ ! -e {quote(telemetry_file)} ]; then "
+            f"touch {quote(telemetry_file)}; fi",
+            group=TaskGroup.FILESYSTEM,
+            description="Create collector telemetry output if missing",
+        )
+        if result is None:
+            raise RuntimeError("Could not prepare collector telemetry output.")
         influx_certificate_path = f"{self.target_path}/influx-ca.pem"
         influx_certificate_b64 = str(
             (self._influx_binding or {}).get("MLOX_INFLUX_CERTIFICATE_B64", "")
@@ -296,12 +309,6 @@ class OtelDockerService(
             )
         else:
             self.exec.fs_create_empty_file(conn, influx_certificate_path)
-        self.exec.fs_set_permissions(
-            conn,
-            f"{self.target_path}/otel-data",
-            "777",
-            sudo=True,
-        )
         self.exec.fs_set_permissions(conn, telemetry_file, "777", sudo=True)
         # The contrib Collector container runs unprivileged and must read the
         # public CA certificate during TLS setup. The certificate is not secret;
@@ -631,3 +638,23 @@ class OtelDockerService(
                 base64.b64encode(certificate).decode("ascii")
             )
         return environment
+
+    def send_test_telemetry(self, conn) -> Dict[str, bool]:
+        """Send trace, metric, and log probes through this deployed collector."""
+
+        from mlox.services.otel.client import OTelClient
+
+        certificate = self.exec.fs_read_file(
+            conn, f"{self.target_path}/cert.pem", format="txt/plain"
+        )
+        self.service_url = f"https://{conn.host}:{self.port_grpc}"
+        self.certificate = certificate
+        client = OTelClient(
+            collector_url=self.service_url,
+            trusted_certs=certificate,
+            resource_attrs={"service.name": "mlox-otel-connectivity-probe"},
+        )
+        try:
+            return client.send_test_telemetry()
+        finally:
+            client.shutdown()

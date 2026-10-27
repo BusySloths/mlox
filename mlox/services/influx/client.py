@@ -193,15 +193,37 @@ class InfluxClient:
         ]
 
     def recent_spans(
-        self, *, since_seconds: int = 300, limit: int = 100
+        self,
+        *,
+        since_seconds: int = 300,
+        limit: int = 100,
+        measurement_names: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return recent span records from the Collector's ``spans`` table."""
+        available = (
+            self.measurements(max_rows=500)
+            if measurement_names is None
+            else measurement_names
+        )
+        if "spans" not in {name.lower() for name in available}:
+            return []
         return self._recent_signal_rows("spans", since_seconds=since_seconds, limit=limit)
 
     def recent_logs(
-        self, *, since_seconds: int = 300, limit: int = 100
+        self,
+        *,
+        since_seconds: int = 300,
+        limit: int = 100,
+        measurement_names: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return recent log records from the Collector's ``logs`` table."""
+        available = (
+            self.measurements(max_rows=500)
+            if measurement_names is None
+            else measurement_names
+        )
+        if "logs" not in {name.lower() for name in available}:
+            return []
         return self._recent_signal_rows("logs", since_seconds=since_seconds, limit=limit)
 
     def recent_metrics(

@@ -17,6 +17,7 @@ Related modules (plain-text links):
 import json
 import logging
 import shlex
+import time
 
 from dataclasses import dataclass, field
 from typing import Dict
@@ -115,6 +116,8 @@ class InfluxDockerService(AbstractService, AbstractHealthService):
 
     def _ensure_database(self, conn) -> None:
         """Create the telemetry database with the configured retention policy."""
+        import requests
+
         from mlox.services.influx.client import InfluxClient
 
         client = InfluxClient(
@@ -123,14 +126,38 @@ class InfluxDockerService(AbstractService, AbstractHealthService):
             database=self.database,
             certificate=str(self.certificate or "").encode("utf-8"),
         )
+        deadline = time.monotonic() + 90
+        while True:
+            try:
+                client.health()
+                break
+            except requests.RequestException as exc:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(
+                        "InfluxDB did not become reachable within 90 seconds; "
+                        "check its container health and published port."
+                    ) from exc
+                time.sleep(2)
+
         try:
             client.create_database(retention_period=self.retention_period)
-        except Exception as exc:
+        except requests.HTTPError as exc:
+            status = getattr(exc.response, "status_code", "unknown")
+            if status in {400, 409}:
+                detail = (
+                    f"InfluxDB rejected database creation (HTTP {status}). The "
+                    "database may already exist; Core retention is immutable, "
+                    "so create a new database with this retention and migrate "
+                    "or discard the old database."
+                )
+            else:
+                detail = (
+                    f"InfluxDB rejected database creation (HTTP {status}); "
+                    "check the admin token and server logs."
+                )
             raise RuntimeError(
                 f"Could not create InfluxDB database '{self.database}' with "
-                f"{self.retention_period} retention. InfluxDB 3 Core does not "
-                "change retention on an existing database; create a new database "
-                "with this retention and migrate or discard the old database."
+                f"{self.retention_period} retention. {detail}"
             ) from exc
 
     def spin_down(self, conn) -> bool:
@@ -138,12 +165,38 @@ class InfluxDockerService(AbstractService, AbstractHealthService):
 
     def check(self, conn) -> Dict:
         try:
+            self._load_runtime_connection_info(conn)
             state = self.exec.docker_service_state(conn, "influxdb3")
             return {"status": state, "docker_state": state}
         except Exception as e:
             logging.error(f"Error checking InfluxDB service status: {e}")
             self.state = "unknown"
         return {"status": "unknown"}
+
+    def _load_runtime_connection_info(self, conn) -> None:
+        """Rebuild connection fields that are intentionally not persisted."""
+        self.service_ports["InfluxDB"] = int(self.port)
+        self.service_urls["InfluxDB"] = f"https://{conn.host}:{self.port}"
+        try:
+            self.certificate = self.exec.fs_read_file(
+                conn, f"{self.target_path}/cert.pem", format="txt/plain"
+            )
+        except FileNotFoundError:
+            self.certificate = ""
+
+    def _refresh_runtime_connection_info(self) -> None:
+        """Restore endpoint and TLS certificate after MLOX reloads a project."""
+        lookup = getattr(self, "_service_lookup", None)
+        get_bundle = getattr(lookup, "get_bundle_by_service", None)
+        bundle = get_bundle(self) if callable(get_bundle) else None
+        if bundle is None:
+            raise ValueError(
+                "InfluxDB endpoint and certificate are unavailable. Check InfluxDB "
+                "health or set up the service again."
+            )
+        self.set_task_executor(bundle.server.create_new_task_executor())
+        with bundle.server.get_server_connection() as conn:
+            self._load_runtime_connection_info(conn)
 
     def get_health(self, conn) -> Dict:
         """Return the standard health payload used by the TUI health action."""
@@ -168,8 +221,20 @@ class InfluxDockerService(AbstractService, AbstractHealthService):
 
         import base64
 
+        if not self.service_urls.get("InfluxDB") or not self.certificate:
+            self._refresh_runtime_connection_info()
         connection = self.get_secrets()["influx_connection"]
-        certificate = str(connection.get("certificate") or "")
+        raw_certificate = connection.get("certificate") or ""
+        certificate = (
+            raw_certificate.decode("utf-8")
+            if isinstance(raw_certificate, bytes)
+            else str(raw_certificate)
+        )
+        if not certificate.strip():
+            raise ValueError(
+                "InfluxDB TLS certificate is unavailable. Check that the service "
+                "has been set up and its certificate file is readable."
+            )
         binding = {
             "MLOX_INFLUX_URL": str(connection["url"]),
             "MLOX_INFLUX_TOKEN": str(connection["token"]),

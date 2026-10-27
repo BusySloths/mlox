@@ -101,6 +101,44 @@ def check_service_health(
     )
 
 
+def send_otel_connectivity_probe(service, bundle) -> OperationResult:
+    """Send one trace, metric, and log through a deployed OTel collector."""
+
+    if not service or not callable(getattr(service, "send_test_telemetry", None)):
+        return OperationResult(
+            False, 63, "Selected service cannot send an OTel probe."
+        )
+    if not bundle:
+        return OperationResult(
+            False, 64, "Could not find the collector server bundle."
+        )
+    try:
+        with bundle.server.get_server_connection() as conn:
+            signals = service.send_test_telemetry(conn)
+    except Exception as exc:
+        return OperationResult(False, 65, f"OTel connectivity probe failed: {exc}")
+    if not isinstance(signals, dict):
+        return OperationResult(
+            False, 66, "Collector returned an invalid probe result."
+        )
+    failed = [
+        name for name in ("traces", "metrics", "logs") if not signals.get(name)
+    ]
+    if failed:
+        return OperationResult(
+            False,
+            67,
+            f"Collector did not confirm export for: {', '.join(failed)}.",
+            {"signals": signals},
+        )
+    return OperationResult(
+        True,
+        0,
+        "Export flush completed for trace, metric, and log probes.",
+        {"signals": signals},
+    )
+
+
 def check_service_health_in_workspace(workspace, service) -> OperationResult:
     """Check service health through an open workspace adapter."""
 

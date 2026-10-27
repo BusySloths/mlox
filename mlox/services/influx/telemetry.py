@@ -24,12 +24,15 @@ class InfluxTelemetryQueryService:
     def recent_spans(self, *, since_seconds: int = 300, limit: int = 500) -> list[dict[str, Any]]:
         window = min(max(int(since_seconds), 1), self.timeout_seconds)
         rows = min(max(int(limit), 1), self.max_rows)
-        # The collector's Influx exporter writes spans into this logical table.
-        # This query is intentionally fixed: Operations never accepts raw SQL.
-        return self.client.query(
-            "SELECT * FROM spans WHERE time >= now() - INTERVAL "
-            f"'{window} seconds' ORDER BY time ASC",
-            max_rows=rows,
+        # The client returns newest-first for the TUI; Operations consumes
+        # spans oldest-first to preserve event order inside its time window.
+        return list(
+            reversed(
+                self.client.recent_spans(
+                    since_seconds=window,
+                    limit=rows,
+                )
+            )
         )
 
     def summary(self) -> dict[str, Any]:
@@ -42,13 +45,21 @@ class InfluxTelemetryQueryService:
             except requests.HTTPError as exc:
                 status = exc.response.status_code if exc.response is not None else 0
                 table = getattr(exc, "influx_table", None)
+                detail = ""
+                if status == 400 and exc.response is not None:
+                    detail = " ".join(exc.response.text.split())
+                    token = str(getattr(self.client, "token", "") or "")
+                    if token:
+                        detail = detail.replace(token, "[redacted]")
+                    detail = detail[:240]
                 if status in {401, 403}:
                     errors[name] = f"InfluxDB rejected access (HTTP {status})."
                 elif status == 400:
                     target = f" for table {table!r}" if table else ""
-                    errors[name] = (
+                    message = (
                         f"InfluxDB rejected the {name} query{target} (HTTP 400)."
                     )
+                    errors[name] = f"{message} {detail}" if detail else message
                 else:
                     errors[name] = f"InfluxDB {name} query failed (HTTP {status})."
                 return []
@@ -73,6 +84,7 @@ class InfluxTelemetryQueryService:
             lambda: self.client.recent_spans(
                 since_seconds=self.timeout_seconds,
                 limit=signal_row_limit,
+                measurement_names=measurements,
             ),
         )
         logs = load_signal(
@@ -80,6 +92,7 @@ class InfluxTelemetryQueryService:
             lambda: self.client.recent_logs(
                 since_seconds=self.timeout_seconds,
                 limit=signal_row_limit,
+                measurement_names=measurements,
             ),
         )
         health = load_signal("health", self.client.health)
