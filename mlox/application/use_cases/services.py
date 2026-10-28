@@ -296,6 +296,14 @@ def list_services(project: WorkspaceState) -> OperationResult[ListServicesData]:
             payload.append(
                 {
                     "name": service.name,
+                    "uuid": getattr(service, "uuid", None),
+                    "server_uuid": getattr(bundle.server, "uuid", None),
+                    "capabilities": sorted(_service_capability_names(service)),
+                    "bindings": {
+                        key: getattr(service, key)
+                        for key in ("telemetry_uuid", "secret_manager_uuid", "registry_uuid", "influx_service_uuid")
+                        if getattr(service, key, None)
+                    },
                     "service_config_id": getattr(
                         service, "service_config_id", "unknown"
                     ),
@@ -655,9 +663,12 @@ def service_logs(
     tail: int = 200,
 ) -> OperationResult[ServiceLogsData]:
     infra = project.infrastructure
-    service = infra.get_service(name)
+    lookup_uuid = getattr(infra, "get_service_by_uuid", None)
+    service = (lookup_uuid(name) if callable(lookup_uuid) else None) or infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")
+    if tail < 1:
+        return OperationResult(False, 2, "Log tail must be positive.")
     chosen_label = label
     if chosen_label is None:
         labels = _service_log_labels(service)
@@ -669,12 +680,15 @@ def service_logs(
     bundle = infra.get_bundle_by_service(service)
     if not bundle:
         return OperationResult(False, 10, "Could not find server bundle for service.")
-    with bundle.server.get_server_connection() as conn:
-        log_tail = getattr(service, "service_log_tail", None)
-        if callable(log_tail):
-            logs = log_tail(conn, label=chosen_label, tail=tail)
-        else:
-            logs = service.compose_service_log_tail(conn, label=chosen_label, tail=tail)
+    try:
+        with bundle.server.get_server_connection() as conn:
+            log_tail = getattr(service, "service_log_tail", None)
+            if callable(log_tail):
+                logs = log_tail(conn, label=chosen_label, tail=tail)
+            else:
+                logs = service.compose_service_log_tail(conn, label=chosen_label, tail=tail)
+    except Exception as exc:
+        return OperationResult(False, 12, f"Could not fetch service logs: {exc}")
     return OperationResult(True, 0, "Fetched service logs.", {"logs": logs})
 
 

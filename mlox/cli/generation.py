@@ -8,9 +8,10 @@ from dataclasses import dataclass
 from typing import Any, Callable, Literal, Union, get_args, get_origin, get_type_hints
 
 import typer
+import click
 
 from mlox.application.result import OperationResult
-from mlox.cli.common import handle_result
+from mlox.cli.common import handle_result, json_output
 from mlox.cli.context import resolve_credentials
 from mlox.project import ProjectWorkspace
 
@@ -72,6 +73,7 @@ class WorkspaceCommand:
     renderer: ResultRenderer
     parameters: tuple[CliParameter, ...] = ()
     scope: Literal["workspace", "class"] = "workspace"
+    render_failure: bool = False
 
 
 def _method_contract(spec: WorkspaceCommand):
@@ -212,17 +214,30 @@ def build_workspace_command(spec: WorkspaceCommand) -> Callable[..., None]:
     def callback(**values: Any) -> None:
         project = values.pop("project", None)
         password = values.pop("password", None)
-        arguments = {
-            parameter.workspace_parameter: parameter.transform(values[parameter.name])
-            for parameter in spec.parameters
-        }
-        if spec.scope == "workspace":
-            resolved_project, resolved_password = resolve_credentials(project, password)
-            workspace = ProjectWorkspace.open(resolved_project, resolved_password)
-            operation = getattr(workspace, spec.method)
-        else:
-            operation = getattr(ProjectWorkspace, spec.method)
-        result = handle_result(operation(**arguments))
+        for parameter in spec.parameters:
+            workspace_parameter = method_signature.parameters[parameter.workspace_parameter]
+            if _parameter_default(parameter, workspace_parameter) is ... and values.get(parameter.name) is None:
+                hint = parameter.name if parameter.kind == "argument" else (parameter.declarations or (f"--{parameter.name.replace('_', '-')}",))[0]
+                raise click.MissingParameter(param_hint=hint, param_type=parameter.kind)
+        try:
+            arguments = {
+                parameter.workspace_parameter: parameter.transform(values[parameter.name])
+                for parameter in spec.parameters
+            }
+            if spec.scope == "workspace":
+                resolved_project, resolved_password = resolve_credentials(project, password)
+                workspace = ProjectWorkspace.open(resolved_project, resolved_password)
+                operation = getattr(workspace, spec.method)
+            else:
+                operation = getattr(ProjectWorkspace, spec.method)
+            result = operation(**arguments)
+        except Exception as exc:
+            if not json_output():
+                raise
+            result = OperationResult(False, 1, str(exc))
+        if not result.success and spec.render_failure and not json_output():
+            spec.renderer(result)
+        result = handle_result(result)
         spec.renderer(result)
 
     callback.__name__ = f"{spec.method}_{spec.name.replace('-', '_')}_command"
@@ -235,7 +250,7 @@ def build_workspace_command(spec: WorkspaceCommand) -> Callable[..., None]:
                 inspect.Parameter(
                     "project",
                     inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    default=typer.Argument(None, help="Project name"),
+                    default=typer.Option(None, "--project", help="Project path (defaults to MLOX_PROJECT_PATH)"),
                     annotation=str | None,
                 ),
                 inspect.Parameter(

@@ -349,7 +349,7 @@ class MLFlowGatewayK3sService(
 
     def service_log_tail(self, conn, label: str | None = None, tail: int = 200) -> str:
         if label and label not in self.log_labels():
-            return f"Log label {label} not found"
+            raise ValueError(f"Log label {label} not found")
         return self.exec.k8s_resource_log_tail(
             conn,
             f"deployment/{self.deployment_name}",

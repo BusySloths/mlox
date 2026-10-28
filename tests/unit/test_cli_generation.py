@@ -13,6 +13,12 @@ from mlox.cli.generation import (
 )
 from mlox.cli.rendering.results import render_message
 from mlox.cli.specifications.server import SERVER_COMMANDS
+from mlox.cli.specifications.server import _server_template_path
+
+
+def test_server_template_accepts_full_path_and_existing_ubuntu_suffix():
+    assert _server_template_path("connector/mlox-server.connector.yaml") == "connector/mlox-server.connector.yaml"
+    assert _server_template_path("ubuntu.docker") == "ubuntu/mlox-server.ubuntu.docker.yaml"
 
 
 def _server_command(name: str) -> WorkspaceCommand:
@@ -103,6 +109,8 @@ def test_registration_rejects_duplicate_command_names():
 
 def test_simple_commands_are_generated_but_model_deploy_stays_explicit():
     assert set(server.GENERATED_SERVER_COMMANDS) == {
+        "inspect",
+        "exec",
         "list",
         "add",
         "setup",
@@ -110,6 +118,7 @@ def test_simple_commands_are_generated_but_model_deploy_stays_explicit():
         "save-key",
     }
     assert set(service.GENERATED_SERVICE_COMMANDS) == {
+        "inspect",
         "list",
         "add",
         "setup",

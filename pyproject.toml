@@ -48,6 +48,7 @@ dependencies = [
     "kafka-python-ng>=2.2.3",
     "bcrypt>=5.0.0",
     "requests>=2.31",  # HTTP client used by core use cases (models, MLflow gateway)
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

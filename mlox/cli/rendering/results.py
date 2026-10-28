@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable
+import json
 
 import typer
 
@@ -14,6 +15,19 @@ def render_message(result: OperationResult[Any]) -> None:
     """Render the operation message."""
 
     typer.echo(result.message)
+
+
+def render_inspection(result: OperationResult[Any]) -> None:
+    typer.echo(json.dumps(result.data, indent=2, default=str))
+
+
+def render_server_command(result: OperationResult[Any]) -> None:
+    """Preserve remote stdout and stderr for interactive CLI users."""
+    data = result.data or {}
+    if data.get("stdout"):
+        typer.echo(data["stdout"], nl=False)
+    if data.get("stderr"):
+        typer.echo(data["stderr"], nl=False, err=True)
 
 
 def render_server_list(result: OperationResult[Any]) -> None:

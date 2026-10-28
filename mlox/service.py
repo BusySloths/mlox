@@ -848,12 +848,19 @@ class AbstractService(ABC):
         `tail` lines using the remote helper.
         """
         if label not in self.compose_service_names:
-            return "Not found"
+            raise ValueError(f"Unknown service log label: {label}")
 
         service = self.compose_service_names[label]
 
-        # Try to resolve container name from current docker state
-        all_states = self.exec.docker_all_service_states(conn)
+        # Use a non-interactive sudo channel and preserve command failures.
+        result = conn.sudo(
+            "docker ps -a --format '{{.Names}}'", hide=True, warn=True,
+            pty=False, in_stream=False, timeout=30,
+        )
+        if result.exited:
+            detail = result.stderr.removeprefix("[sudo] password: ").strip()
+            raise RuntimeError(f"Could not list Docker containers (exit {result.exited}): {detail}")
+        all_states = result.stdout.splitlines()
 
         # direct match
         if service in all_states:
@@ -869,11 +876,7 @@ class AbstractService(ABC):
                 return self.exec.docker_service_log_tails(conn, cname, tail=tail)
 
         # last resort: try service name directly (may be a container id)
-        state = self.exec.docker_service_state(conn, service)
-        if state:
-            return self.exec.docker_service_log_tails(conn, service, tail=tail)
-
-        return f"Service with label {label} ({service}) not found"
+        raise LookupError(f"Service with label {label} ({service}) not found")
 
     def log_labels(self) -> List[str]:
         """Return selectable log labels for this service.

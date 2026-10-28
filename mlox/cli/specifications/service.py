@@ -10,10 +10,13 @@ from mlox.cli.rendering.results import (
     render_service_identity,
     render_service_list,
     render_service_logs,
+    render_inspection,
 )
 
 
 SERVICE_COMMANDS = (
+    WorkspaceCommand(name="inspect", method="inspect_service", help="Inspect a service by UUID or name.",
+        parameters=(CliParameter("identifier", "Service UUID or name", kind="argument"),), renderer=render_inspection),
     WorkspaceCommand(
         name="list",
         method="list_services",
@@ -58,7 +61,7 @@ SERVICE_COMMANDS = (
         method="service_logs",
         help="Show recent logs for a service.",
         parameters=(
-            CliParameter("name", "Service name", kind="argument"),
+            CliParameter("name", "Service UUID or name", kind="argument"),
             CliParameter("label", "Service log label to fetch logs for"),
             CliParameter("tail", "Number of log lines to return"),
         ),

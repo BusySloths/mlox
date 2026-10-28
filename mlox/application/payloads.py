@@ -32,6 +32,8 @@ class ServerSummary(TypedDict):
     """Serializable server row returned by ``list_servers``."""
 
     ip: str
+    uuid: str | None
+    capabilities: list[str]
     state: str
     service_count: int
     service_config_id: str | None
@@ -66,10 +68,23 @@ class ServerHealthData(TypedDict):
     health: dict[str, Any]
 
 
+class ServerCommandData(TypedDict):
+    """Output captured from a non-interactive server command."""
+
+    stdout: str
+    stderr: str
+    exit_code: int | None
+    timed_out: bool
+
+
 class ServiceSummary(TypedDict):
     """Serializable service row returned by ``list_services``."""
 
     name: str
+    uuid: str | None
+    server_uuid: str | None
+    capabilities: list[str]
+    bindings: dict[str, str]
     service_config_id: str
     server_ip: str
     state: str

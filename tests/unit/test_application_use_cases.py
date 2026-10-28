@@ -44,6 +44,25 @@ class _Connection:
         return False
 
 
+def test_service_logs_reports_provider_failure():
+    from unittest.mock import Mock
+    service = SimpleNamespace(log_labels=lambda: ["collector"], service_log_tail=Mock(side_effect=RuntimeError("sudo failed")))
+    bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=lambda: _Connection()))
+    infra = SimpleNamespace(get_service=lambda name: service, get_bundle_by_service=lambda value: bundle)
+    result = services.service_logs(_project(infra), name="collector")
+    assert not result.success
+    assert "sudo failed" in result.message
+
+
+def test_compose_logs_fail_when_container_listing_fails():
+    from mlox.service import AbstractService
+    service = SimpleNamespace(compose_service_names={"collector": "otel-collector"})
+    conn = SimpleNamespace(sudo=lambda *args, **kwargs: SimpleNamespace(exited=1, stdout="", stderr="permission denied"))
+    import pytest
+    with pytest.raises(RuntimeError, match="Could not list Docker containers"):
+        AbstractService.compose_service_log_tail(service, conn, "collector", 5)
+
+
 def _project(infrastructure):
     return SimpleNamespace(name="demo", infrastructure=infrastructure)
 

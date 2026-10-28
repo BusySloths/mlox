@@ -10,6 +10,7 @@ from mlox.application.payloads import (
     ListConfigsData,
     ListServersData,
     ServerHealthData,
+    ServerCommandData,
     ServerOperationData,
     ServerSummary,
 )
@@ -28,10 +29,50 @@ from mlox.utils import dataclass_to_dict
 logger = logging.getLogger(__name__)
 
 
+def execute_server_command(
+    project: WorkspaceState, *, ip: str, command: str, sudo: bool = False,
+    timeout: int = 60,
+) -> OperationResult[ServerCommandData]:
+    """Execute a non-interactive command using the project's managed SSH identity."""
+    from invoke.exceptions import CommandTimedOut
+
+    bundle = project.infrastructure.get_bundle_by_ip(ip)
+    if not bundle:
+        return OperationResult(False, 5, "Server not found in infrastructure.")
+    if ServerCapability.TERMINAL.value not in _server_capability_names(bundle.server):
+        return OperationResult(False, 13, "The selected server does not support SSH commands.")
+    if not command.strip() or timeout <= 0:
+        return OperationResult(False, 2, "Command must be nonempty and timeout must be positive.")
+    try:
+        with bundle.server.get_server_connection() as conn:
+            run = conn.sudo if sudo else conn.run
+            result = run(command, hide=True, warn=True, pty=False, in_stream=False, timeout=timeout)
+        exit_code = result.exited
+        data: ServerCommandData = {
+            "stdout": result.stdout.removeprefix("[sudo] password: ") if sudo else result.stdout,
+            "stderr": result.stderr.removeprefix("[sudo] password: ") if sudo else result.stderr,
+            "exit_code": exit_code, "timed_out": False,
+        }
+        return OperationResult(
+            exit_code == 0, exit_code if exit_code else 0,
+            "Command completed." if exit_code == 0 else f"Command exited with status {exit_code}.", data,
+        )
+    except CommandTimedOut as exc:
+        return OperationResult(False, 124, f"Command timed out after {timeout} seconds.", {
+            "stdout": exc.result.stdout, "stderr": exc.result.stderr,
+            "exit_code": None, "timed_out": True,
+        })
+    except Exception as exc:
+        logger.warning("Server command failed: %s", type(exc).__name__)
+        return OperationResult(False, 1, f"Could not execute server command ({type(exc).__name__}).")
+
+
 def list_servers(project: WorkspaceState) -> OperationResult[ListServersData]:
     payload: list[ServerSummary] = [
         {
             "ip": bundle.server.ip,
+            "uuid": getattr(bundle.server, "uuid", None),
+            "capabilities": sorted(_server_capability_names(bundle.server)),
             "state": getattr(bundle.server, "state", "unknown"),
             "service_count": len(bundle.services),
             "service_config_id": getattr(bundle.server, "service_config_id", None),
