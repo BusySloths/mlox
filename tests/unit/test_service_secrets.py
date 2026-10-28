@@ -207,15 +207,14 @@ SERVICE_CASES = [
             "port": "8086",
             "token": "influx-token",
         },
-        {
-            "username": "influx",
-            "password": "influx-pass",
+        {"influx_connection": {
             "token": "influx-token",
             "certificate": "",
             "port": "8086",
             "url": None,
             "ip": "",
-        },
+            "database": "telemetry",
+        }},
         None,
     ),
     (

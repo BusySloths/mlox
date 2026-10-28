@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+import base64
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -106,6 +107,10 @@ class _Executor:
         self._record("k8s_apply_manifest", path, **kwargs)
         return self.apply_result
 
+    def k8s_patch_resource(self, conn, resource_type, name, patch, **kwargs):
+        self._record("k8s_patch_resource", resource_type, name, patch, **kwargs)
+        return "patched"
+
     def k8s_delete_resource(self, conn, *args, **kwargs):
         self._record("k8s_delete_resource", *args, **kwargs)
         return self.delete_result
@@ -190,16 +195,12 @@ def test_runtime_binding_refreshes_managed_tls_gateway(
         environment={"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"},
     )
 
-    documents = list(yaml.safe_load_all(service.exec.files[service.manifest_path]))
-    runtime_secret = next(
-        item
-        for item in documents
-        if item.get("kind") == "Secret"
-        and item["metadata"]["name"] == service.runtime_secret_name
-    )
-    assert runtime_secret["stringData"] == {
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"
-    }
+    patch = next(call for call in service.exec.calls if call[0] == "k8s_patch_resource")
+    assert patch[1][:2] == ("secret", service.runtime_secret_name)
+    assert patch[1][2]["data"]["OTEL_EXPORTER_OTLP_ENDPOINT"] == base64.b64encode(
+        b"https://otel.example:4317"
+    ).decode()
+    assert patch[2]["namespace"] == service.namespace
     assert any(
         "rollout restart deployment/mlflow-gateway" in call[1][0]
         for call in service.exec.calls

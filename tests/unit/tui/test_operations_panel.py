@@ -202,13 +202,13 @@ async def _monitor_selector() -> tuple[list[tuple[str, str]], str]:
         name="Monitor A",
         uuid="monitor-a",
         state="running",
-        get_telemetry_data=lambda _bundle: "",
+        get_telemetry_query_service=lambda: SimpleNamespace(recent_spans=lambda **kwargs: []),
     )
     second = SimpleNamespace(
         name="Monitor B",
         uuid="monitor-b",
         state="stopped",
-        get_telemetry_data=lambda _bundle: "",
+        get_telemetry_query_service=lambda: SimpleNamespace(recent_spans=lambda **kwargs: []),
     )
     infrastructure = SimpleNamespace(
         bundles=[

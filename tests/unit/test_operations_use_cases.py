@@ -107,6 +107,23 @@ def _raw(*runs):
     return json.dumps({"resourceSpans": [{"scopeSpans": [{"spans": spans}]}]})
 
 
+def _influx_rows(*runs):
+    """Represent demo spans as the flattened rows returned by Influx Core."""
+    rows = []
+    for span in (span for run in runs for span in run):
+        attributes = {}
+        for item in span["attributes"]:
+            value = item["value"]
+            attributes[item["key"]] = next(iter(value.values()))
+        rows.append({
+            "trace_id": span["traceId"], "span_id": span["spanId"],
+            "span.name": span["name"], "start_time_unix_nano": span["startTimeUnixNano"],
+            "end_time_unix_nano": span["endTimeUnixNano"],
+            "attributes": json.dumps(attributes),
+        })
+    return rows
+
+
 def test_watch_calibrates_detects_first_deviation_and_recovery():
     session = OperationsWatchSession(baseline_runs=2)
     session.start("")
@@ -132,8 +149,10 @@ def test_watch_calibrates_detects_first_deviation_and_recovery():
 
 
 def test_start_uses_existing_telemetry_as_watermark():
-    telemetry = _raw(_run(1))
-    service = SimpleNamespace(get_telemetry_data=lambda bundle: telemetry)
+    telemetry = _influx_rows(_run(1))
+    service = SimpleNamespace(get_telemetry_query_service=lambda: SimpleNamespace(
+        recent_spans=lambda **kwargs: telemetry,
+    ))
     infra = SimpleNamespace(
         bundles=[SimpleNamespace(name="demo", services=[service])]
     )
@@ -154,12 +173,12 @@ def test_start_requires_a_telemetry_source():
 
 def test_watch_uses_selected_monitor_for_start_and_refresh():
     readings = {
-        "wrong": [_raw(_run(1))],
-        "right": ["", _raw(_run(2))],
+        "wrong": [_influx_rows(_run(1))],
+        "right": [[], _influx_rows(_run(2))],
     }
 
     def monitor(name, uuid):
-        def read(_bundle):
+        def read(**kwargs):
             values = readings[name]
             return values.pop(0) if len(values) > 1 else values[0]
 
@@ -167,7 +186,7 @@ def test_watch_uses_selected_monitor_for_start_and_refresh():
             name=name,
             uuid=uuid,
             state="running",
-            get_telemetry_data=read,
+            get_telemetry_query_service=lambda: SimpleNamespace(recent_spans=read),
         )
 
     wrong = monitor("wrong", "monitor-wrong")
