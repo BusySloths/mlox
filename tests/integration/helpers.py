@@ -29,7 +29,8 @@ def log_compose_diagnostics(service, bundle) -> None:
             for args in ("ps --all", "logs --no-color --tail 80"):
                 try:
                     result = conn.sudo(
-                        f"{prefix} {args}", hide=True, warn=True, pty=False, timeout=30
+                        f"{prefix} {args}", hide=True, warn=True, pty=False,
+                        in_stream=False, timeout=30
                     )
                     logging.error(
                         "Readiness diagnostics for %s (%s, exit %s):\n%s\n%s",

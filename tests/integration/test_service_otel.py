@@ -14,6 +14,7 @@ from mlox.infra import Infrastructure, Bundle
 from tests.integration.conftest import wait_for_service_ready
 
 pytestmark = pytest.mark.integration
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
@@ -38,17 +39,16 @@ def install_otel_service(ubuntu_docker_server):
         pytest.fail("Failed to add otel service from config")
 
     service = bundle_added.services[-1]
-    with ubuntu_docker_server.get_server_connection() as conn:
-        service.setup(conn)
-        service.spin_up(conn)
-    # Initial stabilization wait while containers/images start up
-    wait_for_service_ready(service, bundle, retries=3, interval=10, no_checks=True)
-
-    yield bundle_added, service
-
-    result = remove_service(infra, service.name)
-    if not result.success:
-        logger.warning("Failed to remove service via application logic: %s", result.message)
+    try:
+        with ubuntu_docker_server.get_server_connection() as conn:
+            service.setup(conn)
+            service.spin_up(conn)
+        assert wait_for_service_ready(service, bundle, retries=40, interval=5).get("status") == "running"
+        yield bundle_added, service
+    finally:
+        result = remove_service(infra, service.name)
+        if not result.success:
+            logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_otel_service_is_running(install_otel_service):
@@ -79,6 +79,7 @@ def test_otel_log_file_written(install_otel_service):
     otel_logger.info(msg)
     time.sleep(3)
     logger_provider.shutdown()
+    otel_logger.removeHandler(handler)
 
     data = service.get_telemetry_data(bundle)
     assert msg in data

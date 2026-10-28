@@ -100,8 +100,9 @@ class FakeExec:
     def docker_up(self, conn, compose_path, env_path):
         self._record("docker_up", compose_path, env_path)
 
-    def docker_restart(self, conn, compose_path, env_path):
-        self._record("docker_restart", compose_path, env_path)
+    def docker_restart(self, conn, compose_path, env_path, **kwargs):
+        self._record("docker_restart", compose_path, env_path, **kwargs)
+        return "recreated"
 
     def docker_down(self, conn, *args, **kwargs):
         self._record("docker_down", *args, **kwargs)
@@ -827,8 +828,31 @@ def test_otel_destination_update_validates_restarts_and_rolls_back(conn):
         "rolled_back": True,
         "error": "At least one OpenTelemetry destination must be enabled.",
     }
-    assert any(call[0] == "docker_restart" for call in service.exec.calls)
+    assert not any(call[0] in {"docker_restart", "tls_setup"} for call in service.exec.calls)
     assert service.file_destination is True
+
+
+def test_otel_catalog_defaults_handle_omitted_destination_parameters():
+    from mlox.config import load_all_service_configs
+
+    config = next(item for item in load_all_service_configs() if item.id == "otel-0.146.1-docker")
+    service = config.instantiate_service(params={})
+    assert service.file_destination is True
+    assert service.influx_service_uuid is None
+    assert service.relic_endpoint == "" and service.relic_key == ""
+    assert service._pipeline_exporter_list() == "file"
+
+
+def test_otel_catalog_keeps_explicit_destinations():
+    from mlox.config import load_all_service_configs
+
+    config = next(item for item in load_all_service_configs() if item.id == "otel-0.146.1-docker")
+    service = config.instantiate_service(params={
+        "${MLOX_OTEL_FILE_DESTINATION}": "false",
+        "${MLOX_OTEL_INFLUX_SERVICE_UUID}": "influx-id",
+    })
+    assert service.file_destination is False
+    assert service.influx_service_uuid == "influx-id"
 
 
 def test_otel_destination_update_backs_up_validates_and_restarts(conn):
@@ -849,6 +873,8 @@ def test_otel_destination_update_backs_up_validates_and_restarts(conn):
     assert any("docker compose --env-file" in command for command in commands)
     assert any("run --rm --no-deps otel-collector" in command for command in commands)
     assert any(call[0] == "docker_restart" for call in service.exec.calls)
+    assert not any(call[0] == "tls_setup" for call in service.exec.calls)
+    assert all(call[2].get("force_recreate") is True for call in service.exec.calls if call[0] == "docker_restart")
 
 
 def test_otel_telemetry_missing_before_setup_is_empty(conn, monkeypatch):
@@ -907,6 +933,97 @@ def test_otel_destination_validation_failure_restores_backup(conn, monkeypatch):
         call[0] == "execute" and call[1][2] == "Restore OTel collector config"
         for call in service.exec.calls
     )
+    restore_command = next(call[1][0] for call in service.exec.calls if call[0] == "execute" and call[1][2] == "Restore OTel collector config")
+    assert "influx-ca.pem.previous" in restore_command
+    assert not any(call[0] == "tls_setup" for call in service.exec.calls)
+
+
+@pytest.mark.parametrize("old_ca_exists", [True, False])
+def test_otel_failed_update_restores_previous_influx_ca_and_config(conn, monkeypatch, old_ca_exists):
+    import base64
+    class StatefulExec(FakeExec):
+        def execute(self, connection, command, *, group, description="", **kwargs):
+            self._record("execute", command, group, description, kwargs)
+            paths = [f"/tmp/stack/{name}" for name in (
+                "otel-collector-config.yaml", "service.env", "docker-compose.yaml", "influx-ca.pem",
+            )]
+            if description == "Back up OTel collector config":
+                for path in paths:
+                    if path in self.files:
+                        self.files[path + ".previous"] = self.files[path]
+            elif description == "Restore OTel collector config":
+                for path in paths:
+                    if path + ".previous" in self.files:
+                        self.files[path] = self.files[path + ".previous"]
+                    else:
+                        self.files.pop(path, None)
+            return "ok"
+
+        def fs_copy(self, connection, source, destination):
+            super().fs_copy(connection, source, destination)
+            self.files[destination] = "new rendered file"
+
+        def fs_create_empty_file(self, connection, path):
+            super().fs_create_empty_file(connection, path)
+            self.files[path] = ""
+
+    executor = StatefulExec()
+    for path, content in {
+        "/tmp/stack/otel-collector-config.yaml": "old config",
+        "/tmp/stack/service.env": "old environment",
+        "/tmp/stack/docker-compose.yaml": "old compose",
+        "/tmp/stack/influx-ca.pem": "old CA",
+        "/tmp/stack/cert.pem": "old serving certificate",
+        "/tmp/stack/key.pem": "old private key",
+    }.items():
+        executor.files[path] = content
+    if not old_ca_exists:
+        del executor.files["/tmp/stack/influx-ca.pem"]
+    executor.service_states["otel-collector"] = "running"
+    service = _set_exec(OtelDockerService(
+        **BASE, relic_endpoint="", relic_key="", config="otel/otel-collector-config-0.146.1.yaml",
+        port_grpc="4317", port_http="4318", port_health="13133",
+    ), executor)
+    provider = SimpleNamespace(get_influx_env_binding=lambda: {
+        "MLOX_INFLUX_V2_WRITE_ENDPOINT": "https://influx.example/api/v2/write",
+        "MLOX_INFLUX_TOKEN": "test-token", "MLOX_INFLUX_ORG": "mlox",
+        "MLOX_INFLUX_DATABASE": "telemetry",
+        "MLOX_INFLUX_CERTIFICATE_B64": base64.b64encode(b"new CA").decode(),
+    })
+    monkeypatch.setattr(service, "get_dependent_service", lambda *args, **kwargs: provider)
+    monkeypatch.setattr(service, "_validate_rendered_config", lambda conn: (_ for _ in ()).throw(RuntimeError("invalid config")))
+    result = service.update_destinations(conn, influx_service_uuid="new-influx")
+    assert not result["updated"] and result["rolled_back"]
+    if old_ca_exists:
+        assert executor.files["/tmp/stack/influx-ca.pem"] == "old CA"
+    else:
+        assert "/tmp/stack/influx-ca.pem" not in executor.files
+    assert executor.files["/tmp/stack/otel-collector-config.yaml"] == "old config"
+    assert executor.files["/tmp/stack/service.env"] == "old environment"
+    assert executor.files["/tmp/stack/docker-compose.yaml"] == "old compose"
+    assert executor.files["/tmp/stack/cert.pem"] == "old serving certificate"
+    assert executor.files["/tmp/stack/key.pem"] == "old private key"
+    assert service.influx_service_uuid is None
+
+
+def test_otel_unhealthy_update_rolls_back_and_rechecks_old_configuration(conn, monkeypatch):
+    service = _set_exec(OtelDockerService(
+        **BASE, relic_endpoint="", relic_key="", config="otel/otel-collector-config-0.146.1.yaml",
+        port_grpc="4317", port_http="4318", port_health="13133",
+    ), FakeExec())
+    calls = []
+
+    def wait(connection):
+        calls.append(connection)
+        if len(calls) == 1:
+            raise RuntimeError("collector did not become ready")
+
+    monkeypatch.setattr(service, "_wait_collector_ready", wait)
+    result = service.update_destinations(conn, diagnostic_exporter=True)
+    assert not result["updated"] and result["rolled_back"]
+    assert not service.diagnostic_exporter
+    assert len(calls) == 2
+    assert len([call for call in service.exec.calls if call[0] == "docker_restart"]) == 2
 
 
 def test_otel_influx_destination_uses_contrib_influx_exporter(conn):

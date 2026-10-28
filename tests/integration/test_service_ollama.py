@@ -37,9 +37,9 @@ def install_ollama_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
 
-    wait_for_service_ready(
-        service, bundle_added, retries=6, interval=10, no_checks=True
-    )
+    assert wait_for_service_ready(
+        service, bundle_added, retries=12, interval=5
+    ).get("status") == "running"
 
     yield bundle_added, service
 

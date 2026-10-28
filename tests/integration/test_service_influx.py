@@ -5,6 +5,7 @@ import requests
 
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
+from mlox.services.influx.client import InfluxClient
 
 from tests.integration.conftest import wait_for_service_ready
 
@@ -25,21 +26,20 @@ def install_influx_service(ubuntu_docker_server):
 
     bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
-        pytest.skip("Failed to add InfluxDB service from config")
+        pytest.fail("Failed to add InfluxDB service from config")
 
     service = bundle_added.services[-1]
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        service.setup(conn)
-        service.spin_up(conn)
-
-    wait_for_service_ready(service, bundle, retries=6, interval=30, no_checks=True)
-
-    yield bundle_added, service
-
-    result = remove_service(infra, service.name)
-    if not result.success:
-        logger.warning("Failed to remove service via application logic: %s", result.message)
+    try:
+        with ubuntu_docker_server.get_server_connection() as conn:
+            service.setup(conn)
+            service.spin_up(conn)
+        assert wait_for_service_ready(service, bundle, retries=40, interval=5).get("status") == "running"
+        yield bundle_added, service
+    finally:
+        result = remove_service(infra, service.name)
+        if not result.success:
+            logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_influx_service_is_running(install_influx_service):
@@ -54,6 +54,14 @@ def test_influx_service_is_running(install_influx_service):
         logger.error(f"Error checking InfluxDB service status: {e}")
 
     assert status.get("status", None) == "running"
+    connection = service.get_secrets()["influx_connection"]
+    client = InfluxClient(
+        url=connection["url"], token=connection["token"], database=connection["database"],
+        certificate=connection["certificate"].encode("utf-8"),
+    )
+    assert client.health()
+    # A fresh, empty database is queryable before the first telemetry write.
+    assert isinstance(client.measurements(), list)
 
 
 def test_influxdb_accepts_collector_signal_measurements(

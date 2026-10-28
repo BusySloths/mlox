@@ -98,10 +98,14 @@ class DockerMixin(TaskRunnerABC):
         connection: Connection,
         config_yaml: str,
         env_file: str | None = None,
+        *,
+        force_recreate: bool = False,
     ) -> str | None:
         """Reconcile a compose stack without forcing a stop/start cycle."""
 
         command = self._docker_compose_up_command(config_yaml, env_file)
+        if force_recreate:
+            command += " --force-recreate"
         result = self._run_task(
             connection,
             group=TaskGroup.CONTAINER_RUNTIME,

@@ -1,13 +1,15 @@
 from tests.integration.helpers import add_service, remove_service
-import time
+import logging
 import pytest
 
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
+from tests.integration.conftest import wait_for_service_ready
 
 
 # Mark this module as an integration test
 pytestmark = pytest.mark.integration
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
@@ -31,8 +33,12 @@ def install_milvus_service(ubuntu_docker_server):
     with ubuntu_docker_server.get_server_connection() as conn:
         service.setup(conn)
         service.spin_up(conn)
-        # Allow some time for containers to become healthy
-    time.sleep(30)
+    # Milvus does not implement an application readiness check yet. Compose
+    # state establishes container startup, not API-level readiness.
+    status = wait_for_service_ready(
+        service, bundle, check_fn=lambda: {"status": "running"}, retries=60, interval=5
+    )
+    assert status.get("status") == "running"
 
     yield bundle_added, service
 

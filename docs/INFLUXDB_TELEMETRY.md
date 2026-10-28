@@ -19,6 +19,9 @@ and the exporter-required `org` is `mlox` (Core ignores it). File output is
 optional diagnostics only. Destination updates render and validate the pinned
 Collector configuration, restart it, wait for health, and restore the previous
 rendered destination settings when validation or health fails.
+Updating destinations preserves the Collector's serving certificate so
+existing clients retain their TLS trust. The previous configuration, Compose
+file, environment, and Influx CA are restored if an update fails.
 
 Operations uses the Influx query backend and has fixed limits: a 300-second query
 window, 500 rows, and a 30-second request timeout. The service TUI shows bounded
@@ -26,3 +29,11 @@ recent metric, span, and log rows alongside health and measurements. Metric rows
 are sampled from at most 12 metric measurements, with MLOX measurements shown
 first. The TUI omits tokens, certificates, arbitrary SQL, and unbounded data
 views.
+
+The Multipass integration suite includes a Collector-to-Influx all-signal test
+and an MLflow Operations demo workflow that checks model spans in Influx before
+and after a Collector destination update. Run on a Multipass-capable host:
+
+```sh
+uv run pytest tests/integration/test_telemetry_workflow.py -m integration --run-integration
+```

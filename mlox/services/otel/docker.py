@@ -17,6 +17,7 @@ Related modules (plain-text links):
 
 import logging
 import base64
+import time
 from shlex import quote
 
 from dataclasses import dataclass, field
@@ -75,6 +76,21 @@ class OtelDockerService(
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        # Catalog callers may omit optional template parameters (for example
+        # `mlox service add`); unresolved placeholders are not destinations.
+        defaults = {
+            "file_destination": True,
+            "diagnostic_exporter": False,
+            "grafana_cloud_destination": False,
+            "new_relic_destination": False,
+            "influx_service_uuid": None,
+            "relic_endpoint": "", "relic_key": "",
+            "grafana_cloud_endpoint": "", "grafana_cloud_key": "",
+        }
+        for name, default in defaults.items():
+            value = getattr(self, name)
+            if isinstance(value, str) and value.startswith("${MLOX_") and value.endswith("}"):
+                setattr(self, name, default)
         self._normalize_destination_flags()
         # Historical deployments supplied provider credentials directly and did
         # not persist explicit destination toggles.  Keep those destinations
@@ -272,7 +288,7 @@ class OtelDockerService(
             "metric_points": snapshot.summary.get("metric_points", 0),
         }
 
-    def setup(self, conn) -> None:
+    def setup(self, conn, *, preserve_tls: bool = False) -> None:
         self.grafana_cloud_key = self._normalize_auth_header(self.grafana_cloud_key)
         self._resolve_influx_binding()
 
@@ -349,7 +365,8 @@ class OtelDockerService(
             self._influx_exporter_block(),
         )
 
-        self.exec.tls_setup(conn, conn.host, self.target_path)
+        if not preserve_tls:
+            self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
         )
@@ -517,6 +534,7 @@ class OtelDockerService(
         if unknown:
             raise ValueError("Unsupported collector destination setting.")
         previous = {name: getattr(self, name) for name in allowed}
+        previous_binding = self._influx_binding
         backed_up = False
         try:
             for name, value in destinations.items():
@@ -528,16 +546,17 @@ class OtelDockerService(
             self._pipeline_exporter_list()
             self._backup_collector_files(conn)
             backed_up = True
-            self.setup(conn)
+            self.setup(conn, preserve_tls=True)
             self._validate_rendered_config(conn)
-            self.exec.docker_restart(
+            restarted = self.exec.docker_restart(
                 conn,
                 f"{self.target_path}/{self.target_docker_script}",
                 f"{self.target_path}/{self.target_docker_env}",
+                force_recreate=True,
             )
-            health = self.check(conn)
-            if health.get("status") != "running":
-                raise RuntimeError("collector did not become healthy")
+            if restarted is None:
+                raise RuntimeError("Could not restart the collector.")
+            self._wait_collector_ready(conn)
             self._discard_collector_backup(conn)
             return {"updated": True, "destinations": self.collector_destinations()}
         except Exception as error:
@@ -545,20 +564,25 @@ class OtelDockerService(
             logging.error("OpenTelemetry collector destination update failed: %s", failure_message)
             for name, value in previous.items():
                 setattr(self, name, value)
+            self._influx_binding = previous_binding
             self._normalize_destination_flags()
             # Render and recreate the previous healthy configuration.  A second
             # failure is deliberately surfaced instead of hiding an outage.
             try:
                 if backed_up:
                     self._restore_collector_backup(conn)
+                    restarted = self.exec.docker_restart(
+                        conn,
+                        f"{self.target_path}/{self.target_docker_script}",
+                        f"{self.target_path}/{self.target_docker_env}",
+                        force_recreate=True,
+                    )
+                    if restarted is None:
+                        raise RuntimeError("Could not restart the previous collector configuration.")
+                    self._wait_collector_ready(conn)
+                    restored = True
                 else:
-                    self.setup(conn)
-                self.exec.docker_restart(
-                    conn,
-                    f"{self.target_path}/{self.target_docker_script}",
-                    f"{self.target_path}/{self.target_docker_env}",
-                )
-                restored = self.check(conn).get("status") == "running"
+                    restored = True  # No files or containers were changed.
             except Exception:
                 restored = False
             return {
@@ -571,9 +595,17 @@ class OtelDockerService(
         execute = getattr(self.exec, "execute", None)
         if not callable(execute):
             raise RuntimeError("Executor cannot stage collector configuration.")
-        config = f"{self.target_path}/otel-collector-config.yaml"
-        env = f"{self.target_path}/{self.target_docker_env}"
-        command = f"cp {quote(config)} {quote(config + '.previous')} && cp {quote(env)} {quote(env + '.previous')}"
+        paths = self._collector_update_paths()
+        optional_ca = paths[-1]
+        marker = optional_ca + ".previous.absent"
+        commands = [f"cp -p {quote(path)} {quote(path + '.previous')}" for path in paths[:-1]]
+        commands.append(
+            f"rm -f {quote(optional_ca + '.previous')} {quote(marker)} && "
+            f"if [ -e {quote(optional_ca)} ]; then "
+            f"cp -p {quote(optional_ca)} {quote(optional_ca + '.previous')}; "
+            f"else touch {quote(marker)}; fi"
+        )
+        command = " && ".join(commands)
         if execute(conn, command, group=TaskGroup.FILESYSTEM, description="Back up OTel collector config") is None:
             raise RuntimeError("Could not back up collector configuration.")
 
@@ -581,18 +613,53 @@ class OtelDockerService(
         execute = getattr(self.exec, "execute", None)
         if not callable(execute):
             raise RuntimeError("Executor cannot restore collector configuration.")
-        config = f"{self.target_path}/otel-collector-config.yaml"
-        env = f"{self.target_path}/{self.target_docker_env}"
-        command = f"mv {quote(config + '.previous')} {quote(config)} && mv {quote(env + '.previous')} {quote(env)}"
+        paths = self._collector_update_paths()
+        optional_ca = paths[-1]
+        commands = [f"cp -p {quote(path + '.previous')} {quote(path)}" for path in paths[:-1]]
+        commands.append(
+            f"if [ -e {quote(optional_ca + '.previous')} ]; then "
+            f"cp -p {quote(optional_ca + '.previous')} {quote(optional_ca)}; "
+            f"elif [ -e {quote(optional_ca + '.previous.absent')} ]; then "
+            f"rm -f {quote(optional_ca)}; else exit 1; fi"
+        )
+        command = " && ".join(commands)
         if execute(conn, command, group=TaskGroup.FILESYSTEM, description="Restore OTel collector config") is None:
             raise RuntimeError("Could not restore collector configuration.")
 
     def _discard_collector_backup(self, conn) -> None:
         execute = getattr(self.exec, "execute", None)
         if callable(execute):
-            config = f"{self.target_path}/otel-collector-config.yaml"
-            env = f"{self.target_path}/{self.target_docker_env}"
-            execute(conn, f"rm -f {quote(config + '.previous')} {quote(env + '.previous')}", group=TaskGroup.FILESYSTEM, description="Remove OTel config backup")
+            paths = self._collector_update_paths()
+            backups = " ".join(quote(path + ".previous") for path in paths)
+            backups += " " + quote(paths[-1] + ".previous.absent")
+            execute(conn, f"rm -f {backups}", group=TaskGroup.FILESYSTEM, description="Remove OTel config backup")
+
+    def _collector_update_paths(self) -> tuple[str, ...]:
+        return tuple(f"{self.target_path}/{name}" for name in (
+            "otel-collector-config.yaml", self.target_docker_env,
+            self.target_docker_script, "influx-ca.pem",
+        ))
+
+    def _wait_collector_ready(self, conn, timeout: float = 30) -> None:
+        """Wait for the actual local health endpoint after Compose recreates it."""
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                if self.check(conn).get("status") == "running":
+                    result = self.exec.execute(
+                        conn,
+                        f"curl --fail --silent --show-error --insecure --max-time 3 "
+                        f"https://127.0.0.1:{int(self.port_health)}/health/status",
+                        group=TaskGroup.CONTAINER_RUNTIME,
+                        description="Check collector health endpoint",
+                    )
+                    if result is not None:
+                        return
+            except Exception:
+                pass
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Collector health endpoint did not become ready.")
+            time.sleep(1)
 
     def _validate_rendered_config(self, conn) -> None:
         """Validate through Compose so config interpolation sees its runtime env."""

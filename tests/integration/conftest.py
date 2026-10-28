@@ -3,6 +3,7 @@ import uuid
 import time
 import socket
 import logging
+import json
 import shlex
 import pytest
 
@@ -110,42 +111,35 @@ def wait_for_service_ready(
     check_fn: Optional[Callable[[], Dict[str, str]]] = None,
     retries: int = 40,
     interval: int = 60,
-    no_checks: bool = False,
 ) -> Dict[str, str]:
-    """Poll a service until it reports ``status == 'running'``.
+    """Poll Compose containers and the service's readiness until ready.
 
-    Parameters
-    ----------
-    service: AbstractService
-        Service instance to check.
-    bundle: Bundle
-        Bundle containing the server the service is running on.
-    check_fn: Callable, optional
-        Optional custom check function returning a status dict. If not
-        provided, ``service.check`` is invoked using a server connection.
-    retries: int
-        Number of times to poll before giving up.
-    interval: int
-        Sleep interval in seconds between polls.
-    no_checks: bool
-        If True, skip all checks and wait 'retries x interval' seconds.
-
-    Returns
-    -------
-    Dict[str, str]
-        The last status dictionary returned by the check function.
+    Compose's synchronous ``up`` finishes image pulls and container creation
+    before this function runs. Running containers with a health check must be
+    healthy; successful one-shot containers may be exited. Failed or dead
+    containers terminate the wait with diagnostics.
     """
 
     status: Dict[str, str] = {"status": "unknown"}
     for i in range(retries):
         try:
-            if no_checks:
-                status = {"status": "unknown"}
-            else:
-                if check_fn:
-                    status = check_fn()
-                else:
-                    with bundle.server.get_server_connection() as conn:
+            server = getattr(bundle, "server", None)
+            is_compose = bool(
+                server and "docker" in (getattr(server, "backend", ()) or ())
+                and getattr(service, "compose_service_names", None)
+                and getattr(service, "target_path", None)
+            )
+            if is_compose:
+                with server.get_server_connection() as conn:
+                    compose = _compose_readiness(conn, service)
+                    if compose["status"] == "failed":
+                        status = compose
+                        break
+                    if compose["status"] != "running":
+                        status = compose
+                    elif check_fn:
+                        status = check_fn()
+                    else:
                         capabilities = getattr(service, "capabilities", set()) or set()
                         if ServiceCapability.HEALTH in capabilities and hasattr(
                             service, "get_health"
@@ -153,8 +147,17 @@ def wait_for_service_ready(
                             status = service.get_health(conn)
                         else:
                             status = service.check(conn)
-                if status.get("healthy") is True or status.get("status") == "running":
-                    return status
+            elif check_fn:
+                status = check_fn()
+            else:
+                with bundle.server.get_server_connection() as conn:
+                    capabilities = getattr(service, "capabilities", set()) or set()
+                    if ServiceCapability.HEALTH in capabilities and hasattr(service, "get_health"):
+                        status = service.get_health(conn)
+                    else:
+                        status = service.check(conn)
+            if status.get("healthy") is True or status.get("status") == "running":
+                return status
             logging.warning(
                 f"Retry {i + 1}/{retries} in {interval}s. Service state {getattr(service, 'state', '?')} not yet running: {status}"
             )
@@ -163,10 +166,54 @@ def wait_for_service_ready(
             logging.warning(
                 f"Retry {i + 1}/{retries} in {interval}s. Exception during status check: {e}"
             )
-        time.sleep(interval)
-    if not no_checks:
-        log_compose_diagnostics(service, bundle)
+        if i + 1 < retries:
+            time.sleep(interval)
+    log_compose_diagnostics(service, bundle)
     return status
+
+
+def _compose_readiness(conn, service) -> Dict[str, str]:
+    """Inspect Compose's containers, including exited initializer containers."""
+    compose = f"{service.target_path}/{service.target_docker_script}"
+    env = f"{service.target_path}/{service.target_docker_env}"
+    command = (
+        f"docker compose --env-file {shlex.quote(env)} -f {shlex.quote(compose)} "
+        "ps --all --format json"
+    )
+    result = conn.sudo(command, hide=True, warn=True, pty=False, in_stream=False, timeout=30)
+    if result.exited:
+        detail = (result.stderr or "").removeprefix("[sudo] password: ").strip()
+        raise RuntimeError(f"Docker Compose container inspection failed (exit {result.exited}): {detail}")
+    output = result.stdout.strip()
+    if not output:
+        return {"status": "starting", "detail": "Compose has not created containers yet."}
+    try:
+        parsed = json.loads(output)
+        containers = parsed if isinstance(parsed, list) else [parsed]
+    except json.JSONDecodeError:
+        containers = [json.loads(line) for line in output.splitlines() if line.strip()]
+    if not containers:
+        return {"status": "starting", "detail": "Compose has not created containers yet."}
+    running = 0
+    pending = []
+    for container in containers:
+        name = str(container.get("Name") or container.get("Service") or "container")
+        state = str(container.get("State") or "unknown").lower()
+        health = str(container.get("Health") or "").lower()
+        exit_code = container.get("ExitCode")
+        if state in {"dead", "exited"} and str(exit_code) not in {"0", "None"}:
+            return {"status": "failed", "detail": f"Container {name} {state} with exit code {exit_code}."}
+        if state == "dead":
+            return {"status": "failed", "detail": f"Container {name} is dead."}
+        if state == "running":
+            running += 1
+            if health and health != "healthy":
+                pending.append(f"{name}: {health}")
+        elif not (state == "exited" and str(exit_code) == "0"):
+            pending.append(f"{name}: {state}")
+    if pending or not running:
+        return {"status": "starting", "detail": ", ".join(pending) or "No containers are running."}
+    return {"status": "running"}
 
 
 def wait_for_k3s_ready(
