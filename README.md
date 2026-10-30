@@ -45,9 +45,11 @@ It's for engineers who prefer thoughtful systems over chaos. Backed by open sour
 
 ---
 
-## Current Status
+## Status
 
-Native, Docker, and Kubernetes execution, connector integrations, and the major services are functional. The project has been accepted at **CAIN 2026**.
+MLOX is in active development and has been accepted at **CAIN 2026**. What is
+stable, beta, or experimental, and where the project is heading, is tracked in
+one place: the [component status and roadmap in docs/DOCTRINE.md](docs/DOCTRINE.md).
 
 We welcome contributors, users, and honest feedback. If you hit something broken, please [open an issue](https://github.com/BusySloths/mlox/issues/new/choose) or reach out at `contact@mlox.org`.
 
@@ -57,13 +59,13 @@ We welcome contributors, users, and honest feedback. If you hit something broken
 
 | Area | What's included |
 |------|----------------|
-| **Infrastructure** | Add, remove, and tag servers; use Native, Docker, or Kubernetes execution; create single- or multi-node clusters |
+| **Infrastructure** | Add, remove, and tag servers; run work natively, in Docker, or on single- or multi-node Kubernetes |
 | **Services** | Deploy, manage, and remove services; centralize secrets; connect service dependencies |
 | **Connectors** | Integrate externally hosted services such as BigQuery, Cloud Storage, Sheets, and GCP Secret Manager |
 | **Applications** | Import repositories and deploy your product alongside its supporting services |
-| **Operations** | Experimental telemetry watching, incident evidence, planning, and advisory agent workspaces |
-| **Code** | `busysloths-mlox` PyPI package with client integrations, SDK helpers, and example snippets |
-| **Lifecycle Management** | Migrate, upgrade, export, and decommission services *(planned)* |
+| **Knowledge** | Keep notes, wiki pages, FAQs, todos, and markdown kanban boards inside the encrypted project |
+| **Operations** | Observe workload runs, keep incident evidence, plan work, and consult advisory agent workspaces |
+| **Code** | `busysloths-mlox` PyPI package: the `ProjectWorkspace` SDK plus per-service client helpers |
 
 ---
 
@@ -81,41 +83,49 @@ For MLflow setup, model serving, and focused integration tests, see the
 
 ## Architecture in 30 Seconds
 
+MLOX plays two roles. As a **platform**, the CLI and TUI manage your
+infrastructure. As a **client package**, your own code consumes the services
+MLOX deployed.
+
 ```text
-CLI     TUI
-  \      |
-   +-----+
-          |
-          v
-      `ProjectWorkspace`
-          |
-          v
-   internal state + repository
-          |
-          v
- encrypted `project.mlox` (SQLCipher)
- metadata + data-source pointer + infrastructure + secrets
-          |
-          +-- active source: `self` today
-          +-- PostgreSQL-ready repository boundary later
+ PLATFORM  (manage infrastructure)          CLIENT  (consume services)
+
+     CLI           TUI                       your code, notebooks, jobs
+      └─────┬───────┘                                   │
+            ▼                                           │ token or keyfile
+     ProjectWorkspace       public API,                 ▼
+            │               one commit per change    secret manager
+            ▼                                           │ endpoints + credentials
+     application use cases                              ▼
+            │                                     service client helpers
+            ▼                                     (e.g. services/feast/client.py)
+     WorkspaceState ◄──► SQLCipher repository ──► encrypted project.mlox
+            │
+            ▼
+     Infrastructure: bundles of one server + its services
+            │
+            ▼
+     executors + backend adapters ──► native · Docker · Kubernetes · connector
 ```
 
-`ProjectWorkspace` is the single public runtime API. It loads and atomically
-persists internal workspace state containing metadata and `Infrastructure`;
-the single selected secret manager is available through `workspace.secrets`.
-Encrypted project storage is selected initially, with no silent fallback when an
-external provider is unavailable. The project
-also records its active data source (`sqlcipher/self` initially), leaving a clean
-migration path to PostgreSQL. CLI commands open a workspace per invocation,
-while the TUI retains one workspace in runtime state. (The Streamlit web UI is
-deprecated — see [docs/DOCTRINE.md](docs/DOCTRINE.md).)
+The model has three tiers:
 
-Service and server definitions remain inspectable and configuration-driven, while execution is handled consistently across Native, Docker, Kubernetes, and connector backends.
+1. **Servers** are the machines: Ubuntu hosts, your local machine, or a virtual
+   "connector" server for externally hosted services.
+2. **Backends** decide how a server runs work: native, Docker, Kubernetes, or a
+   connector. A server's abilities come from the capability mixins it implements.
+3. **Services** run on top: tracking, serving, databases, workflows, and more.
+
+Every server and service is a YAML config plus a Python class, so the catalog is
+inspectable and extensible. External packages add their own through plugin entry
+points. MLOX is deliberately opinionated: it knows how services depend on each
+other, so it can wire them together and manage them as one connected system.
 
 For deeper reading:
 
-- [Architecture Guide](docs/ARCHITECTURE.md) — codebase walkthrough
-- [Python API](docs/PYTHON_API.md) — supported workspace SDK contract
+- [Architecture Guide](docs/ARCHITECTURE.md) — codebase walkthrough and invariants
+- [Python API](docs/PYTHON_API.md) — the supported `ProjectWorkspace` SDK contract
+- [Plugin Guide](docs/PLUGIN_CONFIGS.md) — shipping services and servers from your own package
 
 ---
 
@@ -135,7 +145,7 @@ mlox tui
 mlox --help
 ```
 
-See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough including Docker and Kubernetes setup. See [Encrypted Project Files](docs/PROJECT_FILES.md) for creation, storage, backup, and legacy migration details.
+See the [Installation Guide](docs/INSTALLATION.md) for user and developer setup and the integration-test VMs. See [Encrypted Project Files](docs/PROJECT_FILES.md) for creation, storage, backup, and legacy migration details.
 
 ---
 
@@ -143,29 +153,34 @@ See [Installation Guide](docs/INSTALLATION.md) for a fuller walkthrough includin
 
 ```
 mlox/
-├── mlox/
-│   ├── application/    # Stateful application API and shared use cases
-│   ├── cli/            # Typer CLI package (root app + command modules)
-│   ├── execution/      # Backend and system execution helpers
-│   ├── project/        # Aggregate, SQLCipher repository, and secret adapter
-│   ├── servers/        # Local, connector, and Ubuntu compute with Native, Docker, or Kubernetes
-│   ├── services/       # Deployable ML/AI services and integrations
-│   ├── tui/            # Textual terminal UI + TUI-specific UI handlers
-│   ├── ui/             # Frontend UI handler registry
-│   ├── assets/         # Runtime templates and packaged assets
-│   ├── resources/      # Images and other static resources
-│   ├── view/           # Streamlit web UI — deprecated (moving to plugin repo)
-│   ├── infra.py        # Service/server graph
-│   ├── config.py       # YAML loading + plugin discovery + UI handler lookup
-│   └── executors.py    # Remote task executor layer used by services/servers
+├── mlox/                    # The busysloths-mlox package
+│   ├── cli/                 # Typer CLI: declarative specifications/ + commands/
+│   ├── tui/                 # Textual terminal UI: screens, widgets, service panels
+│   ├── project/             # ProjectWorkspace, WorkspaceState, SQLCipher repository,
+│   │                        #   embedded secrets, knowledge entries, operations records
+│   ├── application/         # Frontend-independent use cases returning OperationResult
+│   ├── infra.py             # Infrastructure topology: bundles of servers and services
+│   ├── server.py            # AbstractServer and backend/capability mixins
+│   ├── service.py           # AbstractService lifecycle contract and capability ABCs
+│   ├── servers/             # Ubuntu (native/Docker/Kubernetes), local, and connector servers
+│   ├── services/            # Built-in services: YAML config, class, manifests, client.py
+│   ├── config.py            # YAML config loading and plugin entry-point discovery
+│   ├── execution/           # Target-agnostic execution base + Docker/K8s/Git/firewall helpers
+│   ├── executors.py         # UbuntuTaskExecutor, the current (Fabric/SSH) executor
+│   ├── secret_manager.py    # Secret manager interface and TinySecretManager
+│   ├── ui/                  # Frontend handler registry
+│   ├── view/, app.py        # Streamlit web UI: deprecated, maintenance only
+│   ├── assets/              # Cloud-init and Multipass helper scripts
+│   └── resources/           # Logos and README media
 ├── tests/
-│   ├── unit/           # Fast tests, no external deps
-│   └── integration/    # Multipass VM tests, including Kubernetes/k3s tests
-├── examples/           # OTel, MLflow tracking, DAG templates
-├── docs/               # Architecture, installation, contribution guides
-├── wiki/               # GitHub Wiki source pages
-├── scripts/            # Development and maintenance utilities
-└── website/            # Astro landing page
+│   ├── unit/                # Fast tests, no external deps
+│   └── integration/         # Multipass VM tests, including Kubernetes/k3s
+├── examples/                # Telemetry, tracking, Airflow DAGs, operations demo
+├── docs/                    # Doctrine, architecture, catalog, and guides
+├── content/                 # Demo and tutorial scripts + media registry
+├── scripts/                 # Maintenance utilities, docs checks, content pipeline
+├── wiki/                    # GitHub Wiki source pages
+└── website/                 # Astro site published to GitHub Pages
 ```
 
 ---
@@ -229,12 +244,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, milestone, and PR workflow
 |----------|-------------|
 | [Doctrine](docs/DOCTRINE.md) | Status, roadmap, and binding decisions (single point of truth) |
 | [Services Catalog](docs/SERVICES_CATALOG.md) | Generated service/server catalog |
-| [Architecture](docs/ARCHITECTURE.md) | Codebase walkthrough |
+| [Architecture](docs/ARCHITECTURE.md) | Codebase walkthrough and invariants |
+| [Python API](docs/PYTHON_API.md) | Supported `ProjectWorkspace` SDK contract |
 | [Installation Guide](docs/INSTALLATION.md) | Setup from scratch |
 | [Content Pipeline Recipe](docs/CONTENT_PIPELINE.md) | Script, record, redact, verify, and publish demos/tutorial media |
 | [Project Files](docs/PROJECT_FILES.md) | Encrypted project files, backup, migration |
 | [Contributing Guide](CONTRIBUTING.md) | How to contribute |
 | [Plugin Guide](docs/PLUGIN_CONFIGS.md) | External service and server config plugins |
+| [Releasing](docs/RELEASING.md) | Versioning and the release pipeline |
 | [API Docs](https://busysloths.github.io/mlox/docs) | Generated Python API reference |
 
 ---
