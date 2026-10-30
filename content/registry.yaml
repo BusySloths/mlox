@@ -38,7 +38,7 @@ pieces:
   - slug: pilot-demo
     type: demo
     title: "MLOX in two minutes: from command line to your infrastructure"
-    status: scripted
+    status: recorded
     services: []
     outputs:
       - type: readme_gif
@@ -49,6 +49,37 @@ pieces:
         dest: mlox/resources/tui-overview.png
       - type: screenshot
         dest: mlox/resources/tui-tabs.png
+
+  - slug: website-tui
+    type: showcase
+    title: "Website gallery: the MLOX TUI on real infrastructure"
+    status: recorded
+    services: []
+    outputs:
+      - type: screenshot
+        dest: website/public/mlox_tui_overview.png
+      - type: screenshot
+        dest: website/public/mlox_tui_monitor.png
+      - type: screenshot
+        dest: website/public/mlox_tui_models.png
+      - type: screenshot
+        dest: website/public/mlox_tui_workflow.png
+      - type: screenshot
+        dest: website/public/mlox_tui_repositories.png
+      - type: screenshot
+        dest: website/public/mlox_tui_databases.png
+      - type: screenshot
+        dest: website/public/mlox_tui_knowledge.png
+      - type: screenshot
+        dest: website/public/mlox_tui_firewall.png
+      - type: screenshot
+        dest: website/public/mlox_tui_service.png
+      - type: screenshot
+        dest: website/public/mlox_tui_catalog.png
+      - type: screenshot
+        dest: website/public/mlox_tui_cli.png
+      - type: clip
+        dest: website/public/mlox_tui_tour.mp4
 
   - slug: install-to-first-service
     type: tutorial

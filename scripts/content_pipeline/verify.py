@@ -5,12 +5,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.content_pipeline import redact, transcribe as stt
+from scripts.content_pipeline import entities, redact, transcribe as stt
 
 
 def verify(artifacts: list[str | Path], work_dir: Path) -> list[str]:
     """Return leak descriptions; an empty list means the gate passes."""
-    originals, _ = redact.load_patches(work_dir)
+    originals: list[str] = []
+    if (work_dir / "redaction.json").exists():
+        originals, _ = redact.load_patches(work_dir)
+    # known project entities must stay unreadable even if detection missed them
+    originals = sorted(set(originals) | set(entities.load(work_dir)), key=str.lower)
     if not originals:
         return []
     leaks: list[str] = []
@@ -24,7 +28,7 @@ def verify(artifacts: list[str | Path], work_dir: Path) -> list[str]:
     for artifact in artifacts:
         # upscale before OCR — small sidebar text is invisible at native size
         frames = redact.extract_frames(
-            str(artifact), work_dir / "verify-frames", fps=0.5, scale=3)
+            str(artifact), work_dir / "verify-frames", fps=1.0, scale=3)
         for frame in frames:
             text = redact.run(
                 ["tesseract", str(frame), "-", "--psm", "6"]).stdout

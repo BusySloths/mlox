@@ -49,7 +49,7 @@ def _redaction_vf(
         patches = shifted
     if not patches:
         return None
-    return redact.build_filter_chain(patches)
+    return redact.build_filter_chain(patches, style=redact.load_style(work_dir))
 
 
 def _base_filters(fps: int, width: int) -> str:

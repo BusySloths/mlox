@@ -14,6 +14,7 @@ from pathlib import Path
 from scripts.content_pipeline import (
     config,
     cut,
+    entities,
     ingest,
     normalize,
     redact,
@@ -94,6 +95,9 @@ def cmd_redact(args: argparse.Namespace) -> int:
             literals=piece_redact.get("literals"),
             prefixes=piece_redact.get("prefixes"),
             ip_prefix=piece_redact.get("ip_replacement_prefix", redact.DEFAULT_IP_PREFIX),
+            entities=entities.load(wd),
+            style=args.style,
+            fps=args.fps,
         )
     mapping = {p["replacement"] for p in payload["patches"]}
     print(f"{len(payload['patches'])} patches, originals: "
@@ -104,8 +108,29 @@ def cmd_redact(args: argparse.Namespace) -> int:
             print("Aborted — review content/.work/"
                   f"{args.slug}/redaction.json and re-run with --yes.")
             return 1
-    out = redact.apply(args.video, wd)
+    if args.refine:
+        added = redact.refine(args.video, wd, entities=entities.load(wd),
+                              rounds=args.refine, fps=args.fps)
+        print(f"refine: {added} patches added for text still readable after redaction")
+        out = wd / "redacted.mp4"
+    else:
+        out = redact.apply(args.video, wd)
     print(f"wrote {out}")
+    return 0
+
+
+def cmd_entities(args: argparse.Namespace) -> int:
+    from mlox.application.use_cases.project import project_password_env_name
+
+    project = Path(args.project)
+    env_name = args.password_env or project_password_env_name(project.stem)
+    password = os.environ.get(env_name) or os.environ.get("MLOX_PROJECT_PASSWORD")
+    if not password:
+        print(f"Set {env_name} (or MLOX_PROJECT_PASSWORD) to the project password.")
+        return 2
+    found = entities.from_mlox_cli(str(project), password=password)
+    out = entities.save(work_dir(args), found)
+    print(f"wrote {out}: {len(found)} entities")
     return 0
 
 
@@ -203,9 +228,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--slug", required=True)
     p.set_defaults(func=cmd_normalize)
 
+    p = sub.add_parser("entities",
+                       help="collect sensitive strings from an MLOX project via the mlox CLI")
+    p.add_argument("--slug", required=True)
+    p.add_argument("--project", required=True, help="path to the .mlox project file")
+    p.add_argument("--password-env",
+                   help="env var holding the password (default: MLOX_PROJECT_PASSWORD_<NAME>)")
+    p.set_defaults(func=cmd_entities)
+
     p = sub.add_parser("redact")
     p.add_argument("video")
     p.add_argument("--slug", required=True)
+    p.add_argument("--style", choices=redact.STYLES, default="blur",
+                   help="blur (default), box (black out) or replace (fake text)")
+    p.add_argument("--fps", type=float, default=1.0,
+                   help="periodic OCR sampling rate; scene changes are always sampled")
+    p.add_argument("--refine", type=int, default=2, metavar="ROUNDS",
+                   help="re-OCR the redacted video and patch leftovers (0 disables)")
     p.add_argument("--yes", action="store_true",
                    help="apply without interactive confirmation")
     p.set_defaults(func=cmd_redact)

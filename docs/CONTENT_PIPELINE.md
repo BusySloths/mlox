@@ -64,21 +64,27 @@ uv run python -m scripts.content_pipeline transcribe "$WORKING" --slug <slug>
 # content/.work/<slug>/timeline.json
 # {"chapters":[{"name":"intro","start":0,"end":42}]}
 
-# 5. Detect possible sensitive text, inspect redaction.json, then apply it.
+# 5. Collect the project's ground-truth sensitive strings (IPs, git owners,
+#    hostnames, emails) through the mlox CLI. The password is read from
+#    MLOX_PROJECT_PASSWORD_<NAME> (or MLOX_PROJECT_PASSWORD) and never put on argv.
+uv run python -m scripts.content_pipeline entities --slug <slug> --project <name>.mlox
+
+# 6. Detect possible sensitive text, inspect redaction.json, then apply it.
+#    --style blur (default) | box | replace; --refine N re-OCRs the result.
 uv run python -m scripts.content_pipeline redact "$WORKING" --slug <slug>
 
 # Re-run with --yes only after reviewing the mapping.
 uv run python -m scripts.content_pipeline redact "$WORKING" --slug <slug> --yes
 
-# 6. Make screenshots and one GIF from explicit, reviewed timestamps.
+# 7. Make screenshots and one GIF from explicit, reviewed timestamps.
 uv run python -m scripts.content_pipeline cut "$WORKING" \
   --slug <slug> --shots 12 48 --gif 54 66 --out /tmp/<slug>-artifacts
 
-# 7. Check every final visual artifact before committing or publishing.
+# 8. Check every final visual artifact before committing or publishing.
 uv run python -m scripts.content_pipeline verify /tmp/<slug>-artifacts/*.png \
   /tmp/<slug>-artifacts/demo.gif --slug <slug>
 
-# 8. Render an article when the piece declares an article output.
+# 9. Render an article when the piece declares an article output.
 uv run python -m scripts.content_pipeline render --slug <slug> \
   --script content/<slug>/script.md
 ```
@@ -96,18 +102,39 @@ when changing the working profile.
 
 ## Redaction and publishing gate
 
-Every IP address is replaced with the documentation range
-`198.51.100.<last-octet>`. Names and project-specific identifiers come from the
-default and per-piece `redact.literals` / `redact.prefixes` mappings in the
-registry. Treat OCR detection as a candidate generator, not proof that a
-recording is safe: review `content/.work/<slug>/redaction.json` and the output
-frames yourself.
+Detection OCRs the working master at 3x scale, once per second and right after
+every scene change. A word is sensitive when a registry rule classifies it
+(`redact.literals` / `redact.prefixes`, any IPv4 address) or when it shows one
+of the project entities from `entities.json`, including truncated or misread
+fragments such as an IP split into `97` and `97.15`. Because TUI content is
+static within a scene, each detection covers its whole scene, and a patch
+extends into neighbouring frames for as long as its region still shows the
+same pixels (it never spreads through empty background).
+
+Three styles are available and recorded in `redaction.json`:
+
+- `blur` (default): one blurred copy of the frame merged through a timed mask.
+- `box`: solid black boxes.
+- `replace`: fake replacement text. IPs become documentation-range addresses
+  (`198.51.100.10`, `.20`, …) that keep no part of the real address; each
+  address keeps the same fake for the whole run.
+
+`--refine N` (default 2) applies the redaction, OCRs the result and patches
+whatever is still readable, up to N rounds. Manual patches (for example a
+whole panel showing a private repository tree) can be added to
+`redaction.json` as rows with explicit `windows`; refine and apply keep them.
+
+Treat OCR detection as a candidate generator, not proof that a recording is
+safe: review `content/.work/<slug>/redaction.json` and the output frames
+yourself. For text you control at the source (for example CLI output), prefer
+rewriting it before it reaches the screen and run `verify` on the result.
 
 `verify` is a required visual release gate: a non-zero exit means do not
-publish. It OCRs the supplied final visual files at higher resolution and
-compares them with the entities detected during redaction. It currently reads
-the source transcript for narration checks rather than re-transcribing each
-final clip, so manually review audio in published videos as well.
+publish. It OCRs the supplied final visual files at 3x scale once per second
+and fails on any detected original or project entity. Re-run it on every
+re-encoded copy (different scales can make blurred text legible again). It
+reads the source transcript for narration checks rather than re-transcribing
+each final clip, so manually review audio in published videos as well.
 
 ## Current limitations and follow-up work
 
