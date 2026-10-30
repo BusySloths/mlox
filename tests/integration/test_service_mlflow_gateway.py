@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service, remove_service
+from tests.integration.helpers import add_service, prepare_service
 import logging
 import os
 import time
@@ -11,23 +11,23 @@ import requests
 from mlox.config import get_stacks_path, load_config
 from mlox.infra import Infrastructure
 from tests.integration.conftest import wait_for_service_ready
-from tests.integration.test_service_mlflow3 import install_mlflow3_service  # noqa: F401
+from tests.integration.test_service_mlflow import install_mlflow_service  # noqa: F401
 
 pytestmark = pytest.mark.integration
-pytest_plugins = ["tests.integration.test_service_mlflow3"]
+pytest_plugins = ["tests.integration.test_service_mlflow"]
 
 logger = logging.getLogger(__name__)
 requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
 
 
-class IdentityModel(mlflow.pyfunc.PythonModel):  # type: ignore
-    def predict(self, context, model_input, params=None) -> pd.DataFrame:
-        return pd.DataFrame(model_input)
-
-
 def _register_identity_model(
     service_url: str, username: str, password: str
 ) -> tuple[str, str]:
+
+    class IdentityModel(mlflow.pyfunc.PythonModel):  # type: ignore
+        def predict(self, context, model_input, params=None) -> pd.DataFrame:
+            return pd.DataFrame(model_input)
+
     mlflow.set_tracking_uri(service_url)
     mlflow.set_registry_uri(service_url)
     os.environ["MLFLOW_TRACKING_USERNAME"] = username
@@ -53,9 +53,9 @@ def _register_identity_model(
 
 
 @pytest.fixture(scope="module")
-def deploy_mlflow_gateway(ubuntu_docker_server, install_mlflow3_service):
+def deploy_mlflow_gateway(ubuntu_docker_server, install_mlflow_service, request):
     infra = Infrastructure()
-    bundle, mlflow_service = install_mlflow3_service
+    bundle, mlflow_service = install_mlflow_service
     infra.bundles.append(bundle)
 
     mlflow_status = wait_for_service_ready(
@@ -86,15 +86,9 @@ def deploy_mlflow_gateway(ubuntu_docker_server, install_mlflow3_service):
 
     gateway_service = gateway_bundle.services[-1]
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        gateway_service.setup(conn)
-        gateway_service.spin_up(conn)
+    prepare_service(request, infra, gateway_bundle, gateway_service)
 
     yield gateway_service, gateway_bundle, model_name, model_version
-
-    result = remove_service(infra, gateway_service.name)
-    if not result.success:
-        logger.warning("Failed to remove MLflow Gateway service via application logic: %s", result.message)
 
 
 def test_mlflow_gateway_is_ready(deploy_mlflow_gateway):
@@ -126,7 +120,7 @@ def test_mlflow_gateway_identity_prediction(deploy_mlflow_gateway):
         verify=False,
         timeout=120,
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert response.headers["X-MLOX-Pipeline-ID"] == "integration-pipeline-1"
     assert response.headers["X-MLOX-Pipeline-Name"] == "identity-pipeline"
     body = response.json()

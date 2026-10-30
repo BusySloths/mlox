@@ -140,7 +140,7 @@ tasks:
           printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - 'uv run python -m pytest -m integration --run-integration'
+      - 'uv run python -m pytest tests/integration -m integration --run-integration {{.CLI_ARGS}}'
 
   tests:integration:k8s:
     aliases: [tests:integration:kubernetes]
@@ -159,7 +159,7 @@ tasks:
           printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - 'uv run python -m pytest tests/integration -m "integration and kubernetes" --run-integration'
+      - 'uv run python -m pytest tests/integration -m "integration and kubernetes" --run-integration {{.CLI_ARGS}}'
 
   tests:integration:service:
     silent: true
@@ -177,9 +177,9 @@ tasks:
           exit 1;
         fi
         printf '\n\033[1;36m▶ Starting debugger. Waiting for VS Code to attach on port 5678...\033[0m\n'
-        uv run python -m debugpy --listen 5678 --wait-for-client -m pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration
+        uv run python -m debugpy --listen 5678 --wait-for-client -m pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration {{.CLI_ARGS}}
         {{else}}
-        uv run pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration{{if eq .PDB "true"}} --pdb{{end}}
+        uv run pytest tests/integration/test_service_{{.SERVICE}}.py -m integration --run-integration{{if eq .PDB "true"}} --pdb{{end}} {{.CLI_ARGS}}
         {{end}}
     desc: Run integration tests for a specific service only (e.g. mlflow, airflow, etc.)
 

@@ -8,7 +8,7 @@ _REGISTERED = False
 
 _TUI_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
     "mlox.tui.services.otel": {
-        "config_ids": ("otel-0.127.0-docker", "otel-0.146.1-docker"),
+        "config_ids": ("otel-0.146.1-docker",),
         "function_names": ("settings",),
     },
     "mlox.tui.services.openbao": {
@@ -17,6 +17,10 @@ _TUI_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
     },
     "mlox.tui.services.postgres": {
         "config_ids": ("postgres-16-bullseye-docker",),
+        "function_names": ("settings",),
+    },
+    "mlox.tui.services.influx": {
+        "config_ids": ("influx-3.12.0-core-docker",),
         "function_names": ("settings",),
     },
     "mlox.tui.services.mlflow_gateway": {

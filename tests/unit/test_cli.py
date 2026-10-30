@@ -1,4 +1,5 @@
 import pytest
+import json
 from types import SimpleNamespace
 from unittest import mock
 
@@ -10,6 +11,55 @@ from mlox.application.result import OperationResult
 
 typer = pytest.importorskip("typer")
 runner = CliRunner()
+
+
+def test_schema_describes_nested_commands():
+    result = runner.invoke(cli.app, ["schema"])
+    assert result.exit_code == 0
+    schema = json.loads(result.stdout)
+    service = next(c for c in schema["cli"]["commands"] if c["path"][-1] == "service")
+    setup = next(c for c in service["commands"] if c["path"][-1] == "setup")
+    assert any(p["name"] == "name" and p["required"] for p in setup["parameters"])
+
+
+def test_json_argument_errors_and_dotenv_project_selection(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MLOX_PROJECT_PATH", "temporary")
+    monkeypatch.setenv("MLOX_PROJECT_PASSWORD", "temporary")
+    monkeypatch.delenv("MLOX_PROJECT_PATH", raising=False)
+    monkeypatch.delenv("MLOX_PROJECT_PASSWORD", raising=False)
+    (tmp_path / ".env").write_text("MLOX_PROJECT_PATH=example.mlox\nMLOX_PROJECT_PASSWORD=pw\n")
+    operation = _patch_application(monkeypatch, "service_logs", OperationResult(True, 0, "ok", {"logs": "test"}))
+    result = runner.invoke(cli.app, ["--output", "json", "service", "logs", "collector", "--tail", "5"])
+    assert result.exit_code == 0
+    operation.assert_called_once_with(name="collector", label=None, tail=5)
+    ProjectWorkspace.open.assert_called_once_with("example.mlox", "pw")
+    result = runner.invoke(cli.app, ["--output", "json", "server", "exec", "--ip", "host"])
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"] == "invalid_arguments"
+
+
+def test_service_inspection_by_uuid_and_ambiguous_name():
+    workspace = ProjectWorkspace.__new__(ProjectWorkspace)
+    workspace.list_services = mock.Mock(return_value=OperationResult(True, 0, "ok", {"services": [
+        {"uuid": "one", "name": "collector"}, {"uuid": "two", "name": "collector"},
+    ]}))
+    assert workspace.inspect_service(identifier="one").data["service"]["uuid"] == "one"
+    assert not workspace.inspect_service(identifier="collector").success
+
+
+def test_json_output_handles_success_failure_and_domain_objects(monkeypatch):
+    service = SimpleNamespace(name="collector", uuid="abc", state="running", token="secret")
+    _patch_application(monkeypatch, "setup_service", OperationResult(True, 0, "ok", {"service": service}))
+    result = runner.invoke(cli.app, ["--output", "json", "service", "setup", "--project", "proj", "collector", "--password", "pw"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["data"]["service"] == {"name": "collector", "uuid": "abc", "state": "running"}
+    assert "secret" not in result.stdout
+
+    _patch_application(monkeypatch, "setup_service", OperationResult(False, 7, "failed"))
+    result = runner.invoke(cli.app, ["--output", "json", "service", "setup", "--project", "proj", "collector", "--password", "pw"])
+    assert result.exit_code == 7
+    assert json.loads(result.stdout)["success"] is False
 
 
 def _patch_application(monkeypatch, method_name, result):
@@ -51,7 +101,7 @@ def test_server_list_no_servers(monkeypatch):
     operation_result = OperationResult(True, 0, "No servers found.", {"servers": []})
     _patch_application(monkeypatch, "list_servers", operation_result)
 
-    result = runner.invoke(cli.app, ["server", "list", "proj", "--password", "pw"])
+    result = runner.invoke(cli.app, ["server", "list", "--project", "proj", "--password", "pw"])
 
     assert result.exit_code == 0
     assert "No servers found." in result.stdout
@@ -66,7 +116,7 @@ def test_server_list_outputs_servers(monkeypatch):
     application = SimpleNamespace(list_servers=mock_list)
     monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=application))
 
-    result = runner.invoke(cli.app, ["server", "list", "proj", "--password", "pw"])
+    result = runner.invoke(cli.app, ["server", "list", "--project", "proj", "--password", "pw"])
 
     assert result.exit_code == 0
     assert "Servers" in result.stdout
@@ -87,7 +137,7 @@ def test_server_add_failure(monkeypatch):
         [
             "server",
             "add",
-            "proj",
+            "--project", "proj",
             "--password",
             "pw",
             "--server-template",
@@ -115,7 +165,7 @@ def test_server_add_success(monkeypatch):
         [
             "server",
             "add",
-            "proj",
+            "--project", "proj",
             "--password",
             "pw",
             "--server-template",
@@ -142,7 +192,7 @@ def test_server_setup_maps_positional_ip(monkeypatch):
 
     result = runner.invoke(
         cli.app,
-        ["server", "setup", "proj", "1.2.3.4", "--password", "pw"],
+        ["server", "setup", "--project", "proj", "1.2.3.4", "--password", "pw"],
     )
 
     assert result.exit_code == 0
@@ -154,7 +204,7 @@ def test_service_list_no_services(monkeypatch):
     operation_result = OperationResult(True, 0, "No services found.", {"services": []})
     _patch_application(monkeypatch, "list_services", operation_result)
 
-    result = runner.invoke(cli.app, ["service", "list", "proj", "--password", "pw"])
+    result = runner.invoke(cli.app, ["service", "list", "--project", "proj", "--password", "pw"])
 
     assert result.exit_code == 0
     assert "No services found." in result.stdout
@@ -175,7 +225,7 @@ def test_service_list_outputs(monkeypatch):
     )
     _patch_application(monkeypatch, "list_services", operation_result)
 
-    result = runner.invoke(cli.app, ["service", "list", "proj", "--password", "pw"])
+    result = runner.invoke(cli.app, ["service", "list", "--project", "proj", "--password", "pw"])
 
     assert result.exit_code == 0
     assert "Services" in result.stdout
@@ -191,7 +241,7 @@ def test_service_logs_infers_optional_values_and_defaults(monkeypatch):
 
     result = runner.invoke(
         cli.app,
-        ["service", "logs", "proj", "api", "--password", "pw"],
+        ["service", "logs", "--project", "proj", "api", "--password", "pw"],
     )
 
     assert result.exit_code == 0
@@ -205,7 +255,7 @@ def test_model_list_maps_registry_alias(monkeypatch):
 
     result = runner.invoke(
         cli.app,
-        ["model", "list", "proj", "-r", "registry", "--password", "pw"],
+        ["model", "list", "--project", "proj", "-r", "registry", "--password", "pw"],
     )
 
     assert result.exit_code == 0

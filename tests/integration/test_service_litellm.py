@@ -40,7 +40,7 @@ def install_litellm_service(ubuntu_docker_server):
         service.spin_up(conn)
 
     # Wait longer for LiteLLM + Ollama to start (pulling models takes time)
-    wait_for_service_ready(service, bundle, retries=20, interval=30, no_checks=True)
+    assert wait_for_service_ready(service, bundle, retries=120, interval=5).get("status") == "running"
 
     yield bundle_added, service
 

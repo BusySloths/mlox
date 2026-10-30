@@ -352,6 +352,8 @@ class ServiceConfig:
             if self.build.params:
                 init_params.update(self.build.params)
             for key, value in init_params.items():
+                if not isinstance(value, str):
+                    continue
                 for k in params.keys():
                     if k in value:
                         # Two cases:

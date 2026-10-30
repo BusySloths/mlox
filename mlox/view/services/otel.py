@@ -467,6 +467,14 @@ def setup(infra: Infrastructure, bundle: Bundle) -> dict[str, str]:
             ),
         )
     ).lower()
+    params["${MLOX_OTEL_INFLUX_SERVICE_UUID}"] = ""
+    params["${MLOX_OTEL_FILE_DESTINATION}"] = "true"
+    params["${MLOX_OTEL_NEW_RELIC_DESTINATION}"] = str(bool(
+        params["${MLOX_RELIC_KEY}"] and params["${MLOX_RELIC_ENDPOINT}"]
+    )).lower()
+    params["${MLOX_OTEL_GRAFANA_CLOUD_DESTINATION}"] = str(bool(
+        params["${MLOX_GRAFANA_CLOUD_KEY}"] and params["${MLOX_GRAFANA_CLOUD_ENDPOINT}"]
+    )).lower()
     return params
 
 

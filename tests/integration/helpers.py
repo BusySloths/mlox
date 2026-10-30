@@ -29,7 +29,8 @@ def log_compose_diagnostics(service, bundle) -> None:
             for args in ("ps --all", "logs --no-color --tail 80"):
                 try:
                     result = conn.sudo(
-                        f"{prefix} {args}", hide=True, warn=True, pty=False, timeout=30
+                        f"{prefix} {args}", hide=True, warn=True, pty=False,
+                        in_stream=False, timeout=30
                     )
                     logging.error(
                         "Readiness diagnostics for %s (%s, exit %s):\n%s\n%s",
@@ -95,3 +96,41 @@ def remove_server(infrastructure: Infrastructure, server_ip: str):
 def remove_service(infrastructure: Infrastructure, service_name: str):
     project = WorkspaceState(name="integration-test", infrastructure=infrastructure)
     return services.teardown_service(project, name=service_name)
+
+
+def prepare_service(request, infrastructure, bundle, service) -> None:
+    """Register cleanup before setup, and capture diagnostics on startup failure."""
+    def cleanup():
+        result = remove_service(infrastructure, service.name)
+        if not result.success:
+            logging.warning("Failed to remove service %s: %s", service.name, result.message)
+
+    request.addfinalizer(cleanup)
+    try:
+        with bundle.server.get_server_connection() as conn:
+            service.setup(conn)
+            service.spin_up(conn)
+    except Exception:
+        log_compose_diagnostics(service, bundle)
+        raise
+
+
+def purge_test_docker(server, *, remove_running=False) -> None:
+    """Reclaim Docker storage only on the suite's dedicated disposable VM."""
+    try:
+        with server.get_server_connection() as conn:
+            options = dict(hide=True, warn=False, pty=False, in_stream=False, timeout=180)
+            if remove_running:
+                result = conn.sudo("docker ps --all --quiet", **options)
+                ids = result.stdout.split()
+                if ids:
+                    conn.sudo("docker rm --force --volumes " + " ".join(map(shlex.quote, ids)), **options)
+            for command in (
+                "docker system prune --all --force --volumes",
+                "docker builder prune --all --force",
+                "docker volume prune --all --force",
+            ):
+                result = conn.sudo(command, **options)
+                logging.info("Test VM cleanup (%s): %s", command, result.stdout.strip())
+    except Exception:
+        logging.exception("Could not purge Docker resources on test VM %s", server.ip)

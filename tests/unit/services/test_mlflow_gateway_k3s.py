@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,6 +20,7 @@ class FakeExecutor:
         self.rollout_result = "deployment successfully rolled out"
         self.ready_result = "1"
         self.health_result = "200"
+        self.secret_data: dict[str, str] = {}
 
     def _record(self, name, *args, **kwargs) -> None:
         self.calls.append((name, args, kwargs))
@@ -36,6 +38,15 @@ class FakeExecutor:
     def k8s_apply_manifest(self, conn, path: str, **kwargs):
         self._record("k8s_apply_manifest", path, **kwargs)
         return self.apply_result
+
+    def k8s_patch_resource(self, conn, resource_type, name, patch, **kwargs):
+        self._record("k8s_patch_resource", resource_type, name, patch, **kwargs)
+        for key, value in patch["data"].items():
+            if value is None:
+                self.secret_data.pop(key, None)
+            else:
+                self.secret_data[key] = value
+        return "patched"
 
     def execute(self, conn, command: str, **kwargs):
         self._record("execute", command, **kwargs)
@@ -94,7 +105,7 @@ def test_renders_gateway_manifest(gateway: MLFlowGatewayK3sService) -> None:
     assert "xgboost==2.1.0" in manifest
     assert "kind: Secret" in manifest
     assert "name: mlflow-gateway-basic-auth" in manifest
-    assert "gateway-user:$apr1$" in manifest
+    assert "gateway-user:$2b$" in manifest
     assert 'gateway-user: "gateway-user"' in manifest
     assert 'gateway-password: "gateway-password"' in manifest
     assert 'tracking-password: "tracking-password"' in manifest
@@ -190,6 +201,9 @@ def test_changing_runtime_bindings_reapplies_and_restarts_gateway(
         lambda: {"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"},
     )
     conn = SimpleNamespace(host="gateway.example")
+    gateway.exec.secret_data["OTEL_EXPORTER_OTLP_ENDPOINT"] = base64.b64encode(
+        b"https://otel.example:4317"
+    ).decode()
 
     gateway._apply_secret_manager_binding(
         conn,
@@ -202,16 +216,13 @@ def test_changing_runtime_bindings_reapplies_and_restarts_gateway(
     assert any("rollout status deployment/mlflow-gateway" in command for command in commands)
 
     gateway._remove_secret_manager_binding(conn)
-    documents = list(yaml.safe_load_all(gateway.exec.files[gateway.manifest_path]))
-    runtime_secret = next(
-        item
-        for item in documents
-        if item.get("kind") == "Secret"
-        and item["metadata"]["name"] == gateway.runtime_secret_name
-    )
-    assert runtime_secret["stringData"] == {
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"
+    assert gateway.exec.secret_data == {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": base64.b64encode(b"https://otel.example:4317").decode()
     }
+    patches = [call for call in gateway.exec.calls if call[0] == "k8s_patch_resource"]
+    assert len(patches) == 2
+    assert patches[0][1][2]["data"]["MLOX_SECRET_MANAGER_KEYFILE"] == base64.b64encode(b"encrypted-keyfile").decode()
+    assert patches[1][1][2]["data"]["MLOX_SECRET_MANAGER_KEYFILE"] is None
 
 
 def test_runtime_binding_rollout_timeout_keeps_binding_update_successful(
@@ -232,7 +243,9 @@ def test_runtime_binding_rollout_timeout_keeps_binding_update_successful(
         environment={"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example:4317"},
     )
 
-    assert gateway.exec.files[gateway.manifest_path]
+    assert gateway.exec.secret_data["OTEL_EXPORTER_OTLP_ENDPOINT"] == base64.b64encode(
+        b"https://otel.example:4317"
+    ).decode()
 
 
 def test_renders_ingress_with_path_middlewares(
@@ -374,10 +387,8 @@ def test_fetches_gateway_kubernetes_logs(gateway: MLFlowGatewayK3sService) -> No
     assert call[2]["namespace"] == gateway.namespace
     assert call[2]["tail"] == 25
     assert call[2]["container"] == "gateway"
-    assert (
+    with pytest.raises(ValueError, match="Log label missing not found"):
         gateway.service_log_tail(object(), label="missing")
-        == "Log label missing not found"
-    )
 
 
 def test_teardown_is_non_blocking_and_clears_service_state(

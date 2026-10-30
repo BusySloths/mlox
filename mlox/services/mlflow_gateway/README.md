@@ -5,7 +5,8 @@ MLflow registry models. Models are loaded on demand and cached in memory.
 
 ## Setup
 
-In MLOX, add an MLflow model registry first, then select one gateway service:
+In MLOX, add the supported [MLflow 3.8.1 registry](../mlflow/README.md)
+first, then select one gateway service:
 
 - `mlflow-gateway-3.8.1-docker`
 - `mlflow-gateway-3.8.1-k3s`

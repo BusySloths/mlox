@@ -14,6 +14,7 @@ from mlox.application.payloads import (
     ListServersData,
     ListServicesData,
     ServerHealthData,
+    ServerCommandData,
     ServerOperationData,
     ServiceData,
     ServiceHealthData,
@@ -635,6 +636,38 @@ class ProjectWorkspace:
         """List servers registered in the project infrastructure."""
 
         return servers.list_servers(self._state)
+
+    def inspect_project(self) -> OperationResult[dict[str, Any]]:
+        """Return project identity and infrastructure counts."""
+        return OperationResult(True, 0, "Project retrieved.", {
+            "id": self.id, "name": self.name, "path": str(self.path),
+            "version": self.version, "servers": len(self.infrastructure.bundles),
+            "services": sum(len(b.services) for b in self.infrastructure.bundles),
+        })
+
+    def inspect_server(self, *, identifier: str) -> OperationResult[dict[str, Any]]:
+        """Inspect a server by UUID or IP address."""
+        result = self.list_servers()
+        matches = [s for s in result.data["servers"] if identifier in (s.get("uuid"), s.get("ip"))]
+        if len(matches) != 1:
+            return OperationResult(False, 5, "Server not found or identifier is ambiguous.")
+        return OperationResult(True, 0, "Server retrieved.", {"server": matches[0]})
+
+    def inspect_service(self, *, identifier: str) -> OperationResult[dict[str, Any]]:
+        """Inspect a service by UUID or unique name."""
+        result = self.list_services()
+        matches = [s for s in result.data["services"] if identifier in (s.get("uuid"), s.get("name"))]
+        if len(matches) != 1:
+            return OperationResult(False, 8, "Service not found or identifier is ambiguous.")
+        return OperationResult(True, 0, "Service retrieved.", {"service": matches[0]})
+
+    def execute_server_command(
+        self, *, ip: str, command: str, sudo: bool = False, timeout: int = 60
+    ) -> OperationResult[ServerCommandData]:
+        """Run a non-interactive command on a project server over SSH."""
+        return servers.execute_server_command(
+            self._state, ip=ip, command=command, sudo=sudo, timeout=timeout
+        )
 
     def add_server(
         self,

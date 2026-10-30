@@ -18,18 +18,14 @@ The container is **model-agnostic at build time**. The model's Python version an
 mlflow_mlserver/
 ├── mlox.mlserver.3.8.1.yaml          # MLOX service descriptor → maps to docker.py class
 ├── mlox.mlserver.3.8.1.k3s.yaml      # K8s variant descriptor → maps to k3s.py class
-├── mlox.mlserver.2.22.0.yaml         # Legacy 2.x variant
 ├── docker-compose-mlflow-mlserver-3.8.1.yaml   # Traefik + mlserver_app services
-├── docker-compose-mlflow-mlserver-2.22.0.yaml  # Legacy
 ├── dockerfile-mlflow-mlserver-3.8.1   # debian:bookworm-slim + pyenv + bootstrap Python
-├── dockerfile-mlflow-mlserver         # Legacy 2.x dockerfile
 ├── start_mlserver.sh                  # Container entrypoint (the critical file)
 ├── docker.py                          # MLFlowMLServerDockerService (AbstractService)
 ├── k3s.py                             # K8s adapter
 └── ui.py                              # MLOX UI panels (setup + settings)
 ```
 
-**The 3.8.1 stack is the active one. The 2.22.0 stack is legacy — do not apply 3.8.1 changes there without explicit instruction.**
 
 ---
 

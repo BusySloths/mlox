@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import pytest
+from mlox.config import load_service_config_by_id
 
 from mlox.service import AbstractSecretManagerService, ServiceCapability
 from mlox.tui.services import setup as service_setup
@@ -47,6 +49,46 @@ def test_otel_setup_spec_defaults_diagnostic_exporter_to_disabled() -> None:
         ("Enabled — high-volume collector output", "true"),
     ]
     assert spec.params({}, None)["${MLOX_OTEL_DIAGNOSTIC_EXPORTER}"] == "false"
+
+
+@pytest.mark.parametrize("influx_uuid", ["", "influx-uuid"])
+def test_otel_setup_instantiates_service_with_destinations(influx_uuid):
+    influx = SimpleNamespace(
+        name="InfluxDB", uuid="influx-uuid",
+        capabilities={ServiceCapability.DATABASE},
+        get_influx_env_binding=lambda: pytest.fail("Setup must not copy credentials"),
+    )
+    infra = SimpleNamespace(services=lambda: [influx])
+    spec = service_setup.otel(infra, None)
+    selector = next(field for field in spec.fields if field.name == "influx_service_uuid")
+    assert ("InfluxDB", "influx-uuid") in selector.options
+    values = {field.name: field.default for field in spec.fields}
+    values["influx_service_uuid"] = influx_uuid
+    params = spec.params(values, infra)
+    params.update({
+        "${MLOX_USER_HOME}": "/tmp/mlox",
+        "${MLOX_AUTO_PORT_GRPC}": "4317",
+        "${MLOX_AUTO_PORT_HTTP}": "4318",
+        "${MLOX_AUTO_PORT_HEALTH}": "13133",
+    })
+    config = load_service_config_by_id("otel-0.146.1-docker")
+    service = config.instantiate_service(params)
+    assert service is not None
+    assert service.influx_service_uuid == influx_uuid
+    assert service.file_destination is True
+    assert service.grafana_cloud_destination is False
+    assert service.new_relic_destination is False
+    assert all("${" not in str(value) for value in vars(service).values())
+
+    # Literal YAML nulls must also survive generic parameter substitution.
+    config.build.params["influx_service_uuid"] = None
+    assert config.instantiate_service(params).influx_service_uuid is None
+
+
+def test_otel_setup_rejects_enabled_provider_without_credentials():
+    spec = service_setup.otel(None, None)
+    with pytest.raises(ValueError, match="New Relic requires"):
+        spec.params({"new_relic_destination": "true"}, None)
 
 
 def test_mlflow_gateway_setup_spec_uses_registry_secrets() -> None:
@@ -190,7 +232,7 @@ def test_all_builtin_service_configs_have_tui_setup_handlers() -> None:
         "gcp-storage-0.1.0",
         "github-repo-0.1-beta-docker",
         "headlamp-newest-k3s",
-        "influx-1.11.8-docker",
+        "influx-3.12.0-core-docker",
         "k8s-dashboard-newest-k3s",
         "kafka-3.7.0-docker",
         "kafka-4.1.0-docker",
@@ -199,17 +241,14 @@ def test_all_builtin_service_configs_have_tui_setup_handlers() -> None:
         "litellm-ollama-1.77.7-docker",
         "milvus-2.5-docker",
         "minio-release-2025-07-23-docker",
-        "mlflow-2.22.0-docker",
         "mlflow-3.8.1-docker",
         "mlflow-gateway-3.8.1-docker",
         "mlflow-gateway-3.8.1-k3s",
         "mlflow-gateway-3.8.1-k3s-managed-tls",
-        "mlflow-mlserver-2.22.0-docker",
         "mlflow-mlserver-3.8.1-docker",
         "mlflow-mlserver-3.8.1-k3s",
         "ollama-0.23.3-docker",
         "openbao-docker",
-        "otel-0.127.0-docker",
         "otel-0.146.1-docker",
         "postgres-16-bullseye-docker",
         "redis-8-bookworm-docker",

@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service, remove_service
+from tests.integration.helpers import add_service, prepare_service
 import os
 import time
 import pytest
@@ -16,13 +16,8 @@ pytestmark = pytest.mark.integration
 logger = logging.getLogger(__name__)
 
 
-class IdentityModel(mlflow.pyfunc.PythonModel):
-    def predict(self, context, model_input):
-        return model_input
-
-
 @pytest.fixture(scope="module")
-def install_mlflow_service(ubuntu_docker_server):
+def install_mlflow_service(ubuntu_docker_server, request):
     """Install and start the MLflow service on the provided server."""
     # Prepare infrastructure with the existing server
     infra = Infrastructure()
@@ -30,7 +25,7 @@ def install_mlflow_service(ubuntu_docker_server):
     infra.bundles.append(bundle)
 
     # Load MLflow service configuration
-    config = load_config(get_stacks_path(), "/mlflow", "mlox.mlflow.2.22.0.yaml")
+    config = load_config(get_stacks_path(), "/mlflow", "mlox.mlflow.3.8.1.yaml")
 
     bundle_added = add_service(infra, ubuntu_docker_server.ip, config, params={})
     if not bundle_added:
@@ -39,61 +34,60 @@ def install_mlflow_service(ubuntu_docker_server):
     service = bundle_added.services[-1]
 
     # Setup and start the service
-    with ubuntu_docker_server.get_server_connection() as conn:
-        service.setup(conn)
-        service.spin_up(conn)
-        # Allow some time for containers to become healthy
-    wait_for_service_ready(service, bundle, retries=6, interval=20, no_checks=True)
+    prepare_service(request, infra, bundle_added, service)
+    status = wait_for_service_ready(service, bundle, retries=24, interval=5)
+    assert status.get("status") == "running", status
 
     yield bundle_added, service
-
-    # Teardown after tests
-    result = remove_service(infra, service.name)
-    if not result.success:
-        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_mlflow_service_is_running(install_mlflow_service):
     """Verify MLflow service is reported as running and exposes a URL."""
     bundle, service = install_mlflow_service
     assert service.service_url
-    assert service.state == "running"
 
-    status = wait_for_service_ready(service, bundle, retries=20, interval=30)
+    status = wait_for_service_ready(service, bundle, retries=12, interval=30)
+    # with bundle.server.get_server_connection() as conn:
+    #     status = service.check(conn)
     assert status.get("status") == "running"
 
 
-# def test_mlflow_log_dummy_model(install_mlflow_service):
-#     """Log a simple identity model to the MLflow server and verify it can be loaded and used."""
-#     _, service = install_mlflow_service
+def test_mlflow_log_dummy_model(install_mlflow_service):
+    """Log a simple identity model to the MLflow server and verify it can be loaded and used."""
 
-#     # Point the client to the server URL
-#     try:
-#         mlflow.set_tracking_uri(service.service_url)
-#         os.environ["MLFLOW_TRACKING_USERNAME"] = service.ui_user
-#         os.environ["MLFLOW_TRACKING_PASSWORD"] = service.ui_pw
-#         os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
+    class IdentityModel(mlflow.pyfunc.PythonModel):
+        def predict(self, context, model_input):
+            return model_input
 
-#         # Start a run and log a simple PythonModel that returns input unchanged
-#         mlflow.set_experiment("test_experiment")
-#         with mlflow.start_run(run_name="test_run") as run:
-#             mlflow.pyfunc.log_model("model", python_model=IdentityModel())
-#             logger.info(f"Logged model in run {run.info.run_id}")
-#             run_id = mlflow.active_run().info.run_id
-#             model_uri = f"runs:/{run_id}/model"
-#         # Load the model back and run a prediction
-#         loaded = mlflow.pyfunc.load_model(model_uri)
-#         df = pd.DataFrame({"a": [1, 2, 3]})
-#         pred = loaded.predict(df)
+    _, service = install_mlflow_service
 
-#         # Compare outputs - for DataFrame input, identity model should return same structure
-#         # Use pandas testing if available, fallback to simple equality
-#         try:
-#             pd.testing.assert_frame_equal(
-#                 pred.reset_index(drop=True), df.reset_index(drop=True)
-#             )
-#         except Exception:
-#             assert pred.equals(df)
+    # Point the client to the server URL
+    try:
+        mlflow.set_tracking_uri(service.service_url)
+        os.environ["MLFLOW_TRACKING_USERNAME"] = service.ui_user
+        os.environ["MLFLOW_TRACKING_PASSWORD"] = service.ui_pw
+        os.environ["MLFLOW_TRACKING_INSECURE_TLS"] = "true"
 
-#     except Exception as e:
-#         pytest.fail(f"Could not log/load model against MLflow server: {e}")
+        # Start a run and log a simple PythonModel that returns input unchanged
+        mlflow.set_experiment("test_experiment")
+        with mlflow.start_run(run_name="test_run") as run:
+            mlflow.pyfunc.log_model("model", python_model=IdentityModel())
+            logger.info(f"Logged model in run {run.info.run_id}")
+            run_id = mlflow.active_run().info.run_id
+            model_uri = f"runs:/{run_id}/model"
+        # Load the model back and run a prediction
+        loaded = mlflow.pyfunc.load_model(model_uri)
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        pred = loaded.predict(df)
+
+        # Compare outputs - for DataFrame input, identity model should return same structure
+        # Use pandas testing if available, fallback to simple equality
+        try:
+            pd.testing.assert_frame_equal(
+                pred.reset_index(drop=True), df.reset_index(drop=True)
+            )
+        except Exception:
+            assert pred.equals(df)
+
+    except Exception as e:
+        pytest.fail(f"Could not log/load model against MLflow server: {e}")

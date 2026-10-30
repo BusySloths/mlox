@@ -74,7 +74,7 @@ class ProjectActions(Container):
                 variant="success",
             )
             yield Button(
-                "Add Bundle from Server Template",
+                "Add Bundle",
                 id="add-bundle-from-server-template",
                 variant="success",
             )

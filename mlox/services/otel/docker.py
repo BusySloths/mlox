@@ -17,9 +17,11 @@ Related modules (plain-text links):
 
 import logging
 import base64
+import time
+from shlex import quote
 
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Any, Dict, Mapping
 from urllib.parse import unquote
 
 from mlox.service import (
@@ -31,6 +33,7 @@ from mlox.service import (
     service_health_payload,
 )
 from mlox.services.otel.constants import MLOX_OTEL_CERTIFICATE_B64_ENV
+from mlox.execution.base import TaskGroup
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -61,6 +64,10 @@ class OtelDockerService(
     grafana_cloud_endpoint: str = ""
     grafana_cloud_key: str = ""
     diagnostic_exporter: bool | str = False
+    file_destination: bool | str = True
+    influx_service_uuid: str | None = None
+    grafana_cloud_destination: bool | str = True
+    new_relic_destination: bool | str = True
     service_url: str = field(init=False, default="")
     compose_service_names: Dict[str, str] = field(
         init=False,
@@ -69,18 +76,127 @@ class OtelDockerService(
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        self.diagnostic_exporter = str(self.diagnostic_exporter).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
+        # Catalog callers may omit optional template parameters (for example
+        # `mlox service add`); unresolved placeholders are not destinations.
+        defaults = {
+            "file_destination": True,
+            "diagnostic_exporter": False,
+            "grafana_cloud_destination": False,
+            "new_relic_destination": False,
+            "influx_service_uuid": None,
+            "relic_endpoint": "", "relic_key": "",
+            "grafana_cloud_endpoint": "", "grafana_cloud_key": "",
         }
+        for name, default in defaults.items():
+            value = getattr(self, name)
+            if isinstance(value, str) and value.startswith("${MLOX_") and value.endswith("}"):
+                setattr(self, name, default)
+        self._normalize_destination_flags()
+        # Historical deployments supplied provider credentials directly and did
+        # not persist explicit destination toggles.  Keep those destinations
+        # enabled when complete, but do not present incomplete defaults as on.
+        self._disable_unconfigured_hosted_destinations()
+        # Runtime-only material resolved from the selected InfluxDB service.
+        # It is intentionally not a dataclass field and is never persisted.
+        self._influx_binding: Dict[str, str] | None = None
+
+    def _normalize_destination_flags(self) -> None:
+        for name in (
+            "diagnostic_exporter",
+            "file_destination",
+            "grafana_cloud_destination",
+            "new_relic_destination",
+        ):
+            enabled = str(getattr(self, name)).strip().lower() in {
+                "1", "true", "yes", "on"
+            }
+            setattr(self, name, enabled)
 
     def _has_new_relic_exporter(self) -> bool:
-        return len(self.relic_key) > 4 and len(self.relic_endpoint) > 4
+        return (
+            self.new_relic_destination
+            and len(self.relic_key) > 4
+            and len(self.relic_endpoint) > 4
+        )
 
     def _has_grafana_cloud_exporter(self) -> bool:
-        return len(self.grafana_cloud_key) > 4 and len(self.grafana_cloud_endpoint) > 4
+        return (
+            self.grafana_cloud_destination
+            and len(self.grafana_cloud_key) > 4
+            and len(self.grafana_cloud_endpoint) > 4
+        )
+
+    def _disable_unconfigured_hosted_destinations(self) -> None:
+        if not self._has_grafana_cloud_exporter():
+            self.grafana_cloud_destination = False
+        if not self._has_new_relic_exporter():
+            self.new_relic_destination = False
+
+    def _validate_hosted_destinations(self) -> None:
+        """Reject enabled hosted destinations that lack their credentials."""
+
+        destinations = (
+            (
+                "Grafana Cloud",
+                self.grafana_cloud_destination,
+                self.grafana_cloud_endpoint,
+                self.grafana_cloud_key,
+            ),
+            (
+                "New Relic",
+                self.new_relic_destination,
+                self.relic_endpoint,
+                self.relic_key,
+            ),
+        )
+        for name, enabled, endpoint, api_key in destinations:
+            if enabled and (len(endpoint.strip()) < 5 or len(api_key.strip()) < 5):
+                raise ValueError(f"{name} requires an OTLP endpoint and API key.")
+
+    def _resolve_influx_binding(self) -> Dict[str, str] | None:
+        """Resolve the selected InfluxDB service without persisting credentials."""
+
+        service_uuid = str(self.influx_service_uuid or "").strip()
+        if not service_uuid:
+            self._influx_binding = None
+            return None
+        provider = self.get_dependent_service(
+            service_uuid,
+            required_capabilities={ServiceCapability.DATABASE},
+        )
+        if provider is None:
+            raise ValueError(
+                f"InfluxDB service {service_uuid!r} was not found."
+            )
+        get_binding = getattr(provider, "get_influx_env_binding", None)
+        if not callable(get_binding):
+            raise ValueError(
+                f"Service {service_uuid!r} does not provide an Influx binding."
+            )
+        binding = get_binding()
+        required = {
+            "MLOX_INFLUX_V2_WRITE_ENDPOINT",
+            "MLOX_INFLUX_TOKEN",
+            "MLOX_INFLUX_ORG",
+            "MLOX_INFLUX_DATABASE",
+        }
+        if not isinstance(binding, Mapping) or not required.issubset(binding):
+            raise ValueError(
+                "Selected InfluxDB service returned an incomplete binding."
+            )
+        self._influx_binding = {
+            str(key): str(value) for key, value in binding.items()
+        }
+        return self._influx_binding
+
+    def _has_influx_exporter(self) -> bool:
+        binding = self._influx_binding
+        return bool(
+            binding
+            and len(binding.get("MLOX_INFLUX_V2_WRITE_ENDPOINT", "")) > 4
+            and len(binding.get("MLOX_INFLUX_TOKEN", "")) > 4
+            and bool(binding.get("MLOX_INFLUX_DATABASE", "").strip())
+        )
 
     @staticmethod
     def _normalize_auth_header(value: str) -> str:
@@ -91,13 +207,17 @@ class OtelDockerService(
         return normalized
 
     def _pipeline_exporter_list(self) -> str:
-        exporters = ["file"]
+        exporters = ["file"] if self.file_destination else []
         if self.diagnostic_exporter:
             exporters.insert(0, "debug")
         if self._has_new_relic_exporter():
             exporters.append("otlphttp/new_relic")
         if self._has_grafana_cloud_exporter():
             exporters.append("otlphttp/grafana_cloud")
+        if self._has_influx_exporter():
+            exporters.append("influxdb/influx")
+        if not exporters:
+            raise ValueError("At least one OpenTelemetry destination must be enabled.")
         return ", ".join(exporters)
 
     def _new_relic_exporter_block(self) -> str:
@@ -116,11 +236,39 @@ class OtelDockerService(
             'headers: {Authorization: "${env:MY_OTEL_GRAFANA_CLOUD_KEY}"} }'
         )
 
-    def get_telemetry_data(self, bundle) -> Any:
-        with bundle.server.get_server_connection() as conn:
-            data = self.exec.fs_read_file(
-                conn, f"{self.target_path}/otel-data/telemetry.json", format="txt/plain"
+    def _influx_exporter_block(self) -> str:
+        if not self._has_influx_exporter():
+            return ""
+        # InfluxDB 3 Core implements the v2 line-protocol compatibility API.
+        # ``org`` is required by the Collector exporter but ignored by Core;
+        # ``bucket`` maps to the Core database.  This exporter supports all
+        # three signals, unlike the generic OTLP HTTP exporter.
+        return "\n".join(
+            (
+                "  influxdb/influx:",
+                '    endpoint: "${env:MY_OTEL_INFLUX_ENDPOINT}"',
+                '    org: "${env:MY_OTEL_INFLUX_ORG}"',
+                '    bucket: "${env:MY_OTEL_INFLUX_BUCKET}"',
+                '    token: "${env:MY_OTEL_INFLUX_TOKEN}"',
+                "    tls:",
+                "      ca_file: /etc/influx-ca.pem",
+                "    precision: ns",
+                "    payload_max_lines: 1000",
+                "    payload_max_bytes: 1000000",
             )
+        )
+
+    def get_telemetry_data(self, bundle) -> Any:
+        if not self.file_destination:
+            return ""
+        with bundle.server.get_server_connection() as conn:
+            try:
+                data = self.exec.fs_read_file(
+                    conn, f"{self.target_path}/otel-data/telemetry.json", format="txt/plain"
+                )
+            except FileNotFoundError:
+                # A newly added collector has not produced local output yet.
+                return ""
         return data
 
     def get_monitor_snapshot(self, bundle) -> Dict[str, Any]:
@@ -140,20 +288,48 @@ class OtelDockerService(
             "metric_points": snapshot.summary.get("metric_points", 0),
         }
 
-    def setup(self, conn) -> None:
+    def setup(self, conn, *, preserve_tls: bool = False) -> None:
         self.grafana_cloud_key = self._normalize_auth_header(self.grafana_cloud_key)
+        self._resolve_influx_binding()
 
         self.exec.fs_create_dir(conn, self.target_path)
-        self.exec.fs_create_dir(conn, f"{self.target_path}/otel-data")
+        telemetry_dir = f"{self.target_path}/otel-data"
+        self.exec.fs_create_dir(conn, telemetry_dir)
+        self.exec.fs_set_permissions(conn, telemetry_dir, "777", sudo=True)
         telemetry_file = f"{self.target_path}/otel-data/telemetry.json"
-        self.exec.fs_touch(conn, telemetry_file)
-        self.exec.fs_set_permissions(
+        execute = getattr(self.exec, "execute", None)
+        if not callable(execute):
+            raise RuntimeError("Executor cannot prepare collector telemetry output.")
+        result = execute(
             conn,
-            f"{self.target_path}/otel-data",
-            "777",
-            sudo=True,
+            f"if [ ! -e {quote(telemetry_file)} ]; then "
+            f"touch {quote(telemetry_file)}; fi",
+            group=TaskGroup.FILESYSTEM,
+            description="Create collector telemetry output if missing",
         )
+        if result is None:
+            raise RuntimeError("Could not prepare collector telemetry output.")
+        influx_certificate_path = f"{self.target_path}/influx-ca.pem"
+        influx_certificate_b64 = str(
+            (self._influx_binding or {}).get("MLOX_INFLUX_CERTIFICATE_B64", "")
+        )
+        if influx_certificate_b64:
+            try:
+                certificate = base64.b64decode(influx_certificate_b64, validate=True)
+            except (ValueError, TypeError) as exc:
+                raise ValueError(
+                    "Selected InfluxDB service returned an invalid certificate."
+                ) from exc
+            self.exec.fs_write_file(
+                conn, influx_certificate_path, certificate.decode("utf-8")
+            )
+        else:
+            self.exec.fs_create_empty_file(conn, influx_certificate_path)
         self.exec.fs_set_permissions(conn, telemetry_file, "777", sudo=True)
+        # The contrib Collector container runs unprivileged and must read the
+        # public CA certificate during TLS setup. The certificate is not secret;
+        # keep it read-only for all users and restrict modifications to root.
+        self.exec.fs_set_permissions(conn, influx_certificate_path, "644", sudo=True)
 
         template = self.resolve_asset(self.template)
         self.exec.fs_copy(
@@ -182,8 +358,15 @@ class OtelDockerService(
             "__GRAFANA_CLOUD_EXPORTER_BLOCK__",
             self._grafana_cloud_exporter_block(),
         )
+        self.exec.fs_find_and_replace(
+            conn,
+            config_path,
+            "__INFLUX_EXPORTER_BLOCK__",
+            self._influx_exporter_block(),
+        )
 
-        self.exec.tls_setup(conn, conn.host, self.target_path)
+        if not preserve_tls:
+            self.exec.tls_setup(conn, conn.host, self.target_path)
         self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
         )
@@ -204,6 +387,28 @@ class OtelDockerService(
             conn,
             env_path,
             f"OTEL_GRAFANA_CLOUD_ENDPOINT={self.grafana_cloud_endpoint}",
+        )
+        influx_binding = self._influx_binding or {}
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            "OTEL_INFLUX_ENDPOINT="
+            f"{influx_binding.get('MLOX_INFLUX_V2_WRITE_ENDPOINT', '')}",
+        )
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_INFLUX_TOKEN={influx_binding.get('MLOX_INFLUX_TOKEN', '')}",
+        )
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_INFLUX_ORG={influx_binding.get('MLOX_INFLUX_ORG', '')}",
+        )
+        self.exec.fs_append_line(
+            conn,
+            env_path,
+            f"OTEL_INFLUX_BUCKET={influx_binding.get('MLOX_INFLUX_DATABASE', '')}",
         )
         self.service_url = f"https://{conn.host}:{self.port_grpc}"
         self.service_ports["OTLP gRPC receiver"] = int(self.port_grpc)
@@ -283,8 +488,194 @@ class OtelDockerService(
                 "api_key": self.grafana_cloud_key,
                 "endpoint": self.grafana_cloud_endpoint,
             }
+        if self.influx_service_uuid:
+            secrets["influx_destination"] = {
+                "service_uuid": self.influx_service_uuid,
+                "configured": self._has_influx_exporter(),
+            }
 
         return secrets
+
+    def collector_destinations(self) -> Dict[str, bool]:
+        """Declarative all-signal destination state, safe for TUI display."""
+        return {
+            "file": bool(self.file_destination),
+            "influx": bool(self.influx_service_uuid),
+            "grafana_cloud": self._has_grafana_cloud_exporter(),
+            "new_relic": self._has_new_relic_exporter(),
+        }
+
+    def _destination_failure_message(self, error: Exception) -> str:
+        """Return an actionable failure reason without exposing credentials."""
+
+        detail = str(error).strip() or "collector destination update failed"
+        sensitive_values = [self.relic_key, self.grafana_cloud_key]
+        sensitive_values.extend((self._influx_binding or {}).values())
+        for value in sensitive_values:
+            if value and len(value) >= 5:
+                detail = detail.replace(value, "[redacted]")
+        return detail[:500]
+
+    def update_destinations(self, conn, **destinations: Any) -> Dict[str, Any]:
+        """Render, validate, restart, health-check, and roll back destinations.
+
+        The configuration is rendered from the same declarative fields as setup.
+        A failed restart or health check is immediately followed by a render and
+        restart of the last known-good fields; secrets remain in the protected
+        env file and are never returned in this result.
+        """
+        allowed = {
+            "file_destination", "influx_service_uuid",
+            "grafana_cloud_destination", "grafana_cloud_endpoint",
+            "grafana_cloud_key", "new_relic_destination", "relic_endpoint",
+            "relic_key", "diagnostic_exporter",
+        }
+        unknown = set(destinations) - allowed
+        if unknown:
+            raise ValueError("Unsupported collector destination setting.")
+        previous = {name: getattr(self, name) for name in allowed}
+        previous_binding = self._influx_binding
+        backed_up = False
+        try:
+            for name, value in destinations.items():
+                setattr(self, name, value)
+            self._normalize_destination_flags()
+            self._validate_hosted_destinations()
+            self._resolve_influx_binding()
+            # This catches an empty destination set before replacing the config.
+            self._pipeline_exporter_list()
+            self._backup_collector_files(conn)
+            backed_up = True
+            self.setup(conn, preserve_tls=True)
+            self._validate_rendered_config(conn)
+            restarted = self.exec.docker_restart(
+                conn,
+                f"{self.target_path}/{self.target_docker_script}",
+                f"{self.target_path}/{self.target_docker_env}",
+                force_recreate=True,
+            )
+            if restarted is None:
+                raise RuntimeError("Could not restart the collector.")
+            self._wait_collector_ready(conn)
+            self._discard_collector_backup(conn)
+            return {"updated": True, "destinations": self.collector_destinations()}
+        except Exception as error:
+            failure_message = self._destination_failure_message(error)
+            logging.error("OpenTelemetry collector destination update failed: %s", failure_message)
+            for name, value in previous.items():
+                setattr(self, name, value)
+            self._influx_binding = previous_binding
+            self._normalize_destination_flags()
+            # Render and recreate the previous healthy configuration.  A second
+            # failure is deliberately surfaced instead of hiding an outage.
+            try:
+                if backed_up:
+                    self._restore_collector_backup(conn)
+                    restarted = self.exec.docker_restart(
+                        conn,
+                        f"{self.target_path}/{self.target_docker_script}",
+                        f"{self.target_path}/{self.target_docker_env}",
+                        force_recreate=True,
+                    )
+                    if restarted is None:
+                        raise RuntimeError("Could not restart the previous collector configuration.")
+                    self._wait_collector_ready(conn)
+                    restored = True
+                else:
+                    restored = True  # No files or containers were changed.
+            except Exception:
+                restored = False
+            return {
+                "updated": False,
+                "rolled_back": restored,
+                "error": failure_message,
+            }
+
+    def _backup_collector_files(self, conn) -> None:
+        execute = getattr(self.exec, "execute", None)
+        if not callable(execute):
+            raise RuntimeError("Executor cannot stage collector configuration.")
+        paths = self._collector_update_paths()
+        optional_ca = paths[-1]
+        marker = optional_ca + ".previous.absent"
+        commands = [f"cp -p {quote(path)} {quote(path + '.previous')}" for path in paths[:-1]]
+        commands.append(
+            f"rm -f {quote(optional_ca + '.previous')} {quote(marker)} && "
+            f"if [ -e {quote(optional_ca)} ]; then "
+            f"cp -p {quote(optional_ca)} {quote(optional_ca + '.previous')}; "
+            f"else touch {quote(marker)}; fi"
+        )
+        command = " && ".join(commands)
+        if execute(conn, command, group=TaskGroup.FILESYSTEM, description="Back up OTel collector config") is None:
+            raise RuntimeError("Could not back up collector configuration.")
+
+    def _restore_collector_backup(self, conn) -> None:
+        execute = getattr(self.exec, "execute", None)
+        if not callable(execute):
+            raise RuntimeError("Executor cannot restore collector configuration.")
+        paths = self._collector_update_paths()
+        optional_ca = paths[-1]
+        commands = [f"cp -p {quote(path + '.previous')} {quote(path)}" for path in paths[:-1]]
+        commands.append(
+            f"if [ -e {quote(optional_ca + '.previous')} ]; then "
+            f"cp -p {quote(optional_ca + '.previous')} {quote(optional_ca)}; "
+            f"elif [ -e {quote(optional_ca + '.previous.absent')} ]; then "
+            f"rm -f {quote(optional_ca)}; else exit 1; fi"
+        )
+        command = " && ".join(commands)
+        if execute(conn, command, group=TaskGroup.FILESYSTEM, description="Restore OTel collector config") is None:
+            raise RuntimeError("Could not restore collector configuration.")
+
+    def _discard_collector_backup(self, conn) -> None:
+        execute = getattr(self.exec, "execute", None)
+        if callable(execute):
+            paths = self._collector_update_paths()
+            backups = " ".join(quote(path + ".previous") for path in paths)
+            backups += " " + quote(paths[-1] + ".previous.absent")
+            execute(conn, f"rm -f {backups}", group=TaskGroup.FILESYSTEM, description="Remove OTel config backup")
+
+    def _collector_update_paths(self) -> tuple[str, ...]:
+        return tuple(f"{self.target_path}/{name}" for name in (
+            "otel-collector-config.yaml", self.target_docker_env,
+            self.target_docker_script, "influx-ca.pem",
+        ))
+
+    def _wait_collector_ready(self, conn, timeout: float = 30) -> None:
+        """Wait for the actual local health endpoint after Compose recreates it."""
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                if self.check(conn).get("status") == "running":
+                    result = self.exec.execute(
+                        conn,
+                        f"curl --fail --silent --show-error --insecure --max-time 3 "
+                        f"https://127.0.0.1:{int(self.port_health)}/health/status",
+                        group=TaskGroup.CONTAINER_RUNTIME,
+                        description="Check collector health endpoint",
+                    )
+                    if result is not None:
+                        return
+            except Exception:
+                pass
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Collector health endpoint did not become ready.")
+            time.sleep(1)
+
+    def _validate_rendered_config(self, conn) -> None:
+        """Validate through Compose so config interpolation sees its runtime env."""
+        execute = getattr(self.exec, "execute", None)
+        if not callable(execute):
+            raise RuntimeError("Executor cannot validate collector configuration.")
+        compose_path = f"{self.target_path}/{self.target_docker_script}"
+        env_path = f"{self.target_path}/{self.target_docker_env}"
+        command = (
+            f"docker compose --env-file {quote(env_path)} -f {quote(compose_path)} "
+            "run --rm --no-deps otel-collector "
+            "validate --config=/etc/otel-collector-config.yaml"
+        )
+        result = execute(conn, command, group=TaskGroup.CONTAINER_RUNTIME, sudo=True, description="Validate OTel collector config")
+        if result is None:
+            raise RuntimeError("Collector configuration validation failed.")
 
     def get_telemetry_env_binding(self) -> Dict[str, str]:
         """Export a complete environment-only OTLP client configuration."""
@@ -314,3 +705,23 @@ class OtelDockerService(
                 base64.b64encode(certificate).decode("ascii")
             )
         return environment
+
+    def send_test_telemetry(self, conn) -> Dict[str, bool]:
+        """Send trace, metric, and log probes through this deployed collector."""
+
+        from mlox.services.otel.client import OTelClient
+
+        certificate = self.exec.fs_read_file(
+            conn, f"{self.target_path}/cert.pem", format="txt/plain"
+        )
+        self.service_url = f"https://{conn.host}:{self.port_grpc}"
+        self.certificate = certificate
+        client = OTelClient(
+            collector_url=self.service_url,
+            trusted_certs=certificate,
+            resource_attrs={"service.name": "mlox-otel-connectivity-probe"},
+        )
+        try:
+            return client.send_test_telemetry()
+        finally:
+            client.shutdown()

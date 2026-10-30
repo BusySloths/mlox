@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from rich.text import Text
+from textual.binding import Binding
 from textual.widgets import Tree
 
 from .model import (
@@ -64,8 +65,19 @@ BACKEND_STYLES = {
 class InfraTree(Tree[SelectionInfo]):
     """Tree showing the current infrastructure bundles, servers and services."""
 
+    # Keep row selection separate from expansion. The disclosure arrow remains
+    # the only way to collapse or expand a branch.
+    BINDINGS = [
+        Binding("space", "ignore_tree_toggle", "", show=False),
+        Binding("shift+space", "ignore_tree_toggle", "", show=False),
+    ]
+
     def __init__(self) -> None:
         super().__init__("Infrastructure", id="infra-tree")
+        self.auto_expand = False
+
+    def action_ignore_tree_toggle(self) -> None:
+        """Prevent keyboard selection from toggling branch expansion."""
 
     def on_mount(self) -> None:
         self.populate_tree()

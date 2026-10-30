@@ -30,6 +30,9 @@ def resolve_password(
     env_value = os.getenv(PASSWORD_ENVVAR)
     if env_value:
         return env_value
+    from mlox.cli.common import json_output
+    if json_output():
+        raise typer.BadParameter(f"Set {PASSWORD_ENVVAR} or provide --password.", param_hint="password")
     return typer.prompt(prompt_text, hide_input=True)
 
 

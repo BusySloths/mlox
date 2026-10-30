@@ -1,13 +1,11 @@
 from tests.integration.helpers import add_service, remove_service
 import shlex
-import time
 import pytest
 import logging
 
 from mlox.config import load_config, get_stacks_path
 from mlox.execution.base import TaskGroup
 from mlox.infra import Infrastructure, Bundle
-from mlox.service import ServiceCapability
 
 from tests.integration.conftest import wait_for_service_ready
 
@@ -40,9 +38,7 @@ def install_airflow_service(ubuntu_docker_server):
         # Allow some time for containers to become healthy
         # Downloading images and starting containers may take time
 
-    for i in range(10):
-        logger.info(f"Waiting 30s for Airflow service to stabilize... ({i + 1}/10)")
-        time.sleep(30)
+    assert wait_for_service_ready(service, bundle, retries=60, interval=5).get("status") == "running"
 
     yield bundle_added, service
 
@@ -69,7 +65,7 @@ def install_airflow_secret_manager(install_airflow_service):
     with bundle.server.get_server_connection() as conn:
         openbao.setup(conn)
         openbao.spin_up(conn)
-    wait_for_service_ready(openbao, bundle, retries=6, interval=20, no_checks=True)
+    assert wait_for_service_ready(openbao, bundle, retries=24, interval=5).get("status") == "running"
 
     yield bundle, airflow, openbao
 
@@ -88,29 +84,7 @@ def test_airflow_service_is_running(install_airflow_service):
     web_url = service.service_urls.get("Airflow UI", None)
     assert web_url, "Airflow UI URL not found in service URLs"
 
-    # Prefer rich health for services that advertise it, otherwise use check().
-    retries = 40
-    for i in range(retries):
-        try:
-            with bundle.server.get_server_connection() as conn:
-                if ServiceCapability.HEALTH in (
-                    getattr(service, "capabilities", set()) or set()
-                ) and hasattr(service, "get_health"):
-                    status = service.get_health(conn)
-                else:
-                    status = service.check(conn)
-            if status.get("healthy") is True or status.get("status") == "running":
-                break
-            logger.warning(
-                f"Retry {i + 1}/{retries} in 60s. Service state is {service.state} but Airflow service not yet up: {status}"
-            )
-            time.sleep(60)
-        except Exception as e:
-            status = {"status": "unknown", "error": str(e)}
-            logger.warning(
-                f"Retry {i + 1}/{retries} in 60s. Exception during status check: {e}"
-            )
-
+    status = wait_for_service_ready(service, bundle, retries=120, interval=5)
     assert status.get("healthy") is True or status.get("status") == "running"
     # state may be 'running' depending on service implementation
     assert service.state == "running"

@@ -25,6 +25,7 @@ architecture lives in `docs/ARCHITECTURE.md`; everything else derives.
 | Native / Docker execution | **Stable** | Primary execution paths. |
 | Persistence (SQLCipher `project.mlox`) | **Stable** | Single encrypted file per project. |
 | Project sync (PostgreSQL snapshot) | **Planned** | Local-first SQLCipher + optional Postgres sync point; see Roadmap. |
+| Operations (Team, Pipelines, Plan) | **Experimental** | Project-scoped workload observation, evidence, planning, and advisory agent workspaces; see Roadmap for boundaries. |
 
 Not every bundled service has a uniform status; maturity labels (Functional /
 Beta / Experimental) per component are tracked here as they change, not in the
@@ -148,6 +149,9 @@ execution unit. If this ever moves to GitHub Projects (or another tool), that
 tool becomes the linked source of truth and this section must point to it —
 never duplicate the list in both places.
 
+Service-local design documents may expand one of these items into implementation
+notes. They do not establish product priority or status; this roadmap does.
+
 1. **Project advancement** — deepen what a project is, and how people and
    agents work with it.
    1. **Project sync (local-first + PostgreSQL snapshot).** MLOX projects
@@ -173,11 +177,28 @@ never duplicate the list in both places.
       `[[wiki-links]]`). Follow-ups: named markdown templates
       (`template <kind> <name>`), Obsidian export/import, and the agent/LLM
       chat surface on top of the search field.
-   4. **Agent integration over project state.** An integration that gives an
-      agent read access to the current project info (topology, services,
-      secrets structure, health) so it can answer questions about the infra —
-      a first step toward an agentic MLOps team. Builds directly on the
-      existing config-driven topology model.
+   4. **Operations: pipelines and agent team.** **Experimental, but already a
+      useful operational foundation.** The TUI Operations section is
+      workload-first: Pipelines observes model and general workload runs,
+      preserves incident evidence and postmortems, and projects the
+      project-scoped `Operations` plan board. Team persists a roster, work
+      items, messages, and reviewable proposals; the built-in Pipeline Observer
+      can investigate watched workload evidence through an optional
+      OpenAI-compatible reasoning provider. This is the first practical step
+      toward an agentic MLOps team built on the existing topology, service, and
+      health model.
+
+      Current boundaries are deliberate: Pipelines is an observed-workload view,
+      not an orchestrator or scheduler; watching is telemetry-dependent and
+      user-started, not a continuous alerting or incident-response system.
+      Custom Team roles are durable profiles but do not yet have independent
+      runtimes or authority. Reasoning is advisory, its credentials stay in the
+      active secret manager, and the small set of remediation actions is
+      explicitly selected and approved by a person. Evolve this into reliable
+      multi-source evidence, durable operational history, reviewable
+      recommendations, capability-scoped agent access, and audited,
+      human-controlled remediation — never autonomous free-form infrastructure
+      control.
 2. **Catalog & placement** — grow what can be deployed, and deploy it well.
    1. **Catalog growth.** Deliberately grow the service/connector/server
       catalog — it is the main compounding value of the platform. Candidate
@@ -188,6 +209,13 @@ never duplicate the list in both places.
       target server actually provides the capabilities a service requires
       (declared in YAML `capabilities`/`requirements`), and enforce them at
       runtime as the model matures. Today they are parsed but not enforced.
+   3. **Model-serving gateway reliability.** Make the MLflow Gateway safe and
+      predictable for real inference traffic: isolate model versions and their
+      dependencies, bound alias/registry work on the request path, expose
+      phase-level latency and saturation signals, and apply safe concurrency,
+      overload, and lifecycle controls. Detailed engineering options live in
+      `mlox/services/mlflow_gateway/ROADMAP.md`; they are implementation notes,
+      not a second product roadmap.
 3. **Security & trust** — earn and keep the trust of users running real
    infrastructure on MLOX.
    1. **Security policy and threat model.** A `SECURITY.md` with a
@@ -205,14 +233,25 @@ never duplicate the list in both places.
       exact package, creates the GitHub Release, and deploys release-tagged docs.
       Its security-sensitive actions are commit-pinned. Remaining work is
       repository-wide workflow pinning and version-pinned historical API docs.
+   4. **Safe host operations.** Define conservative, recoverable ownership of
+      host-level changes made by MLOX: firewall exposure, Docker daemon policy,
+      bounded logs, and cleanup after partial service setup. The controls must
+      avoid lock-out, disk exhaustion, and stale state while preserving explicit
+      operator ownership where MLOX should not take over.
 4. **Community & adoption** — make MLOX easy to discover, learn, and trust.
    1. **Tutorial / cookbook series.** Written, end-to-end guides for common
       deployment stories: install → TUI → first deployed service, plus
       per-service recipes (e.g. MLflow tracking, n8n). Durable and reviewable
       with the docs pipeline; the basis for videos.
-   2. **Video / demo series.** Short, scripted walkthroughs — install to
-      first deployed service in minutes, then one per major service category
-      — derived from the tutorials so they stay in sync as the UI evolves.
+   2. **Video / demo series.** **In progress as maintainer tooling, not a
+      user-facing product capability.** The first content-pipeline draft has
+      produced a README demo GIF, but it is not yet fully proven through
+      repeated real recording and publishing workflows. Complete reviewed
+      alignment, artifact materialization, final-media verification, and
+      end-to-end testing before treating the process as routine. The eventual
+      short walkthroughs — install to first deployed service, then one per
+      major service category — remain derived from tutorials so they stay in
+      sync as the UI evolves.
    3. **API documentation quality.** The generated pdoc reference today is
       raw output over thin docstrings. Invest in narrative docstrings for the
       public surface (`ProjectWorkspace` first), per-use-case examples for the

@@ -926,6 +926,13 @@ def save_operations_postmortem(
 
 
 def _attributes(attributes: Any) -> dict[str, Any]:
+    if isinstance(attributes, str):
+        try:
+            attributes = json.loads(attributes)
+        except json.JSONDecodeError:
+            return {}
+    if isinstance(attributes, dict):
+        return {str(key): value for key, value in attributes.items()}
     values: dict[str, Any] = {}
     for item in attributes or []:
         if not isinstance(item, dict) or not item.get("key"):
@@ -934,6 +941,66 @@ def _attributes(attributes: Any) -> dict[str, Any]:
         value = next(iter(encoded.values()), None) if isinstance(encoded, dict) else None
         values[str(item["key"])] = value
     return values
+
+
+def _influx_span_to_otlp(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize an Influx exporter span row to the OTLP shape Operations uses."""
+    trace_id = str(row.get("traceId") or row.get("trace_id") or "")
+    span_id = str(row.get("spanId") or row.get("span_id") or "")
+    name = str(row.get("name") or row.get("span.name") or "")
+    if not trace_id or not span_id or not name:
+        return None
+
+    attributes = _attributes(row.get("attributes"))
+    for key in ("service.name", "span.kind"):
+        if key in row:
+            attributes.setdefault(key, row[key])
+
+    try:
+        end_ns = int(
+            row.get("endTimeUnixNano") or row.get("end_time_unix_nano") or 0
+        )
+    except (TypeError, ValueError):
+        end_ns = 0
+    try:
+        start_ns = int(
+            row.get("startTimeUnixNano") or row.get("start_time_unix_nano") or 0
+        )
+    except (TypeError, ValueError):
+        start_ns = 0
+    try:
+        duration_ns = int(row.get("durationNano") or row.get("duration_nano") or 0)
+    except (TypeError, ValueError):
+        duration_ns = 0
+
+    if not start_ns and end_ns and duration_ns:
+        start_ns = end_ns - duration_ns
+    if not end_ns and start_ns and duration_ns:
+        end_ns = start_ns + duration_ns
+    if not start_ns and row.get("time"):
+        try:
+            timestamp = datetime.fromisoformat(
+                str(row["time"]).replace("Z", "+00:00")
+            )
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            start_ns = (
+                int(timestamp.timestamp()) * 1_000_000_000
+                + timestamp.microsecond * 1_000
+            )
+        except (TypeError, ValueError, OverflowError):
+            start_ns = 0
+    if not end_ns:
+        end_ns = start_ns + max(duration_ns, 0)
+
+    return {
+        "traceId": trace_id,
+        "spanId": span_id,
+        "name": name,
+        "startTimeUnixNano": str(start_ns),
+        "endTimeUnixNano": str(end_ns),
+        "attributes": attributes,
+    }
 
 
 def _spans(raw: str | None) -> list[dict[str, Any]]:
@@ -1407,12 +1474,12 @@ class OperationsWatchSession:
 
 
 def list_operations_monitors(infra) -> list[dict[str, str]]:
-    """Return services that can provide raw telemetry for operations analysis."""
+    """Return services with a bounded telemetry-query backend for Operations."""
 
     monitors: list[dict[str, str]] = []
     for bundle in getattr(infra, "bundles", []) or []:
         for service in getattr(bundle, "services", []) or []:
-            if callable(getattr(service, "get_telemetry_data", None)):
+            if callable(getattr(service, "get_telemetry_query_service", None)):
                 monitors.append(
                     {
                         "uuid": str(getattr(service, "uuid", "")),
@@ -1432,12 +1499,44 @@ def _telemetry_source(
 ) -> tuple[Any, Any] | tuple[None, None]:
     for bundle in getattr(infra, "bundles", []) or []:
         for service in getattr(bundle, "services", []) or []:
-            if not callable(getattr(service, "get_telemetry_data", None)):
+            if not callable(getattr(service, "get_telemetry_query_service", None)):
                 continue
             if monitor_uuid and str(getattr(service, "uuid", "")) != monitor_uuid:
                 continue
             return bundle, service
     return None, None
+
+
+def _query_spans(service, *, since_seconds: int = 86_400) -> str:
+    """Fetch Operations evidence through its backend, never collector files."""
+    backend = service.get_telemetry_query_service()
+    rows = backend.recent_spans(since_seconds=since_seconds, limit=500)
+    payloads: list[str] = []
+    for row in rows:
+        # Influx stores spans as flattened rows (snake_case IDs/timestamps,
+        # span.name, and JSON attributes); convert those rows back to the
+        # normalized OTLP shape consumed by OperationsWatchSession.
+        document = row.get("span") or row.get("data") or row
+        if isinstance(document, str):
+            try:
+                document = json.loads(document)
+            except json.JSONDecodeError:
+                continue
+        if isinstance(document, dict) and "resourceSpans" in document:
+            payloads.append(json.dumps(document))
+        elif isinstance(document, dict):
+            span = (
+                document
+                if document.get("spanId")
+                else _influx_span_to_otlp(document)
+            )
+            if span is not None:
+                payloads.append(
+                    json.dumps(
+                        {"resourceSpans": [{"scopeSpans": [{"spans": [span]}]}]}
+                    )
+                )
+    return "\n".join(payloads)
 
 
 def start_operations_watch(
@@ -1455,9 +1554,9 @@ def start_operations_watch(
         )
         return OperationResult(False, 30, message)
     try:
-        raw = service.get_telemetry_data(bundle)
+        raw = _query_spans(service)
     except Exception as exc:
-        return OperationResult(False, 31, f"Could not read telemetry: {exc}")
+        return OperationResult(False, 31, f"Could not query telemetry: {exc}")
     session = OperationsWatchSession(baseline_runs=baseline_runs)
     session.monitor_uuid = str(getattr(service, "uuid", ""))
     session.monitor_name = str(getattr(service, "name", "Telemetry monitor"))
@@ -1477,10 +1576,10 @@ def refresh_operations_watch(infra, session: OperationsWatchSession) -> Operatio
             False, 30, "The selected telemetry monitor is no longer available."
         )
     try:
-        raw = service.get_telemetry_data(bundle)
+        raw = _query_spans(service)
         ingested = session.ingest(raw)
     except Exception as exc:
-        return OperationResult(False, 31, f"Could not read telemetry: {exc}")
+        return OperationResult(False, 31, f"Could not query telemetry: {exc}")
     return OperationResult(
         True,
         0,

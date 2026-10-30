@@ -2360,6 +2360,88 @@ RemoveServiceDialog {
   align: center middle;
 }
 
+OtelDestinationDialog {
+  align: center middle;
+  background: #000000 72%;
+}
+
+#otel-destinations-dialog {
+  width: 86;
+  max-width: 94%;
+  height: 38;
+  max-height: 90%;
+  padding: 1 2;
+  border: round #38bdf8;
+  background: #0b1724;
+}
+
+#otel-destinations-title {
+  height: 2;
+  color: #e0f2fe;
+  text-style: bold;
+  content-align: center middle;
+}
+
+#otel-destinations-description {
+  height: auto;
+  color: #a5c8df;
+  margin-bottom: 1;
+}
+
+#otel-destinations-error {
+  height: auto;
+  min-height: 1;
+  margin-bottom: 1;
+}
+
+#otel-destinations-form {
+  height: 1fr;
+}
+
+.otel-destination-section {
+  height: auto;
+  margin: 0 0 1 0;
+  padding: 1;
+  border: round #24465d;
+  background: #0f2131;
+}
+
+.otel-destination-heading {
+  height: 1;
+  color: #7dd3fc;
+  text-style: bold;
+  margin-bottom: 1;
+}
+
+.otel-destination-label {
+  height: 1;
+  color: #cbd5e1;
+  margin-top: 1;
+}
+
+.otel-destination-note {
+  height: auto;
+  color: #94a3b8;
+  margin-bottom: 1;
+}
+
+#otel-destinations-actions {
+  height: 3;
+  margin-top: 1;
+  align-horizontal: right;
+}
+
+#otel-destinations-actions Button {
+  width: 18;
+  margin-left: 1;
+}
+
+#otel-destination-status {
+  height: auto;
+  color: #cbd5e1;
+  margin-top: 1;
+}
+
 #rename-service-dialog,
 #runtime-providers-dialog,
 #remove-service-dialog {
@@ -2728,4 +2810,36 @@ Tree {
 
 #otel-telemetry-summary {
   margin-top: 1;
+}
+
+#influx-refresh {
+  width: auto;
+  min-width: 12;
+  height: 3;
+  margin: 0 0 1 0;
+}
+
+#influx-data-tabs {
+  height: 1fr;
+  min-height: 5;
+}
+
+#influx-metric-select,
+#influx-trace-service-select,
+#influx-log-service-select {
+  width: 1fr;
+  height: 3;
+  margin-bottom: 1;
+}
+
+#influx-metrics,
+#influx-spans,
+#influx-logs {
+  height: auto;
+  margin-bottom: 1;
+}
+
+#influx-message {
+  height: auto;
+  color: #94a3b8;
 }

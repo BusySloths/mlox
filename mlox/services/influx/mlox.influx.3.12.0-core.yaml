@@ -1,0 +1,41 @@
+id: influx-3.12.0-core-docker
+name: InfluxDB 3 Core
+version: 3.12.0-core
+maintainer: InfluxData
+description_short: Version-pinned InfluxDB 3 Core telemetry database.
+description: >-
+  InfluxDB 3 Core stores MLOX telemetry. Authentication is token based and
+  connection material is exported only through the selected secret manager.
+links:
+  project: https://www.influxdata.com/products/influxdb/
+  documentation: https://docs.influxdata.com/influxdb3/core/
+requirements:
+  cpus: 2.0
+  ram_gb: 4.0
+  disk_gb: 10.0
+groups:
+  service: null
+  database:
+    time-series: null
+  backend:
+    docker: null
+capabilities:
+  service:
+  - database
+  - health
+  backend:
+  - docker
+ports:
+  web_ui: 8181
+build:
+  class_name: mlox.services.influx.docker.InfluxDockerService
+  params:
+    name: influx-3.12.0-core
+    template: influx/docker-compose-influx-3.12.0-core.yaml
+    target_path: ${MLOX_USER_HOME}/influx-3.12.0-core
+    user: ${MLOX_AUTO_USER}
+    pw: ${MLOX_AUTO_PW}
+    token: apiv3_${MLOX_AUTO_PW}
+    database: telemetry
+    retention_period: 7d
+    port: ${MLOX_AUTO_PORT_WEB_UI}

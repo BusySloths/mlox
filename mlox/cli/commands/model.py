@@ -6,11 +6,12 @@ from typing import Optional
 
 import typer
 
-from mlox.cli.common import handle_result
+from mlox.cli.common import handle_result, json_output
 from mlox.cli.context import resolve_credentials
 from mlox.cli.generation import register_workspace_commands
 from mlox.cli.specifications.model import MODEL_COMMANDS
 from mlox.project import ProjectWorkspace
+from mlox.application.result import OperationResult
 
 
 model_app = typer.Typer(help="Manage ML models")
@@ -19,12 +20,10 @@ model_app = typer.Typer(help="Manage ML models")
 def _parse_model_identifier(model: str) -> tuple[str, str, str]:
     parts = model.split(":")
     if len(parts) != 3:
-        typer.echo(
-            "[ERROR] Model identifier must be in the format "
-            "<registry_name>:<model_name>:<version>.",
-            err=True,
+        handle_result(
+            OperationResult(False, 1, "Model identifier must be in the format "
+                            "<registry_name>:<model_name>:<version>.")
         )
-        raise typer.Exit(code=1)
     return parts[0], parts[1], parts[2]
 
 
@@ -33,7 +32,7 @@ GENERATED_MODEL_COMMANDS = register_workspace_commands(model_app, MODEL_COMMANDS
 
 @model_app.command("deploy")
 def model_deploy(
-    project: Optional[str] = typer.Argument(None, help="Project name"),
+    project: Optional[str] = typer.Option(None, "--project", help="Project path"),
     password: Optional[str] = typer.Option(
         None,
         "--password",
@@ -58,16 +57,20 @@ def model_deploy(
 ) -> None:
     """Deploy a registered model using the MLflow MLServer docker service."""
 
-    resolved_project, resolved_password = resolve_credentials(project, password)
-    registry_name, model_name, model_version = _parse_model_identifier(model)
-    result = handle_result(
-        ProjectWorkspace.open(resolved_project, resolved_password).deploy_model(
+    try:
+        resolved_project, resolved_password = resolve_credentials(project, password)
+        registry_name, model_name, model_version = _parse_model_identifier(model)
+        result = ProjectWorkspace.open(resolved_project, resolved_password).deploy_model(
             registry_name=registry_name,
             model_name=model_name,
             model_version=model_version,
             server_ip=target,
         )
-    )
+    except Exception as exc:
+        if not json_output():
+            raise
+        result = OperationResult(False, 1, str(exc))
+    result = handle_result(result)
     typer.echo(result.message)
     service = result.data.get("service") if result.data else None
     if service:

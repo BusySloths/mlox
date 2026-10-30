@@ -42,7 +42,7 @@ def install_registry_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
 
-    wait_for_service_ready(service, bundle, retries=6, interval=20, no_checks=True)
+    assert wait_for_service_ready(service, bundle, retries=24, interval=5).get("status") == "running"
 
     yield bundle_added, service
 

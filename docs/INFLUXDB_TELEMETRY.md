@@ -1,0 +1,43 @@
+# InfluxDB telemetry
+
+MLOX deploys `influxdb:3.12.0-core` with persistent Docker storage, TLS, a health
+check, token authentication, and a seven-day retention period for its telemetry
+database. The deployment intentionally does not migrate,
+back up, or run compatibility services for the retired Influx 1.x definition.
+The retention period applies when the database is created. InfluxDB 3 Core
+does not change retention for an existing database; adopting the policy for one
+requires creating a new database and migrating or discarding the old data.
+
+Service secrets are collected into the selected MLOX secret manager. Managed
+runtimes receive `MLOX_INFLUX_URL`, `MLOX_INFLUX_TOKEN`,
+`MLOX_INFLUX_DATABASE`, and (when TLS is used) `MLOX_INFLUX_CERTIFICATE_B64`.
+Applications use `InfluxClient.from_env()`; it returns `None` without a binding.
+External clients can call `InfluxClient.from_keyfile(service_name, keyfile, password)`
+instead of embedding a token.
+
+Collector destinations are all-signal: an enabled destination receives metrics,
+logs, and traces. For Influx 3 Core, the Collector uses its `influxdb` exporter
+against the `/api/v2/write` compatibility endpoint: `bucket` is the Core database
+and the exporter-required `org` is `mlox` (Core ignores it). File output is
+optional diagnostics only. Destination updates render and validate the pinned
+Collector configuration, restart it, wait for health, and restore the previous
+rendered destination settings when validation or health fails.
+Updating destinations preserves the Collector's serving certificate so
+existing clients retain their TLS trust. The previous configuration, Compose
+file, environment, and Influx CA are restored if an update fails.
+
+Operations uses the Influx query backend and has fixed limits: a 300-second query
+window, 500 rows, and a 30-second request timeout. The service TUI shows bounded
+recent metric, span, and log rows alongside health and measurements. Metric rows
+are sampled from at most 12 metric measurements, with MLOX measurements shown
+first. The TUI omits tokens, certificates, arbitrary SQL, and unbounded data
+views.
+
+The Multipass integration suite includes a Collector-to-Influx test for metrics,
+logs, and spans, and an MLflow Operations demo workflow that registers a model,
+serves it through the gateway, and checks its pipeline spans in Influx before
+and after a Collector destination update. Run on a Multipass-capable host:
+
+```sh
+uv run pytest tests/integration/test_telemetry_workflow.py -m integration --run-integration
+```

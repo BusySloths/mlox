@@ -345,17 +345,21 @@ def test_service_restart_prefers_compose_restart_for_compose_services():
 
 
 def test_compose_service_status_and_logs_paths():
+    from types import SimpleNamespace
+    import pytest
     svc = _svc()
 
     statuses = svc.compose_service_status(conn=object())
     assert statuses["db"] == "exited"
 
-    assert svc.compose_service_log_tail(conn=object(), label="api", tail=10).startswith(
+    conn = SimpleNamespace(sudo=lambda *args, **kwargs: SimpleNamespace(exited=0, stdout="api\n", stderr=""))
+    assert svc.compose_service_log_tail(conn=conn, label="api", tail=10).startswith(
         "logs:"
     )
-    assert svc.compose_service_log_tail(conn=object(), label="missing") == "Not found"
+    with pytest.raises(ValueError):
+        svc.compose_service_log_tail(conn=conn, label="missing")
     assert svc.log_labels() == ["api", "db"]
-    assert svc.service_log_tail(conn=object(), label="api", tail=10).startswith("logs:")
+    assert svc.service_log_tail(conn=conn, label="api", tail=10).startswith("logs:")
 
 
 def test_dump_state_writes_debug_files():
@@ -408,3 +412,22 @@ def test_health_service_normalizes_probe_payload():
         "state": "running",
         "healthy": True,
     }
+
+
+def test_compose_startup_error_includes_hidden_docker_stderr():
+    from invoke.exceptions import UnexpectedExit
+    from invoke.runners import Result
+
+    svc = _svc()
+    svc.exec = UbuntuTaskExecutor()
+
+    def fail_startup(*args, **kwargs):
+        raise UnexpectedExit(Result(
+            command="docker compose up", exited=1,
+            stderr="Error response from daemon: port is already allocated",
+            hide=("stderr",),
+        ))
+
+    with pytest.raises(RuntimeError, match="port is already allocated"):
+        svc.compose_up(SimpleNamespace(sudo=fail_startup))
+    assert svc.exec.history_data[-1]["exit_code"] == 1

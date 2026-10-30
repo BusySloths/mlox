@@ -14,12 +14,21 @@ Related modules (plain-text links):
 - mlox.services.influx.ui
 """
 
+import json
 import logging
+import shlex
+import time
 
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import (
+    AbstractHealthService,
+    AbstractService,
+    ServiceCapability,
+    service_health_payload,
+)
+from mlox.execution.base import TaskGroup
 
 
 # Configure logging (optional, but recommended)
@@ -31,15 +40,17 @@ logging.basicConfig(
 
 
 @dataclass
-class InfluxDockerService(AbstractService):
-    capabilities = {ServiceCapability.DATABASE}
+class InfluxDockerService(AbstractService, AbstractHealthService):
+    capabilities = {ServiceCapability.DATABASE, ServiceCapability.HEALTH}
     user: str
     pw: str
     port: str | int
     token: str
+    database: str = "telemetry"
+    retention_period: str = "7d"
     compose_service_names: Dict[str, str] = field(
         init=False,
-        default_factory=lambda: {"InfluxDB": "influxdbv2"},
+        default_factory=lambda: {"InfluxDB": "influxdb3"},
     )
 
     def setup(self, conn) -> None:
@@ -57,22 +68,34 @@ class InfluxDockerService(AbstractService):
         env_path = f"{self.target_path}/{self.target_docker_env}"
         self.exec.fs_append_line(conn, env_path, f"INFLUXDB_PORT={self.port}")
 
-        env_admin_path = f"{self.target_path}/.env.influxdb2-admin-username"
-        env_pw_path = f"{self.target_path}/.env.influxdb2-admin-password"
-        env_token_path = f"{self.target_path}/.env.influxdb2-admin-token"
-
-        self.exec.fs_append_line(conn, env_admin_path, self.user)
-        self.exec.fs_append_line(conn, env_pw_path, self.pw)
-        self.exec.fs_append_line(conn, env_token_path, self.token)
-
-        self.exec.fs_concatenate_files(
+        # Core bootstraps authorization only from an offline admin-token JSON
+        # document. Docker Compose exposes it as a secret, never an environment
+        # variable or command-line value.
+        token_path = f"{self.target_path}/.influxdb3-admin-token.json"
+        self.exec.fs_write_file(
             conn,
-            [
-                f"{self.target_path}/cert.pem",
-                f"{self.target_path}/key.pem",
-            ],
-            f"{self.target_path}/influxdb.pem",
+            token_path,
+            json.dumps(
+                {
+                    "token": self.token,
+                    "name": "mlox-admin",
+                    "description": "MLOX-managed InfluxDB 3 Core admin token",
+                }
+            ),
         )
+        # InfluxDB 3 Core runs as UID/GID 1500. Compose mounts local secrets as
+        # bind files, so preserve private host access while allowing that group
+        # to read the token at /run/secrets/influxdb3-admin-token.
+        result = self.exec.execute(
+            conn,
+            f"chgrp 1500 -- {shlex.quote(token_path)}",
+            group=TaskGroup.SECURITY_ASSETS,
+            sudo=True,
+            description="Grant InfluxDB runtime group access to admin token",
+        )
+        if result is None:
+            raise RuntimeError("Could not set InfluxDB admin token group ownership.")
+        self.exec.fs_set_permissions(conn, token_path, "640", sudo=True)
 
         self.service_ports["InfluxDB"] = int(self.port)
         self.service_urls["InfluxDB"] = f"https://{conn.host}:{self.port}"
@@ -86,30 +109,158 @@ class InfluxDockerService(AbstractService):
         self.exec.fs_delete_dir(conn, self.target_path)
 
     def spin_up(self, conn) -> bool:
-        return self.compose_up(conn)
+        started = self.compose_up(conn)
+        if started:
+            self._ensure_database(conn)
+        return started
+
+    def _ensure_database(self, conn) -> None:
+        """Create the telemetry database with the configured retention policy."""
+        import requests
+
+        from mlox.services.influx.client import InfluxClient
+
+        client = InfluxClient(
+            url=f"https://{conn.host}:{self.port}",
+            token=self.token,
+            database=self.database,
+            certificate=str(self.certificate or "").encode("utf-8"),
+        )
+        deadline = time.monotonic() + 90
+        while True:
+            try:
+                client.health()
+                break
+            except requests.RequestException as exc:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(
+                        "InfluxDB did not become reachable within 90 seconds; "
+                        "check its container health and published port."
+                    ) from exc
+                time.sleep(2)
+
+        try:
+            client.create_database(retention_period=self.retention_period)
+        except requests.HTTPError as exc:
+            status = getattr(exc.response, "status_code", "unknown")
+            if status in {400, 409}:
+                detail = (
+                    f"InfluxDB rejected database creation (HTTP {status}). The "
+                    "database may already exist; Core retention is immutable, "
+                    "so create a new database with this retention and migrate "
+                    "or discard the old database."
+                )
+            else:
+                detail = (
+                    f"InfluxDB rejected database creation (HTTP {status}); "
+                    "check the admin token and server logs."
+                )
+            raise RuntimeError(
+                f"Could not create InfluxDB database '{self.database}' with "
+                f"{self.retention_period} retention. {detail}"
+            ) from exc
 
     def spin_down(self, conn) -> bool:
         return self.compose_down(conn)
 
     def check(self, conn) -> Dict:
         try:
-            state = self.exec.docker_service_state(conn, "influxdbv2")
-            return {"status": state}
+            self._load_runtime_connection_info(conn)
+            state = self.exec.docker_service_state(conn, "influxdb3")
+            return {"status": state, "docker_state": state}
         except Exception as e:
             logging.error(f"Error checking InfluxDB service status: {e}")
             self.state = "unknown"
         return {"status": "unknown"}
 
+    def _load_runtime_connection_info(self, conn) -> None:
+        """Rebuild connection fields that are intentionally not persisted."""
+        self.service_ports["InfluxDB"] = int(self.port)
+        self.service_urls["InfluxDB"] = f"https://{conn.host}:{self.port}"
+        try:
+            self.certificate = self.exec.fs_read_file(
+                conn, f"{self.target_path}/cert.pem", format="txt/plain"
+            )
+        except FileNotFoundError:
+            self.certificate = ""
+
+    def _refresh_runtime_connection_info(self) -> None:
+        """Restore endpoint and TLS certificate after MLOX reloads a project."""
+        lookup = getattr(self, "_service_lookup", None)
+        get_bundle = getattr(lookup, "get_bundle_by_service", None)
+        bundle = get_bundle(self) if callable(get_bundle) else None
+        if bundle is None:
+            raise ValueError(
+                "InfluxDB endpoint and certificate are unavailable. Check InfluxDB "
+                "health or set up the service again."
+            )
+        self.set_task_executor(bundle.server.create_new_task_executor())
+        with bundle.server.get_server_connection() as conn:
+            self._load_runtime_connection_info(conn)
+
+    def get_health(self, conn) -> Dict:
+        """Return the standard health payload used by the TUI health action."""
+
+        payload = self.check(conn)
+        payload["health_url"] = f"{self.service_urls.get('InfluxDB', '')}/health"
+        return service_health_payload(self, payload)
+
     def get_secrets(self) -> Dict[str, Dict]:
         credentials = {
-            "username": self.user,
-            "password": self.pw,
             "token": self.token,
             "certificate": self.certificate,
             "port": str(self.port),
             "url": self.service_urls.get("InfluxDB", None),
             "ip": self.service_urls.get("InfluxDB", "").split("//")[-1].split(":")[0],
+            "database": self.database,
         }
-        if not credentials:
-            return {}
-        return credentials
+        return {"influx_connection": credentials}
+
+    def get_influx_env_binding(self) -> Dict[str, str]:
+        """Return runtime-safe Influx configuration (no application secret logic)."""
+
+        import base64
+
+        if not self.service_urls.get("InfluxDB") or not self.certificate:
+            self._refresh_runtime_connection_info()
+        connection = self.get_secrets()["influx_connection"]
+        raw_certificate = connection.get("certificate") or ""
+        certificate = (
+            raw_certificate.decode("utf-8")
+            if isinstance(raw_certificate, bytes)
+            else str(raw_certificate)
+        )
+        if not certificate.strip():
+            raise ValueError(
+                "InfluxDB TLS certificate is unavailable. Check that the service "
+                "has been set up and its certificate file is readable."
+            )
+        binding = {
+            "MLOX_INFLUX_URL": str(connection["url"]),
+            "MLOX_INFLUX_TOKEN": str(connection["token"]),
+            "MLOX_INFLUX_DATABASE": str(connection["database"]),
+            # Collector's Influx exporter speaks the v2 compatibility API.
+            "MLOX_INFLUX_V2_WRITE_ENDPOINT": str(connection["url"]).rstrip("/")
+            + "/api/v2/write",
+            # Core ignores org for v2 compatibility, but the exporter validates it.
+            "MLOX_INFLUX_ORG": "mlox",
+        }
+        if certificate:
+            binding["MLOX_INFLUX_CERTIFICATE_B64"] = base64.b64encode(
+                certificate.encode("utf-8")
+            ).decode("ascii")
+        return binding
+
+    def get_telemetry_query_service(self):
+        """Return the bounded Operations query backend for this service."""
+        from mlox.services.influx.client import InfluxClient
+        from mlox.services.influx.telemetry import InfluxTelemetryQueryService
+
+        connection = self.get_secrets()["influx_connection"]
+        return InfluxTelemetryQueryService(
+            InfluxClient(
+                url=str(connection["url"]), token=str(connection["token"]),
+                database=str(connection["database"]),
+                certificate=str(connection["certificate"]).encode("utf-8"),
+            )
+        )

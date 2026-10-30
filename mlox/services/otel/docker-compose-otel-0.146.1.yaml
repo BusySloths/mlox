@@ -18,6 +18,10 @@ services:
       - MY_OTEL_RELIC_KEY=${OTEL_RELIC_KEY}
       - MY_OTEL_GRAFANA_CLOUD_ENDPOINT=${OTEL_GRAFANA_CLOUD_ENDPOINT}
       - MY_OTEL_GRAFANA_CLOUD_KEY=${OTEL_GRAFANA_CLOUD_KEY}
+      - MY_OTEL_INFLUX_ENDPOINT=${OTEL_INFLUX_ENDPOINT}
+      - MY_OTEL_INFLUX_TOKEN=${OTEL_INFLUX_TOKEN}
+      - MY_OTEL_INFLUX_ORG=${OTEL_INFLUX_ORG}
+      - MY_OTEL_INFLUX_BUCKET=${OTEL_INFLUX_BUCKET}
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./otel-data:/etc/otelcol  # fix path to where the file exporter writes
@@ -25,6 +29,7 @@ services:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
       - ./cert.pem:/etc/cert.pem
       - ./key.pem:/etc/key.pem
+      - ./influx-ca.pem:/etc/influx-ca.pem:ro
     ports:
       - "${OTEL_PORT_GRPC}:4317"   # OTLP gRPC receiver
       - "${OTEL_PORT_HTTP}:4318"   # OTLP HTTP receiver

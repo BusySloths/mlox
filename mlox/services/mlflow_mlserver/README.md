@@ -2,6 +2,9 @@
 
 Serves a single registered MLflow model over HTTPS using [MLServer](https://mlserver.readthedocs.io/) as the inference backend. Traefik handles TLS termination and HTTP Basic Auth in front. Intended for one model per deployment — spin up multiple instances on different ports to serve multiple models.
 
+The supported stack uses MLflow 3.8.1. Create an
+[MLflow registry](../mlflow/README.md) first and bind this service to it.
+
 ---
 
 ## What's in this directory
@@ -9,12 +12,9 @@ Serves a single registered MLflow model over HTTPS using [MLServer](https://mlse
 | File | Purpose |
 |------|---------|
 | `mlox.mlserver.3.8.1.yaml` | MLOX service config (used by MLOX to discover and instantiate this service) |
-| `mlox.mlserver.2.22.0.yaml` | Same but for the older MLflow 2.x / MLServer stack |
 | `mlox.mlserver.3.8.1.k3s.yaml` | Kubernetes variant config |
 | `docker-compose-mlflow-mlserver-3.8.1.yaml` | Docker Compose stack: Traefik + MLServer app |
-| `docker-compose-mlflow-mlserver-2.22.0.yaml` | Docker Compose stack for the 2.x variant |
 | `dockerfile-mlflow-mlserver-3.8.1` | Container image: Debian + pyenv + mlflow + mlserver |
-| `dockerfile-mlflow-mlserver` | Dockerfile for the 2.x variant |
 | `start_mlserver.sh` | Container entrypoint: reads model Python version, installs it, starts serving |
 | `docker.py` | MLOX service class (`MLFlowMLServerDockerService`) |
 | `k3s.py` | Kubernetes deployment adapter |
@@ -157,4 +157,3 @@ This was the original bug before the current design. Symptom: error paths show `
 | Variant | MLflow | MLServer | Dockerfile | Compose | Notes |
 |---------|--------|----------|-----------|---------|-------|
 | 3.8.1 (current) | 3.8.1 | 1.7.x | `dockerfile-mlflow-mlserver-3.8.1` | `docker-compose-mlflow-mlserver-3.8.1.yaml` | pyenv, dynamic Python |
-| 2.22.0 (legacy) | 2.22.0 | bundled | `dockerfile-mlflow-mlserver` | `docker-compose-mlflow-mlserver-2.22.0.yaml` | older stack, no pyenv |

@@ -337,7 +337,6 @@ def test_builtin_web_ui_service_configs_advertise_web_ui_capability():
         "kubeflow-1.10.1-k3s",
         "litellm-ollama-1.77.7-docker",
         "minio-release-2025-07-23-docker",
-        "mlflow-2.22.0-docker",
         "mlflow-3.8.1-docker",
         "openbao-docker",
     }

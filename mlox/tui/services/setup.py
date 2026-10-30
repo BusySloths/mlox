@@ -232,19 +232,45 @@ def mlflow_gateway_managed_tls(infra, bundle, config=None) -> TemplateFormSpec:
 
 
 def otel(infra, bundle, config=None) -> TemplateFormSpec:
+    influx_services = [
+        (service.name, str(service.uuid))
+        for service in _iter_services(infra)
+        if ServiceCapability.DATABASE.value in _capability_names(service)
+        and callable(getattr(service, "get_influx_env_binding", None))
+    ]
+    toggles = [("Disabled", "false"), ("Enabled", "true")]
     return TemplateFormSpec(
         title="Add OpenTelemetry Collector",
+        description="Every enabled destination receives metrics, logs, and traces.",
         fields=[
-            TemplateFieldSpec("relic_key", "New Relic OTLP key", required=False),
+            TemplateFieldSpec(
+                "influx_service_uuid", "InfluxDB service", kind="select",
+                required=False, options=[("None (disabled)", "")] + influx_services,
+                help="Stores only the service UUID; credentials are resolved at setup.",
+            ),
+            TemplateFieldSpec(
+                "file_destination", "Local diagnostic file", kind="select",
+                default="true", options=toggles,
+            ),
+            TemplateFieldSpec(
+                "new_relic_destination", "New Relic", kind="select",
+                default="false", options=toggles,
+            ),
+            TemplateFieldSpec("relic_key", "New Relic OTLP key", kind="password", required=False),
             TemplateFieldSpec(
                 "relic_endpoint",
                 "New Relic OTLP endpoint",
-                default="https://otlp.eu01.nr-data.net:4317",
+                default="https://otlp.eu01.nr-data.net:4318",
                 required=False,
+            ),
+            TemplateFieldSpec(
+                "grafana_cloud_destination", "Grafana Cloud", kind="select",
+                default="false", options=toggles,
             ),
             TemplateFieldSpec(
                 "grafana_cloud_key",
                 "Grafana Cloud authorization header",
+                kind="password",
                 required=False,
             ),
             TemplateFieldSpec(
@@ -269,18 +295,43 @@ def otel(infra, bundle, config=None) -> TemplateFormSpec:
             ),
         ],
         submit_label="Add Service",
-        materialize=lambda values, infra: {
-            "${MLOX_RELIC_KEY}": values.get("relic_key", ""),
-            "${MLOX_RELIC_ENDPOINT}": values.get("relic_endpoint", ""),
-            "${MLOX_GRAFANA_CLOUD_KEY}": values.get("grafana_cloud_key", ""),
-            "${MLOX_GRAFANA_CLOUD_ENDPOINT}": values.get(
-                "grafana_cloud_endpoint", ""
-            ),
-            "${MLOX_OTEL_DIAGNOSTIC_EXPORTER}": values.get(
-                "diagnostic_exporter", "false"
-            ),
-        },
+        materialize=_materialize_otel,
     )
+
+
+def _materialize_otel(values, infra) -> dict[str, str]:
+    for label, flag, endpoint, key in (
+        ("New Relic", "new_relic_destination", "relic_endpoint", "relic_key"),
+        ("Grafana Cloud", "grafana_cloud_destination", "grafana_cloud_endpoint", "grafana_cloud_key"),
+    ):
+        if values.get(flag, "false") == "true" and (
+            len(values.get(endpoint, "").strip()) < 5
+            or len(values.get(key, "").strip()) < 5
+        ):
+            raise ValueError(f"{label} requires an OTLP endpoint and API key.")
+    if not (
+        values.get("influx_service_uuid", "")
+        or any(values.get(flag, default) == "true" for flag, default in (
+            ("file_destination", "true"), ("diagnostic_exporter", "false"),
+            ("new_relic_destination", "false"), ("grafana_cloud_destination", "false"),
+        ))
+    ):
+        raise ValueError("At least one OpenTelemetry destination must be enabled.")
+    return {
+        "${MLOX_OTEL_INFLUX_SERVICE_UUID}": values.get("influx_service_uuid", ""),
+        "${MLOX_OTEL_FILE_DESTINATION}": values.get("file_destination", "true"),
+        "${MLOX_OTEL_NEW_RELIC_DESTINATION}": values.get(
+            "new_relic_destination", "false"
+        ),
+        "${MLOX_OTEL_GRAFANA_CLOUD_DESTINATION}": values.get(
+            "grafana_cloud_destination", "false"
+        ),
+        "${MLOX_RELIC_KEY}": values.get("relic_key", ""),
+        "${MLOX_RELIC_ENDPOINT}": values.get("relic_endpoint", ""),
+        "${MLOX_GRAFANA_CLOUD_KEY}": values.get("grafana_cloud_key", ""),
+        "${MLOX_GRAFANA_CLOUD_ENDPOINT}": values.get("grafana_cloud_endpoint", ""),
+        "${MLOX_OTEL_DIAGNOSTIC_EXPORTER}": values.get("diagnostic_exporter", "false"),
+    }
 
 
 def repo_deploy(infra, bundle, config=None) -> TemplateFormSpec:
@@ -492,7 +543,7 @@ SETUP_HANDLERS = {
     "gcp-storage-0.1.0": gcp_secret_backed,
     "github-repo-0.1-beta-docker": github_repo,
     "headlamp-newest-k3s": no_params,
-    "influx-1.11.8-docker": no_params,
+    "influx-3.12.0-core-docker": no_params,
     "k8s-dashboard-newest-k3s": no_params,
     "kafka-3.7.0-docker": no_params,
     "kafka-4.1.0-docker": no_params,
@@ -501,17 +552,14 @@ SETUP_HANDLERS = {
     "litellm-ollama-1.77.7-docker": litellm,
     "milvus-2.5-docker": no_params,
     "minio-release-2025-07-23-docker": no_params,
-    "mlflow-2.22.0-docker": no_params,
     "mlflow-3.8.1-docker": no_params,
     "mlflow-gateway-3.8.1-docker": mlflow_gateway,
     "mlflow-gateway-3.8.1-k3s": mlflow_gateway,
     "mlflow-gateway-3.8.1-k3s-managed-tls": mlflow_gateway_managed_tls,
-    "mlflow-mlserver-2.22.0-docker": mlflow_mlserver,
     "mlflow-mlserver-3.8.1-docker": mlflow_mlserver,
     "mlflow-mlserver-3.8.1-k3s": mlflow_mlserver,
     "ollama-0.23.3-docker": ollama,
     "openbao-docker": no_params,
-    "otel-0.127.0-docker": otel,
     "otel-0.146.1-docker": otel,
     "postgres-16-bullseye-docker": postgres,
     "redis-8-bookworm-docker": no_params,

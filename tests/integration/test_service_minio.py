@@ -32,7 +32,7 @@ def install_minio_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
 
-    wait_for_service_ready(service, bundle, retries=6, interval=20, no_checks=True)
+    assert wait_for_service_ready(service, bundle, retries=24, interval=5).get("status") == "running"
 
     yield bundle_added, service
 
@@ -60,7 +60,7 @@ def test_minio_basic_read_write(install_minio_service, bucket):
     # Use boto3 S3 client to interact with MinIO
     bundle, service = install_minio_service
 
-    _ = wait_for_service_ready(service, bundle, retries=3, interval=10, no_checks=True)
+    assert wait_for_service_ready(service, bundle, retries=6, interval=5).get("status") == "running"
 
     # service.service_url is like https://<host>:<port>
     # boto3 expects endpoint_url without scheme when using signature_version, so pass full URL

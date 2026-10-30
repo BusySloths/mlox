@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shlex
 from typing import Any
 
 from fabric import Connection  # type: ignore
@@ -97,10 +98,14 @@ class DockerMixin(TaskRunnerABC):
         connection: Connection,
         config_yaml: str,
         env_file: str | None = None,
+        *,
+        force_recreate: bool = False,
     ) -> str | None:
         """Reconcile a compose stack without forcing a stop/start cycle."""
 
         command = self._docker_compose_up_command(config_yaml, env_file)
+        if force_recreate:
+            command += " --force-recreate"
         result = self._run_task(
             connection,
             group=TaskGroup.CONTAINER_RUNTIME,
@@ -157,25 +162,9 @@ class DockerMixin(TaskRunnerABC):
     def docker_service_log_tails(
         self, connection: Connection, service_name: str, tail: int = 200
     ) -> str:
-        try:
-            cmd = f"docker logs --tail {int(tail)} {service_name}"
-            res = (
-                self._run_task(
-                    connection,
-                    group=TaskGroup.CONTAINER_RUNTIME,
-                    command=cmd,
-                    sudo=True,
-                    pty=False,
-                    description=f"Fetch Docker logs for {service_name}",
-                    extra_metadata={
-                        "log_source": "docker",
-                        "service_name": service_name,
-                        "tail": int(tail),
-                    },
-                )
-                or "No docker logs found"
-            )
-            return res
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning("Failed to fetch logs for %s: %s", service_name, exc)
-            return "Failed to fetch logs"
+        cmd = f"docker logs --tail {int(tail)} {shlex.quote(service_name)} 2>&1"
+        result = connection.sudo(cmd, hide=True, warn=True, pty=False, in_stream=False, timeout=30)
+        output = result.stdout.removeprefix("[sudo] password: ")
+        if result.exited:
+            raise RuntimeError(f"Docker log retrieval failed (exit {result.exited}): {output.strip()}")
+        return output.rstrip("\n")

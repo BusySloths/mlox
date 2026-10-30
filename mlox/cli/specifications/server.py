@@ -8,14 +8,33 @@ from mlox.cli.rendering.results import (
     config_table_renderer,
     render_message,
     render_server_list,
+    render_server_command,
+    render_inspection,
 )
 
 
 def _server_template_path(value: str) -> str:
+    if "/" in value or value.endswith(".yaml"):
+        return value
     return f"ubuntu/mlox-server.{value}.yaml"
 
 
 SERVER_COMMANDS = (
+    WorkspaceCommand(name="inspect", method="inspect_server", help="Inspect a server by UUID or IP.",
+        parameters=(CliParameter("identifier", "Server UUID or IP", kind="argument"),), renderer=render_inspection),
+    WorkspaceCommand(
+        name="exec",
+        method="execute_server_command",
+        help="Run a non-interactive SSH command on a project server.",
+        parameters=(
+            CliParameter("ip", "Server IP or hostname"),
+            CliParameter("command", "Shell command to execute"),
+            CliParameter("sudo", "Run using the managed sudo credential"),
+            CliParameter("timeout", "Command timeout in seconds"),
+        ),
+        renderer=render_server_command,
+        render_failure=True,
+    ),
     WorkspaceCommand(
         name="list",
         method="list_servers",
@@ -29,7 +48,7 @@ SERVER_COMMANDS = (
         parameters=(
             CliParameter(
                 "server_template",
-                "Server template path relative to the stacks directory",
+                "Server template path or Ubuntu template suffix (for example ubuntu.docker)",
                 target="template_path",
                 transform=_server_template_path,
             ),

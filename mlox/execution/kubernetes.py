@@ -332,22 +332,12 @@ class KubernetesMixin(TaskRunnerABC):
         if kubeconfig:
             parts.extend(["--kubeconfig", kubeconfig])
         command = _quote_command(parts)
-        result = self._run_task(
-            connection,
-            group=TaskGroup.KUBERNETES,
-            command=command,
-            sudo=sudo,
-            pty=False,
-            description=f"Fetch Kubernetes logs for {namespace}/{resource}",
-            extra_metadata={
-                "log_source": "kubernetes",
-                "namespace": namespace,
-                "resource": resource,
-                "container": container or "",
-                "tail": int(tail),
-            },
-        )
-        return result or "No Kubernetes logs found"
+        run = connection.sudo if sudo else connection.run
+        result = run(command, hide=True, warn=True, pty=False, in_stream=False, timeout=30)
+        if result.exited:
+            detail = result.stderr.removeprefix("[sudo] password: ").strip()
+            raise RuntimeError(f"Kubernetes log retrieval failed (exit {result.exited}): {detail}")
+        return result.stdout.rstrip("\n")
 
     def k8s_patch_resource(
         self,

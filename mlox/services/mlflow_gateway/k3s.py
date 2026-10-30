@@ -1,10 +1,11 @@
+import base64
 import json
 import logging
 import re
 import shlex
 from dataclasses import dataclass, field
 
-from passlib.hash import apr_md5_crypt
+import bcrypt
 
 from mlox.executors import TaskGroup
 from mlox.service import (
@@ -103,7 +104,9 @@ class MLFlowGatewayK3sService(
         requirements = _resolved_text(self.requirements_txt)
         cache_size = _resolved_setting(self.cache_max_models, "10")
         cache_ttl = _resolved_setting(self.cache_ttl_days, "10")
-        password_hash = apr_md5_crypt.hash(self.pw)
+        password_hash = bcrypt.hashpw(
+            self.pw.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
         runtime_environment = self._runtime_environment(
             include_secret_manager=include_secret_manager,
             include_telemetry=include_telemetry,
@@ -181,29 +184,26 @@ class MLFlowGatewayK3sService(
         self,
         conn,
         *,
-        include_secret_manager: bool = True,
-        include_telemetry: bool = True,
-        secret_manager_environment: dict[str, str] | None = None,
-        telemetry_environment: dict[str, str] | None = None,
+        environment: dict[str, str] | None,
+        keys: tuple[str, ...],
     ) -> None:
-        """Apply changed provider bindings and restart the gateway deployment."""
+        """Patch only the changed provider keys, preserving unrelated credentials."""
 
-        self.exec.fs_write_file(
-            conn,
-            self.manifest_path,
-            self._render_gateway_manifest(
-                include_secret_manager=include_secret_manager,
-                include_telemetry=include_telemetry,
-                secret_manager_environment=secret_manager_environment,
-                telemetry_environment=telemetry_environment,
-            ),
+        patch_data = {key: None for key in keys}
+        patch_data.update(
+            {
+                key: base64.b64encode(str(value).encode("utf-8")).decode("ascii")
+                for key, value in (environment or {}).items()
+            }
         )
-        if (
-            self.exec.k8s_apply_manifest(
-                conn, self.manifest_path, kubeconfig=self.kubeconfig
-            )
-            is None
-        ):
+        if self.exec.k8s_patch_resource(
+            conn,
+            "secret",
+            self.runtime_secret_name,
+            {"data": patch_data},
+            namespace=self.namespace,
+            kubeconfig=self.kubeconfig,
+        ) is None:
             raise RuntimeError("Failed to apply MLflow Gateway runtime bindings.")
 
         restarted = self.exec.execute(
@@ -243,11 +243,17 @@ class MLFlowGatewayK3sService(
         environment: dict[str, str],
     ) -> None:
         self._refresh_runtime_bindings(
-            conn, secret_manager_environment=environment
+            conn,
+            environment=environment,
+            keys=("MLOX_SECRET_MANAGER_KEYFILE", "MLOX_SECRET_MANAGER_KEYFILE_PW"),
         )
 
     def _remove_secret_manager_binding(self, conn) -> None:
-        self._refresh_runtime_bindings(conn, include_secret_manager=False)
+        self._refresh_runtime_bindings(
+            conn,
+            environment=None,
+            keys=("MLOX_SECRET_MANAGER_KEYFILE", "MLOX_SECRET_MANAGER_KEYFILE_PW"),
+        )
 
     def _apply_telemetry_binding(
         self,
@@ -256,10 +262,34 @@ class MLFlowGatewayK3sService(
         telemetry_uuid: str,
         environment: dict[str, str],
     ) -> None:
-        self._refresh_runtime_bindings(conn, telemetry_environment=environment)
+        self._refresh_runtime_bindings(
+            conn,
+            environment=environment,
+            keys=(
+                "OTEL_EXPORTER_OTLP_ENDPOINT",
+                "OTEL_EXPORTER_OTLP_PROTOCOL",
+                "OTEL_EXPORTER_OTLP_INSECURE",
+                "OTEL_EXPORTER_OTLP_CERTIFICATE",
+                "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64",
+                "OTEL_TRACES_SAMPLER",
+                "OTEL_RESOURCE_ATTRIBUTES",
+            ),
+        )
 
     def _remove_telemetry_binding(self, conn) -> None:
-        self._refresh_runtime_bindings(conn, include_telemetry=False)
+        self._refresh_runtime_bindings(
+            conn,
+            environment=None,
+            keys=(
+                "OTEL_EXPORTER_OTLP_ENDPOINT",
+                "OTEL_EXPORTER_OTLP_PROTOCOL",
+                "OTEL_EXPORTER_OTLP_INSECURE",
+                "OTEL_EXPORTER_OTLP_CERTIFICATE",
+                "MLOX_OTEL_EXPORTER_OTLP_CERTIFICATE_B64",
+                "OTEL_TRACES_SAMPLER",
+                "OTEL_RESOURCE_ATTRIBUTES",
+            ),
+        )
 
     def _kubectl(self, arguments: str) -> str:
         return f"kubectl --kubeconfig {shlex.quote(self.kubeconfig)} {arguments}"
@@ -319,7 +349,7 @@ class MLFlowGatewayK3sService(
 
     def service_log_tail(self, conn, label: str | None = None, tail: int = 200) -> str:
         if label and label not in self.log_labels():
-            return f"Log label {label} not found"
+            raise ValueError(f"Log label {label} not found")
         return self.exec.k8s_resource_log_tail(
             conn,
             f"deployment/{self.deployment_name}",

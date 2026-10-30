@@ -36,7 +36,7 @@ def install_kafka_service(ubuntu_docker_server):
         service.setup(conn)
         service.spin_up(conn)
 
-    wait_for_service_ready(service, bundle, retries=3, interval=20, no_checks=True)
+    assert wait_for_service_ready(service, bundle, retries=12, interval=5).get("status") == "running"
 
     yield bundle, service
 
@@ -69,9 +69,9 @@ def test_kafka_service_is_running(install_kafka_service):
 def test_kafka_basic_read_write(install_kafka_service, tmp_path, topic):
     bundle, service = install_kafka_service
     status = wait_for_service_ready(
-        service, bundle, retries=6, interval=10, no_checks=True
+        service, bundle, retries=12, interval=5
     )
-    # assert status.get("status") == "running"
+    assert status.get("status") == "running"
 
     cafile = _write_certificate(tmp_path, service.certificate)
     bootstrap = f"{bundle.server.ip}:{service.service_ports['Kafka SSL']}"

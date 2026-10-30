@@ -77,15 +77,22 @@ class UbuntuTaskExecutor(
             )
             return stdout
         except Exception as exc:
+            failed_result = getattr(exc, "result", None)
+            detail = str(exc)
+            if failed_result is not None:
+                stderr = str(getattr(failed_result, "stderr", "") or "").strip()
+                if stderr and stderr not in detail:
+                    detail = f"{detail}\n{stderr}"
             self._record_history(
                 action=action,
                 status="error",
                 command=cmd,
-                error=str(exc),
+                exit_code=getattr(failed_result, "exited", None),
+                error=detail,
                 metadata=metadata,
             )
             if sudo:
-                logger.error("Command failed: %s", exc)
+                logger.error("Command failed: %s", detail)
                 return None
             raise
 

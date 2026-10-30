@@ -36,7 +36,7 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "function_names": ("settings", "setup"),
     },
     "mlox.view.services.influx": {
-        "config_ids": ("influx-1.11.8-docker",),
+        "config_ids": ("influx-3.12.0-core-docker",),
         "function_names": ("settings",),
     },
     "mlox.view.services.k8s_dashboard": {
@@ -72,12 +72,11 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "function_names": ("settings",),
     },
     "mlox.view.services.mlflow": {
-        "config_ids": ("mlflow-2.22.0-docker", "mlflow-3.8.1-docker"),
+        "config_ids": ("mlflow-3.8.1-docker",),
         "function_names": ("settings",),
     },
     "mlox.view.services.mlflow_mlserver": {
         "config_ids": (
-            "mlflow-mlserver-2.22.0-docker",
             "mlflow-mlserver-3.8.1-k3s",
             "mlflow-mlserver-3.8.1-docker",
         ),
@@ -103,7 +102,7 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "function_names": ("settings", "setup"),
     },
     "mlox.view.services.otel": {
-        "config_ids": ("otel-0.127.0-docker", "otel-0.146.1-docker"),
+        "config_ids": ("otel-0.146.1-docker",),
         "function_names": ("settings", "setup"),
     },
     "mlox.view.services.postgres": {

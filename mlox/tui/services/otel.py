@@ -12,12 +12,16 @@ import pandas as pd
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from textual import on
 from textual.app import ComposeResult
 from textual.css.query import NoMatches
-from textual.containers import Horizontal, VerticalScroll
-from textual.widgets import Static
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
+from textual.widgets import Button, Checkbox, Input, Select, Static
 
+from mlox.application.use_cases.services import send_otel_connectivity_probe
 from mlox.infra import Bundle, Infrastructure
+from mlox.service import ServiceCapability
 from mlox.services.otel.docker import OtelDockerService
 from mlox.view.services.otel import (
     STANDARD_METRIC_GROUPS,
@@ -1077,11 +1081,401 @@ class OtelTelemetryPanel(VerticalScroll):
         return Panel(table, title="Collector Output", border_style="blue")
 
 
+def _influx_service_options(
+    infra: Infrastructure | None, current_uuid: str | None
+) -> list[tuple[str, str]]:
+    """List infrastructure services that can export an Influx runtime binding."""
+
+    options: list[tuple[str, str]] = []
+    for bundle in getattr(infra, "bundles", []) or []:
+        for candidate in getattr(bundle, "services", []) or []:
+            capabilities = {
+                capability.value if hasattr(capability, "value") else str(capability)
+                for capability in getattr(candidate, "capabilities", set()) or set()
+            }
+            service_uuid = str(getattr(candidate, "uuid", "") or "")
+            if (
+                service_uuid
+                and ServiceCapability.DATABASE.value in capabilities
+                and callable(getattr(candidate, "get_influx_env_binding", None))
+            ):
+                name = str(getattr(candidate, "name", "InfluxDB") or "InfluxDB")
+                options.append((f"{name} ({service_uuid[:8]})", service_uuid))
+    if current_uuid and current_uuid not in {value for _, value in options}:
+        options.insert(
+            0,
+            (f"Unavailable InfluxDB service ({current_uuid[:8]})", current_uuid),
+        )
+    return sorted(options, key=lambda option: option[0].lower())
+
+
+def _select_value(select: Select) -> str | None:
+    return None if select.value is Select.NULL else str(select.value)
+
+
+def _destination_update_values(
+    service: OtelDockerService,
+    *,
+    file_destination: bool,
+    influx_service_uuid: str | None,
+    grafana_cloud_destination: bool,
+    grafana_cloud_endpoint: str,
+    grafana_cloud_key: str,
+    new_relic_destination: bool,
+    relic_endpoint: str,
+    relic_key: str,
+    diagnostic_exporter: bool,
+) -> dict[str, Any]:
+    """Build a destination update without ever reading Influx credentials.
+
+    The Influx selector stores only a service UUID. Its endpoint, token, and
+    database are resolved from the selected service at apply time.
+    """
+
+    return {
+        "file_destination": file_destination,
+        "influx_service_uuid": (influx_service_uuid or "").strip() or None,
+        "grafana_cloud_destination": grafana_cloud_destination,
+        "grafana_cloud_endpoint": grafana_cloud_endpoint.strip(),
+        "grafana_cloud_key": grafana_cloud_key or service.grafana_cloud_key,
+        "new_relic_destination": new_relic_destination,
+        "relic_endpoint": relic_endpoint.strip(),
+        "relic_key": relic_key or service.relic_key,
+        "diagnostic_exporter": diagnostic_exporter,
+    }
+
+
+def _stored_key_hint(value: str) -> str:
+    return "A key is already stored; leave this field blank to retain it." if value else (
+        "No stored key. Enter a key before enabling this destination."
+    )
+
+
+def _destination_validation_error(values: dict[str, Any]) -> str | None:
+    """Keep enabled hosted destinations from being silently omitted."""
+
+    requirements = (
+        (
+            "Grafana Cloud",
+            "grafana_cloud_destination",
+            "grafana_cloud_endpoint",
+            "grafana_cloud_key",
+        ),
+        ("New Relic", "new_relic_destination", "relic_endpoint", "relic_key"),
+    )
+    for name, enabled_key, endpoint_key, key_key in requirements:
+        if values.get(enabled_key) and (
+            not str(values.get(endpoint_key, "")).strip()
+            or len(str(values.get(key_key, "")).strip()) < 5
+        ):
+            return f"{name} needs both an OTLP endpoint and an API key."
+    return None
+
+
+class OtelDestinationDialog(ModalScreen[dict[str, Any] | None]):
+    """Centered, readable editor for all-signal collector destinations."""
+
+    def __init__(
+        self,
+        infra: Infrastructure | None,
+        service: OtelDockerService,
+    ) -> None:
+        super().__init__()
+        self.infra = infra
+        self.service = service
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="otel-destinations-dialog"):
+            yield Static("COLLECTOR DESTINATIONS", id="otel-destinations-title")
+            yield Static(
+                "Every enabled destination receives traces, metrics, and logs.",
+                id="otel-destinations-description",
+            )
+            yield Static("", id="otel-destinations-error")
+            with VerticalScroll(id="otel-destinations-form"):
+                with Vertical(classes="otel-destination-section"):
+                    yield Static("Local diagnostics", classes="otel-destination-heading")
+                    yield Checkbox(
+                        "Write a local diagnostic file",
+                        value=bool(self.service.file_destination),
+                        id="otel-file-destination",
+                    )
+                with Vertical(classes="otel-destination-section"):
+                    yield Static("InfluxDB", classes="otel-destination-heading")
+                    yield Static(
+                        "Credentials and TLS trust are resolved from this service.",
+                        classes="otel-destination-note",
+                    )
+                    yield Select(
+                        _influx_service_options(
+                            self.infra, self.service.influx_service_uuid
+                        ),
+                        value=self.service.influx_service_uuid or Select.NULL,
+                        prompt="None (disable InfluxDB)",
+                        allow_blank=True,
+                        id="otel-influx-service",
+                    )
+                with Vertical(classes="otel-destination-section"):
+                    yield Static("Grafana Cloud", classes="otel-destination-heading")
+                    yield Checkbox(
+                        "Send telemetry to Grafana Cloud",
+                        value=bool(self.service.grafana_cloud_destination),
+                        id="otel-grafana-destination",
+                    )
+                    yield Static("OTLP endpoint", classes="otel-destination-label")
+                    yield Input(
+                        value=self.service.grafana_cloud_endpoint,
+                        placeholder="https://…/otlp",
+                        id="otel-grafana-endpoint",
+                    )
+                    yield Static("API key", classes="otel-destination-label")
+                    yield Input(
+                        placeholder="Required when enabled; blank keeps stored key",
+                        password=True,
+                        id="otel-grafana-key",
+                    )
+                    yield Static(
+                        _stored_key_hint(self.service.grafana_cloud_key),
+                        classes="otel-destination-note",
+                    )
+                with Vertical(classes="otel-destination-section"):
+                    yield Static("New Relic", classes="otel-destination-heading")
+                    yield Checkbox(
+                        "Send telemetry to New Relic",
+                        value=bool(self.service.new_relic_destination),
+                        id="otel-relic-destination",
+                    )
+                    yield Static("OTLP endpoint", classes="otel-destination-label")
+                    yield Input(
+                        value=self.service.relic_endpoint,
+                        placeholder="https://…",
+                        id="otel-relic-endpoint",
+                    )
+                    yield Static("License key", classes="otel-destination-label")
+                    yield Input(
+                        placeholder="Required when enabled; blank keeps stored key",
+                        password=True,
+                        id="otel-relic-key",
+                    )
+                    yield Static(
+                        _stored_key_hint(self.service.relic_key),
+                        classes="otel-destination-note",
+                    )
+                with Vertical(classes="otel-destination-section"):
+                    yield Static("Debugging", classes="otel-destination-heading")
+                    yield Checkbox(
+                        "Enable collector debug diagnostics",
+                        value=bool(self.service.diagnostic_exporter),
+                        id="otel-diagnostic-exporter",
+                    )
+            with Horizontal(id="otel-destinations-actions"):
+                yield Button("Cancel", id="otel-cancel-destinations")
+                yield Button(
+                    "Save & Apply", id="otel-save-destinations", variant="primary"
+                )
+
+    @on(Button.Pressed, "#otel-cancel-destinations")
+    def cancel(self, _: Button.Pressed) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#otel-save-destinations")
+    def save(self, _: Button.Pressed) -> None:
+        values = _destination_update_values(
+            self.service,
+            file_destination=self.query_one("#otel-file-destination", Checkbox).value,
+            influx_service_uuid=_select_value(
+                self.query_one("#otel-influx-service", Select)
+            ),
+            grafana_cloud_destination=self.query_one(
+                "#otel-grafana-destination", Checkbox
+            ).value,
+            grafana_cloud_endpoint=self.query_one(
+                "#otel-grafana-endpoint", Input
+            ).value,
+            grafana_cloud_key=self.query_one("#otel-grafana-key", Input).value,
+            new_relic_destination=self.query_one(
+                "#otel-relic-destination", Checkbox
+            ).value,
+            relic_endpoint=self.query_one("#otel-relic-endpoint", Input).value,
+            relic_key=self.query_one("#otel-relic-key", Input).value,
+            diagnostic_exporter=self.query_one(
+                "#otel-diagnostic-exporter", Checkbox
+            ).value,
+        )
+        error = _destination_validation_error(values)
+        if error:
+            self.query_one("#otel-destinations-error", Static).update(
+                Text(error, style="bold #ff9b9b")
+            )
+            return
+        self.dismiss(values)
+
+
+class OtelDestinationSettingsPanel(Vertical):
+    """Compact launcher for the collector-destination editor."""
+
+    DEFAULT_CSS = """
+    OtelDestinationSettingsPanel { height: auto; }
+    #otel-action-buttons { height: auto; width: 100%; }
+    #otel-action-buttons Button { width: auto; min-width: 24; margin-right: 1; }
+    """
+
+    def __init__(
+        self,
+        infra: Infrastructure | None,
+        bundle: Bundle | None,
+        service: OtelDockerService,
+    ) -> None:
+        super().__init__()
+        self.infra = infra
+        self.bundle = bundle
+        self.service = service
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(id="otel-action-buttons"):
+            yield Button(
+                "Configure Collector Destinations",
+                id="otel-open-destinations",
+                variant="primary",
+            )
+            yield Button("Send Test Telemetry", id="otel-send-probe")
+        yield Static("", id="otel-destination-status")
+
+    @on(Button.Pressed, "#otel-open-destinations")
+    def open_destinations(self, _: Button.Pressed) -> None:
+        self.app.push_screen(
+            OtelDestinationDialog(self.infra, self.service), self.apply_destinations
+        )
+
+    @on(Button.Pressed, "#otel-send-probe")
+    def send_probe(self, _: Button.Pressed) -> None:
+        if self.bundle is None:
+            self.notify("This collector is not assigned to a server bundle.", severity="error")
+            return
+        button = self.query_one("#otel-send-probe", Button)
+        button.disabled = True
+        button.label = "Sending test telemetry…"
+        self.query_one("#otel-destination-status", Static).update(
+            "Sending one trace, metric, and log through the collector…"
+        )
+        app = self.app
+
+        def send() -> None:
+            result = send_otel_connectivity_probe(self.service, self.bundle)
+            app.call_from_thread(self._show_probe_result, result)
+
+        app.run_worker(
+            send,
+            thread=True,
+            exclusive=True,
+            group=f"otel-probe-{id(self)}",
+        )
+
+    def _show_probe_result(self, result) -> None:
+        if not self.is_attached:
+            return
+        button = self.query_one("#otel-send-probe", Button)
+        button.disabled = False
+        button.label = "Send Test Telemetry"
+        status = self.query_one("#otel-destination-status", Static)
+        if result.success:
+            message = result.message
+            status.update(Text(message, style="bold #86efac"))
+            self.notify(message)
+            return
+        status.update(Text(result.message, style="bold #ff9b9b"))
+        self.notify(result.message, severity="error")
+
+    def apply_destinations(self, values: dict[str, Any] | None) -> None:
+        if values is None:
+            return
+        if self.bundle is None:
+            self.notify(
+                "This collector is not assigned to a server bundle.", severity="error"
+            )
+            return
+        button = self.query_one("#otel-open-destinations", Button)
+        button.disabled = True
+        button.label = "Applying collector destinations…"
+        self.query_one("#otel-destination-status", Static).update(
+            "Applying collector destinations…"
+        )
+        app = self.app
+
+        def apply() -> None:
+            try:
+                with self.bundle.server.get_server_connection() as conn:
+                    result = self.service.update_destinations(conn, **values)
+                if result.get("updated"):
+                    commit = getattr(getattr(app, "workspace", None), "commit", None)
+                    if callable(commit):
+                        commit()
+            except Exception as exc:  # pragma: no cover - remote IO defensive path
+                result = {"updated": False, "error": str(exc)}
+            app.call_from_thread(self._apply_result, result)
+
+        app.run_worker(
+            apply,
+            thread=True,
+            exclusive=True,
+            group=f"otel-destinations-{id(self)}",
+        )
+
+    def _apply_result(self, result: dict[str, Any]) -> None:
+        if not self.is_attached:
+            return
+        button = self.query_one("#otel-open-destinations", Button)
+        button.disabled = False
+        button.label = "Configure Collector Destinations"
+        if result.get("updated"):
+            destinations = result.get("destinations", {})
+            enabled = ", ".join(
+                name.replace("_", " ")
+                for name, value in destinations.items()
+                if value
+            )
+            message = f"Collector updated. Active destinations: {enabled or 'none'}."
+            self.query_one("#otel-destination-status", Static).update(
+                Text(message, style="bold #86efac")
+            )
+            self.notify(message)
+        else:
+            suffix = (
+                "; previous configuration restored"
+                if result.get("rolled_back")
+                else ""
+            )
+            message = f"Update failed: {result.get('error', 'unknown error')}{suffix}"
+            self.query_one("#otel-destination-status", Static).update(
+                Text(message, style="bold #ff9b9b")
+            )
+            self.notify(message, severity="error")
+
+
+class OtelServicePanel(Vertical):
+    """Operations tab combining destination controls and live host telemetry."""
+
+    def __init__(
+        self,
+        infra: Infrastructure | None,
+        bundle: Bundle | None,
+        service: OtelDockerService,
+    ) -> None:
+        super().__init__()
+        self.infra = infra
+        self.bundle = bundle
+        self.service = service
+
+    def compose(self) -> ComposeResult:
+        yield OtelDestinationSettingsPanel(self.infra, self.bundle, self.service)
+        yield OtelTelemetryPanel(self.infra, self.bundle, self.service)
+
+
 def settings(
     infra: Infrastructure,
     bundle: Bundle,
     service: OtelDockerService,
-) -> OtelTelemetryPanel:
-    """Return a Textual container visualising OTEL telemetry."""
+) -> OtelServicePanel:
+    """Return destination controls plus the live OTEL telemetry dashboard."""
 
-    return OtelTelemetryPanel(infra, bundle, service)
+    return OtelServicePanel(infra, bundle, service)

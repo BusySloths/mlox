@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from examples import runtime
-from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
+from mlox.services.mlflow.docker import MLFlowDockerService
 
 
 @pytest.mark.parametrize("telemetry,manager", [(False, False), (True, False), (False, True), (True, True)])
@@ -52,7 +52,7 @@ def test_project_providers(monkeypatch, caplog, telemetry, manager):
 @pytest.mark.parametrize("available", [False, True])
 def test_tracker_required_and_first_selected(monkeypatch, caplog, available):
     caplog.set_level(logging.INFO)
-    trackers = [MLFlow3DockerService(
+    trackers = [MLFlowDockerService(
         name=name, service_config_id="mlflow", template="", target_path="/tmp/mlflow",
         ui_user="ml", ui_pw="pw", port="5000",
     ) for name in ("tracker1", "tracker2")] if available else []

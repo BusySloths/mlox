@@ -181,10 +181,18 @@ class FilesystemMixin(TaskRunnerABC):
         separator: str = "!",
         sudo: bool = False,
     ) -> None:
+        """Replace matches with literal text, including multiline YAML blocks."""
+        replacement = (
+            new.replace("\\", "\\\\")
+            .replace("&", "\\&")
+            .replace(separator, "\\" + separator)
+            .replace("\n", "\\\n")
+        )
+        expression = f"s{separator}{old}{separator}{replacement}{separator}g"
         self._run_task(
             connection,
             group=TaskGroup.FILESYSTEM,
-            command=(f"sed -i 's{separator}{old}{separator}{new}{separator}g' {fname}"),
+            command=f"sed -i {shlex.quote(expression)} {shlex.quote(fname)}",
             sudo=sudo,
         )
 
