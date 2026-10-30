@@ -4,6 +4,9 @@ MLOX deploys `influxdb:3.12.0-core` with persistent Docker storage, TLS, a healt
 check, token authentication, and a seven-day retention period for its telemetry
 database. The deployment intentionally does not migrate,
 back up, or run compatibility services for the retired Influx 1.x definition.
+The retention period applies when the database is created. InfluxDB 3 Core
+does not change retention for an existing database; adopting the policy for one
+requires creating a new database and migrating or discarding the old data.
 
 Service secrets are collected into the selected MLOX secret manager. Managed
 runtimes receive `MLOX_INFLUX_URL`, `MLOX_INFLUX_TOKEN`,
@@ -30,8 +33,9 @@ are sampled from at most 12 metric measurements, with MLOX measurements shown
 first. The TUI omits tokens, certificates, arbitrary SQL, and unbounded data
 views.
 
-The Multipass integration suite includes a Collector-to-Influx all-signal test
-and an MLflow Operations demo workflow that checks model spans in Influx before
+The Multipass integration suite includes a Collector-to-Influx test for metrics,
+logs, and spans, and an MLflow Operations demo workflow that registers a model,
+serves it through the gateway, and checks its pipeline spans in Influx before
 and after a Collector destination update. Run on a Multipass-capable host:
 
 ```sh
