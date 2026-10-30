@@ -22,10 +22,10 @@ from mlox.services.influx.client import InfluxClient
 from mlox.services.otel.client import OTelClient
 from tests.integration.conftest import wait_for_service_ready
 from tests.integration.helpers import add_service, remove_service
-from tests.integration.test_service_mlflow3 import install_mlflow3_service  # noqa: F401
+from tests.integration.test_service_mlflow import install_mlflow_service  # noqa: F401
 
 pytestmark = pytest.mark.integration
-pytest_plugins = ["tests.integration.test_service_mlflow3"]
+pytest_plugins = ["tests.integration.test_service_mlflow"]
 logger = logging.getLogger(__name__)
 
 
@@ -128,14 +128,14 @@ def test_collector_exports_all_signals_and_preserves_tls_on_update(ubuntu_docker
 
 
 def test_operations_demo_gateway_exports_pipeline_to_influx(
-    ubuntu_docker_server, install_mlflow3_service, monkeypatch
+    ubuntu_docker_server, install_mlflow_service, monkeypatch
 ):
     """Register the actual demo, deploy the stack, predict, and query its spans."""
     from examples.operations_demo.model import OperationsDemoModel, demonstration_batch
     from examples.operations_demo.register import _serving_signature
     from mlox.services.mlflow.mlops import MLFlowDeployableModelService
 
-    bundle, registry = install_mlflow3_service
+    bundle, registry = install_mlflow_service
     assert wait_for_service_ready(registry, bundle, retries=60, interval=5).get("status") == "running"
     for key, value in {
         "MLFLOW_URI": registry.service_url, "MLFLOW_TRACKING_URI": registry.service_url,

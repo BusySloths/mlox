@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
+from mlox.services.mlflow.docker import MLFlowDockerService
 from mlox.services.otel import client as otel_client_module
 from mlox.services.otel.client import OTelClient
 
@@ -48,8 +48,8 @@ class FakeExec:
         self._record("fs_delete_dir", path)
 
 
-def test_mlflow3_docker_service_setup_check_and_models(monkeypatch):
-    service = MLFlow3DockerService(**BASE, ui_user="ml", ui_pw="pw", port="5000")
+def test_mlflow_docker_service_setup_check_and_models(monkeypatch):
+    service = MLFlowDockerService(**BASE, ui_user="ml", ui_pw="pw", port="5000")
     service.exec = FakeExec()
     conn = SimpleNamespace(host="example.test")
     service.setup(conn)
@@ -78,7 +78,7 @@ def test_mlflow3_docker_service_setup_check_and_models(monkeypatch):
             return [_Model("demo", "1")]
 
     monkeypatch.setattr(
-        "mlox.services.mlflow.docker_mlflow3.create_mlflow_client",
+        "mlox.services.mlflow.docker.create_mlflow_client",
         lambda *_: _Client(),
     )
 
@@ -96,14 +96,14 @@ def test_mlflow3_docker_service_setup_check_and_models(monkeypatch):
     service.teardown(conn)
 
 
-def test_mlflow3_docker_service_fallback_paths(monkeypatch):
-    service = MLFlow3DockerService(**BASE, ui_user="ml", ui_pw="pw", port="5000")
+def test_mlflow_docker_service_fallback_paths(monkeypatch):
+    service = MLFlowDockerService(**BASE, ui_user="ml", ui_pw="pw", port="5000")
     service.exec = FakeExec()
     conn = SimpleNamespace(host="example.test")
     service.setup(conn)
 
     monkeypatch.setattr(
-        "mlox.services.mlflow.docker_mlflow3.create_mlflow_client",
+        "mlox.services.mlflow.docker.create_mlflow_client",
         lambda *_: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
@@ -526,3 +526,38 @@ def test_get_telemetry_client_initializes_only_once(monkeypatch):
     assert otel_client_module.get_telemetry_client() is client
     assert otel_client_module.get_telemetry_client() is client
     assert calls == ["from-env"]
+
+
+def test_mlflow_auth_ini_round_trips_percent_credentials():
+    from configparser import ConfigParser
+    from mlox.services.mlflow.docker import MLFlowDockerService
+
+    service = MLFlowDockerService(**BASE, ui_user="admin%name", ui_pw="pw%value%(name)s", port="5000")
+    service.exec = FakeExec()
+    service.setup(SimpleNamespace(host="example.test"))
+    lines = [args[1] for name, args, _ in service.exec.calls
+             if name == "fs_append_line" and args[0].endswith("basic-auth.ini")]
+    config = ConfigParser()
+    config.read_string("\n".join(lines))
+    assert config["mlflow"]["admin_username"] == service.ui_user
+    assert config["mlflow"]["admin_password"] == service.ui_pw
+
+
+def test_mlflow_readiness_reports_client_error_without_password(monkeypatch):
+    service = MLFlowDockerService(**BASE, ui_user="ml", ui_pw="secret-password", port="5000")
+    service.service_url = "https://example.test:5000"
+
+    def fail_client(*args):
+        raise RuntimeError("authentication rejected for secret-password")
+
+    monkeypatch.setattr("mlox.services.mlflow.docker.create_mlflow_client", fail_client)
+    status = service.get_health(SimpleNamespace())
+    assert status["status"] == "unknown"
+    assert status["healthy"] is False
+    assert status["error"] == "RuntimeError: authentication rejected for [redacted]"
+
+
+def test_previous_mlflow3_import_resolves_to_supported_adapter():
+    from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
+
+    assert MLFlow3DockerService is MLFlowDockerService

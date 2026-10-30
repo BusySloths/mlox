@@ -189,6 +189,26 @@ task tests:integration:run      # integration tests (requires Multipass VMs)
 task tests:integration:k8s      # Kubernetes integration tests (requires Multipass/k3s)
 ```
 
+To keep integration runs quiet and save output per test module:
+
+```bash
+task tests:integration:run -- --integration-quiet
+# Or choose the parent directory for the logs:
+task tests:integration:run -- --integration-log-dir /tmp/mlox-logs
+# These flags also work with pytest directly and the k8s/service tasks:
+uv run python -m pytest tests/integration --run-integration --integration-quiet
+```
+
+Each run creates a unique `mlox-integration-*` directory under the system temp
+folder (or the supplied parent directory). The terminal shows each test name as it starts, its pass/fail result, and the log
+paths. Module files contain captured stdout, stderr, Python logs at
+INFO level and above, and full failure tracebacks, including fixture setup and
+teardown. Shared fixture output belongs to the module whose test triggers that
+fixture phase. Files are written after each phase completes. Quiet capture
+applies to the whole pytest invocation; only integration modules get log files.
+Omit both options to retain the existing live output.
+
+
 ### Ways to Contribute
 
 - [Bug reports](https://github.com/BusySloths/mlox/issues/new/choose)

@@ -23,7 +23,6 @@ def reject_optional_sdk(name, *args, **kwargs):
 builtins.__import__ = reject_optional_sdk
 from mlox.services.otel.docker import OtelDockerService
 from mlox.services.mlflow.docker import MLFlowDockerService
-from mlox.services.mlflow.docker_mlflow3 import MLFlow3DockerService
 from mlox.services.gcp.bq_service import GCPBigQueryService
 from mlox.services.gcp.secret_service import GCPSecretService
 from mlox.services.gcp.sheet_service import GCPSpreadsheetsService
@@ -31,7 +30,6 @@ from mlox.services.gcp.storage_service import GCPStorageService
 
 assert OtelDockerService.__name__ == "OtelDockerService"
 assert MLFlowDockerService.__name__ == "MLFlowDockerService"
-assert MLFlow3DockerService.__name__ == "MLFlow3DockerService"
 assert GCPBigQueryService.__name__ == "GCPBigQueryService"
 assert GCPSecretService.__name__ == "GCPSecretService"
 assert GCPSpreadsheetsService.__name__ == "GCPSpreadsheetsService"

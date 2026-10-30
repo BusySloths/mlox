@@ -43,7 +43,7 @@ capabilities:
 ports:
   web_ui: 5432
 build:
-  class_name: mlox.services.mlflow.docker_mlflow3.MLFlow3DockerService
+  class_name: mlox.services.mlflow.docker.MLFlowDockerService
   params:
     name: mlflow-3.8.1
     template: mlflow/docker-compose-mlflow-3.8.1.yaml

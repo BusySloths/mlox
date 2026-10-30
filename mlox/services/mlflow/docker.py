@@ -78,8 +78,9 @@ class MLFlowDockerService(
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_URL={conn.host}")
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_USERNAME={self.ui_user}")
         self.exec.fs_append_line(conn, env_path, f"MLFLOW_PASSWORD={self.ui_pw}")
-        # self.exec.fs_append_line(conn, env_path, f"MLFLOW_TRACKING_USERNAME={self.ui_user}")
-        # self.exec.fs_append_line(conn, env_path, f"MLFLOW_TRACKING_PASSWORD={self.ui_pw}")
+        # ConfigParser interpolates percent signs in INI values.
+        ini_user = self.ui_user.replace("%", "%%")
+        ini_password = self.ui_pw.replace("%", "%%")
         ini_path = f"{self.target_path}/basic-auth.ini"
         self.exec.fs_create_empty_file(conn, ini_path)
         self.exec.fs_append_line(conn, ini_path, "[mlflow]")
@@ -87,10 +88,11 @@ class MLFlowDockerService(
         self.exec.fs_append_line(
             conn, ini_path, "database_uri = sqlite:///basic_auth.db"
         )
-        self.exec.fs_append_line(conn, ini_path, f"admin_username = {self.ui_user}")
-        self.exec.fs_append_line(conn, ini_path, f"admin_password = {self.ui_pw}")
+        self.exec.fs_append_line(conn, ini_path, f"admin_username = {ini_user}")
+        self.exec.fs_append_line(conn, ini_path, f"admin_password = {ini_password}")
         self.service_ports["MLFlow Webserver"] = int(self.port)
         self.service_urls["MLFlow UI"] = f"https://{conn.host}:{self.port}"
+        self.service_urls["Dashboard"] = f"https://{conn.host}:{self.port}"
         self.service_url = f"https://{conn.host}:{self.port}"
 
     def teardown(self, conn):
@@ -123,10 +125,14 @@ class MLFlowDockerService(
                 "registered_models (cutoff=10)": len(models),
             }
         except Exception as e_ml:
-            logger.debug("MLflow API check failed: %s", e_ml)
+            error = f"{type(e_ml).__name__}: {e_ml}"
+            if self.ui_pw:
+                error = error.replace(self.ui_pw, "[redacted]")
+            logger.debug("MLflow API check failed: %s", error)
         return {
             "status": "unknown",
             "message": "MLflow API not reachable",
+            "error": error,
         }
 
     def get_health(self, conn) -> Dict[str, Any]:

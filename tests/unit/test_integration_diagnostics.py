@@ -158,6 +158,8 @@ def test_docker_volume_checks_use_post_setup_login_and_sudo(monkeypatch):
     monkeypatch.setattr(
         integration, "remove_server", lambda *args: SimpleNamespace(success=True)
     )
+    purges = []
+    monkeypatch.setattr(integration, "purge_test_docker", lambda *args, **kwargs: purges.append(kwargs))
     fixture = integration.ubuntu_docker_server.__wrapped__(
         {"ip": server.ip, "name": "test-vm"}
     )
@@ -166,6 +168,49 @@ def test_docker_volume_checks_use_post_setup_login_and_sudo(monkeypatch):
     with pytest.raises(StopIteration):
         next(fixture)
 
+    assert purges == [{"remove_running": True}]
     assert len(calls) == 2
     assert all(command == "docker volume ls -q" for command, _ in calls)
     assert all(options["warn"] is False for _, options in calls)
+
+
+def test_startup_failure_captures_diagnostics_and_still_cleans_up(monkeypatch):
+    from tests.integration import helpers
+
+    events = []
+    finalizers = []
+
+    def fail_startup(conn):
+        raise RuntimeError("port already allocated")
+
+    service = SimpleNamespace(name="failed-service", setup=lambda conn: None, spin_up=fail_startup)
+    bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=lambda: nullcontext(object())))
+    monkeypatch.setattr(helpers, "log_compose_diagnostics", lambda *args: events.append("diagnostics"))
+    monkeypatch.setattr(helpers, "remove_service", lambda *args: events.append("cleanup") or SimpleNamespace(success=True))
+    with pytest.raises(RuntimeError, match="port already allocated"):
+        helpers.prepare_service(SimpleNamespace(addfinalizer=finalizers.append), object(), bundle, service)
+    assert events == ["diagnostics"]
+    assert len(finalizers) == 1
+    finalizers[0]()
+    assert events == ["diagnostics", "cleanup"]
+
+
+@pytest.mark.parametrize("remove_running", [False, True])
+def test_docker_purge_is_remote_and_preserves_running_services_until_final_cleanup(remove_running):
+    from tests.integration.helpers import purge_test_docker
+
+    calls = []
+
+    def sudo(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(stdout="abc123\ndef456\n" if command == "docker ps --all --quiet" else "reclaimed")
+
+    server = SimpleNamespace(ip="test-vm", get_server_connection=lambda: nullcontext(SimpleNamespace(sudo=sudo)))
+    purge_test_docker(server, remove_running=remove_running)
+    commands = [command for command, _ in calls]
+    expected = ["docker system prune --all --force --volumes",
+                "docker builder prune --all --force", "docker volume prune --all --force"]
+    if remove_running:
+        expected = ["docker ps --all --quiet", "docker rm --force --volumes abc123 def456"] + expected
+    assert commands == expected
+    assert all(options["in_stream"] is False and options["warn"] is False for _, options in calls)

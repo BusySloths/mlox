@@ -72,12 +72,11 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "function_names": ("settings",),
     },
     "mlox.view.services.mlflow": {
-        "config_ids": ("mlflow-2.22.0-docker", "mlflow-3.8.1-docker"),
+        "config_ids": ("mlflow-3.8.1-docker",),
         "function_names": ("settings",),
     },
     "mlox.view.services.mlflow_mlserver": {
         "config_ids": (
-            "mlflow-mlserver-2.22.0-docker",
             "mlflow-mlserver-3.8.1-k3s",
             "mlflow-mlserver-3.8.1-docker",
         ),

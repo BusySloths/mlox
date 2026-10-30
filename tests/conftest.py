@@ -1,6 +1,8 @@
 import os
 import pytest
 
+pytest_plugins = ["tests.integration_logging"]
+
 
 def pytest_addoption(parser):
     parser.addoption(

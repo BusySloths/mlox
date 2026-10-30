@@ -38,12 +38,10 @@ The authoritative, exhaustive list of services and servers bundled with MLOX. Ge
 | **LiteLLM + Ollama** | 1.77.7 (stable) | docker | LiteLLM is an open-source library that simplifies the integration of large language models (LLMs) into applications. |
 | **Milvus** | 2.5 | docker | Milvus is an open-source vector database designed for scalable similarity search. |
 | **MinIO** | RELEASE.2025-07-23T15-54-02Z-cpuv1 | docker | MinIO is a high-performance, S3 compatible object store. |
-| **MLFlow** | 2.22.0 | docker | MLFlow is an open-source platform for managing the machine learning lifecycle, including experimentation, reproducibility, and deployment. |
 | **MLFlow** | 3.8.1 | docker | MLFlow is an open-source platform for managing the machine learning lifecycle, including experimentation, reproducibility, and deployment. |
 | **MLFlow Gateway** | 3.8.1 | kubernetes | Lightweight multi-model HTTP gateway for MLflow on Kubernetes. |
 | **MLFlow Gateway** | 3.8.1 | docker | Lightweight multi-model HTTP gateway for MLflow registry models. |
 | **MLFlow Gateway (managed TLS)** | 3.8.1 | kubernetes | MLflow model gateway on k3s using secret-manager-backed TLS. |
-| **MLFlow-MLServer** | 2.22.0 | docker | MLServer is an open-source Python library for building production-ready asynchronous APIs for machine learning models. |
 | **MLFlow-MLServer** | 3.8.1 | kubernetes | Deploy an MLflow registry model with MLServer on Kubernetes (k3s). |
 | **MLFlow-MLServer** | 3.8.1 | docker | MLServer is an open-source Python library for building production-ready asynchronous APIs for machine learning models. |
 | **Ollama** | 0.23.3 | docker | Standalone Ollama service with HTTPS and BasicAuth via Traefik. |

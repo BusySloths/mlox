@@ -412,3 +412,22 @@ def test_health_service_normalizes_probe_payload():
         "state": "running",
         "healthy": True,
     }
+
+
+def test_compose_startup_error_includes_hidden_docker_stderr():
+    from invoke.exceptions import UnexpectedExit
+    from invoke.runners import Result
+
+    svc = _svc()
+    svc.exec = UbuntuTaskExecutor()
+
+    def fail_startup(*args, **kwargs):
+        raise UnexpectedExit(Result(
+            command="docker compose up", exited=1,
+            stderr="Error response from daemon: port is already allocated",
+            hide=("stderr",),
+        ))
+
+    with pytest.raises(RuntimeError, match="port is already allocated"):
+        svc.compose_up(SimpleNamespace(sudo=fail_startup))
+    assert svc.exec.history_data[-1]["exit_code"] == 1

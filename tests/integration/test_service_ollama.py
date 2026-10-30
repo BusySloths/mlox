@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service, remove_service
+from tests.integration.helpers import add_service, prepare_service
 
 """Integration tests for standalone Ollama service."""
 
@@ -18,7 +18,7 @@ requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
 
 
 @pytest.fixture(scope="module")
-def install_ollama_service(ubuntu_docker_server):
+def install_ollama_service(ubuntu_docker_server, request):
     """Install and start the standalone Ollama service on the provided server."""
     infra = Infrastructure()
     bundle = Bundle(name=ubuntu_docker_server.ip, server=ubuntu_docker_server)
@@ -33,19 +33,12 @@ def install_ollama_service(ubuntu_docker_server):
 
     service = bundle_added.services[-1]
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        service.setup(conn)
-        service.spin_up(conn)
+    prepare_service(request, infra, bundle_added, service)
 
-    assert wait_for_service_ready(
-        service, bundle_added, retries=12, interval=5
-    ).get("status") == "running"
+    status = wait_for_service_ready(service, bundle_added, retries=12, interval=5)
+    assert status.get("status") == "running", status
 
     yield bundle_added, service
-
-    result = remove_service(infra, service.name)
-    if not result.success:
-        logger.warning("Failed to remove service via application logic: %s", result.message)
 
 
 def test_ollama_service_is_running(install_ollama_service):

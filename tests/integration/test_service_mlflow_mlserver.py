@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_service, remove_service
+from tests.integration.helpers import add_service, prepare_service
 import os
 import time
 import logging
@@ -13,34 +13,34 @@ from typing import Dict
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
 from tests.integration.conftest import wait_for_service_ready
-from tests.integration.test_service_mlflow3 import install_mlflow3_service  # noqa: F401
+from tests.integration.test_service_mlflow import install_mlflow_service  # noqa: F401
 
 pytestmark = pytest.mark.integration
-pytest_plugins = ["tests.integration.test_service_mlflow3"]
+pytest_plugins = ["tests.integration.test_service_mlflow"]
 
 logger = logging.getLogger(__name__)
 requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
 
 
-class IdentityModel(mlflow.pyfunc.PythonModel):  # type: ignore
-    def get_conda_env(self) -> Dict:
-        return {
-            "name": "mlflow-models",
-            "channels": ["defaults"],
-            "dependencies": [
-                f"python={self.requirements_python_version or '3.12.5'}",
-                {"pip": [f"mlflow=={mlflow.__version__}"]},
-            ],
-        }
-
-    def load_context(self, context):
-        logger.info("Done.")
-
-    def predict(self, context, model_input, params=None) -> pd.DataFrame:
-        return model_input
-
-
 def _register_identity_model(service_url: str, username: str, password: str) -> str:
+
+    class IdentityModel(mlflow.pyfunc.PythonModel):  # type: ignore
+        def get_conda_env(self) -> Dict:
+            return {
+                "name": "mlflow-models",
+                "channels": ["defaults"],
+                "dependencies": [
+                    f"python={self.requirements_python_version or '3.12.5'}",
+                    {"pip": [f"mlflow=={mlflow.__version__}"]},
+                ],
+            }
+
+        def load_context(self, context):
+            logger.info("Done.")
+
+        def predict(self, context, model_input, params=None) -> pd.DataFrame:
+            return model_input
+
     mlflow.set_tracking_uri(service_url)
     mlflow.set_registry_uri(service_url)
     os.environ["MLFLOW_TRACKING_USERNAME"] = username
@@ -66,12 +66,10 @@ def _register_identity_model(service_url: str, username: str, password: str) -> 
 
 
 @pytest.fixture(scope="module")
-def deploy_mlflow_mlserver(ubuntu_docker_server, install_mlflow3_service):
+def deploy_mlflow_mlserver(ubuntu_docker_server, install_mlflow_service, request):
     infra = Infrastructure()
-    bundle = Bundle(name=ubuntu_docker_server.ip, server=ubuntu_docker_server)
+    bundle, mlflow_service = install_mlflow_service
     infra.bundles.append(bundle)
-
-    bundle, mlflow_service = install_mlflow3_service
     mlflow_status = wait_for_service_ready(
         mlflow_service, bundle, retries=12, interval=30
     )
@@ -100,15 +98,9 @@ def deploy_mlflow_mlserver(ubuntu_docker_server, install_mlflow3_service):
 
     mlserver_service = mlserver_bundle.services[-1]
 
-    with ubuntu_docker_server.get_server_connection() as conn:
-        mlserver_service.setup(conn)
-        mlserver_service.spin_up(conn)
+    prepare_service(request, infra, mlserver_bundle, mlserver_service)
 
     yield mlserver_service, bundle
-
-    result = remove_service(infra, mlserver_service.name)
-    if not result.success:
-        logger.warning("Failed to remove MLServer service via application logic: %s", result.message)
 
 
 def test_mlserver_is_ready(deploy_mlflow_mlserver):

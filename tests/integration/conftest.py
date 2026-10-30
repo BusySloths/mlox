@@ -1,4 +1,4 @@
-from tests.integration.helpers import add_server, log_compose_diagnostics, remove_server
+from tests.integration.helpers import add_server, log_compose_diagnostics, remove_server, purge_test_docker
 import uuid
 import time
 import socket
@@ -329,6 +329,7 @@ def ubuntu_docker_server(multipass_instance):
         logging.warning(
             "Baseline docker volumes removed during teardown: %s", missing_volumes
         )
+    purge_test_docker(server, remove_running=True)
     result = remove_server(infra, server.ip)
     if result.success:
         logging.info("Successfully tore down ubuntu_docker_server.")
@@ -470,3 +471,14 @@ def ubuntu_simple_server(ubuntu_docker_server, multipass_instance):
 #     except Exception as e:
 #         logging.warning(f"Could not tear down ubuntu_native_server: {e}")
 #     remove_server(infra, server.ip)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def reclaim_test_docker_storage(request):
+    """Prune unused resources after a module's service fixtures finish."""
+    server = None
+    if "ubuntu_docker_server" in request.fixturenames:
+        server = request.getfixturevalue("ubuntu_docker_server")
+    yield
+    if server is not None:
+        purge_test_docker(server)
