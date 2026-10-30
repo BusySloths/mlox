@@ -74,6 +74,8 @@ Airflow, Milvus, Feast, Kafka, LiteLLM, OpenBao, GCP, and more). The exhaustive,
 authoritative list — generated directly from the YAML plugin configs — lives in
 [**docs/SERVICES_CATALOG.md**](docs/SERVICES_CATALOG.md). Per-component maturity
 status is tracked in [docs/DOCTRINE.md](docs/DOCTRINE.md).
+For MLflow setup, model serving, and focused integration tests, see the
+[MLflow service guide](mlox/services/mlflow/README.md).
 
 ---
 

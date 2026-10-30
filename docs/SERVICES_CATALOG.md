@@ -4,7 +4,7 @@
 
 The authoritative, exhaustive list of services and servers bundled with MLOX. Generated from the YAML plugin configs; the single source of truth is those configs, not this page.
 
-**35 service configs, 9 server configs.**
+**33 service configs, 9 server configs.**
 
 ---
 

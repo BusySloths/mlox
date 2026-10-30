@@ -2,6 +2,9 @@
 
 Serves a single registered MLflow model over HTTPS using [MLServer](https://mlserver.readthedocs.io/) as the inference backend. Traefik handles TLS termination and HTTP Basic Auth in front. Intended for one model per deployment — spin up multiple instances on different ports to serve multiple models.
 
+The supported stack uses MLflow 3.8.1. Create an
+[MLflow registry](../mlflow/README.md) first and bind this service to it.
+
 ---
 
 ## What's in this directory
