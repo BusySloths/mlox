@@ -1,108 +1,170 @@
 ---
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 const releaseTag = import.meta.env.PUBLIC_MLOX_RELEASE_TAG;
 const releaseUrl = import.meta.env.PUBLIC_MLOX_RELEASE_URL || 'https://github.com/BusySloths/mlox/releases/latest';
 
 const navItems = [
+  { name: 'Tour', href: '#tour' },
   { name: 'Features', href: '#features' },
-  { name: 'Why MLOX?', href: '#why-mlox' },
-  { name: 'Screenshots', href: '#screenshots' },
-  { name: 'Get Started', href: '#get-started' },
-  { name: 'Docs', href: '/mlox/docs/', external: true },
-  { name: releaseTag ? `Release ${releaseTag}` : 'Releases', href: releaseUrl, external: true },
-  { name: 'Sponsors', href: '#sponsors' },
-  { name: 'GitHub', href: 'https://github.com/BusySloths/mlox', external: true },
+  { name: 'How it works', href: '#how' },
+  { name: 'Get started', href: '#get-started' },
+  { name: 'Docs', href: `${base}docs/`, external: true },
+  { name: releaseTag ? releaseTag : 'Releases', href: releaseUrl, external: true },
 ];
 ---
 
-<header class="fixed top-0 left-0 right-0 z-50 border-b-2 border-black bg-accent-yellow">
-  <nav class="container mx-auto px-6 py-3">
-    <div class="flex items-center justify-between gap-3">
-      <div class="flex items-center space-x-2">
-        <a href={import.meta.env.BASE_URL} class="flex items-center space-x-2 hover:translate-x-1 transition-transform">
-          <span class="text-2xl font-black tracking-tight uppercase">MLOX</span>
-        </a>
-      </div>
+<header class="site-header" id="top">
+  <nav class="wrap site-nav" aria-label="Main">
+    <a href={base} class="brand" aria-label="MLOX home">
+      <picture>
+        <source srcset={`${base}mlox_sloth_branch.webp`} type="image/webp" />
+        <img src={`${base}mlox_sloth_branch.png`} alt="" width="48" height="24" />
+      </picture>
+      <span class="brand__word">MLOX</span>
+    </a>
 
-      <div class="hidden md:flex items-center flex-wrap gap-2 justify-end">
-        {navItems.map((item) => (
+    <ul class="nav-links">
+      {navItems.map((item) => (
+        <li>
           <a
             href={item.href}
-            class="font-bold text-sm px-3 py-1 border border-black bg-paper-bright hover:bg-black hover:text-white transition-colors"
             target={item.external ? '_blank' : undefined}
             rel={item.external ? 'noopener noreferrer' : undefined}
-          >
-            {item.name}
-          </a>
-        ))}
-      </div>
-
-      <button
-        id="mobile-menu-button"
-        class="md:hidden p-2 border border-black bg-paper-bright hover:bg-black hover:text-white transition-colors"
-        aria-label="Toggle menu"
-        aria-expanded="false"
-        aria-controls="mobile-menu"
-      >
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="square" stroke-linejoin="miter" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"></path>
-        </svg>
-      </button>
-    </div>
-
-    <div id="mobile-menu" class="hidden md:hidden pt-4 pb-2 space-y-2">
-      {navItems.map((item) => (
-        <a
-          href={item.href}
-          class="block px-4 py-2 font-bold border border-black bg-paper-bright hover:bg-black hover:text-white transition-colors"
-          target={item.external ? '_blank' : undefined}
-          rel={item.external ? 'noopener noreferrer' : undefined}
-        >
-          {item.name}
-        </a>
+          >{item.name}</a>
+        </li>
       ))}
-    </div>
+    </ul>
+
+    <a class="gh" href="https://github.com/BusySloths/mlox" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      <span>GitHub</span>
+    </a>
+
+    <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-nav">
+      <span></span><span></span>
+    </button>
   </nav>
+
+  <div class="mobile-nav" id="mobile-nav" hidden>
+    {navItems.map((item) => (
+      <a
+        href={item.href}
+        target={item.external ? '_blank' : undefined}
+        rel={item.external ? 'noopener noreferrer' : undefined}
+      >{item.name}</a>
+    ))}
+    <a href="https://github.com/BusySloths/mlox" target="_blank" rel="noopener noreferrer">GitHub</a>
+  </div>
 </header>
 
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    background: rgba(7, 17, 12, 0.72);
+    border-bottom: 1px solid var(--line);
+  }
+  .site-nav {
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .brand img { width: 48px; height: auto; }
+  .brand__word {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: var(--cream);
+  }
+  .nav-links {
+    display: flex;
+    gap: 6px;
+    list-style: none;
+    margin: 0 0 0 auto;
+    padding: 0;
+  }
+  .nav-links a {
+    display: block;
+    padding: 8px 12px;
+    border-radius: 999px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 15px;
+    transition: color 0.2s, background 0.2s;
+  }
+  .nav-links a:hover { color: var(--cream); background: rgba(243, 233, 210, 0.06); }
+  .gh {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    color: var(--lime);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.2s, color 0.2s;
+  }
+  .gh:hover { background: var(--lime); color: var(--bg-deep); }
+  .menu-btn {
+    display: none;
+    margin-left: auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    cursor: pointer;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .menu-btn span { width: 18px; height: 2px; background: var(--cream); transition: transform 0.25s var(--ease); }
+  .menu-btn[aria-expanded="true"] span:first-child { transform: translateY(4px) rotate(45deg); }
+  .menu-btn[aria-expanded="true"] span:last-child { transform: translateY(-4px) rotate(-45deg); }
+  .mobile-nav {
+    display: grid;
+    gap: 4px;
+    padding: 8px 20px 18px;
+    border-top: 1px solid var(--line);
+  }
+  .mobile-nav[hidden] { display: none; }
+  .mobile-nav a {
+    padding: 12px 6px;
+    color: var(--cream);
+    text-decoration: none;
+    border-bottom: 1px solid var(--line);
+  }
+  @media (max-width: 900px) {
+    .nav-links, .gh { display: none; }
+    .menu-btn { display: inline-flex; }
+  }
+</style>
+
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const menuButton = document.getElementById('mobile-menu-button') as HTMLButtonElement | null;
-    const mobileMenu = document.getElementById('mobile-menu');
-
-    menuButton?.addEventListener('click', () => {
-      const isNowOpen = mobileMenu?.classList.toggle('hidden') === false;
-      menuButton.setAttribute('aria-expanded', String(isNowOpen));
-    });
-
-    const closeMobileMenu = () => {
-      mobileMenu?.classList.add('hidden');
-      menuButton?.setAttribute('aria-expanded', 'false');
-    };
-
-    // Smooth-scroll hash links and close menu
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (this: HTMLAnchorElement, e) {
-        e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href') || '');
-        if (target) {
-          const header = document.querySelector('header');
-          const banner = document.getElementById('news-banner');
-          const headerHeight = header?.getBoundingClientRect().height ?? 72;
-          const bannerHeight = banner?.classList.contains('hidden') ? 0 : (banner?.getBoundingClientRect().height ?? 0);
-          const headerOffset = headerHeight + bannerHeight + 8;
-
-          const elementPosition = target.getBoundingClientRect().top;
-          const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-          window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
-          closeMobileMenu();
-        }
-      });
-    });
-
-    // Close mobile menu when clicking external/non-hash links inside it
-    mobileMenu?.querySelectorAll('a:not([href^="#"])').forEach(link => {
-      link.addEventListener('click', closeMobileMenu);
-    });
+  const btn = document.getElementById('menu-btn');
+  const nav = document.getElementById('mobile-nav');
+  const close = () => {
+    if (!nav || !btn) return;
+    nav.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  btn?.addEventListener('click', () => {
+    if (!nav) return;
+    nav.hidden = !nav.hidden;
+    btn.setAttribute('aria-expanded', String(!nav.hidden));
   });
+  nav?.querySelectorAll('a').forEach((a) => a.addEventListener('click', close));
 </script>

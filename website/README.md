@@ -22,9 +22,16 @@ website/
 To update the landing page copy, edit the Markdown files in `src/content/pages/`.
 Each file has frontmatter (metadata between `---`) and content below:
 
-- **hero.md** - Main hero section with tagline and CTA buttons
-- **features.md** - Features showcase section
-- **getting-started.md** - Quick start guide section
+- **hero.md** - Hero headline, install command, CTAs and the stats strip
+- **gallery.md** - "Explore the TUI" tabs: one entry per screenshot (`image` is the basename in `public/`, served as `.webp` with a `.png` fallback)
+- **features.md** - Feature panels and the service marquee (`services`)
+- **how-it-works.md** - The three illustrated steps
+- **why-mlox.md** - "Why MLOX" cards; the body of `hero.md` is shown as their intro
+- **getting-started.md** - Install steps with copyable commands
+
+Screenshots and the hero video (`public/mlox_tui_*`) come from the content
+pipeline (`content/registry.yaml`, piece `website-tui`): they are recorded from a
+real project and redacted before they land here. See `docs/CONTENT_PIPELINE.md`.
 
 ## 🧞 Commands
 

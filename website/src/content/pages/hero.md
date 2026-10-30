@@ -1,17 +1,26 @@
 ---
-title: "Deploy and manage ML/AI infrastructure on your own servers."
+title: "Your ML stack. Your servers."
+eyebrow: "Open-source MLOps · MIT licensed"
 subtitle: "Slothfully simple."
-description: "Servers, Docker, Kubernetes, databases, workflows, model serving, data services, tracking, and monitoring, with your product at the center. Managed in one place and connected by design."
-cta_primary: "Get Started"
-cta_primary_link: "https://github.com/BusySloths/mlox"
-cta_secondary: "View Documentation"
-cta_secondary_link: "https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md"
+description: "MLOX deploys and runs MLflow, Airflow, LiteLLM, databases, model serving and monitoring on servers you own, and keeps it all connected around your product, in one encrypted project file you drive from the terminal."
+cta_primary: "Get started"
+cta_primary_link: "#get-started"
+cta_secondary: "Star on GitHub"
+cta_secondary_link: "https://github.com/BusySloths/mlox"
+install: "uv tool install 'busysloths-mlox[tui]'"
+stats:
+  - value: "20+"
+    label: "service templates, ready to deploy"
+  - value: "3"
+    label: "backends: native, Docker, Kubernetes"
+  - value: "1"
+    label: "encrypted, portable project file"
+  - value: "0"
+    label: "web consoles to babysit"
 ---
 
 Keep your product at the center.
 
 MLOX manages servers, sets up Docker and Kubernetes clusters, deploys open-source services, stores project state and secrets in an encrypted project file, and wires dependencies across databases, workflows, experiment tracking, model serving, data services, and monitoring.
-
-Deploy open-source components through the TUI or CLI. MLOX keeps the stack inspectable, keeps each project in one portable encrypted file, and connects service dependencies across your own servers and external integrations.
 
 Built for solopreneurs, startups, and small teams that want to build their product instead of assembling infrastructure.

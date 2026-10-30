@@ -1,55 +1,69 @@
 ---
-// News banner for important announcements
+// Slim, dismissible announcement above the header.
 ---
 
-<div
-  id="news-banner"
-  class="fixed top-[72px] left-0 right-0 z-40 bg-accent-cyan"
-  role="region"
-  aria-label="News announcement"
-  aria-live="polite"
->
-  <div class="container mx-auto px-6 py-2">
-    <div class="flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3 flex-1 justify-center text-center">
-        <span aria-hidden="true" class="text-xl">⚡</span>
-        <p class="text-paper-bright font-bold text-xs md:text-sm uppercase tracking-wide">
-          <span class="font-black">News:</span> Our paper "MLOX: Open-Source MLOps for the Rest of Us" has been accepted by
-          <a href="https://conf.researchr.org/home/cain-2026" target="_blank" rel="noopener noreferrer" class="underline decoration-2 hover:bg-black hover:text-white px-1">
-            CAIN 2026
-          </a>
-          <span class="hidden sm:inline"> — the top AI Engineering conference.</span>
-        </p>
-        <span aria-hidden="true" class="text-xl">⚡</span>
-      </div>
-      <button
-        id="close-banner"
-        class="ml-2 text-paper-bright hover:bg-black hover:text-white transition-colors p-1 border border-black"
-        aria-label="Close banner"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="square" stroke-linejoin="miter" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-      </button>
-    </div>
-  </div>
+<div class="news" id="news-banner" role="region" aria-label="Announcement">
+  <p class="wrap news__text">
+    <span class="news__tag">News</span>
+    Our paper <em>“MLOX: Open-Source MLOps for the Rest of Us”</em> was accepted at
+    <a href="https://conf.researchr.org/home/cain-2026" target="_blank" rel="noopener noreferrer">CAIN 2026</a>.
+  </p>
+  <button class="news__close" id="close-banner" aria-label="Dismiss announcement">×</button>
 </div>
 
+<style>
+  .news {
+    position: relative;
+    background: linear-gradient(90deg, rgba(242, 181, 65, 0.16), rgba(197, 240, 106, 0.12));
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+    color: var(--cream);
+  }
+  .news[hidden] { display: none; }
+  .news__text {
+    margin: 0 auto;
+    padding: 9px 44px 9px 0;
+    text-align: center;
+  }
+  .news__tag {
+    display: inline-block;
+    margin-right: 10px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--amber);
+    color: var(--bg-deep);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    vertical-align: 1px;
+  }
+  .news a { color: var(--amber); text-underline-offset: 3px; }
+  .news__close {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+  }
+  .news__close:hover { color: var(--cream); background: rgba(243, 233, 210, 0.08); }
+</style>
+
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const banner = document.getElementById('news-banner');
-    const closeButton = document.getElementById('close-banner');
-
-    const bannerClosed = localStorage.getItem('news-banner-closed');
-    if (bannerClosed === 'true') {
-      banner?.classList.add('hidden');
-      document.querySelector('main')?.classList.remove('pt-16');
-    }
-
-    closeButton?.addEventListener('click', () => {
-      banner?.classList.add('hidden');
-      localStorage.setItem('news-banner-closed', 'true');
-      document.querySelector('main')?.classList.remove('pt-16');
-    });
+  const banner = document.getElementById('news-banner');
+  try {
+    if (localStorage.getItem('news-banner-closed') === 'true' && banner) banner.hidden = true;
+  } catch { /* storage unavailable: keep the banner */ }
+  document.getElementById('close-banner')?.addEventListener('click', () => {
+    if (banner) banner.hidden = true;
+    try { localStorage.setItem('news-banner-closed', 'true'); } catch { /* ignore */ }
   });
 </script>

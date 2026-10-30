@@ -1,0 +1,229 @@
+---
+interface Shot {
+  id: string;
+  label: string;
+  title: string;
+  description: string;
+  image: string;
+  alt: string;
+}
+interface Props { shots: Shot[] }
+
+const { shots } = Astro.props;
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<div class="tui" data-gallery>
+  <div class="tui__chrome" aria-hidden="true">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <span class="tui__title">mlox — my_infra</span>
+  </div>
+
+  <div class="tui__tabs" role="tablist" aria-label="MLOX TUI screens">
+    {shots.map((shot, i) => (
+      <button
+        role="tab"
+        id={`tab-${shot.id}`}
+        aria-controls={`panel-${shot.id}`}
+        aria-selected={i === 0 ? 'true' : 'false'}
+        tabindex={i === 0 ? 0 : -1}
+        class="tui__tab"
+      >{shot.label}</button>
+    ))}
+  </div>
+
+  <div class="tui__body">
+    {shots.map((shot, i) => (
+      <figure
+        class="tui__panel"
+        role="tabpanel"
+        id={`panel-${shot.id}`}
+        aria-labelledby={`tab-${shot.id}`}
+        data-active={i === 0 ? 'true' : 'false'}
+        hidden={i !== 0}
+      >
+        <div class="tui__shot">
+          <picture>
+            <source srcset={`${base}${shot.image}.webp`} type="image/webp" />
+            <img
+              src={`${base}${shot.image}.png`}
+              alt={shot.alt}
+              width="1920"
+              height="1163"
+              loading={i === 0 ? 'eager' : 'lazy'}
+              decoding="async"
+            />
+          </picture>
+        </div>
+        <figcaption class="tui__caption">
+          <span class="tui__count mono">{pad(i + 1)} / {pad(shots.length)}</span>
+          <strong>{shot.title}</strong>
+          <span>{shot.description}</span>
+        </figcaption>
+      </figure>
+    ))}
+  </div>
+
+  <div class="tui__footer mono" aria-hidden="true">
+    <span><b>←</b> <b>→</b> switch tab</span>
+    <span><b>q</b> quit <i>(just kidding)</i></span>
+    <span class="tui__palette"><b>^p</b> palette</span>
+  </div>
+</div>
+
+<style>
+  .tui {
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid rgba(197, 240, 106, 0.28);
+    background: #0d1d15;
+    box-shadow:
+      0 50px 120px -40px rgba(0, 0, 0, 0.85),
+      0 0 0 1px rgba(0, 0, 0, 0.4),
+      0 0 80px -30px rgba(197, 240, 106, 0.25);
+  }
+  .tui__chrome {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 16px;
+    background: #141c18;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #3a423d; }
+  .tui__title {
+    margin: 0 auto;
+    transform: translateX(-30px);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: #7c867f;
+  }
+  .tui__tabs {
+    display: flex;
+    gap: 2px;
+    padding: 10px 14px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid rgba(197, 240, 106, 0.16);
+  }
+  .tui__tabs::-webkit-scrollbar { display: none; }
+  .tui__tab {
+    flex: none;
+    position: relative;
+    padding: 8px 12px 10px;
+    border: 0;
+    background: none;
+    color: #8fa08f;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .tui__tab:hover { color: var(--cream); }
+  .tui__tab[aria-selected="true"] { color: #ffffff; }
+  /* active tab: the TUI's blue highlight plus a lime underline */
+  .tui__tab[aria-selected="true"]::before {
+    content: "";
+    position: absolute;
+    inset: 4px 2px 8px;
+    border-radius: 4px;
+    background: #4c8de0;
+    z-index: -1;
+  }
+  .tui__tab[aria-selected="true"]::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: -1px;
+    height: 2px;
+    background: var(--lime);
+  }
+  .tui__tab { z-index: 0; }
+
+  .tui__body { position: relative; }
+  .tui__panel { margin: 0; }
+  .tui__panel[hidden] { display: none; }
+  .tui__panel[data-active="true"] .tui__shot img { animation: fadeShot 0.55s var(--ease); }
+  @keyframes fadeShot {
+    from { opacity: 0; transform: scale(1.012); filter: blur(3px); }
+    to { opacity: 1; transform: none; filter: none; }
+  }
+  .tui__shot { background: #0d1d15; }
+  .tui__shot img { width: 100%; height: auto; }
+  .tui__caption {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "count title" "count desc";
+    column-gap: 22px;
+    row-gap: 4px;
+    padding: 20px 24px 22px;
+    border-top: 1px solid rgba(197, 240, 106, 0.16);
+    background: linear-gradient(180deg, rgba(16, 36, 26, 0.95), rgba(11, 25, 18, 0.95));
+  }
+  .tui__count { grid-area: count; color: var(--amber); font-size: 13px; padding-top: 4px; }
+  .tui__caption strong { grid-area: title; color: var(--cream); font-size: 20px; font-weight: 680; letter-spacing: -0.01em; }
+  .tui__caption span:last-child { grid-area: desc; color: var(--muted); max-width: 78ch; }
+  .tui__footer {
+    display: flex;
+    gap: 22px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #9fb0a0;
+    background: #0a1510;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+  }
+  .tui__footer b { color: var(--amber); font-weight: 700; }
+  .tui__footer i { color: #63746a; font-style: normal; }
+  .tui__palette { margin-left: auto; }
+  @media (max-width: 640px) {
+    .tui__caption { grid-template-columns: 1fr; grid-template-areas: "count" "title" "desc"; }
+    .tui__footer span:nth-child(2) { display: none; }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-gallery]').forEach((root) => {
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+
+    const select = (index: number, focus = false) => {
+      const i = (index + tabs.length) % tabs.length;
+      tabs.forEach((tab, j) => {
+        const on = j === i;
+        tab.setAttribute('aria-selected', String(on));
+        tab.tabIndex = on ? 0 : -1;
+        panels[j].hidden = !on;
+        panels[j].dataset.active = String(on);
+      });
+      tabs[i].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      if (focus) tabs[i].focus();
+    };
+
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(i));
+      tab.addEventListener('keydown', (e) => {
+        const current = tabs.indexOf(tab);
+        if (e.key === 'ArrowRight') { e.preventDefault(); select(current + 1, true); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); select(current - 1, true); }
+        if (e.key === 'Home') { e.preventDefault(); select(0, true); }
+        if (e.key === 'End') { e.preventDefault(); select(tabs.length - 1, true); }
+      });
+    });
+
+    // like the TUI: arrow keys work while the gallery is on screen
+    let onScreen = false;
+    new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting && entry.intersectionRatio > 0.5; },
+      { threshold: [0, 0.5, 1] }).observe(root);
+    document.addEventListener('keydown', (e) => {
+      const target = e.target as HTMLElement;
+      if (!onScreen || target.closest('[role="tablist"], input, textarea, [contenteditable]')) return;
+      const current = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+      if (e.key === 'ArrowRight') { e.preventDefault(); select(current + 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); select(current - 1); }
+    });
+  });
+</script>
