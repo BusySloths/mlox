@@ -5,7 +5,7 @@ features:
   - title: "Infrastructure"
     icon: "[ ]"
     color: "lime"
-    description: "Bring any Ubuntu server, then let MLOX handle the rest."
+    description: "Bring your own server, for example an Ubuntu VPS, then let MLOX handle the setup."
     items:
       - "Add, tag and secure servers over SSH"
       - "Run services natively, with Docker, or on Kubernetes (k3s)"

@@ -4,7 +4,7 @@ eyebrow: "How it works"
 description: "Three calm steps. No YAML archaeology, no click-ops."
 steps:
   - title: "Add a server"
-    description: "Point MLOX at any Ubuntu machine you can reach over SSH, then pick a backend: native, Docker or Kubernetes. MLOX sets it up, locks it down and remembers it in your encrypted project."
+    description: "Connect a server over SSH, for example an Ubuntu VPS, then pick a backend: native, Docker or Kubernetes. MLOX sets it up, locks it down and remembers it in your encrypted project."
     image: "mlox_tui_overview"
     alt: "The MLOX overview listing bundles, servers and their running state."
   - title: "Deploy from the catalog"

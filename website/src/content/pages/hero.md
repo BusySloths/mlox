@@ -16,7 +16,7 @@ stats:
   - value: "1"
     label: "encrypted, portable project file"
   - value: "0"
-    label: "web consoles to babysit"
+    label: "managed platform subscriptions required"
 ---
 
 Keep your product at the center.
