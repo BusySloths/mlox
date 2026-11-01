@@ -1,0 +1,27 @@
+services:
+  app:
+    image: etherpad/etherpad:2.6.1
+    restart: unless-stopped
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: db
+      DB_PORT: '5432'
+      DB_NAME: etherpad
+      DB_USER: etherpad
+      DB_PASS: ${APP_PASSWORD}
+    depends_on:
+      - db
+    volumes:
+      - etherpad-data:/opt/etherpad-lite/var
+  db:
+    image: postgres:15.13-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: etherpad
+      POSTGRES_USER: etherpad
+      POSTGRES_PASSWORD: ${APP_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+volumes:
+  etherpad-data:
+  postgres-data:

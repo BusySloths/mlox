@@ -1,0 +1,15 @@
+services:
+  app:
+    image: roundcube/roundcubemail:1.6.11-apache
+    restart: unless-stopped
+    environment:
+      ROUNDCUBEMAIL_DB_TYPE: sqlite
+      ROUNDCUBEMAIL_DEFAULT_HOST: ${IMAP_SERVER}
+      ROUNDCUBEMAIL_DEFAULT_PORT: ${IMAP_PORT}
+      ROUNDCUBEMAIL_SMTP_SERVER: ${SMTP_SERVER}
+      ROUNDCUBEMAIL_SMTP_PORT: ${SMTP_PORT}
+      ROUNDCUBEMAIL_DES_KEY: ${ROUNDCUBE_KEY}
+    volumes:
+      - roundcube-data:/var/roundcube/db
+volumes:
+  roundcube-data:

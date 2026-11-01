@@ -1,0 +1,43 @@
+build:
+  class_name: mlox.services.catalog_apps.docker.CatalogAppDockerService
+  params:
+    acme_email: ${APP_ACME_EMAIL}
+    app_port: 80
+    hostname: ${APP_HOSTNAME}
+    name: roundcube-1.6.11
+    password: ${MLOX_AUTO_PW}
+    port: ${MLOX_AUTO_PORT_WEB_UI}
+    target_path: ${MLOX_USER_HOME}/mlox-roundcube
+    template: catalog_apps/roundcube-compose.yaml
+    tls_mode: ${APP_TLS_MODE}
+    tls_secret_manager_uuid: ${APP_TLS_SECRET_MANAGER_UUID}
+    tls_secret_name: ${APP_TLS_SECRET_NAME}
+    imap_server: ${APP_IMAP_SERVER}
+    smtp_server: ${APP_SMTP_SERVER}
+    imap_port: ${APP_IMAP_PORT}
+    smtp_port: ${APP_SMTP_PORT}
+capabilities:
+  backend:
+  - docker
+  service:
+  - web_ui
+description: Webmail client for an existing IMAP and SMTP server. Runs behind Traefik.
+description_short: Webmail client for an existing IMAP and SMTP server.
+groups:
+  application: null
+  backend:
+    docker: null
+  service: null
+id: catalog-app-roundcube-1.6.11-docker
+links:
+  project: https://github.com/roundcube/roundcubemail
+  documentation: https://github.com/roundcube/roundcubemail
+maintainer: Busy Sloths
+name: Roundcube
+ports:
+  web_ui: 8080
+requirements:
+  cpus: 1.0
+  disk_gb: 2.0
+  ram_gb: 1.0
+version: 1.6.11

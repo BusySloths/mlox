@@ -4,7 +4,7 @@
 
 The authoritative, exhaustive list of services and servers bundled with MLOX. Generated from the YAML plugin configs; the single source of truth is those configs, not this page.
 
-**33 service configs, 9 server configs.**
+**37 service configs, 9 server configs.**
 
 ---
 
@@ -24,6 +24,7 @@ The authoritative, exhaustive list of services and servers bundled with MLOX. Ge
 | **Apache Kafka** | 4.1.0 | docker | Apache Kafka is a distributed event streaming platform for high-performance data pipelines. |
 | **Bitnami Kafka** | 3.7.0 | docker | Apache Kafka is a distributed event streaming platform for high-performance data pipelines. |
 | **Developers Terminal Dream** | 0.1-beta | docker, k3s_agent, kubernetes, kubernetes_agent, native | Install a terminal-first developer workstation on MLOX backends. |
+| **Etherpad** | 2.6.1 | docker | Collaborative real-time document editing. |
 | **Feast Feature Store** | 0.54.0 | docker | Feast is an open-source feature store for managing and serving machine learning features. |
 | **GCP BigQuery** | 0.1.0 | connector | GCP BigQuery is a fully managed, serverless data warehouse that enables scalable analysis over petabytes of data. |
 | **GCP Secret Manager** | 0.1.0 | connector | GCP Secret Manager is a secure and scalable service for managing secrets in Google Cloud Platform. |
@@ -36,6 +37,7 @@ The authoritative, exhaustive list of services and servers bundled with MLOX. Ge
 | **Kubeflow** | 1.10.1 | kubernetes | A Kubernetes-native platform for machine learning workflows. |
 | **Kubernetes Dashboard** | 7.13.0 | kubernetes | Kubernetes Dashboard is a web-based UI for managing Kubernetes clusters. |
 | **LiteLLM + Ollama** | 1.77.7 (stable) | docker | LiteLLM is an open-source library that simplifies the integration of large language models (LLMs) into applications. |
+| **Memos** | 0.31.0 | docker | Self-hosted notes and collaborative spaces. |
 | **Milvus** | 2.5 | docker | Milvus is an open-source vector database designed for scalable similarity search. |
 | **MinIO** | RELEASE.2025-07-23T15-54-02Z-cpuv1 | docker | MinIO is a high-performance, S3 compatible object store. |
 | **MLFlow** | 3.8.1 | docker | MLFlow is an open-source platform for managing the machine learning lifecycle, including experimentation, reproducibility, and deployment. |
@@ -51,7 +53,9 @@ The authoritative, exhaustive list of services and servers bundled with MLOX. Ge
 | **Private Registry** | 3 | docker | Secure, private Docker distribution registry with TLS and htpasswd auth. |
 | **Redis** | 8-bookworm | docker | Redis is an open-source, in-memory data structure store. |
 | **Repository Docker Deploy** | 0.1-beta | docker | Deploy a docker compose file from an existing repository service. |
+| **Roundcube** | 1.6.11 | docker | Webmail client for an existing IMAP and SMTP server. |
 | **TinySecretManager (TSM)** | 0.1-beta | docker, kubernetes, native | TinySecretManager is a lightweight, file-based secret management service. |
+| **Wiki.js** | 2.5.306 | docker | A collaborative team wiki and knowledge base. |
 
 ---
 

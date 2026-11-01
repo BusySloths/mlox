@@ -1,0 +1,8 @@
+services:
+  app:
+    image: ghcr.io/usememos/memos:0.31.0
+    restart: unless-stopped
+    volumes:
+      - memos-data:/var/opt/memos
+volumes:
+  memos-data:

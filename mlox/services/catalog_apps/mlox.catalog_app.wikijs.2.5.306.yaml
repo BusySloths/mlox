@@ -1,0 +1,39 @@
+build:
+  class_name: mlox.services.catalog_apps.docker.CatalogAppDockerService
+  params:
+    acme_email: ${APP_ACME_EMAIL}
+    app_port: 3000
+    hostname: ${APP_HOSTNAME}
+    name: wikijs-2.5.306
+    password: ${MLOX_AUTO_PW}
+    port: ${MLOX_AUTO_PORT_WEB_UI}
+    target_path: ${MLOX_USER_HOME}/mlox-wikijs
+    template: catalog_apps/wikijs-compose.yaml
+    tls_mode: ${APP_TLS_MODE}
+    tls_secret_manager_uuid: ${APP_TLS_SECRET_MANAGER_UUID}
+    tls_secret_name: ${APP_TLS_SECRET_NAME}
+capabilities:
+  backend:
+  - docker
+  service:
+  - web_ui
+description: A collaborative team wiki and knowledge base. Runs behind Traefik.
+description_short: A collaborative team wiki and knowledge base.
+groups:
+  application: null
+  backend:
+    docker: null
+  service: null
+id: catalog-app-wikijs-2.5.306-docker
+links:
+  project: https://github.com/requarks/wiki
+  documentation: https://github.com/requarks/wiki
+maintainer: Busy Sloths
+name: Wiki.js
+ports:
+  web_ui: 3000
+requirements:
+  cpus: 1.0
+  disk_gb: 2.0
+  ram_gb: 1.0
+version: 2.5.306

@@ -1,0 +1,40 @@
+id: catalog-app-memos-0.31.0-docker
+name: Memos
+version: 0.31.0
+maintainer: Busy Sloths
+description_short: Self-hosted notes and collaborative spaces.
+description: Self-hosted notes and collaborative spaces. Runs as an isolated Docker
+  Compose application behind Traefik.
+links:
+  project: https://github.com/usememos/memos
+  documentation: https://github.com/usememos/memos
+requirements:
+  cpus: 1.0
+  ram_gb: 1.0
+  disk_gb: 2.0
+groups:
+  service: null
+  application: null
+  backend:
+    docker: null
+capabilities:
+  service:
+  - web_ui
+  backend:
+  - docker
+ports:
+  web_ui: 5230
+build:
+  class_name: mlox.services.catalog_apps.docker.CatalogAppDockerService
+  params:
+    name: memos-0.31.0
+    template: catalog_apps/memos-compose.yaml
+    target_path: ${MLOX_USER_HOME}/mlox-memos
+    port: ${MLOX_AUTO_PORT_WEB_UI}
+    app_port: 5230
+    password: ${MLOX_AUTO_PW}
+    tls_mode: ${APP_TLS_MODE}
+    tls_secret_manager_uuid: ${APP_TLS_SECRET_MANAGER_UUID}
+    tls_secret_name: ${APP_TLS_SECRET_NAME}
+    hostname: ${APP_HOSTNAME}
+    acme_email: ${APP_ACME_EMAIL}

@@ -19,6 +19,38 @@ def no_params(infra, bundle, config=None) -> TemplateFormSpec:
     )
 
 
+def catalog_app(infra, bundle, config=None) -> TemplateFormSpec:
+    is_roundcube = str(getattr(config, "id", "")).startswith("catalog-app-roundcube-")
+    return TemplateFormSpec(
+        title=f"Add {getattr(config, 'name', 'Application')}",
+        description="Choose TLS. Managed TLS and Cloudflare ACME require an existing secret-manager service and secret.",
+        fields=[
+            TemplateFieldSpec("tls_mode", "TLS mode", kind="select", default="self-signed", options=[("Self-signed", "self-signed"), ("Managed certificate", "managed"), ("Let's Encrypt with Cloudflare DNS", "letsencrypt-cloudflare")]),
+            TemplateFieldSpec("tls_secret_manager_uuid", "TLS secret-manager UUID", required=False),
+            TemplateFieldSpec("tls_secret_name", "TLS secret name", required=False),
+            TemplateFieldSpec("hostname", "Public hostname (Let's Encrypt)", required=False),
+            TemplateFieldSpec("acme_email", "Let's Encrypt email", required=False),
+        ] + ([
+            TemplateFieldSpec("imap_server", "IMAP server", placeholder="ssl://mail.example.org"),
+            TemplateFieldSpec("imap_port", "IMAP port", kind="integer", default="143", min_value=1, max_value=65535),
+            TemplateFieldSpec("smtp_server", "SMTP server", placeholder="tls://mail.example.org"),
+            TemplateFieldSpec("smtp_port", "SMTP port", kind="integer", default="587", min_value=1, max_value=65535),
+        ] if is_roundcube else []),
+        submit_label="Add Service",
+        materialize=lambda values, infra: {
+            "${APP_TLS_MODE}": values.get("tls_mode", "self-signed"),
+            "${APP_TLS_SECRET_MANAGER_UUID}": values.get("tls_secret_manager_uuid", ""),
+            "${APP_TLS_SECRET_NAME}": values.get("tls_secret_name", ""),
+            "${APP_HOSTNAME}": values.get("hostname", ""),
+            "${APP_ACME_EMAIL}": values.get("acme_email", ""),
+            "${APP_IMAP_SERVER}": values.get("imap_server", ""),
+            "${APP_SMTP_SERVER}": values.get("smtp_server", ""),
+            "${APP_IMAP_PORT}": values.get("imap_port", "143"),
+            "${APP_SMTP_PORT}": values.get("smtp_port", "587"),
+        },
+    )
+
+
 def github_repo(infra, bundle, config=None) -> TemplateFormSpec:
     return TemplateFormSpec(
         title="Add GitHub Repository",
@@ -533,6 +565,10 @@ def _csv(value: str) -> str:
 
 
 SETUP_HANDLERS = {
+    "catalog-app-memos-0.31.0-docker": catalog_app,
+    "catalog-app-etherpad-2.6.1-docker": catalog_app,
+    "catalog-app-wikijs-2.5.306-docker": catalog_app,
+    "catalog-app-roundcube-1.6.11-docker": catalog_app,
     "airflow-2.9.2-docker": no_params,
     "airflow-3.1.3-docker": no_params,
     "dev-terminal-0.1-beta": no_params,
