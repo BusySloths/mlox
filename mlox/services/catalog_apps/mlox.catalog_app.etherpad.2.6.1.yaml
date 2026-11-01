@@ -1,13 +1,17 @@
 id: catalog-app-etherpad-2.6.1-docker
-name: Etherpad
+name: 'Application: Etherpad'
 version: 2.6.1
 maintainer: Busy Sloths
-description_short: Collaborative real-time document editing.
-description: Collaborative real-time document editing. Runs as an isolated Docker
-  Compose application behind Traefik.
+description_short: Write and edit shared documents together in real time in a web
+  browser.
+description: Etherpad provides collaborative pads where multiple people can write
+  at once, see each other’s changes and review document history. This deployment includes
+  a PostgreSQL database.
 links:
   project: https://github.com/ether/etherpad
-  documentation: https://github.com/ether/etherpad
+  documentation: https://github.com/ether/etherpad#readme
+  changelog: https://github.com/ether/etherpad/releases
+  security: https://github.com/ether/etherpad/security
 requirements:
   cpus: 1.0
   ram_gb: 2.0
@@ -20,6 +24,7 @@ groups:
 capabilities:
   service:
   - web_ui
+  - health
   backend:
   - docker
 ports:
@@ -27,7 +32,7 @@ ports:
 build:
   class_name: mlox.services.catalog_apps.docker.CatalogAppDockerService
   params:
-    name: etherpad-2.6.1
+    name: app-etherpad-2.6.1
     template: catalog_apps/etherpad-compose.yaml
     target_path: ${MLOX_USER_HOME}/mlox-etherpad
     port: ${MLOX_AUTO_PORT_WEB_UI}
@@ -37,4 +42,3 @@ build:
     tls_secret_manager_uuid: ${APP_TLS_SECRET_MANAGER_UUID}
     tls_secret_name: ${APP_TLS_SECRET_NAME}
     hostname: ${APP_HOSTNAME}
-    acme_email: ${APP_ACME_EMAIL}

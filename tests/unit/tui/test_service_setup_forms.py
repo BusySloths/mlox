@@ -179,6 +179,27 @@ def test_managed_tls_gateway_selects_secret_manager_reference() -> None:
     assert params["${TLS_SECRET_NAME}"] == "gateway-tls"
 
 
+def test_catalog_app_selects_managed_tls_secret():
+    class SecretManager:
+        def list_secrets(self, keys_only=False):
+            return {"app-certificate": None}
+
+    class ManagerService(AbstractSecretManagerService):
+        uuid = "manager-1"
+        name = "OpenBao"
+
+        def get_secret_manager(self, infra):
+            return SecretManager()
+
+    infra = SimpleNamespace(services=lambda: [ManagerService()])
+    spec = service_setup.catalog_app(infra, None, SimpleNamespace(id="catalog-app-memos-0.31.0-docker", name="Memos"))
+    secret = next(field for field in spec.fields if field.name == "tls_secret_ref")
+    assert secret.options[0][0] == "OpenBao / app-certificate"
+    params = spec.params({"tls_mode": "managed", "tls_secret_ref": secret.options[0][1]}, infra)
+    assert params["${APP_TLS_SECRET_MANAGER_UUID}"] == "manager-1"
+    assert params["${APP_TLS_SECRET_NAME}"] == "app-certificate"
+
+
 def test_gcp_setup_spec_exposes_missing_secret_manager_dependency() -> None:
     infra = SimpleNamespace(
         filter_by_group=lambda group: [],

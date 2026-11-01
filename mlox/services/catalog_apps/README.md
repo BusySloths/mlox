@@ -25,22 +25,24 @@ is `self-signed`: Traefik presents its default certificate and browsers warn.
   Gateway. Mlox checks the hostname, validity period, and certificate/key match.
   A Cloudflare origin certificate may be used, but browsers do not trust it
   directly: traffic must pass through Cloudflare using appropriate origin TLS.
-* `letsencrypt-cloudflare`: provide those same manager/name parameters, plus
-  `APP_HOSTNAME` and `APP_ACME_EMAIL`. The secret must contain
-  `cloudflare.api_token`, a Cloudflare DNS API token with permissions to manage
-  the domain's challenge records. Traefik obtains and renews a Let's Encrypt
-  certificate using DNS-01; this does not require port 80. DNS, the token's
-  scope, internet access, firewall rules and public reachability remain the
-  operator's responsibility. The allocated HTTPS port is in the displayed URL;
-  Cloudflare's proxy supports only certain external ports.
+* `letsencrypt`: provide `APP_HOSTNAME`, a public DNS name pointing to this
+  server. Traefik uses HTTP-01 to obtain and renew a certificate, without an
+  email address or DNS-provider credentials. Public TCP port 80 must reach this
+  deployment. Since each app currently has its own proxy, only one app using
+  this mode can bind port 80 on a server at a time. Existing web servers or
+  other services using port 80 also prevent startup. The application remains
+  available on its allocated HTTPS port, as shown in its URL. DNS changes and
+  certificate issuance can take time; initial HTTPS may use Traefik's default
+  certificate until issuance succeeds.
 
-For both non-default modes, certificate material or the DNS token is read from
-the selected secret-manager service at setup. Only its reference is stored in
-service configuration. The target host receives a copy in a private directory
-(mode 700; individual secret files mode 600). ACME account and certificate data
-are retained in the deployment's `acme` directory for renewal. To apply a rotated
-managed certificate or DNS token, update the secret and run service setup again;
-reconcile the containers afterwards. This is not automatic secret synchronization.
+Managed certificate material is read from the selected secret-manager service
+at setup. Only its reference is stored in service configuration. The target host
+receives a copy in a private directory (mode 700; individual secret files mode
+600). ACME account and certificate data are retained in the deployment's `acme`
+directory for renewal. To apply a rotated managed certificate, update the secret
+and run service setup again. This is not automatic secret synchronization.
+Existing `letsencrypt-cloudflare` configurations remain supported for already
+installed services but are not offered for new installations.
 
 For CLI parameters, quote the literal placeholders to prevent shell expansion:
 

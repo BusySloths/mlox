@@ -1,10 +1,9 @@
 build:
   class_name: mlox.services.catalog_apps.docker.CatalogAppDockerService
   params:
-    acme_email: ${APP_ACME_EMAIL}
     app_port: 80
     hostname: ${APP_HOSTNAME}
-    name: roundcube-1.6.11
+    name: app-roundcube-1.6.11
     password: ${MLOX_AUTO_PW}
     port: ${MLOX_AUTO_PORT_WEB_UI}
     target_path: ${MLOX_USER_HOME}/mlox-roundcube
@@ -21,8 +20,12 @@ capabilities:
   - docker
   service:
   - web_ui
-description: Webmail client for an existing IMAP and SMTP server. Runs behind Traefik.
-description_short: Webmail client for an existing IMAP and SMTP server.
+  - health
+description: Roundcube is a browser-based webmail client with folders, contacts and
+  message search. It connects to an existing IMAP and SMTP provider; it does not run
+  a mail server.
+description_short: Read, search and send email in a browser using an existing IMAP
+  and SMTP server.
 groups:
   application: null
   backend:
@@ -31,9 +34,11 @@ groups:
 id: catalog-app-roundcube-1.6.11-docker
 links:
   project: https://github.com/roundcube/roundcubemail
-  documentation: https://github.com/roundcube/roundcubemail
+  documentation: https://github.com/roundcube/roundcubemail#readme
+  changelog: https://github.com/roundcube/roundcubemail/releases
+  security: https://github.com/roundcube/roundcubemail/security
 maintainer: Busy Sloths
-name: Roundcube
+name: 'Application: Roundcube'
 ports:
   web_ui: 8080
 requirements:

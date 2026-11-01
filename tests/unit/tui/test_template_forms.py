@@ -170,3 +170,36 @@ def test_valid_select_options_keeps_string_values_only() -> None:
         ("Empty", ""),
         ("Good", "manager-1"),
     ]
+
+
+async def _catalog_tls_visibility():
+    from types import SimpleNamespace
+    from mlox.tui.services.setup import catalog_app
+
+    spec = catalog_app(None, None, SimpleNamespace(id="catalog-app-memos-0.31.0-docker", name="Memos"))
+    app = DialogHost(spec)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        mode = app.screen.query_one("#template-field-tls-mode", Select)
+        host = app.screen.query_one("#template-field-hostname")
+        secret = app.screen.query_one("#template-field-tls-secret-ref")
+        assert not host.display and not secret.display
+        mode.value = "letsencrypt"
+        await pilot.pause()
+        assert host.display and not secret.display
+        await pilot.click("#confirm-template-setup")
+        await pilot.pause()
+        assert "Public hostname is required" in _render_text(app.screen.query_one("#template-setup-error", Static).render())
+        mode.value = "managed"
+        await pilot.pause()
+        assert not host.display and secret.display
+        app.screen._dismiss_with_values()
+        await pilot.pause()
+        assert "TLS secret (manager / name) is required" in _render_text(app.screen.query_one("#template-setup-error", Static).render())
+        mode.value = "self-signed"
+        await pilot.pause()
+        assert not host.display and not secret.display
+
+
+def test_catalog_tls_fields_follow_selected_mode():
+    asyncio.run(_catalog_tls_visibility())

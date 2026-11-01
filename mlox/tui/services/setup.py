@@ -23,13 +23,11 @@ def catalog_app(infra, bundle, config=None) -> TemplateFormSpec:
     is_roundcube = str(getattr(config, "id", "")).startswith("catalog-app-roundcube-")
     return TemplateFormSpec(
         title=f"Add {getattr(config, 'name', 'Application')}",
-        description="Choose TLS. Managed TLS and Cloudflare ACME require an existing secret-manager service and secret.",
+        description="Choose TLS. Let's Encrypt requires public DNS and port 80; managed TLS uses an existing certificate secret.",
         fields=[
-            TemplateFieldSpec("tls_mode", "TLS mode", kind="select", default="self-signed", options=[("Self-signed", "self-signed"), ("Managed certificate", "managed"), ("Let's Encrypt with Cloudflare DNS", "letsencrypt-cloudflare")]),
-            TemplateFieldSpec("tls_secret_manager_uuid", "TLS secret-manager UUID", required=False),
-            TemplateFieldSpec("tls_secret_name", "TLS secret name", required=False),
-            TemplateFieldSpec("hostname", "Public hostname (Let's Encrypt)", required=False),
-            TemplateFieldSpec("acme_email", "Let's Encrypt email", required=False),
+            TemplateFieldSpec("tls_mode", "TLS mode", kind="select", default="self-signed", options=[("Self-signed", "self-signed"), ("Let's Encrypt", "letsencrypt"), ("Managed certificate", "managed")]),
+            TemplateFieldSpec("hostname", "Public hostname", placeholder="test.mlox.org", visible_when=("tls_mode", "letsencrypt")),
+            TemplateFieldSpec("tls_secret_ref", "TLS secret (manager / name)", kind="select", options=_tls_secret_reference_options(infra), visible_when=("tls_mode", "managed"), help="Secret fields: tls.hostname, tls.crt and tls.key."),
         ] + ([
             TemplateFieldSpec("imap_server", "IMAP server", placeholder="ssl://mail.example.org"),
             TemplateFieldSpec("imap_port", "IMAP port", kind="integer", default="143", min_value=1, max_value=65535),
@@ -37,18 +35,29 @@ def catalog_app(infra, bundle, config=None) -> TemplateFormSpec:
             TemplateFieldSpec("smtp_port", "SMTP port", kind="integer", default="587", min_value=1, max_value=65535),
         ] if is_roundcube else []),
         submit_label="Add Service",
-        materialize=lambda values, infra: {
-            "${APP_TLS_MODE}": values.get("tls_mode", "self-signed"),
-            "${APP_TLS_SECRET_MANAGER_UUID}": values.get("tls_secret_manager_uuid", ""),
-            "${APP_TLS_SECRET_NAME}": values.get("tls_secret_name", ""),
-            "${APP_HOSTNAME}": values.get("hostname", ""),
-            "${APP_ACME_EMAIL}": values.get("acme_email", ""),
+        materialize=_materialize_catalog_app,
+    )
+
+
+def _materialize_catalog_app(values, infra):
+    mode = values.get("tls_mode", "self-signed")
+    manager_uuid, secret_name = "", ""
+    if mode == "managed":
+        manager_uuid, secret_name = json.loads(values["tls_secret_ref"])
+    if mode == "letsencrypt":
+        from mlox.services.mlflow_gateway.k3s_managed_tls import _valid_hostname
+        if not _valid_hostname(values.get("hostname", "").strip().lower().rstrip(".")):
+            raise ValueError("Let's Encrypt requires a valid public hostname.")
+    return {
+            "${APP_TLS_MODE}": mode,
+            "${APP_TLS_SECRET_MANAGER_UUID}": manager_uuid,
+            "${APP_TLS_SECRET_NAME}": secret_name,
+            "${APP_HOSTNAME}": values.get("hostname", "") if mode == "letsencrypt" else "",
             "${APP_IMAP_SERVER}": values.get("imap_server", ""),
             "${APP_SMTP_SERVER}": values.get("smtp_server", ""),
             "${APP_IMAP_PORT}": values.get("imap_port", "143"),
             "${APP_SMTP_PORT}": values.get("smtp_port", "587"),
-        },
-    )
+        }
 
 
 def github_repo(infra, bundle, config=None) -> TemplateFormSpec:

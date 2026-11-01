@@ -88,6 +88,7 @@ def test_app_https_and_persistent_data_after_stop_restart_and_removal(deployed_a
         result = _in_container(conn, service, volume_service, f"cat {shlex.quote(marker)}")
         assert result.stdout.strip() == "mlox-persisted"
         assert service.check(conn)["status"] == "running"
+        assert service.get_health(conn)["healthy"] is True
 
     # The application-level removal path must leave the named volumes intact.
     assert remove_service(infra, service.name).success

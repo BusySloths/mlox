@@ -4,11 +4,14 @@ from __future__ import annotations
 import ipaddress
 import re
 import hashlib
+import shlex
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 import yaml
 
-from mlox.service import AbstractService, AbstractWebUIService, AbstractSecretManagerService, ServiceCapability
+from mlox.execution import TaskGroup
+from mlox.service import AbstractService, AbstractWebUIService, AbstractHealthService, AbstractSecretManagerService, ServiceCapability, service_health_payload
 from mlox.services.mlflow_gateway.k3s_managed_tls import _valid_hostname, _validate_certificate
 
 
@@ -18,10 +21,10 @@ def _option(value: str, default: str = "") -> str:
 
 
 @dataclass
-class CatalogAppDockerService(AbstractService, AbstractWebUIService):
+class CatalogAppDockerService(AbstractService, AbstractWebUIService, AbstractHealthService):
     """Run one curated app and a socket-free Traefik instance per installation."""
 
-    capabilities = {ServiceCapability.WEB_UI}
+    capabilities = {ServiceCapability.WEB_UI, ServiceCapability.HEALTH}
     port: str | int
     app_port: int
     password: str = field(default="", repr=False)
@@ -65,10 +68,10 @@ class CatalogAppDockerService(AbstractService, AbstractWebUIService):
 
     def _configuration(self, conn):
         mode = self.tls_mode
-        if mode not in {"self-signed", "managed", "letsencrypt-cloudflare"}:
-            raise ValueError("TLS mode must be self-signed, managed, or letsencrypt-cloudflare.")
+        if mode not in {"self-signed", "managed", "letsencrypt", "letsencrypt-cloudflare"}:
+            raise ValueError("TLS mode must be self-signed, managed, or letsencrypt.")
         hostname = self.hostname.lower().rstrip(".")
-        secret = self._load_secret() if mode != "self-signed" else {}
+        secret = self._load_secret() if mode in {"managed", "letsencrypt-cloudflare"} else {}
         files = {}
         if mode == "managed":
             hostname = str(secret.get("tls.hostname", "")).strip().lower().rstrip(".")
@@ -82,6 +85,8 @@ class CatalogAppDockerService(AbstractService, AbstractWebUIService):
             if not _valid_hostname(hostname) or not self.acme_email or not isinstance(token, str) or not token.strip() or "\n" in token:
                 raise ValueError("Let's Encrypt requires a hostname, email, and cloudflare.api_token secret.")
             files["cloudflare-token"] = token.strip()
+        if mode == "letsencrypt" and not _valid_hostname(hostname):
+            raise ValueError("Let's Encrypt requires a valid public hostname.")
         host = hostname or str(conn.host)
         try:
             ipaddress.ip_address(host)
@@ -91,7 +96,7 @@ class CatalogAppDockerService(AbstractService, AbstractWebUIService):
         dynamic = {"http": {"routers": {"app": {"rule": "Host(`" + host + "`)", "entryPoints": ["websecure"], "service": "app", "tls": {}}}, "services": {"app": {"loadBalancer": {"servers": [{"url": f"http://app:{self.app_port}"}]}}}}}
         if mode == "managed":
             dynamic["tls"] = {"certificates": [{"certFile": "/config/tls.crt", "keyFile": "/config/tls.key"}]}
-        if mode == "letsencrypt-cloudflare":
+        if mode in {"letsencrypt", "letsencrypt-cloudflare"}:
             dynamic["http"]["routers"]["app"]["tls"] = {"certResolver": "letsencrypt"}
         config = yaml.safe_load(self.resolve_asset(self.template).read_text())
         proxy = {"image": "traefik:v3.3.7", "container_name": f"mlox-app-proxy-{self.port}", "restart": "unless-stopped", "command": ["--providers.file.filename=/config/dynamic.yaml", "--entrypoints.websecure.address=:443"], "ports": [f"{self.port}:443"], "volumes": ["./dynamic.yaml:/config/dynamic.yaml:ro"]}
@@ -101,6 +106,10 @@ class CatalogAppDockerService(AbstractService, AbstractWebUIService):
             proxy["command"] += ["--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare", f"--certificatesresolvers.letsencrypt.acme.email={self.acme_email}", "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"]
             proxy["environment"] = {"CF_DNS_API_TOKEN_FILE": "/config/cloudflare-token"}
             proxy["volumes"] += ["./cloudflare-token:/config/cloudflare-token:ro", "./acme:/acme"]
+        if mode == "letsencrypt":
+            proxy["command"] += ["--entrypoints.web.address=:80", "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web", "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"]
+            proxy["ports"].append("80:80")
+            proxy["volumes"].append("./acme:/acme")
         config["services"]["app"]["container_name"] = f"mlox-app-{self.port}"
         for service_name, service in config["services"].items():
             if service_name != "app":
@@ -131,9 +140,11 @@ class CatalogAppDockerService(AbstractService, AbstractWebUIService):
             path = f"{self.target_path}/{name}"
             self.exec.fs_write_file(conn, path, content)
             self.exec.fs_set_permissions(conn, path, "600")
-        if self.tls_mode == "letsencrypt-cloudflare":
+        if self.tls_mode in {"letsencrypt", "letsencrypt-cloudflare"}:
             self.exec.fs_create_dir(conn, f"{self.target_path}/acme")
             self.exec.fs_set_permissions(conn, f"{self.target_path}/acme", "700")
+        if self.tls_mode == "letsencrypt":
+            self.service_ports["ACME HTTP"] = 80
         self.service_urls["Web UI"] = f"https://{host}:{self.port}"
         self.state = "starting"
 
@@ -163,3 +174,26 @@ class CatalogAppDockerService(AbstractService, AbstractWebUIService):
 
     def get_secrets(self):
         return {}
+
+    def get_health(self, conn):
+        result = self.check(conn)
+        if result["status"] == "running":
+            url = self.service_urls.get("Web UI", "")
+            host = urlsplit(url).hostname
+            if not host:
+                result.update(status="unknown", detail="Application URL is unavailable.")
+            else:
+                command = (
+                    "curl --noproxy '*' -k -sS --connect-timeout 3 --max-time 10 "
+                    "-o /dev/null -w '%{http_code}' "
+                    f"-H {shlex.quote('Host: ' + host)} "
+                    f"{shlex.quote('https://127.0.0.1:' + str(self.port) + '/')}"
+                )
+                try:
+                    code = str(self.exec.execute(conn, command, group=TaskGroup.NETWORKING) or "").strip()
+                except Exception:
+                    code = ""
+                result["http_code"] = code
+                if not code.isdigit() or not 200 <= int(code) < 400:
+                    result.update(status="error", detail="Application did not respond successfully through Traefik.")
+        return service_health_payload(self, result)

@@ -30,6 +30,7 @@ class TemplateFieldSpec:
     min_value: int | None = None
     max_value: int | None = None
     options: list[tuple[str, str]] = field(default_factory=list)
+    visible_when: tuple[str, str] | None = None
 
 
 @dataclass
@@ -70,7 +71,7 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
             yield Static("", id="template-setup-error")
             with VerticalScroll(id="template-setup-fields"):
                 for field_spec in self.spec.fields:
-                    yield Label(field_spec.label, classes="template-field-label")
+                    yield Label(field_spec.label, classes="template-field-label", id=f"{self._field_id(field_spec.name)}-label")
                     widget_id = self._field_id(field_spec.name)
                     if field_spec.kind == "select":
                         options = valid_select_options(field_spec)
@@ -103,7 +104,7 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
                             id=widget_id,
                         )
                     if field_spec.help:
-                        yield Static(field_spec.help, classes="template-field-help")
+                        yield Static(field_spec.help, classes="template-field-help", id=f"{widget_id}-help")
             with Horizontal(id="template-setup-actions"):
                 yield Button("Cancel", id="cancel-template-setup")
                 yield Button(
@@ -116,6 +117,7 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
         self.query_one("#template-setup-description", Static).display = bool(
             self.spec.description
         )
+        self._update_visibility()
         first_field = self.spec.fields[0] if self.spec.fields else None
         if first_field:
             self.query_one(f"#{self._field_id(first_field.name)}").focus()
@@ -123,6 +125,23 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
     @on(Input.Submitted)
     def handle_input_submitted(self, _: Input.Submitted) -> None:
         self._dismiss_with_values()
+
+    @on(Select.Changed)
+    def handle_select_changed(self, _: Select.Changed) -> None:
+        self._update_visibility()
+
+    def _update_visibility(self) -> None:
+        fields = {field.name: field for field in self.spec.fields}
+        for field in self.spec.fields:
+            if not field.visible_when:
+                continue
+            controller, expected = field.visible_when
+            visible = controller in fields and self._read_field(fields[controller]) == expected
+            widget_id = self._field_id(field.name)
+            self.query_one(f"#{widget_id}").display = visible
+            self.query_one(f"#{widget_id}-label").display = visible
+            if field.help:
+                self.query_one(f"#{widget_id}-help").display = visible
 
     @on(Button.Pressed, "#cancel-template-setup")
     def handle_cancel(self, _: Button.Pressed) -> None:
@@ -136,6 +155,11 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
         values: FormValues = {}
         errors: list[str] = []
         for field_spec in self.spec.fields:
+            if field_spec.visible_when and not self.query_one(
+                f"#{self._field_id(field_spec.name)}"
+            ).display:
+                values[field_spec.name] = ""
+                continue
             value = self._read_field(field_spec)
             values[field_spec.name] = value
             errors.extend(self._validate_field(field_spec, value))

@@ -1,10 +1,9 @@
 build:
   class_name: mlox.services.catalog_apps.docker.CatalogAppDockerService
   params:
-    acme_email: ${APP_ACME_EMAIL}
     app_port: 3000
     hostname: ${APP_HOSTNAME}
-    name: wikijs-2.5.306
+    name: app-wikijs-2.5.306
     password: ${MLOX_AUTO_PW}
     port: ${MLOX_AUTO_PORT_WEB_UI}
     target_path: ${MLOX_USER_HOME}/mlox-wikijs
@@ -17,8 +16,10 @@ capabilities:
   - docker
   service:
   - web_ui
-description: A collaborative team wiki and knowledge base. Runs behind Traefik.
-description_short: A collaborative team wiki and knowledge base.
+  - health
+description: Wiki.js lets a team write and organize a knowledge base, manage access
+  and search its documentation. This deployment includes a PostgreSQL database.
+description_short: Create a searchable team wiki for documentation and shared knowledge.
 groups:
   application: null
   backend:
@@ -27,9 +28,11 @@ groups:
 id: catalog-app-wikijs-2.5.306-docker
 links:
   project: https://github.com/requarks/wiki
-  documentation: https://github.com/requarks/wiki
+  documentation: https://github.com/requarks/wiki#readme
+  changelog: https://github.com/requarks/wiki/releases
+  security: https://github.com/requarks/wiki/security
 maintainer: Busy Sloths
-name: Wiki.js
+name: 'Application: Wiki.js'
 ports:
   web_ui: 3000
 requirements:

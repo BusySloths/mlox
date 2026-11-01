@@ -1181,6 +1181,7 @@ class DashboardScreen(Screen):
             if (
                 field.kind == "select"
                 and field.required
+                and not field.visible_when
                 and not valid_select_options(field)
             )
         ]

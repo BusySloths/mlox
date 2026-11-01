@@ -17,7 +17,12 @@ def test_catalog_descriptors_use_shared_prefix():
     assert descriptors
     for descriptor in descriptors:
         assert descriptor.name.startswith('mlox.catalog_app.')
-        assert yaml.safe_load(descriptor.read_text())['id'].startswith('catalog-app-')
+        config = yaml.safe_load(descriptor.read_text())
+        assert config['id'].startswith('catalog-app-')
+        assert config['name'].startswith('Application: ')
+        assert config['build']['params']['name'].startswith('app-')
+        assert 'health' in config['capabilities']['service']
+        assert all(url.startswith('https://') for url in config['links'].values())
 
 
 class FakeExecutor:
@@ -87,15 +92,32 @@ def test_managed_certificate_is_validated_and_private(monkeypatch):
     assert 'key' not in str(dataclass_to_dict(app))
 
 
-def test_cloudflare_dns_challenge_and_no_secret_in_compose(monkeypatch):
-    app = make_app('catalog-app-memos-0.31.0-docker', **{'${APP_TLS_MODE}': 'letsencrypt-cloudflare', '${APP_TLS_SECRET_NAME}': 'dns', '${APP_TLS_SECRET_MANAGER_UUID}': 'manager', '${APP_HOSTNAME}': 'notes.example.org', '${APP_ACME_EMAIL}': 'admin@example.org'})
-    monkeypatch.setattr(app, '_load_secret', lambda: {'cloudflare.api_token': 'secret-token'})
+def test_letsencrypt_http_challenge_only_requires_hostname():
+    app = make_app('catalog-app-memos-0.31.0-docker', **{'${APP_TLS_MODE}': 'letsencrypt', '${APP_HOSTNAME}': 'notes.example.org'})
     app.setup(SimpleNamespace(host='192.0.2.1'))
-    compose = app.exec.files[f'{app.target_path}/docker-compose.yaml']
-    assert 'secret-token' not in compose
-    assert app.exec.files[f'{app.target_path}/cloudflare-token'] == 'secret-token'
-    assert app.exec.modes[f'{app.target_path}/cloudflare-token'] == '600'
-    assert 'dnschallenge.provider=cloudflare' in compose
+    proxy = yaml.safe_load(app.exec.files[f'{app.target_path}/docker-compose.yaml'])['services']['traefik']
+    assert '80:80' in proxy['ports']
+    assert '--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web' in proxy['command']
+    assert app.service_ports['ACME HTTP'] == 80
+
+
+@pytest.mark.parametrize('code, expected', [('200', 'running'), ('302', 'running'), ('502', 'error'), ('', 'error')])
+def test_health_requires_http_response_through_proxy(code, expected):
+    app = make_app('catalog-app-memos-0.31.0-docker')
+    app.setup(SimpleNamespace(host='192.0.2.1'))
+    app.exec.docker_service_state = lambda conn, container: 'running'
+    app.exec.execute = lambda conn, command, **kwargs: code
+    health = app.get_health(None)
+    assert health['status'] == expected
+    assert health['healthy'] is (expected == 'running')
+
+
+def test_managed_tls_rejects_invalid_certificate_before_writes(monkeypatch):
+    app = make_app('catalog-app-memos-0.31.0-docker', **{'${APP_TLS_MODE}': 'managed', '${APP_TLS_SECRET_NAME}': 'cert', '${APP_TLS_SECRET_MANAGER_UUID}': 'manager'})
+    monkeypatch.setattr(app, '_load_secret', lambda: {'tls.hostname': 'notes.example.org', 'tls.crt': 'invalid', 'tls.key': 'invalid'})
+    with pytest.raises(ValueError, match='PEM'):
+        app.setup(SimpleNamespace(host='192.0.2.1'))
+    assert not app.exec.files
 
 
 def test_roundcube_requires_mail_hosts_before_writes():
