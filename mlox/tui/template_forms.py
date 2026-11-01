@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
 
@@ -31,6 +33,7 @@ class TemplateFieldSpec:
     max_value: int | None = None
     options: list[tuple[str, str]] = field(default_factory=list)
     visible_when: tuple[str, str] | None = None
+    options_loader: Callable[[], list[tuple[str, str]]] | None = None
 
 
 @dataclass
@@ -63,6 +66,9 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
     def __init__(self, spec: TemplateFormSpec) -> None:
         super().__init__()
         self.spec = spec
+        self._loading_options: set[str] = set()
+        self._loaded_options: set[str] = set()
+        self._option_tasks: set[asyncio.Task] = set()
 
     def compose(self) -> ComposeResult:
         with Container(id="template-setup-dialog"):
@@ -75,7 +81,15 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
                     widget_id = self._field_id(field_spec.name)
                     if field_spec.kind == "select":
                         options = valid_select_options(field_spec)
-                        if options:
+                        if field_spec.options_loader:
+                            yield Select(
+                                options,
+                                prompt="Loading options...",
+                                allow_blank=True,
+                                disabled=True,
+                                id=widget_id,
+                            )
+                        elif options:
                             yield Select(
                                 options,
                                 value=self._select_default(field_spec, options),
@@ -127,8 +141,13 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
         self._dismiss_with_values()
 
     @on(Select.Changed)
-    def handle_select_changed(self, _: Select.Changed) -> None:
-        self._update_visibility()
+    def handle_select_changed(self, event: Select.Changed) -> None:
+        controllers = {
+            self._field_id(field.visible_when[0])
+            for field in self.spec.fields if field.visible_when
+        }
+        if event.select.id in controllers:
+            self._update_visibility()
 
     def _update_visibility(self) -> None:
         fields = {field.name: field for field in self.spec.fields}
@@ -138,10 +157,63 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
             controller, expected = field.visible_when
             visible = controller in fields and self._read_field(fields[controller]) == expected
             widget_id = self._field_id(field.name)
-            self.query_one(f"#{widget_id}").display = visible
-            self.query_one(f"#{widget_id}-label").display = visible
+            for selector in (f"#{widget_id}", f"#{widget_id}-label"):
+                widget = self.query_one(selector)
+                if widget.display != visible:
+                    widget.display = visible
             if field.help:
-                self.query_one(f"#{widget_id}-help").display = visible
+                help_widget = self.query_one(f"#{widget_id}-help")
+                if help_widget.display != visible:
+                    help_widget.display = visible
+            if visible and field.options_loader and field.name not in self._loading_options and field.name not in self._loaded_options:
+                self._loading_options.add(field.name)
+                task = asyncio.create_task(self._load_options(field))
+                self._option_tasks.add(task)
+                task.add_done_callback(self._option_tasks.discard)
+
+    async def _load_options(self, field: TemplateFieldSpec) -> None:
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+
+        def finish(value, error):
+            if not future.done():
+                if error is not None:
+                    future.set_exception(error)
+                else:
+                    future.set_result(value)
+
+        def load():
+            try:
+                value, error = field.options_loader(), None
+            except Exception as exc:
+                value, error = None, exc
+            try:
+                loop.call_soon_threadsafe(finish, value, error)
+            except RuntimeError:
+                pass  # The application was closed while the provider was busy.
+
+        threading.Thread(target=load, daemon=True, name="mlox-template-options").start()
+        try:
+            options = await future
+            options = [(str(label), value) for label, value in options if isinstance(value, str)]
+            if not self.is_mounted:
+                return
+            select = self.query_one(f"#{self._field_id(field.name)}", Select)
+            select.set_options(options)
+            select.prompt = "Select a secret" if options else "No secrets available"
+            select.disabled = not options
+            self._loaded_options.add(field.name)
+        except Exception:
+            if self.is_mounted:
+                select = self.query_one(f"#{self._field_id(field.name)}", Select)
+                select.prompt = "Could not load options"
+                select.disabled = True
+        finally:
+            self._loading_options.discard(field.name)
+
+    def on_unmount(self) -> None:
+        for task in self._option_tasks:
+            task.cancel()
 
     @on(Button.Pressed, "#cancel-template-setup")
     def handle_cancel(self, _: Button.Pressed) -> None:
@@ -174,7 +246,7 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
         widget = self.query_one(f"#{self._field_id(field_spec.name)}")
         if isinstance(widget, Select):
             value = widget.value
-            if value is Select.BLANK:
+            if value is Select.NULL or value is Select.BLANK:
                 return ""
             return str(value)
         if isinstance(widget, TextArea):

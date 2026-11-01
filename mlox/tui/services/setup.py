@@ -27,7 +27,7 @@ def catalog_app(infra, bundle, config=None) -> TemplateFormSpec:
         fields=[
             TemplateFieldSpec("tls_mode", "TLS mode", kind="select", default="self-signed", options=[("Self-signed", "self-signed"), ("Let's Encrypt", "letsencrypt"), ("Managed certificate", "managed")]),
             TemplateFieldSpec("hostname", "Public hostname", placeholder="test.mlox.org", visible_when=("tls_mode", "letsencrypt")),
-            TemplateFieldSpec("tls_secret_ref", "TLS secret (manager / name)", kind="select", options=_tls_secret_reference_options(infra), visible_when=("tls_mode", "managed"), help="Secret fields: tls.hostname, tls.crt and tls.key."),
+            TemplateFieldSpec("tls_secret_ref", "TLS secret (manager / name)", kind="select", options_loader=lambda: _tls_secret_reference_options(infra), visible_when=("tls_mode", "managed"), help="Secret fields: tls.hostname, tls.crt and tls.key."),
         ] + ([
             TemplateFieldSpec("imap_server", "IMAP server", placeholder="ssl://mail.example.org"),
             TemplateFieldSpec("imap_port", "IMAP port", kind="integer", default="143", min_value=1, max_value=65535),

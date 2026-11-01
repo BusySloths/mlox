@@ -203,3 +203,92 @@ async def _catalog_tls_visibility():
 
 def test_catalog_tls_fields_follow_selected_mode():
     asyncio.run(_catalog_tls_visibility())
+
+
+async def _catalog_secret_lookup_does_not_block():
+    import threading
+    from types import SimpleNamespace
+    from mlox.service import AbstractSecretManagerService
+    from mlox.tui.services.setup import catalog_app
+
+    started, release = threading.Event(), threading.Event()
+
+    class Manager(AbstractSecretManagerService):
+        name = "Slow manager"
+        uuid = "manager-1"
+
+        def get_secret_manager(self, infra):
+            started.set()
+            release.wait(timeout=5)
+            return self
+
+        def list_secrets(self, keys_only=False):
+            return {"certificate": None}
+
+    infra = SimpleNamespace(services=lambda: [Manager()])
+    spec = catalog_app(infra, None, SimpleNamespace(id="catalog-app-wikijs-2.5.306-docker", name="Wiki.js"))
+    assert not started.is_set()
+    app = DialogHost(spec)
+    try:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert not started.is_set()
+            mode = app.screen.query_one("#template-field-tls-mode", Select)
+            mode.value = "managed"
+            await asyncio.wait_for(pilot.pause(), timeout=1)
+            assert started.is_set()
+            # The form remains responsive while the secret manager is blocked.
+            mode.value = "self-signed"
+            await asyncio.wait_for(pilot.pause(), timeout=1)
+            assert not app.screen.query_one("#template-field-tls-secret-ref").display
+            release.set()
+            await pilot.pause(0.2)
+            mode.value = "managed"
+            await pilot.pause()
+            select = app.screen.query_one("#template-field-tls-secret-ref", Select)
+            assert not select.disabled
+    finally:
+        release.set()
+
+
+def test_catalog_secret_lookup_is_lazy_and_does_not_freeze_form():
+    asyncio.run(_catalog_secret_lookup_does_not_block())
+
+
+async def _close_during_slow_options_load():
+    import threading
+    from types import SimpleNamespace
+    from mlox.service import AbstractSecretManagerService
+    from mlox.tui.services.setup import catalog_app
+
+    started, release = threading.Event(), threading.Event()
+
+    class Manager(AbstractSecretManagerService):
+        name = "Unavailable manager"
+        uuid = "manager-1"
+
+        def get_secret_manager(self, infra):
+            started.set()
+            release.wait(timeout=10)
+            return self
+
+        def list_secrets(self, keys_only=False):
+            return {}
+
+    spec = catalog_app(SimpleNamespace(services=lambda: [Manager()]), None,
+                       SimpleNamespace(id="catalog-app-wikijs-2.5.306-docker", name="Wiki.js"))
+    app = DialogHost(spec)
+    try:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.screen.query_one("#template-field-tls-mode", Select).value = "managed"
+            await pilot.pause()
+            assert started.is_set()
+            app.screen.dismiss(None)
+            await asyncio.wait_for(pilot.pause(), timeout=1)
+    finally:
+        release.set()
+
+
+def test_catalog_dialog_closes_while_secret_manager_is_unresponsive():
+    asyncio.run(_close_during_slow_options_load())

@@ -194,8 +194,9 @@ def test_catalog_app_selects_managed_tls_secret():
     infra = SimpleNamespace(services=lambda: [ManagerService()])
     spec = service_setup.catalog_app(infra, None, SimpleNamespace(id="catalog-app-memos-0.31.0-docker", name="Memos"))
     secret = next(field for field in spec.fields if field.name == "tls_secret_ref")
-    assert secret.options[0][0] == "OpenBao / app-certificate"
-    params = spec.params({"tls_mode": "managed", "tls_secret_ref": secret.options[0][1]}, infra)
+    options = secret.options_loader()
+    assert options[0][0] == "OpenBao / app-certificate"
+    params = spec.params({"tls_mode": "managed", "tls_secret_ref": options[0][1]}, infra)
     assert params["${APP_TLS_SECRET_MANAGER_UUID}"] == "manager-1"
     assert params["${APP_TLS_SECRET_NAME}"] == "app-certificate"
 
