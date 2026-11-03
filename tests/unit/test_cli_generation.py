@@ -118,6 +118,9 @@ def test_simple_commands_are_generated_but_model_deploy_stays_explicit():
         "save-key",
     }
     assert set(service.GENERATED_SERVICE_COMMANDS) == {
+        "proxy-routes",
+        "proxy-route-add",
+        "proxy-route-remove",
         "inspect",
         "list",
         "add",

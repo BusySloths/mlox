@@ -15,6 +15,18 @@ from mlox.cli.rendering.results import (
 
 
 SERVICE_COMMANDS = (
+    WorkspaceCommand(name="proxy-routes", method="list_proxy_routes", help="List routes on a Docker reverse proxy.",
+        parameters=(CliParameter("name", "Proxy service name"),), renderer=render_inspection),
+    WorkspaceCommand(name="proxy-route-add", method="add_proxy_route", help="Add a live route to a Docker reverse proxy.",
+        parameters=(CliParameter("name", "Proxy service name"), CliParameter("hostname", "Public hostname"),
+                    CliParameter("backend", "Backend URL; use host.docker.internal for published host ports"),
+                    CliParameter("tls_mode", "Public TLS: self-signed, letsencrypt, or managed"),
+                    CliParameter("insecure_backend", "Disable backend TLS certificate verification"),
+                    CliParameter("backend_host", "Optional backend Host header"),
+                    CliParameter("tls_secret_manager_uuid", "Managed certificate secret-manager UUID"),
+                    CliParameter("tls_secret_name", "Managed certificate secret name")), renderer=render_message),
+    WorkspaceCommand(name="proxy-route-remove", method="remove_proxy_route", help="Remove a live proxy route.",
+        parameters=(CliParameter("name", "Proxy service name"), CliParameter("hostname", "Public hostname")), renderer=render_message),
     WorkspaceCommand(name="inspect", method="inspect_service", help="Inspect a service by UUID or name.",
         parameters=(CliParameter("identifier", "Service UUID or name", kind="argument"),), renderer=render_inspection),
     WorkspaceCommand(

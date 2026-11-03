@@ -574,6 +574,7 @@ def _csv(value: str) -> str:
 
 
 SETUP_HANDLERS = {
+    "docker-proxy-1-docker": no_params,
     "catalog-app-memos-0.31.0-docker": catalog_app,
     "catalog-app-etherpad-2.6.1-docker": catalog_app,
     "catalog-app-wikijs-2.5.306-docker": catalog_app,

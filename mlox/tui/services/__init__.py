@@ -7,6 +7,10 @@ from mlox.ui.registry import register
 _REGISTERED = False
 
 _TUI_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
+    "mlox.tui.services.docker_proxy": {
+        "config_ids": ("docker-proxy-1-docker",),
+        "function_names": ("settings",),
+    },
     "mlox.tui.services.otel": {
         "config_ids": ("otel-0.146.1-docker",),
         "function_names": ("settings",),

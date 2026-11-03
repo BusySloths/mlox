@@ -21,7 +21,7 @@ from mlox.application.payloads import (
     ServiceLogsData,
 )
 from mlox.application.result import OperationResult
-from mlox.application.use_cases import models, project, servers, services
+from mlox.application.use_cases import docker_proxy, models, project, servers, services
 from mlox.config import (
     ServiceConfig,
     get_stacks_path,
@@ -770,6 +770,38 @@ class ProjectWorkspace:
         """List services across all project server bundles."""
 
         return services.list_services(self._state)
+
+    def list_proxy_routes(self, *, name: str) -> OperationResult[dict[str, Any]]:
+        return docker_proxy.list_routes(self._state, name=name)
+
+    def add_proxy_route(self, *, name: str, hostname: str, backend: str,
+                        tls_mode: str = "self-signed", insecure_backend: bool = False,
+                        backend_host: str = "", tls_secret_manager_uuid: str = "",
+                        tls_secret_name: str = "") -> OperationResult[dict[str, Any]]:
+        return self._mutate_proxy_routes(name, lambda: docker_proxy.add_route(
+            self._state, name=name, hostname=hostname, backend=backend,
+            tls_mode=tls_mode, insecure_backend=insecure_backend, backend_host=backend_host,
+            tls_secret_manager_uuid=tls_secret_manager_uuid, tls_secret_name=tls_secret_name,
+        ))
+
+    def remove_proxy_route(self, *, name: str, hostname: str) -> OperationResult[dict[str, Any]]:
+        return self._mutate_proxy_routes(name, lambda: docker_proxy.remove_route(self._state, name=name, hostname=hostname))
+
+    def _mutate_proxy_routes(self, name: str, operation) -> OperationResult[dict[str, Any]]:
+        from mlox.services.docker_proxy.docker import DockerProxyService
+
+        service = self.infrastructure.get_service(name)
+        bundle = self.infrastructure.get_bundle_by_service(service) if isinstance(service, DockerProxyService) else None
+        previous = dict(service.routes) if isinstance(service, DockerProxyService) else None
+        result = self._mutate(operation)
+        if not result.success and previous is not None and service.routes != previous and bundle:
+            try:
+                with bundle.server.get_server_connection() as conn:
+                    service._write_configuration(conn, previous)
+                service.routes = previous
+            except Exception as exc:
+                return OperationResult(False, 1, f"{result.message} Proxy runtime rollback failed: {exc}. Reconcile the proxy before continuing.")
+        return result
 
     def add_service(
         self,
