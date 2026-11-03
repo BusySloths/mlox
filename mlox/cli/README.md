@@ -58,3 +58,32 @@ telemetry and secret-manager binding changes, and the Operations and knowledge A
 The CLI is an adapter. Keep business logic in `mlox.application` and
 `mlox.project`; commands should focus on arguments, validation, and output.
 
+
+## Granting SSH access
+
+Add a client's public key to the existing managed mlox account:
+
+```sh
+mlox server add-ssh-key --ip 192.0.2.10 --public-key "$(cat client.pub)"
+```
+
+The response identifies the login username. The client can then connect using
+`ssh -i ~/.ssh/id_ed25519 USERNAME@192.0.2.10` (add `-p PORT` for a custom SSH
+port). They keep their private key locally; no server password is required.
+This grants the same account and file access as mlox, rather than creating a
+separate Linux user. Password and root login settings are unchanged.
+
+Revoke that key with:
+
+```sh
+mlox server remove-ssh-key --ip 192.0.2.10 --public-key "$(cat client.pub)"
+```
+
+Both commands are idempotent and compare key material independently of comments.
+Removal also matches entries with authorized_keys options and refuses to remove
+mlox's managed access key. Revocation prevents new logins; existing SSH sessions
+remain connected. These operations use the managed SSH connection and Python 3
+on the server and take effect without restarting SSH. They update the remote
+account, not the saved project state. The corresponding workspace methods are
+`add_server_ssh_key(ip=..., public_key=...)` and
+`remove_server_ssh_key(ip=..., public_key=...)`.

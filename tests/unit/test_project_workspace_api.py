@@ -30,6 +30,8 @@ SUPPORTED_WORKSPACE_METHOD_SIGNATURES = {
     "setup_server": "(self, *, ip)",
     "check_server_health": "(self, *, ip)",
     "teardown_server": "(self, *, ip)",
+    "add_server_ssh_key": "(self, *, ip, public_key)",
+    "remove_server_ssh_key": "(self, *, ip, public_key)",
     "save_server_key": "(self, *, ip, output_path)",
     "list_services": "(self)",
     "add_service": "(self, *, server_ip, template_id, params=None)",

@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
+import shlex
 from datetime import datetime
 from typing import Any, Dict, Optional
+
+from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives.serialization import load_ssh_public_key
 
 from mlox.application.payloads import (
     BundleData,
@@ -658,3 +663,115 @@ def get_backend_info(server) -> OperationResult:
     return OperationResult(
         True, 0, "No backend information available.", {"backend_info": {}}
     )
+
+
+def add_server_ssh_key(
+    project: WorkspaceState, *, ip: str, public_key: str
+) -> OperationResult[dict[str, Any]]:
+    """Authorize a public key for the server's managed SSH account."""
+    return _update_server_ssh_key(project, ip=ip, public_key=public_key, remove=False)
+
+
+def remove_server_ssh_key(
+    project: WorkspaceState, *, ip: str, public_key: str
+) -> OperationResult[dict[str, Any]]:
+    """Revoke a public key while preserving the managed SSH identity."""
+    return _update_server_ssh_key(project, ip=ip, public_key=public_key, remove=True)
+
+
+def _public_key_identity(public_key: str) -> tuple[str, str]:
+    if any(char in public_key for char in ("\n", "\r", "\x00")):
+        raise ValueError("Expected a single public key line.")
+    parts = public_key.split()
+    if len(parts) < 2:
+        raise ValueError("Expected an OpenSSH public key.")
+    load_ssh_public_key(" ".join(parts[:2]).encode("ascii"))
+    return parts[0], parts[1]
+
+
+def _update_server_ssh_key(project, *, ip, public_key, remove):
+    bundle = project.infrastructure.get_bundle_by_ip(ip)
+    if not bundle:
+        return OperationResult(False, 5, "Server not found in infrastructure.")
+    server = bundle.server
+    if ServerCapability.TERMINAL.value not in _server_capability_names(server):
+        return OperationResult(False, 13, "The selected server does not support SSH access.")
+    try:
+        identity = _public_key_identity(public_key)
+    except (ValueError, TypeError, UnicodeError, UnsupportedAlgorithm):
+        # Cryptography also rejects unsupported key algorithms.
+        return OperationResult(False, 2, "Invalid OpenSSH public key.")
+    if remove:
+        managed_key = getattr(getattr(server, "remote_user", None), "ssh_pub_key", "")
+        try:
+            managed_identity = _public_key_identity(managed_key)
+        except Exception:
+            return OperationResult(False, 2, "Cannot verify the managed SSH key; refusing removal.")
+        if identity == managed_identity:
+            return OperationResult(False, 2, "Cannot remove mlox's managed SSH access key.")
+    script = (
+        _AUTHORIZED_KEYS_SCRIPT
+        + f"\nupdate({public_key.strip()!r}, {identity!r}, {remove!r})"
+    )
+    try:
+        with server.get_server_connection() as conn:
+            result = conn.run(
+                "python3 -c " + shlex.quote(script), hide=True, warn=True,
+                pty=False, in_stream=False, timeout=30,
+            )
+        if result.exited:
+            return OperationResult(False, 1, "Could not update SSH authorized_keys.")
+        data = json.loads(result.stdout)
+    except Exception as exc:
+        logger.warning("SSH key update failed: %s", type(exc).__name__)
+        return OperationResult(False, 1, "Could not update SSH authorized_keys.")
+    action = "removed" if remove else "added"
+    if data["changed"]:
+        message = f"SSH key {action} for {data['username']} on {ip}."
+    else:
+        status = "absent" if remove else "authorized"
+        message = f"SSH key already {status} for {data['username']} on {ip}."
+    return OperationResult(True, 0, message, data)
+
+
+_AUTHORIZED_KEYS_SCRIPT = r'''import fcntl
+import getpass
+import json
+import os
+from pathlib import Path
+import shlex
+
+
+def update(key, identity, remove):
+    directory = Path.home() / ".ssh"
+    directory.mkdir(mode=0o700, exist_ok=True)
+    directory.chmod(0o700)
+    path = directory / "authorized_keys"
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "r+", encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        os.fchmod(stream.fileno(), 0o600)
+        lines = stream.read().splitlines(keepends=True)
+        def matches(line):
+            if line.lstrip().startswith("#"):
+                return False
+            try:
+                fields = shlex.split(line, comments=False)
+            except ValueError:
+                return False
+            return any(tuple(fields[i:i+2]) == identity for i in (0, 1))
+        present = any(matches(line) for line in lines)
+        changed = present if remove else not present
+        if changed:
+            if remove:
+                text = "".join(line for line in lines if not matches(line))
+            else:
+                text = "".join(lines)
+                text += ("\n" if text and not text.endswith("\n") else "") + key + "\n"
+            stream.seek(0)
+            stream.write(text)
+            stream.truncate()
+            stream.flush()
+            os.fsync(stream.fileno())
+    print(json.dumps({"changed": changed, "username": getpass.getuser()}))
+'''

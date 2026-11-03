@@ -116,6 +116,8 @@ def test_simple_commands_are_generated_but_model_deploy_stays_explicit():
         "setup",
         "teardown",
         "save-key",
+        "add-ssh-key",
+        "remove-ssh-key",
     }
     assert set(service.GENERATED_SERVICE_COMMANDS) == {
         "proxy-routes",

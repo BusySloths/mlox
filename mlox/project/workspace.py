@@ -661,6 +661,18 @@ class ProjectWorkspace:
             return OperationResult(False, 8, "Service not found or identifier is ambiguous.")
         return OperationResult(True, 0, "Service retrieved.", {"service": matches[0]})
 
+    def add_server_ssh_key(
+        self, *, ip: str, public_key: str
+    ) -> OperationResult[dict[str, Any]]:
+        """Authorize a public key for the managed server account."""
+        return servers.add_server_ssh_key(self._state, ip=ip, public_key=public_key)
+
+    def remove_server_ssh_key(
+        self, *, ip: str, public_key: str
+    ) -> OperationResult[dict[str, Any]]:
+        """Revoke a public key, preserving mlox's managed SSH key."""
+        return servers.remove_server_ssh_key(self._state, ip=ip, public_key=public_key)
+
     def execute_server_command(
         self, *, ip: str, command: str, sudo: bool = False, timeout: int = 60
     ) -> OperationResult[ServerCommandData]:

@@ -20,6 +20,19 @@ def _server_template_path(value: str) -> str:
 
 
 SERVER_COMMANDS = (
+    *(
+        WorkspaceCommand(
+            name=f"{action}-ssh-key",
+            method=f"{action}_server_ssh_key",
+            help=f"{action.capitalize()} a public key for the managed server account.",
+            parameters=(
+                CliParameter("ip", "Server IP or hostname"),
+                CliParameter("public_key", "Complete OpenSSH public key (quote the value)"),
+            ),
+            renderer=render_message,
+        )
+        for action in ("add", "remove")
+    ),
     WorkspaceCommand(name="inspect", method="inspect_server", help="Inspect a server by UUID or IP.",
         parameters=(CliParameter("identifier", "Server UUID or IP", kind="argument"),), renderer=render_inspection),
     WorkspaceCommand(
