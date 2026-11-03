@@ -67,6 +67,8 @@ SERVICE_CAPABILITY_ABCS = {
 }
 
 SERVICE_GROUP_ALIASES = {
+    "app": ServiceCapability.APP.value,
+    "application": ServiceCapability.APP.value,
     "health": ServiceCapability.HEALTH.value,
     "web_ui": ServiceCapability.WEB_UI.value,
     "web-ui": ServiceCapability.WEB_UI.value,

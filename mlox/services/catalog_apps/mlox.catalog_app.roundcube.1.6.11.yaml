@@ -19,6 +19,7 @@ capabilities:
   backend:
   - docker
   service:
+  - app
   - web_ui
   - health
 description: Roundcube is a browser-based webmail client with folders, contacts and

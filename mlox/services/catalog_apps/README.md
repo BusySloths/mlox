@@ -7,6 +7,11 @@ HTTPS port is published. Set up the application's administrator account
 immediately; application-specific signup and access settings remain the
 operator's responsibility. Roundcube needs an existing IMAP/SMTP service.
 
+These services advertise the `app` capability: they are end-user applications
+managed by mlox. The capability identifies the application category; it does
+not imply additional integrations or restrict other capabilities such as health
+checks and a web UI.
+
 These entries have Compose and unit coverage but have not yet been verified with
 live containers by the implementation author. Treat them as experimental until
 the deployment, backup, restore and upgrade procedures have been exercised on

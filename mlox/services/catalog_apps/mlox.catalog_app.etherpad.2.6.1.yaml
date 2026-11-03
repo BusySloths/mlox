@@ -23,6 +23,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - app
   - web_ui
   - health
   backend:

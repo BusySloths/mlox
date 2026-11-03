@@ -24,7 +24,7 @@ def _option(value: str, default: str = "") -> str:
 class CatalogAppDockerService(AbstractService, AbstractWebUIService, AbstractHealthService):
     """Run one curated app and a socket-free Traefik instance per installation."""
 
-    capabilities = {ServiceCapability.WEB_UI, ServiceCapability.HEALTH}
+    capabilities = {ServiceCapability.APP, ServiceCapability.WEB_UI, ServiceCapability.HEALTH}
     port: str | int
     app_port: int
     password: str = field(default="", repr=False)

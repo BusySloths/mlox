@@ -235,6 +235,15 @@ def test_service_list_outputs(monkeypatch):
     assert "1.1.1.1" in result.stdout
 
 
+def test_service_list_identifies_apps(monkeypatch):
+    payload = {"services": [{"name": "notes", "service_config_id": "memos", "server_ip": "1.1.1.1", "capabilities": ["app", "web_ui"]}]}
+    _patch_application(monkeypatch, "list_services", OperationResult(True, 0, "Services retrieved.", payload))
+    result = runner.invoke(cli.app, ["service", "list", "--project", "proj", "--password", "pw"])
+    assert result.exit_code == 0
+    assert "App" in result.stdout
+    assert "notes" in result.stdout
+
+
 def test_service_logs_infers_optional_values_and_defaults(monkeypatch):
     operation_result = OperationResult(True, 0, "Logs retrieved.", {"logs": "line"})
     mock_logs = _patch_application(monkeypatch, "service_logs", operation_result)

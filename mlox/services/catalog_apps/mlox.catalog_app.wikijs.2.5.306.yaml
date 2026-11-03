@@ -15,6 +15,7 @@ capabilities:
   backend:
   - docker
   service:
+  - app
   - web_ui
   - health
 description: Wiki.js lets a team write and organize a knowledge base, manage access

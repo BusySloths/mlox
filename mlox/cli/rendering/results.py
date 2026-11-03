@@ -66,6 +66,7 @@ def render_service_list(result: OperationResult[Any]) -> None:
     rows = [
         [
             service.get("name", "-"),
+            "App" if "app" in service.get("capabilities", []) else "Service",
             service.get("service_config_id", "-"),
             service.get("server_ip", "-"),
             service.get("state", "-"),
@@ -76,7 +77,7 @@ def render_service_list(result: OperationResult[Any]) -> None:
         for service in services
     ]
     render_table(
-        ["Service", "Template", "Server", "State", "Labels", "Ports", "URLs"],
+        ["Service", "Type", "Template", "Server", "State", "Labels", "Ports", "URLs"],
         rows,
         title="Services",
     )

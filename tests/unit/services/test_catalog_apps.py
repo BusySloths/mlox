@@ -22,6 +22,7 @@ def test_catalog_descriptors_use_shared_prefix():
         assert config['name'].startswith('Application: ')
         assert config['build']['params']['name'].startswith('app-')
         assert 'health' in config['capabilities']['service']
+        assert 'app' in config['capabilities']['service']
         assert all(url.startswith('https://') for url in config['links'].values())
 
 
@@ -79,6 +80,21 @@ def test_distinct_installations_and_persisted_path():
     first.exec = CatalogAppDockerService.__dataclass_fields__['exec'].default_factory()
     restored = dict_to_dataclass(dataclass_to_dict(first))
     assert restored.target_path == first.target_path
+    assert 'app' in restored.capabilities
+
+
+def test_existing_catalog_app_displays_as_app_after_rename():
+    from mlox.tui.screens.dashboard.tree import service_tree_label
+
+    app = make_app('catalog-app-memos-0.31.0-docker')
+    app.name = 'My notes'
+    assert service_tree_label(app) == 'App: My notes'
+
+
+def test_application_group_maps_to_app_capability():
+    from mlox.config import _capabilities_from_groups
+
+    assert _capabilities_from_groups({'application': None})['service'] == {'app'}
 
 
 def test_managed_certificate_is_validated_and_private(monkeypatch):

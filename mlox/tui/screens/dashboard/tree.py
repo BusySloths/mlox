@@ -15,6 +15,7 @@ from .model import (
 )
 
 SERVICE_CAPABILITY_PRIORITY = (
+    "app",
     "secret_manager",
     "monitor",
     "model_registry",
@@ -36,6 +37,7 @@ SERVICE_CAPABILITY_PRIORITY = (
 )
 
 CAPABILITY_LABELS = {
+    "app": "App",
     "secret_manager": "Secret Manager",
     "model_registry": "Model Registry",
     "model_server": "Model Server",

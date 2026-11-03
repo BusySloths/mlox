@@ -90,6 +90,7 @@ if TYPE_CHECKING:
 class ServiceCapability(StrEnum):
     """User-facing service capabilities advertised by service configs/classes."""
 
+    APP = "app"
     HEALTH = "health"
     WEB_UI = "web_ui"
     SECRET_MANAGER = "secret_manager"
