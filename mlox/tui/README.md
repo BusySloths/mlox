@@ -9,6 +9,10 @@ This package implements the terminal dashboard using Textual.
 - `screens/dashboard/`: infrastructure tree, details, actions, and logs.
 - `services/`: TUI-specific service panels.
 
+The project-level Apps tab lists installed services with the `app` capability,
+their recorded state and web UI address. It can open the selected app and
+refresh the overview without changing the deployed services.
+
 ## Workflow
 
 Login opens or creates a workspace through `mlox.application` use cases and

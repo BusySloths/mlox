@@ -29,6 +29,7 @@ from .knowledge_panel import KnowledgePanel
 from .log_panel import LogPanel
 from .model import SelectionChanged, SelectionInfo, is_bundle_initialized
 from .models_panel import ModelsPanel
+from .apps_panel import AppsPanel
 from .monitor_panel import MonitorPanel
 from .overview_panel import OverviewPanel
 from .operations_panel import OperationsPanel
@@ -90,6 +91,7 @@ KNOWLEDGE_TAB_ID = "knowledge-tab"
 MONITOR_TAB_ID = "monitor-tab"
 OPERATIONS_TAB_ID = "operations-tab"
 MODELS_TAB_ID = "models-tab"
+APPS_TAB_ID = "apps-tab"
 WORKFLOW_TAB_ID = "workflow-tab"
 SERVICE_TUI_TAB_ID = "service-tui-tab"
 SECRET_MANAGER_TAB_ID = "secret-manager-tab"
@@ -214,6 +216,8 @@ class DashboardScreen(Screen):
                                 yield DatabasePanel(id="databases-panel")
                             with TabPane("Models", id=MODELS_TAB_ID):
                                 yield ModelsPanel(id="models-panel")
+                            with TabPane("Apps", id=APPS_TAB_ID):
+                                yield AppsPanel(id="apps-panel")
                             with TabPane("Workflow", id=WORKFLOW_TAB_ID):
                                 yield WorkflowPanel(id="workflow-panel")
                             with TabPane("Repositories", id=REPOSITORY_TAB_ID):
@@ -359,6 +363,7 @@ class DashboardScreen(Screen):
             operations.selection = None
         self.query_one(DatabasePanel).selection = None
         self.query_one(ModelsPanel).selection = None
+        self.query_one(AppsPanel).selection = None
         self.query_one(WorkflowPanel).selection = None
         self.query_one(RepositoryPanel).selection = None
 
@@ -376,6 +381,7 @@ class DashboardScreen(Screen):
             OPERATIONS_TAB_ID: self.query_one(OperationsPanel),
             DATABASES_TAB_ID: self.query_one(DatabasePanel),
             MODELS_TAB_ID: self.query_one(ModelsPanel),
+            APPS_TAB_ID: self.query_one(AppsPanel),
             WORKFLOW_TAB_ID: self.query_one(WorkflowPanel),
             REPOSITORY_TAB_ID: self.query_one(RepositoryPanel),
         }
@@ -1510,6 +1516,10 @@ class DashboardScreen(Screen):
         )
         self._set_tab_visible(
             MODELS_TAB_ID,
+            selection.type == "root" if selection else False,
+        )
+        self._set_tab_visible(
+            APPS_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(
