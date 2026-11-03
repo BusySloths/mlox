@@ -7,6 +7,17 @@ uses the file provider and does not mount the Docker socket. One proxy should
 normally run per server. Port 80 or 443 must be available before setup; notably,
 existing catalog apps using their own Let's Encrypt HTTP challenge already use
 port 80. Stop or reconfigure those explicitly before starting this proxy.
+If setup reports an occupied port, inspect the listeners and published Docker
+ports on the server with:
+
+```sh
+sudo ss -ltnp '( sport = :80 or sport = :443 )'
+sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'
+```
+
+Do not stop a listener until you know which service it supports. The gateway
+requires both ports; a different HTTPS port would not provide the same standard
+domain access. The HTTP-01 Let's Encrypt challenge also requires public port 80.
 
 Add **Traefik Gateway** to the Docker server in the TUI and set it up. Its
 service settings panel lists routes and lets you add or remove them live. The

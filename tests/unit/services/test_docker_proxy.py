@@ -218,3 +218,81 @@ def test_managed_certificate_secret_is_validated(monkeypatch):
     with pytest.raises(ValueError, match='hostname'):
         service.add_route(None, hostname='second.example.org', backend='http://host.docker.internal:3001', tls_mode='managed', tls_secret_manager_uuid='manager', tls_secret_name='certificate')
     assert list(service.routes) == ['wiki.example.org']
+
+
+def test_ingress_preflight_reports_existing_docker_owner_without_starting():
+    service = proxy()
+    calls = []
+    def execute(conn, command, **kwargs):
+        calls.append(command)
+        if command.startswith('ss '):
+            return 'LISTEN 0 4096 [::]:80 [::]:* users:(("docker-proxy",pid=42,fd=4))'
+        if command.startswith('docker ps '):
+            return 'traefik_reverse_proxy_memos|0.0.0.0:80->80/tcp, [::]:80->80/tcp'
+        raise AssertionError(command)
+    service.exec.execute = execute
+    service.exec.docker_up = lambda *args, **kwargs: pytest.fail('Must not start while port is in use')
+    with pytest.raises(RuntimeError, match='80.*traefik_reverse_proxy_memos') as error:
+        service.spin_up(None)
+    assert "No existing service was stopped" in str(error.value)
+    assert service.exec.down == []
+    assert len(calls) == 2
+
+
+def test_ingress_preflight_reports_non_docker_listener():
+    service = proxy()
+    service.exec.execute = lambda conn, command, **kwargs: (
+        'LISTEN 0 128 0.0.0.0:443 0.0.0.0:* users:(("nginx",pid=7,fd=6))'
+        if command.startswith('ss ') else ''
+    )
+    with pytest.raises(RuntimeError, match='443.*nginx'):
+        service._check_ingress_ports(None)
+
+
+def test_ingress_preflight_detects_docker_publish_without_listening_process():
+    service = proxy()
+    service.exec.execute = lambda conn, command, **kwargs: (
+        '' if command.startswith('ss ') else 'mlox-app-proxy-5230|0.0.0.0:80->80/tcp'
+    )
+    with pytest.raises(RuntimeError, match='80.*mlox-app-proxy-5230'):
+        service._check_ingress_ports(None)
+
+
+def test_ingress_preflight_allows_existing_proxy_to_restart():
+    service = proxy()
+    own = service.compose_service_names['Traefik']
+    service.exec.execute = lambda conn, command, **kwargs: (
+        'LISTEN 0 4096 0.0.0.0:80 0.0.0.0:*\nLISTEN 0 4096 [::]:443 [::]:*'
+        if command.startswith('ss ') else f'{own}|0.0.0.0:80->80/tcp, [::]:443->443/tcp'
+    )
+    service._check_ingress_ports(None)
+
+
+def test_ingress_preflight_falls_back_to_docker_when_ss_unavailable():
+    service = proxy()
+    service.exec.execute = lambda conn, command, **kwargs: None
+    service._check_ingress_ports(None)
+
+
+def test_gateway_starts_when_ports_are_free():
+    service = proxy()
+    service.exec.execute = lambda conn, command, **kwargs: ''
+    calls = []
+    service.exec.docker_up = lambda *args: calls.append(args) or 'started'
+    assert service.spin_up(None)
+    assert calls and service.state == 'running'
+
+
+def test_gateway_rechecks_ports_after_raced_docker_bind_failure():
+    service = proxy()
+    checks = []
+    def execute(conn, command, **kwargs):
+        if command.startswith('ss '):
+            checks.append(command)
+            return '' if len(checks) == 1 else 'LISTEN 0 128 0.0.0.0:80 0.0.0.0:* users:(("nginx",pid=7,fd=6))'
+        return ''
+    service.exec.execute = execute
+    service.exec.docker_up = lambda *args: (_ for _ in ()).throw(RuntimeError('port is already allocated'))
+    with pytest.raises(RuntimeError, match='80.*nginx'):
+        service.spin_up(None)
+    assert len(checks) == 2

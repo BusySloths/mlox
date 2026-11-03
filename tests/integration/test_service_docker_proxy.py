@@ -73,3 +73,39 @@ def test_live_route_to_existing_self_signed_app(ubuntu_docker_server):
                 service.exec.docker_down(conn, f'{service.target_path}/{service.target_docker_script}', f'{service.target_path}/{service.target_docker_env}', remove_volumes=True)
             if infra.get_service(service.name):
                 remove_service(infra, service.name)
+
+
+def test_gateway_reports_occupied_port_without_stopping_existing_container(ubuntu_docker_server):
+    import shlex
+    import uuid
+
+    server = ubuntu_docker_server
+    infra = Infrastructure()
+    bundle = Bundle(name=server.ip, server=server)
+    infra.bundles.append(bundle)
+    listener = f'mlox-port80-test-{uuid.uuid4().hex[:12]}'
+    service = None
+    try:
+        with server.get_server_connection() as conn:
+            conn.sudo(
+                f'docker run -d --name {shlex.quote(listener)} -p 80:80 '
+                'traefik:v3.3.7 --entrypoints.web.address=:80',
+                hide=True, warn=False, pty=False, in_stream=False,
+            )
+        config = load_service_config_by_id('docker-proxy-1.0.0-docker')
+        assert add_service(infra, server.ip, config, {})
+        service = bundle.services[-1]
+        with server.get_server_connection() as conn:
+            service.setup(conn)
+            with pytest.raises(RuntimeError, match=listener):
+                service.spin_up(conn)
+            state = conn.sudo(
+                f"docker inspect --format '{{{{.State.Running}}}}' {shlex.quote(listener)}",
+                hide=True, warn=False, pty=False, in_stream=False,
+            )
+            assert state.stdout.strip() == 'true'
+    finally:
+        if service and infra.get_service(service.name):
+            remove_service(infra, service.name)
+        with server.get_server_connection() as conn:
+            conn.sudo(f'docker rm -f {shlex.quote(listener)}', hide=True, warn=True, pty=False, in_stream=False)

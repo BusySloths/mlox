@@ -183,8 +183,61 @@ class DockerProxyService(AbstractService, AbstractHealthService, AbstractProxySe
     def list_routes(self) -> dict[str, dict[str, Any]]:
         return {hostname: dict(route) for hostname, route in self.routes.items()}
 
+    def _check_ingress_ports(self, conn) -> None:
+        """Report occupied ingress ports without altering the owning services."""
+        sockets = self.exec.execute(
+            conn, "ss -H -ltnp '( sport = :80 or sport = :443 )'",
+            group=TaskGroup.NETWORKING, sudo=True,
+        )
+        occupied: dict[int, list[str]] = {}
+        for line in str(sockets or '').splitlines():
+            match = re.search(r'(?:^|\s)\S+:(80|443)(?=\s)', line)
+            if match:
+                occupied.setdefault(int(match.group(1)), []).append(line.strip())
+        containers = self.exec.execute(
+            conn, "docker ps --format '{{.Names}}|{{.Ports}}'",
+            group=TaskGroup.CONTAINER_RUNTIME, sudo=True,
+        )
+        owners: dict[int, list[str]] = {80: [], 443: []}
+        own_ports: set[int] = set()
+        own_name = self.compose_service_names['Traefik']
+        for line in str(containers or '').splitlines():
+            name, separator, ports = line.partition('|')
+            if not separator:
+                continue
+            for port in (80, 443):
+                if re.search(rf':{port}->\d+/tcp\b', ports):
+                    occupied.setdefault(port, [])
+                    owners[port].append(name)
+                    if name == own_name:
+                        own_ports.add(port)
+
+        # A running instance of this proxy legitimately owns both bindings.
+        if own_ports == {80, 443}:
+            return
+        parts = []
+        for port in sorted(occupied):
+            if port in own_ports:
+                continue
+            detail = ', '.join(owners[port]) or '; '.join(occupied[port])
+            parts.append(f"{port} ({detail})")
+        if parts:
+            raise RuntimeError(
+                "Traefik Gateway cannot start because TCP port(s) " + ', '.join(parts)
+                + " are already in use. Identify the owning service and free ports 80 and 443 "
+                "before retrying. An existing catalog app using Let's Encrypt may own port 80. "
+                "No existing service was stopped."
+            )
+
     def spin_up(self, conn):
-        return self.compose_up(conn)
+        self._check_ingress_ports(conn)
+        try:
+            return self.compose_up(conn)
+        except RuntimeError as exc:
+            if 'port is already allocated' in str(exc).lower() or 'address already in use' in str(exc).lower():
+                # Another process may claim a port between the check and bind.
+                self._check_ingress_ports(conn)
+            raise
 
     def spin_down(self, conn):
         self.exec.docker_down(conn, f'{self.target_path}/{self.target_docker_script}', f'{self.target_path}/{self.target_docker_env}', remove_volumes=False)
