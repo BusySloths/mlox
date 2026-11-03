@@ -8,7 +8,7 @@ normally run per server. Port 80 or 443 must be available before setup; notably,
 existing catalog apps using their own Let's Encrypt HTTP challenge already use
 port 80. Stop or reconfigure those explicitly before starting this proxy.
 
-Add **Docker Reverse Proxy** to the Docker server in the TUI and set it up. Its
+Add **Traefik Gateway** to the Docker server in the TUI and set it up. Its
 service settings panel lists routes and lets you add or remove them live. The
 CLI offers `mlox service proxy-routes`, `proxy-route-add`, and
 `proxy-route-remove` (use `--help` for options). Route additions reject a
@@ -17,6 +17,12 @@ route does not stop its backend. Removing or stopping the proxy leaves existing
 applications and their published ports unchanged. The proxy deployment directory,
 including ACME account data and any managed certificate copies, is retained on
 removal so certificates are not lost accidentally.
+
+Optionally select the relayed mlox service in the route form (or pass
+`--service-uuid` to the CLI) to associate it with this proxy in the Apps tab.
+The backend URL still determines where traffic goes; the service association
+does not change or validate that endpoint. Older routes without a service UUID
+are matched only when their local backend port identifies one app unambiguously.
 
 Example for an existing Memos instance running on the same server:
 

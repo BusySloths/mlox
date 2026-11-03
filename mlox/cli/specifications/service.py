@@ -23,6 +23,7 @@ SERVICE_COMMANDS = (
                     CliParameter("tls_mode", "Public TLS: self-signed, letsencrypt, or managed"),
                     CliParameter("insecure_backend", "Disable backend TLS certificate verification"),
                     CliParameter("backend_host", "Optional backend Host header"),
+                    CliParameter("service_uuid", "Optional UUID of the relayed mlox service"),
                     CliParameter("tls_secret_manager_uuid", "Managed certificate secret-manager UUID"),
                     CliParameter("tls_secret_name", "Managed certificate secret name")), renderer=render_message),
     WorkspaceCommand(name="proxy-route-remove", method="remove_proxy_route", help="Remove a live proxy route.",

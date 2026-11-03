@@ -672,9 +672,22 @@ MLflowGatewaySettingsPanel {
   color: #a6c9bdff;
 }
 
-#apps-table {
+#apps-browser {
   height: 1fr;
   width: 1fr;
+}
+
+#apps-proxy-table {
+  width: 1fr;
+  min-width: 24;
+  height: 1fr;
+  margin-right: 1;
+  border: round #1bd6f3ff;
+}
+
+#apps-table {
+  height: 1fr;
+  width: 3fr;
   border: round #3ba55d;
 }
 

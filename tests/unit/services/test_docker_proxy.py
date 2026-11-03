@@ -120,6 +120,49 @@ def test_project_round_trip_keeps_route_and_existing_runtime_names():
     assert restored.compose_service_names == service.compose_service_names
 
 
+def test_proxy_capability_lists_linked_services_without_exposing_mutable_state():
+    from mlox.service import AbstractProxyService, ServiceCapability
+
+    service = proxy()
+    assert isinstance(service, AbstractProxyService)
+    assert ServiceCapability.PROXY in service.capabilities
+    service.add_route(None, hostname='wiki.example.org', backend='http://host.docker.internal:3000', service_uuid='wiki-uuid')
+    assert service.list_relayed_services() == {'wiki-uuid'}
+    routes = service.list_routes()
+    routes['wiki.example.org']['backend'] = 'changed'
+    assert service.routes['wiki.example.org']['backend'] != 'changed'
+
+
+def test_proxy_template_has_semver_and_preserves_legacy_lookup():
+    from mlox.config import load_service_config_by_id
+
+    old = load_service_config_by_id('docker-proxy-1-docker')
+    new = load_service_config_by_id('docker-proxy-1.0.0-docker')
+    assert old and new and old.id == new.id == 'docker-proxy-1.0.0-docker'
+    assert new.version == '1.0.0'
+    assert new.name == 'Traefik Gateway'
+    assert 'proxy' in new.service_capabilities()
+
+
+def test_workspace_links_routes_to_existing_service():
+    from contextlib import nullcontext
+    from mlox.application.use_cases.docker_proxy import add_route
+
+    service = proxy()
+    service.state = 'running'
+    bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=lambda: nullcontext(None)))
+    infra = SimpleNamespace(get_service=lambda name: service, get_bundle_by_service=lambda item: bundle,
+                            get_service_by_uuid=lambda uuid: object() if uuid == 'app-id' else None)
+    project = SimpleNamespace(infrastructure=infra)
+    result = add_route(project, name='docker-proxy', hostname='wiki.example.org',
+                       backend='http://host.docker.internal:3000', service_uuid='app-id')
+    assert result.success
+    assert service.list_routes()['wiki.example.org']['service_uuid'] == 'app-id'
+    bad = add_route(project, name='docker-proxy', hostname='bad.example.org',
+                    backend='http://host.docker.internal:3000', service_uuid='missing')
+    assert not bad.success and 'bad.example.org' not in service.routes
+
+
 def test_managed_certificate_is_validated_before_route_mutation(monkeypatch):
     service = proxy()
     monkeypatch.setattr(service, '_tls_secret', lambda route, host: ('certificate', 'private-key'))

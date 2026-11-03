@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 import yaml
 
 from mlox.execution import TaskGroup
-from mlox.service import AbstractHealthService, AbstractSecretManagerService, AbstractService, ServiceCapability, service_health_payload
+from mlox.service import AbstractHealthService, AbstractProxyService, AbstractSecretManagerService, AbstractService, ServiceCapability, service_health_payload
 from mlox.services.mlflow_gateway.k3s_managed_tls import _valid_hostname, _validate_certificate
 
 
@@ -48,10 +48,10 @@ def _backend(value: str) -> str:
 
 
 @dataclass
-class DockerProxyService(AbstractService, AbstractHealthService):
+class DockerProxyService(AbstractService, AbstractHealthService, AbstractProxyService):
     """One Traefik container; routes are stored in project state and watched files."""
 
-    capabilities = {ServiceCapability.HEALTH}
+    capabilities = {ServiceCapability.HEALTH, ServiceCapability.PROXY}
     routes: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -162,12 +162,12 @@ class DockerProxyService(AbstractService, AbstractHealthService):
         self._write_configuration(conn, self.routes)
         self.state = 'starting'
 
-    def add_route(self, conn, *, hostname: str, backend: str, tls_mode: str = 'self-signed', insecure_backend: bool = False, backend_host: str = '', tls_secret_manager_uuid: str = '', tls_secret_name: str = '') -> None:
+    def add_route(self, conn, *, hostname: str, backend: str, tls_mode: str = 'self-signed', insecure_backend: bool = False, backend_host: str = '', tls_secret_manager_uuid: str = '', tls_secret_name: str = '', service_uuid: str = '') -> None:
         host = _hostname(hostname)
         if host in self.routes:
             raise ValueError(f'A route for {host} already exists.')
         routes = dict(self.routes)
-        routes[host] = {'backend': _backend(backend), 'tls_mode': tls_mode, 'insecure_backend': insecure_backend, 'backend_host': backend_host, 'tls_secret_manager_uuid': tls_secret_manager_uuid, 'tls_secret_name': tls_secret_name}
+        routes[host] = {'backend': _backend(backend), 'tls_mode': tls_mode, 'insecure_backend': insecure_backend, 'backend_host': backend_host, 'tls_secret_manager_uuid': tls_secret_manager_uuid, 'tls_secret_name': tls_secret_name, 'service_uuid': service_uuid}
         self._write_configuration(conn, routes)
         self.routes = routes
 
@@ -179,6 +179,9 @@ class DockerProxyService(AbstractService, AbstractHealthService):
         del routes[host]
         self._write_configuration(conn, routes)
         self.routes = routes
+
+    def list_routes(self) -> dict[str, dict[str, Any]]:
+        return {hostname: dict(route) for hostname, route in self.routes.items()}
 
     def spin_up(self, conn):
         return self.compose_up(conn)

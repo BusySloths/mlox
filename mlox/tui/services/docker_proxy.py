@@ -46,6 +46,12 @@ class DockerProxyPanel(Vertical):
             fields=[
                 TemplateFieldSpec('hostname', 'Public hostname', placeholder='notes.example.org'),
                 TemplateFieldSpec('backend', 'Backend URL', placeholder='https://host.docker.internal:5230'),
+                TemplateFieldSpec('service_uuid', 'Relayed mlox service', kind='select', required=False,
+                                  options=[(f"{getattr(bundle, 'name', '')} / {item.name}", str(item.uuid))
+                                           for bundle in getattr(self.infra, 'bundles', []) or []
+                                           for item in getattr(bundle, 'services', []) or []
+                                           if getattr(item, 'uuid', None) and item is not self.service],
+                                  help='Optional: link this route to an installed service.'),
                 TemplateFieldSpec('tls_mode', 'Public TLS', kind='select', default='self-signed', options=[('Self-signed', 'self-signed'), ("Let’s Encrypt", 'letsencrypt'), ('Managed certificate', 'managed')]),
                 TemplateFieldSpec('tls_secret_ref', 'TLS secret (manager / name)', kind='select', visible_when=('tls_mode', 'managed'), options_loader=lambda: _tls_secret_reference_options(self.infra)),
                 TemplateFieldSpec('insecure_backend', 'Backend certificate verification', kind='select', default='false', options=[('Verify', 'false'), ('Skip verification (self-signed backend)', 'true')]),
@@ -62,7 +68,8 @@ class DockerProxyPanel(Vertical):
             manager, secret = json.loads(values['tls_secret_ref'])
         self._run(lambda ws: ws.add_proxy_route(name=self.service.name, hostname=values['hostname'], backend=values['backend'],
                   tls_mode=values['tls_mode'], insecure_backend=values['insecure_backend'] == 'true',
-                  backend_host=values['backend_host'], tls_secret_manager_uuid=manager, tls_secret_name=secret))
+                  backend_host=values['backend_host'], tls_secret_manager_uuid=manager, tls_secret_name=secret,
+                  service_uuid=values.get('service_uuid', '')))
 
     @on(Button.Pressed, '#proxy-route-remove')
     def remove_route(self):

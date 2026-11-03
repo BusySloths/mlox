@@ -1,9 +1,9 @@
-id: docker-proxy-1-docker
-name: Docker Reverse Proxy
-version: '1'
+id: docker-proxy-1.0.0-docker
+name: Traefik Gateway
+version: 1.0.0
 maintainer: Busy Sloths
-description_short: Route HTTPS hostnames to existing HTTP or HTTPS services.
-description: A shared Traefik reverse proxy for Docker servers, with live hostname routes and optional Let's Encrypt or managed certificates.
+description_short: Give your services secure domain names through one shared gateway.
+description: Traefik Gateway routes multiple public hostnames to existing services on a Docker server. Add or remove routes live and choose self-signed, Let's Encrypt, or secret-manager-backed TLS certificates per hostname.
 links:
   project: https://traefik.io/traefik/
   documentation: https://doc.traefik.io/traefik/
@@ -20,6 +20,7 @@ groups:
 capabilities:
   service:
   - health
+  - proxy
   backend:
   - docker
 build:

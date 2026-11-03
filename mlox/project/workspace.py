@@ -789,11 +789,12 @@ class ProjectWorkspace:
     def add_proxy_route(self, *, name: str, hostname: str, backend: str,
                         tls_mode: str = "self-signed", insecure_backend: bool = False,
                         backend_host: str = "", tls_secret_manager_uuid: str = "",
-                        tls_secret_name: str = "") -> OperationResult[dict[str, Any]]:
+                        tls_secret_name: str = "", service_uuid: str = "") -> OperationResult[dict[str, Any]]:
         return self._mutate_proxy_routes(name, lambda: docker_proxy.add_route(
             self._state, name=name, hostname=hostname, backend=backend,
             tls_mode=tls_mode, insecure_backend=insecure_backend, backend_host=backend_host,
             tls_secret_manager_uuid=tls_secret_manager_uuid, tls_secret_name=tls_secret_name,
+            service_uuid=service_uuid,
         ))
 
     def remove_proxy_route(self, *, name: str, hostname: str) -> OperationResult[dict[str, Any]]:

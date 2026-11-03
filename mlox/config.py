@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Literal, TypedDict
 
 from mlox.service import (
     AbstractHealthService,
+    AbstractProxyService,
     AbstractModelRegistryService,
     AbstractModelServerService,
     AbstractMonitorService,
@@ -54,6 +55,7 @@ SERVER_CAPABILITY_ABCS = {
 
 
 SERVICE_CAPABILITY_ABCS = {
+    ServiceCapability.PROXY.value: AbstractProxyService,
     ServiceCapability.HEALTH.value: AbstractHealthService,
     ServiceCapability.WEB_UI.value: AbstractWebUIService,
     ServiceCapability.SECRET_MANAGER.value: AbstractSecretManagerService,
@@ -67,6 +69,7 @@ SERVICE_CAPABILITY_ABCS = {
 }
 
 SERVICE_GROUP_ALIASES = {
+    "proxy": ServiceCapability.PROXY.value,
     "app": ServiceCapability.APP.value,
     "application": ServiceCapability.APP.value,
     "health": ServiceCapability.HEALTH.value,
@@ -402,6 +405,10 @@ def get_stacks_path(prefix: Literal["mlox", "mlox-server"] = "mlox") -> str:
 
 
 def load_service_config_by_id(service_id: str) -> ServiceConfig | None:
+    # Preserve the originally published proxy template ID for existing scripts
+    # and project state while displaying the semantic-versioned ID in catalogs.
+    aliases = {"docker-proxy-1-docker": "docker-proxy-1.0.0-docker"}
+    service_id = aliases.get(service_id, service_id)
     # for service configs
     for config in load_all_service_configs(prefix="mlox"):
         if config.id == service_id:

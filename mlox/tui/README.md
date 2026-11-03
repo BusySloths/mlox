@@ -9,9 +9,12 @@ This package implements the terminal dashboard using Textual.
 - `screens/dashboard/`: infrastructure tree, details, actions, and logs.
 - `services/`: TUI-specific service panels.
 
-The project-level Apps tab lists installed services with the `app` capability,
-their recorded state and web UI address. It can open the selected app and
-refresh the overview without changing the deployed services.
+The project-level Apps tab groups installed services with the `app` capability
+by their mlox proxy, alongside a permanent “No proxy” group. Select a proxy to
+see its apps, their recorded state and web UI address. The tab can open an app
+and refresh the overview without changing deployed services. The “No proxy”
+group means no association with a proxy managed in the current project; it
+does not detect external proxies.
 
 ## Workflow
 

@@ -28,7 +28,6 @@ The authoritative, exhaustive list of services and servers bundled with MLOX. Ge
 | **Application: Wiki.js** | 2.5.306 | docker | Create a searchable team wiki for documentation and shared knowledge. |
 | **Bitnami Kafka** | 3.7.0 | docker | Apache Kafka is a distributed event streaming platform for high-performance data pipelines. |
 | **Developers Terminal Dream** | 0.1-beta | docker, k3s_agent, kubernetes, kubernetes_agent, native | Install a terminal-first developer workstation on MLOX backends. |
-| **Docker Reverse Proxy** | 1 | docker | Route HTTPS hostnames to existing HTTP or HTTPS services. |
 | **Feast Feature Store** | 0.54.0 | docker | Feast is an open-source feature store for managing and serving machine learning features. |
 | **GCP BigQuery** | 0.1.0 | connector | GCP BigQuery is a fully managed, serverless data warehouse that enables scalable analysis over petabytes of data. |
 | **GCP Secret Manager** | 0.1.0 | connector | GCP Secret Manager is a secure and scalable service for managing secrets in Google Cloud Platform. |
@@ -57,6 +56,7 @@ The authoritative, exhaustive list of services and servers bundled with MLOX. Ge
 | **Redis** | 8-bookworm | docker | Redis is an open-source, in-memory data structure store. |
 | **Repository Docker Deploy** | 0.1-beta | docker | Deploy a docker compose file from an existing repository service. |
 | **TinySecretManager (TSM)** | 0.1-beta | docker, kubernetes, native | TinySecretManager is a lightweight, file-based secret management service. |
+| **Traefik Gateway** | 1.0.0 | docker | Give your services secure domain names through one shared gateway. |
 
 ---
 

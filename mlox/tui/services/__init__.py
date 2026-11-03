@@ -8,7 +8,7 @@ _REGISTERED = False
 
 _TUI_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
     "mlox.tui.services.docker_proxy": {
-        "config_ids": ("docker-proxy-1-docker",),
+        "config_ids": ("docker-proxy-1-docker", "docker-proxy-1.0.0-docker"),
         "function_names": ("settings",),
     },
     "mlox.tui.services.otel": {
