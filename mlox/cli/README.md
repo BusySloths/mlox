@@ -27,10 +27,16 @@ JSON failures have a nonzero exit code and an `error` category such as
 `mlox --output json service logs otel-0.146.1 --tail 5` uses the active project.
 The former positional project argument is replaced by `--project`.
 
-Use `project inspect`, `server inspect <UUID-or-IP>`, or
+Use `project inspect`, `server inspect <UUID-or-server-identifier>`, or
 `service inspect <UUID-or-name>` to examine individual resources. Service and
 server lists include UUIDs and capabilities; services also include their server
 UUID and configured binding UUIDs. Names must be unambiguous for inspection.
+
+For server-targeting commands such as `server exec` and `service add`, you can
+use a bundle name or a unique suffix of its server address in place of the full
+IP or hostname. For example, `--ip 42` selects `192.0.2.42` if no other server
+address ends in `42`. Exact addresses take precedence; ambiguous names or
+suffixes are rejected. Register a new server using its full address.
 
 Run a non-interactive command on a managed SSH server through the workspace:
 

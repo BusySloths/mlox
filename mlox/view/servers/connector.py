@@ -37,7 +37,7 @@ def setup(infra: Infrastructure, config: ServiceConfig) -> dict[str, Any] | None
     if not name:
         st.warning("Enter a connector name.")
         return None
-    if infra.get_bundle_by_ip(name):
+    if any(bundle.server.ip == name for bundle in infra.bundles):
         st.warning("A server with this name already exists.")
         return None
 

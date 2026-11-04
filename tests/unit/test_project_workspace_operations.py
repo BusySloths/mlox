@@ -18,6 +18,44 @@ def _workspace() -> ProjectWorkspace:
     return ProjectWorkspace(_Repository(), WorkspaceState(name="demo"))
 
 
+def test_inspect_server_accepts_bundle_name_and_unique_suffix():
+    workspace = _workspace()
+    first = SimpleNamespace(ip="192.0.2.42", uuid="one")
+    second = SimpleNamespace(ip="192.0.2.142", uuid="two")
+    workspace.infrastructure.bundles.extend([
+        SimpleNamespace(name="first", server=first, services=[]),
+        SimpleNamespace(name="second", server=second, services=[]),
+    ])
+
+    assert workspace.inspect_server(identifier="first").data["server"]["uuid"] == "one"
+    assert workspace.inspect_server(identifier="142").data["server"]["uuid"] == "two"
+    assert workspace.inspect_server(identifier="one").data["server"]["ip"] == first.ip
+    assert not workspace.inspect_server(identifier="42").success
+
+
+def test_server_and_service_lists_include_their_bundle_names():
+    workspace = _workspace()
+    workspace.infrastructure.bundles.extend([
+        SimpleNamespace(
+            name="work", server=SimpleNamespace(ip="192.0.2.1"),
+            services=[SimpleNamespace(name="notes")],
+        ),
+        SimpleNamespace(
+            name="home", server=SimpleNamespace(ip="192.0.2.2"),
+            services=[SimpleNamespace(name="wiki")],
+        ),
+    ])
+
+    servers = workspace.list_servers().data["servers"]
+    services = workspace.list_services().data["services"]
+    assert [(row["ip"], row["bundle_name"]) for row in servers] == [
+        ("192.0.2.1", "work"), ("192.0.2.2", "home")
+    ]
+    assert [(row["name"], row["bundle_name"]) for row in services] == [
+        ("notes", "work"), ("wiki", "home")
+    ]
+
+
 def test_successful_mutation_commits(monkeypatch):
     workspace = _workspace()
     workspace.commit = mock.Mock()

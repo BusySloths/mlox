@@ -26,21 +26,21 @@ SERVER_COMMANDS = (
             method=f"{action}_server_ssh_key",
             help=f"{action.capitalize()} a public key for the managed server account.",
             parameters=(
-                CliParameter("ip", "Server IP or hostname"),
+                CliParameter("ip", "Server IP, hostname, unique suffix, or bundle name"),
                 CliParameter("public_key", "Complete OpenSSH public key (quote the value)"),
             ),
             renderer=render_message,
         )
         for action in ("add", "remove")
     ),
-    WorkspaceCommand(name="inspect", method="inspect_server", help="Inspect a server by UUID or IP.",
-        parameters=(CliParameter("identifier", "Server UUID or IP", kind="argument"),), renderer=render_inspection),
+    WorkspaceCommand(name="inspect", method="inspect_server", help="Inspect a server by UUID, address, unique suffix, or bundle name.",
+        parameters=(CliParameter("identifier", "Server UUID, address, unique suffix, or bundle name", kind="argument"),), renderer=render_inspection),
     WorkspaceCommand(
         name="exec",
         method="execute_server_command",
         help="Run a non-interactive SSH command on a project server.",
         parameters=(
-            CliParameter("ip", "Server IP or hostname"),
+            CliParameter("ip", "Server IP, hostname, unique suffix, or bundle name"),
             CliParameter("command", "Shell command to execute"),
             CliParameter("sudo", "Run using the managed sudo credential"),
             CliParameter("timeout", "Command timeout in seconds"),
@@ -93,7 +93,7 @@ SERVER_COMMANDS = (
         method="setup_server",
         help="Run the setup routine on a server.",
         parameters=(
-            CliParameter("ip", "Server IP or hostname", kind="argument"),
+            CliParameter("ip", "Server IP, hostname, unique suffix, or bundle name", kind="argument"),
         ),
         renderer=render_message,
     ),
@@ -102,7 +102,7 @@ SERVER_COMMANDS = (
         method="teardown_server",
         help="Tear down a server and remove it from the infrastructure.",
         parameters=(
-            CliParameter("ip", "Server IP or hostname", kind="argument"),
+            CliParameter("ip", "Server IP, hostname, unique suffix, or bundle name", kind="argument"),
         ),
         renderer=render_message,
     ),
@@ -111,7 +111,7 @@ SERVER_COMMANDS = (
         method="save_server_key",
         help="Save a server key file for local access.",
         parameters=(
-            CliParameter("ip", "Server IP or hostname", kind="argument"),
+            CliParameter("ip", "Server IP, hostname, unique suffix, or bundle name", kind="argument"),
             CliParameter(
                 "output",
                 "Path to store the encrypted key file",

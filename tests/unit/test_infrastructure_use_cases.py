@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from mlox.application.use_cases import servers, services
-from mlox.infra import Infrastructure
+from mlox.infra import Bundle, Infrastructure
 from mlox.project.state import WorkspaceState
 
 
@@ -129,3 +129,18 @@ def test_add_server_appends_bundle_and_sets_discovered():
     assert result.success
     assert infra.bundles[0].server is server
     assert server.discovered
+
+
+def test_add_server_duplicate_check_uses_exact_address():
+    server = SimpleNamespace(ip="42", test_connection=lambda: True)
+    config = SimpleNamespace(id="server-config", instantiate_server=lambda params: server)
+    infra = Infrastructure.__new__(Infrastructure)
+    infra.bundles = [Bundle(name="other", server=SimpleNamespace(ip="192.0.2.42"))]
+    infra.configs = {}
+    current = WorkspaceState(name="demo", infrastructure=infra)
+    kwargs = dict(template_path="server.yaml", ip="42", port=22, root_user="root", root_password="pw")
+
+    assert servers.add_server(current, lambda path: config, **kwargs).success
+    duplicate = servers.add_server(current, lambda path: config, **kwargs)
+    assert not duplicate.success
+    assert duplicate.message == "Server already exists."

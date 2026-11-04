@@ -40,6 +40,7 @@ def render_server_list(result: OperationResult[Any]) -> None:
     rows = [
         [
             server.get("ip", "-"),
+            server.get("bundle_name") or "-",
             server.get("state", "-"),
             server.get("service_count", 0),
             server.get("service_config_id") or server.get("template", "-"),
@@ -50,7 +51,7 @@ def render_server_list(result: OperationResult[Any]) -> None:
         for server in servers
     ]
     render_table(
-        ["IP", "State", "#Services", "Template", "Port", "Discovered", "Backend"],
+        ["IP", "Bundle", "State", "#Services", "Template", "Port", "Discovered", "Backend"],
         rows,
         title="Servers",
     )
@@ -66,6 +67,7 @@ def render_service_list(result: OperationResult[Any]) -> None:
     rows = [
         [
             service.get("name", "-"),
+            service.get("bundle_name") or "-",
             "App" if "app" in service.get("capabilities", []) else "Service",
             service.get("service_config_id", "-"),
             service.get("server_ip", "-"),
@@ -77,7 +79,7 @@ def render_service_list(result: OperationResult[Any]) -> None:
         for service in services
     ]
     render_table(
-        ["Service", "Type", "Template", "Server", "State", "Labels", "Ports", "URLs"],
+        ["Service", "Bundle", "Type", "Template", "Server", "State", "Labels", "Ports", "URLs"],
         rows,
         title="Services",
     )

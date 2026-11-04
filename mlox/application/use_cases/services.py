@@ -296,6 +296,7 @@ def list_services(project: WorkspaceState) -> OperationResult[ListServicesData]:
             payload.append(
                 {
                     "name": service.name,
+                    "bundle_name": getattr(bundle, "name", ""),
                     "uuid": getattr(service, "uuid", None),
                     "server_uuid": getattr(bundle.server, "uuid", None),
                     "capabilities": sorted(_service_capability_names(service)),

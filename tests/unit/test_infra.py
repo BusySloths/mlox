@@ -241,6 +241,29 @@ def test_infrastructure_lookup_helpers_find_services_bundles_and_servers():
     assert infra.get_server_by_uuid("missing") is None
 
 
+def test_bundle_lookup_accepts_unique_suffixes_and_bundle_names():
+    first = Bundle(name="work", server=make_server(DummyServer, "192.0.2.42"))
+    second = Bundle(name="42", server=make_server(DummyServer, "192.0.2.142"))
+    third = Bundle(name="third", server=make_server(DummyServer, "server.example"))
+    infra = make_infra(bundles=[first, second, third])
+
+    assert infra.get_bundle_by_ip("192.0.2.42") is first
+    assert infra.get_bundle_by_ip("work") is first
+    assert infra.get_bundle_by_ip("42") is second  # An exact bundle name wins.
+    assert infra.get_bundle_by_ip(".42") is first
+    assert infra.get_bundle_by_ip("142") is second
+    assert infra.get_bundle_by_ip("example") is third
+    assert infra.get_bundle_by_ip("2") is None  # Both IPs end in 2.
+    assert infra.get_bundle_by_ip("") is None
+    assert infra.get_bundle_by_ip("missing") is None
+
+    third.name = "work"
+    assert infra.get_bundle_by_ip("work") is None
+    # A complete address still resolves even when another address ends in it.
+    third.server.ip = "other.192.0.2.42"
+    assert infra.get_bundle_by_ip("192.0.2.42") is first
+
+
 def test_kubernetes_and_backend_filters_only_return_matching_bundles():
     running_k8s_server = make_server(DummyServer, "10.0.0.1")
     running_k8s_server.backend = ["kubernetes"]

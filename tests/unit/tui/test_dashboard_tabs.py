@@ -46,15 +46,64 @@ from mlox.tui.screens.dashboard.screen import (
     MODELS_TAB_ID,
     MONITOR_TAB_ID,
     OPERATIONS_TAB_ID,
+    OVERVIEW_TAB_ID,
     REPOSITORY_TAB_ID,
     SECRET_MANAGER_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
     SIDEBAR_STEP,
     SERVER_TEMPLATES_TAB_ID,
     SERVICE_TEMPLATES_TAB_ID,
+    SERVICE_TUI_TAB_ID,
     WORKFLOW_TAB_ID,
 )
 from mlox.tui.template_forms import TemplateFieldSpec, TemplateFormSpec
+
+
+def test_service_page_requires_running_state(monkeypatch) -> None:
+    calls = []
+
+    def build_widget(infra, bundle, service):
+        calls.append(service.state)
+        return OperationResult(True, 0, "Loaded", {"widget": Static("settings")})
+
+    monkeypatch.setattr(
+        "mlox.tui.screens.dashboard.screen.build_service_ui_widget", build_widget
+    )
+
+    async def exercise() -> None:
+        app = DashboardTestApp()
+        async with app.run_test() as pilot:
+            screen = app.query_one(DashboardScreen)
+            tabs = screen.query_one("#main-tabs", TabbedContent)
+            service = SimpleNamespace(state="un-initialized")
+            selection = SelectionInfo(type="service", bundle=object(), service=service)
+
+            for state in (
+                "un-initialized", "starting", "stopped", "terminating",
+                "failed", "error", "unknown", None,
+            ):
+                service.state = state
+                screen._requested_tab_id = SERVICE_TUI_TAB_ID
+                screen._update_tui_panel(selection)
+                assert tabs.get_tab(SERVICE_TUI_TAB_ID).styles.display == "none"
+                assert screen._requested_tab_id is None
+            assert calls == []
+
+            service.state = "running"
+            screen._update_tui_panel(selection)
+            await pilot.pause()
+            assert tabs.get_tab(SERVICE_TUI_TAB_ID).styles.display != "none"
+            assert calls == ["running"]
+            tabs.active = SERVICE_TUI_TAB_ID
+
+            service.state = "stopped"
+            screen._update_tui_panel(selection)
+            await pilot.pause()
+            assert tabs.get_tab(SERVICE_TUI_TAB_ID).styles.display == "none"
+            assert tabs.active == OVERVIEW_TAB_ID
+            assert calls == ["running"]
+
+    asyncio.run(exercise())
 
 
 class DashboardTestApp(App):

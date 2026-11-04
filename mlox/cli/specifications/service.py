@@ -41,7 +41,7 @@ SERVICE_COMMANDS = (
         method="add_service",
         help="Add a new service to an existing server.",
         parameters=(
-            CliParameter("server_ip", "IP of the target server"),
+            CliParameter("server_ip", "Server IP, unique IP suffix, or bundle name"),
             CliParameter("template_id", "Service template ID"),
             CliParameter(
                 "param",

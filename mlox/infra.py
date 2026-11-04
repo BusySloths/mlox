@@ -90,10 +90,22 @@ class Infrastructure:
         return None
 
     def get_bundle_by_ip(self, ip: str) -> Optional[Bundle]:
+        """Find an exact address, bundle name, or unique address suffix.
+
+        Exact addresses take precedence, preserving existing lookups even when
+        another address ends with the same text. Ambiguous names or suffixes
+        do not select a bundle.
+        """
+        if not ip:
+            return None
         for bundle in self.bundles:
             if bundle.server.ip == ip:
                 return bundle
-        return None
+        names = [bundle for bundle in self.bundles if bundle.name == ip]
+        if names:
+            return names[0] if len(names) == 1 else None
+        suffixes = [bundle for bundle in self.bundles if bundle.server.ip.endswith(ip)]
+        return suffixes[0] if len(suffixes) == 1 else None
 
     def list_service_names(self) -> List[str]:
         return [s.name for bundle in self.bundles for s in bundle.services]

@@ -32,6 +32,7 @@ class ServerSummary(TypedDict):
     """Serializable server row returned by ``list_servers``."""
 
     ip: str
+    bundle_name: str
     uuid: str | None
     capabilities: list[str]
     state: str
@@ -81,6 +82,7 @@ class ServiceSummary(TypedDict):
     """Serializable service row returned by ``list_services``."""
 
     name: str
+    bundle_name: str
     uuid: str | None
     server_uuid: str | None
     capabilities: list[str]

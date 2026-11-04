@@ -108,7 +108,7 @@ def test_server_list_no_servers(monkeypatch):
 
 
 def test_server_list_outputs_servers(monkeypatch):
-    payload = {"servers": [{"ip": "1.1.1.1", "state": "running", "service_count": 3}]}
+    payload = {"servers": [{"ip": "1.1.1.1", "bundle_name": "work-server", "state": "running", "service_count": 3}]}
     operation_result = OperationResult(
         True, 0, "Servers retrieved successfully.", payload
     )
@@ -122,6 +122,8 @@ def test_server_list_outputs_servers(monkeypatch):
     assert "Servers" in result.stdout
     assert "| IP" in result.stdout
     assert "| 1.1.1.1" in result.stdout
+    assert "Bundle" in result.stdout
+    assert "work-server" in result.stdout
     assert "running" in result.stdout
     mock_list.assert_called_once_with()
 
@@ -215,6 +217,7 @@ def test_service_list_outputs(monkeypatch):
         "services": [
             {
                 "name": "svc",
+                "bundle_name": "work-server",
                 "service_config_id": "svc-template",
                 "server_ip": "1.1.1.1",
             }
@@ -231,6 +234,8 @@ def test_service_list_outputs(monkeypatch):
     assert "Services" in result.stdout
     assert "| Service" in result.stdout
     assert "| svc" in result.stdout
+    assert "Bundle" in result.stdout
+    assert "work-server" in result.stdout
     assert "svc-template" in result.stdout
     assert "1.1.1.1" in result.stdout
 

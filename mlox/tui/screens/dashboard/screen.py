@@ -1583,11 +1583,25 @@ class DashboardScreen(Screen):
         for child in list(container.children):
             child.remove()
 
+        running = bool(
+            selection
+            and selection.type == "service"
+            and selection.service
+            and getattr(selection.service, "state", None) == "running"
+        )
+        if not running and self._requested_tab_id == SERVICE_TUI_TAB_ID:
+            self._requested_tab_id = None
         self._set_service_tui_tab_visible(False)
 
         if not selection or selection.type != "service" or not selection.service:
             self._mount_placeholder(
                 container, "Select a service to inspect service-specific settings."
+            )
+            return
+
+        if not running:
+            self._mount_placeholder(
+                container, "Service settings are available when the service is running."
             )
             return
 

@@ -76,6 +76,7 @@ def list_servers(project: WorkspaceState) -> OperationResult[ListServersData]:
     payload: list[ServerSummary] = [
         {
             "ip": bundle.server.ip,
+            "bundle_name": getattr(bundle, "name", ""),
             "uuid": getattr(bundle.server, "uuid", None),
             "capabilities": sorted(_server_capability_names(bundle.server)),
             "state": getattr(bundle.server, "state", "unknown"),
@@ -118,7 +119,7 @@ def add_server(
     if not server:
         return OperationResult(False, 4, "Failed to instantiate server.")
     infra = project.infrastructure
-    if infra.get_bundle_by_ip(server.ip):
+    if any(bundle.server.ip == server.ip for bundle in infra.bundles):
         return OperationResult(False, 4, "Server already exists.")
     if not server.test_connection():
         return OperationResult(False, 4, "Could not connect to server.")

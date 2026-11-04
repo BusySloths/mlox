@@ -52,7 +52,7 @@ def model_deploy(
         ...,
         "--target",
         "-t",
-        help="Target server IP or hostname where MLServer should run",
+        help="Target server IP, hostname, unique suffix, or bundle name",
     ),
 ) -> None:
     """Deploy a registered model using the MLflow MLServer docker service."""

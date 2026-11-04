@@ -646,9 +646,16 @@ class ProjectWorkspace:
         })
 
     def inspect_server(self, *, identifier: str) -> OperationResult[dict[str, Any]]:
-        """Inspect a server by UUID or IP address."""
+        """Inspect a server by UUID, address, unique suffix, or bundle name."""
         result = self.list_servers()
-        matches = [s for s in result.data["servers"] if identifier in (s.get("uuid"), s.get("ip"))]
+        matches = [s for s in result.data["servers"] if identifier == s.get("uuid")]
+        if not matches:
+            bundle = self.infrastructure.get_bundle_by_ip(identifier)
+            matches = [
+                summary
+                for current, summary in zip(self.infrastructure.bundles, result.data["servers"])
+                if current is bundle
+            ]
         if len(matches) != 1:
             return OperationResult(False, 5, "Server not found or identifier is ambiguous.")
         return OperationResult(True, 0, "Server retrieved.", {"server": matches[0]})
