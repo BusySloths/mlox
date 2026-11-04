@@ -31,6 +31,8 @@ Use `project inspect`, `server inspect <UUID-or-server-identifier>`, or
 `service inspect <UUID-or-name>` to examine individual resources. Service and
 server lists include UUIDs and capabilities; services also include their server
 UUID and configured binding UUIDs. Names must be unambiguous for inspection.
+Server inspection includes `ssh_username`, the account mlox uses to connect;
+it is null for servers without SSH access.
 
 For server-targeting commands such as `server exec` and `service add`, you can
 use a bundle name or a unique suffix of its server address in place of the full

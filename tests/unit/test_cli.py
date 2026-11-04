@@ -48,6 +48,26 @@ def test_service_inspection_by_uuid_and_ambiguous_name():
     assert not workspace.inspect_service(identifier="collector").success
 
 
+def test_server_inspection_shows_ssh_username_in_both_output_modes(monkeypatch):
+    server = SimpleNamespace(
+        ip="192.0.2.42", uuid="server-1", capabilities={"terminal"},
+        root="root", mlox_user=SimpleNamespace(name="mlox_abc"),
+    )
+    bundle = SimpleNamespace(name="work", server=server, services=[])
+    infrastructure = SimpleNamespace(bundles=[bundle], get_bundle_by_ip=lambda ip: bundle)
+    workspace = ProjectWorkspace.__new__(ProjectWorkspace)
+    workspace._state = SimpleNamespace(infrastructure=infrastructure)
+    monkeypatch.setattr(ProjectWorkspace, "open", mock.Mock(return_value=workspace))
+
+    for prefix in ([], ["--output", "json"]):
+        result = runner.invoke(cli.app, [*prefix, "server", "inspect", "work", "--project", "proj", "--password", "pw"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        if prefix:
+            data = data["data"]
+        assert data["server"]["ssh_username"] == "mlox_abc"
+
+
 def test_json_output_handles_success_failure_and_domain_objects(monkeypatch):
     service = SimpleNamespace(name="collector", uuid="abc", state="running", token="secret")
     _patch_application(monkeypatch, "setup_service", OperationResult(True, 0, "ok", {"service": service}))

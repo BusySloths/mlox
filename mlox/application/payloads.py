@@ -33,6 +33,7 @@ class ServerSummary(TypedDict):
 
     ip: str
     bundle_name: str
+    ssh_username: str | None
     uuid: str | None
     capabilities: list[str]
     state: str

@@ -56,6 +56,26 @@ def test_server_and_service_lists_include_their_bundle_names():
     ]
 
 
+def test_server_inspection_reports_connection_user_only_for_ssh_servers():
+    workspace = _workspace()
+    workspace.infrastructure.bundles.extend([
+        SimpleNamespace(name="managed", server=SimpleNamespace(
+            ip="one", root="root", mlox_user=SimpleNamespace(name="mlox_123"),
+            capabilities={"terminal"},
+        ), services=[]),
+        SimpleNamespace(name="simple", server=SimpleNamespace(
+            ip="two", root="ubuntu", mlox_user=None, capabilities={"terminal"},
+        ), services=[]),
+        SimpleNamespace(name="connector", server=SimpleNamespace(
+            ip="three", root="root", capabilities={"connector"},
+        ), services=[]),
+    ])
+
+    assert workspace.inspect_server(identifier="managed").data["server"]["ssh_username"] == "mlox_123"
+    assert workspace.inspect_server(identifier="simple").data["server"]["ssh_username"] == "ubuntu"
+    assert workspace.inspect_server(identifier="connector").data["server"]["ssh_username"] is None
+
+
 def test_successful_mutation_commits(monkeypatch):
     workspace = _workspace()
     workspace.commit = mock.Mock()

@@ -77,6 +77,15 @@ def list_servers(project: WorkspaceState) -> OperationResult[ListServersData]:
         {
             "ip": bundle.server.ip,
             "bundle_name": getattr(bundle, "name", ""),
+            "ssh_username": (
+                (
+                    getattr(bundle.server.mlox_user, "name", None)
+                    if getattr(bundle.server, "mlox_user", None)
+                    else getattr(bundle.server, "root", None)
+                )
+                if ServerCapability.TERMINAL.value in _server_capability_names(bundle.server)
+                else None
+            ),
             "uuid": getattr(bundle.server, "uuid", None),
             "capabilities": sorted(_server_capability_names(bundle.server)),
             "state": getattr(bundle.server, "state", "unknown"),
