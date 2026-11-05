@@ -25,6 +25,9 @@ JSON failures have a nonzero exit code and an `error` category such as
 `.env` in the current directory without replacing existing environment values;
 `--project` and `--password` override them. For example,
 `mlox --output json service logs otel-0.146.1 --tail 5` uses the active project.
+`mlox server logs my-bundle --tail 100` fetches logs from a log-capable server;
+Ubuntu servers currently expose the system journal. The optional `--label`
+selects a source for either service or server logs.
 The former positional project argument is replaced by `--project`.
 
 Use `project inspect`, `server inspect <UUID-or-server-identifier>`, or

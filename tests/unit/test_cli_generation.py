@@ -109,6 +109,7 @@ def test_registration_rejects_duplicate_command_names():
 
 def test_simple_commands_are_generated_but_model_deploy_stays_explicit():
     assert set(server.GENERATED_SERVER_COMMANDS) == {
+        "logs",
         "inspect",
         "exec",
         "list",

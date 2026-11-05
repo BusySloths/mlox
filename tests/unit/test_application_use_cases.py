@@ -46,7 +46,7 @@ class _Connection:
 
 def test_service_logs_reports_provider_failure():
     from unittest.mock import Mock
-    service = SimpleNamespace(log_labels=lambda: ["collector"], service_log_tail=Mock(side_effect=RuntimeError("sudo failed")))
+    service = SimpleNamespace(capabilities={"logs"}, log_labels=lambda: ["collector"], log_tail=Mock(side_effect=RuntimeError("sudo failed")))
     bundle = SimpleNamespace(server=SimpleNamespace(get_server_connection=lambda: _Connection()))
     infra = SimpleNamespace(get_service=lambda name: service, get_bundle_by_service=lambda value: bundle)
     result = services.service_logs(_project(infra), name="collector")

@@ -347,6 +347,8 @@ def test_builtin_server_config_capabilities_match_classes():
 
     for config_id, (server_capabilities, backend_capabilities) in expected.items():
         config = by_id[config_id]
+        if config_id.startswith("ubuntu-"):
+            server_capabilities = server_capabilities | {"logs"}
         assert config.server_capabilities() == server_capabilities
         assert config.backend_capabilities() == backend_capabilities
         module_path, class_name = config.build.class_name.rsplit(".", 1)

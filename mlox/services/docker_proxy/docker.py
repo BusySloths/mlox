@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 import yaml
 
 from mlox.execution import TaskGroup
-from mlox.service import AbstractHealthService, AbstractProxyService, AbstractSecretManagerService, AbstractService, ServiceCapability, service_health_payload
+from mlox.service import AbstractLogService, AbstractHealthService, AbstractProxyService, AbstractSecretManagerService, AbstractService, ServiceCapability, service_health_payload
 from mlox.services.mlflow_gateway.k3s_managed_tls import _valid_hostname, _validate_certificate
 
 
@@ -48,10 +48,10 @@ def _backend(value: str) -> str:
 
 
 @dataclass
-class DockerProxyService(AbstractService, AbstractHealthService, AbstractProxyService):
+class DockerProxyService(AbstractService, AbstractHealthService, AbstractProxyService, AbstractLogService):
     """One Traefik container; routes are stored in project state and watched files."""
 
-    capabilities = {ServiceCapability.HEALTH, ServiceCapability.PROXY}
+    capabilities = {ServiceCapability.HEALTH, ServiceCapability.PROXY, ServiceCapability.LOGS}
     routes: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self):

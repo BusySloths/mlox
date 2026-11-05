@@ -23,6 +23,7 @@ from typing import Dict, Any, List
 import yaml
 
 from mlox.service import (
+    AbstractLogService,
     AbstractModelServerService,
     AbstractService,
     AbstractWebUIService,
@@ -40,12 +41,13 @@ logging.basicConfig(
 
 @dataclass
 class LiteLLMDockerService(
-    AbstractService, AbstractModelServerService, AbstractWebUIService
+    AbstractService, AbstractModelServerService, AbstractWebUIService, AbstractLogService
 ):
     capabilities = {
         ServiceCapability.LLM,
         ServiceCapability.MODEL_SERVER,
         ServiceCapability.WEB_UI,
+        ServiceCapability.LOGS,
     }
     web_ui_url_label = "Login"
     web_ui_login_fields = ("username", "password")

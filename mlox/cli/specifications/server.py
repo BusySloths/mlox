@@ -10,6 +10,7 @@ from mlox.cli.rendering.results import (
     render_server_list,
     render_server_command,
     render_inspection,
+    render_service_logs,
 )
 
 
@@ -20,6 +21,15 @@ def _server_template_path(value: str) -> str:
 
 
 SERVER_COMMANDS = (
+    WorkspaceCommand(
+        name="logs", method="server_logs", help="Show recent server logs.",
+        parameters=(
+            CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),
+            CliParameter("label", "Server log source"),
+            CliParameter("tail", "Number of log lines to return"),
+        ),
+        renderer=render_service_logs,
+    ),
     *(
         WorkspaceCommand(
             name=f"{action}-ssh-key",

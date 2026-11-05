@@ -14,6 +14,7 @@ from mlox.application.payloads import (
 )
 from mlox.application.result import OperationResult
 from mlox.config import load_all_service_configs
+from mlox.logs import supports_logs
 from mlox.project.state import WorkspaceState
 from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
 from mlox.utils import auto_map_ports, generate_pw, generate_username
@@ -668,6 +669,8 @@ def service_logs(
     service = (lookup_uuid(name) if callable(lookup_uuid) else None) or infra.get_service(name)
     if not service:
         return OperationResult(False, 8, "Service not found in infrastructure.")
+    if not supports_logs(service):
+        return OperationResult(False, 9, "Selected service does not support logs.")
     if tail < 1:
         return OperationResult(False, 2, "Log tail must be positive.")
     chosen_label = label
@@ -683,21 +686,14 @@ def service_logs(
         return OperationResult(False, 10, "Could not find server bundle for service.")
     try:
         with bundle.server.get_server_connection() as conn:
-            log_tail = getattr(service, "service_log_tail", None)
-            if callable(log_tail):
-                logs = log_tail(conn, label=chosen_label, tail=tail)
-            else:
-                logs = service.compose_service_log_tail(conn, label=chosen_label, tail=tail)
+            logs = service.log_tail(conn, label=chosen_label, tail=tail)
     except Exception as exc:
         return OperationResult(False, 12, f"Could not fetch service logs: {exc}")
     return OperationResult(True, 0, "Fetched service logs.", {"logs": logs})
 
 
 def _service_log_labels(service: object) -> List[str]:
-    labels = getattr(service, "log_labels", None)
-    if callable(labels):
-        return list(labels())
-    return list((getattr(service, "compose_service_names", {}) or {}).keys())
+    return list(service.log_labels()) if supports_logs(service) else []
 
 
 def list_service_configs(list_configs) -> OperationResult[ListConfigsData]:

@@ -30,6 +30,7 @@ from mlox.execution.base import TaskGroup
 from mlox.infra import Infrastructure
 from mlox.secret_manager import AbstractSecretManager
 from mlox.service import (
+    AbstractLogService,
     AbstractSecretManagerService,
     AbstractService,
     AbstractWebUIService,
@@ -43,11 +44,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class OpenBaoDockerService(
-    AbstractService, AbstractSecretManagerService, AbstractWebUIService
+    AbstractService, AbstractSecretManagerService, AbstractWebUIService, AbstractLogService
 ):
     """Deploy OpenBao via Docker compose and expose a secret manager client."""
 
-    capabilities = {ServiceCapability.SECRET_MANAGER, ServiceCapability.WEB_UI}
+    capabilities = {ServiceCapability.SECRET_MANAGER, ServiceCapability.WEB_UI, ServiceCapability.LOGS}
     web_ui_url_label = "OpenBao UI"
     web_ui_login_fields = ("username", "password")
     port: int | str

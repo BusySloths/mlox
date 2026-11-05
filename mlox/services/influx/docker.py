@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from mlox.service import (
+    AbstractLogService,
     AbstractHealthService,
     AbstractService,
     ServiceCapability,
@@ -40,8 +41,8 @@ logging.basicConfig(
 
 
 @dataclass
-class InfluxDockerService(AbstractService, AbstractHealthService):
-    capabilities = {ServiceCapability.DATABASE, ServiceCapability.HEALTH}
+class InfluxDockerService(AbstractService, AbstractHealthService, AbstractLogService):
+    capabilities = {ServiceCapability.DATABASE, ServiceCapability.HEALTH, ServiceCapability.LOGS}
     user: str
     pw: str
     port: str | int

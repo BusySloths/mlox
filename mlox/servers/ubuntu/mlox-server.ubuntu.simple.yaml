@@ -21,6 +21,7 @@ groups:
     native: null
 capabilities:
   server:
+  - logs
   - terminal
   backend:
   - native

@@ -40,6 +40,7 @@ class MLFlowGatewayK3sService(
         ServiceCapability.HEALTH,
         ServiceCapability.SECRET_MANAGER_BINDING,
         ServiceCapability.TELEMETRY_BINDING,
+        ServiceCapability.LOGS,
     }
 
     kubeconfig: str = "/etc/rancher/k3s/k3s.yaml"

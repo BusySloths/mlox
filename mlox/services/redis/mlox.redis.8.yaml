@@ -28,6 +28,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - cache
   - database
   backend:

@@ -28,6 +28,7 @@ groups:
       k3s: null
 capabilities:
   server:
+  - logs
   - health
   - git
   - firewall

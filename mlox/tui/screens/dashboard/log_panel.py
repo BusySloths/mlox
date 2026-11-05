@@ -9,6 +9,7 @@ from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
 from textual.reactive import reactive
 from textual.widgets import Button, Input, Select, Static
+from mlox.logs import supports_logs
 
 try:
     from textual.widgets import Log as LogWidget
@@ -18,22 +19,18 @@ except ImportError:  # pragma: no cover - fallback for older textual releases
 from .model import SelectionInfo
 
 
-def _service_log_labels(service) -> list[str]:
-    labels = getattr(service, "log_labels", None)
-    if callable(labels):
-        return list(labels())
-    return list((getattr(service, "compose_service_names", {}) or {}).keys())
-
-
-def _service_log_tail(service, conn, *, label: str, tail: int) -> str:
-    log_tail = getattr(service, "service_log_tail", None)
-    if callable(log_tail):
-        return log_tail(conn, label=label, tail=tail)
-    return service.compose_service_log_tail(conn, label=label, tail=tail)
+def _log_target(selection: SelectionInfo | None):
+    if not selection:
+        return None
+    if selection.type == "service":
+        return selection.service
+    if selection.type == "server":
+        return selection.server
+    return None
 
 
 class LogPanel(Container):
-    """Service log viewer."""
+    """On-demand viewer for service and server logs."""
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
@@ -42,7 +39,7 @@ class LogPanel(Container):
         self._request_generation = 0
 
     def compose(self) -> ComposeResult:
-        yield Static("SERVICE LOGS", classes="activity-heading")
+        yield Static("LOGS", id="log-heading", classes="activity-heading")
         with Horizontal(id="log-controls"):
             yield Select(options=[], prompt="Log source", id="log-label")
             yield Input(
@@ -72,31 +69,35 @@ class LogPanel(Container):
     def on_mount(self) -> None:
         self.tail_input.border_title = "Lines"
         self.status.update(
-            "Select a service to fetch logs. Logs are retrieved on demand."
+            "Select a server or service that supports logs."
         )
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         self._request_generation += 1
         self.query_one("#log-fetch", Button).disabled = False
-        if selection and selection.type == "service" and selection.service:
-            labels = _service_log_labels(selection.service)
+        target = _log_target(selection)
+        self.query_one("#log-heading", Static).update(
+            "SERVER LOGS" if selection and selection.type == "server" else "SERVICE LOGS"
+        )
+        if supports_logs(target):
+            labels = list(target.log_labels())
             if labels:
                 options = [(label, label) for label in labels]
                 self.label_input.set_options(options)
                 self.label_input.value = labels[0]
                 if not self._show_cached_logs(selection, labels[0]):
                     self.log_output.clear()
-                    self.status.update("Ready to fetch logs for the selected service.")
+                    self.status.update("Ready to fetch logs for the selected source.")
             else:
                 self.label_input.set_options([])
                 self.label_input.clear()
                 self.log_output.clear()
-                self.status.update("Selected service does not expose log labels.")
+                self.status.update("No log sources available for this selection.")
         else:
             self.label_input.set_options([])
             self.label_input.clear()
             self.status.update(
-                "Select a service to fetch logs. Logs are retrieved on demand."
+                "Select a server or service that supports logs."
             )
             self.log_output.clear()
 
@@ -107,7 +108,7 @@ class LogPanel(Container):
         self._request_generation += 1
         self.query_one("#log-fetch", Button).disabled = False
         label = event.value if isinstance(event.value, str) else ""
-        if label and self.selection and self.selection.type == "service":
+        if label and supports_logs(_log_target(self.selection)):
             if not self._show_cached_logs(self.selection, label):
                 self.log_output.clear()
                 self.status.update("Ready to fetch logs for the selected source.")
@@ -115,22 +116,23 @@ class LogPanel(Container):
     @on(Button.Pressed, "#log-fetch")
     def handle_fetch(self, _: Button.Pressed) -> None:  # pragma: no cover - UI callback
         selection = self.selection
-        if not selection or selection.type != "service" or not selection.service:
-            self.status.update("Please select a service to fetch logs.")
+        target = _log_target(selection)
+        if not supports_logs(target):
+            self.status.update("Select a server or service that supports logs.")
             return
         bundle = selection.bundle
-        server = getattr(bundle, "server", None) if bundle else None
-        if not bundle or not server:
+        server = target if selection.type == "server" else getattr(bundle, "server", None)
+        if not server:
             self.status.update("Associated server information is missing.")
             return
         raw_label = self.label_input.value
         label = raw_label.strip() if isinstance(raw_label, str) else ""
-        labels = _service_log_labels(selection.service)
+        labels = list(target.log_labels())
         if not label:
             if labels:
                 label = labels[0]
             else:
-                self.status.update("No log labels available for this service.")
+                self.status.update("No log sources available for this selection.")
                 return
         try:
             tail = int(self.tail_input.value.strip() or "200")
@@ -141,7 +143,6 @@ class LogPanel(Container):
             self.status.update("Enter a positive number of lines.")
             return
 
-        service = selection.service
         self._request_generation += 1
         generation = self._request_generation
         self.query_one("#log-fetch", Button).disabled = True
@@ -150,7 +151,7 @@ class LogPanel(Container):
         def fetch_logs() -> None:
             try:
                 with server.get_server_connection() as conn:
-                    logs = _service_log_tail(service, conn, label=label, tail=tail)
+                    logs = target.log_tail(conn, label=label, tail=tail)
             except Exception as exc:  # pragma: no cover - network/IO heavy
                 self.app.call_from_thread(
                     self._finish_fetch, generation, "", f"Failed to fetch logs: {exc}"
@@ -176,6 +177,8 @@ class LogPanel(Container):
         self.status.update("Logs updated." if logs else "No log lines returned.")
 
     def _show_cached_logs(self, selection: SelectionInfo, label: str) -> bool:
+        if not selection or selection.type != "service":
+            return False
         service = selection.service
         if not service:
             return False
@@ -197,7 +200,7 @@ class LogPanel(Container):
                 if container and metadata.get("service_name") != container:
                     continue
             elif metadata.get("log_source") == "kubernetes":
-                if label not in _service_log_labels(service):
+                if label not in service.log_labels():
                     continue
             else:
                 continue

@@ -22,6 +22,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 
 from mlox.service import (
+    AbstractLogService,
     AbstractHealthService,
     AbstractModelRegistryService,
     AbstractService,
@@ -49,11 +50,13 @@ class MLFlowDockerService(
     AbstractHealthService,
     AbstractModelRegistryService,
     AbstractWebUIService,
+    AbstractLogService,
 ):
     capabilities = {
         ServiceCapability.MODEL_REGISTRY,
         ServiceCapability.WEB_UI,
         ServiceCapability.HEALTH,
+        ServiceCapability.LOGS,
     }
     web_ui_url_label = "MLFlow UI"
     web_ui_login_fields = ("username", "password")

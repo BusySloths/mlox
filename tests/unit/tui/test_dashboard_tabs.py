@@ -2665,6 +2665,8 @@ def test_activity_view_switches_between_full_height_logs_and_history() -> None:
         service = SimpleNamespace(
             name="demo", compose_service_names={"App": "app"},
             exec=SimpleNamespace(history=[]),
+            capabilities={"logs"}, log_labels=lambda: ["App"],
+            log_tail=lambda conn, label, tail: "",
         )
         server = SimpleNamespace(ip="10.0.0.5", state="running")
         bundle = SimpleNamespace(name="dev", server=server, services=[service])
@@ -2689,6 +2691,13 @@ def test_activity_view_switches_between_full_height_logs_and_history() -> None:
             await pilot.pause()
             assert history.display and not logs.display
             assert not screen.query_one("#show-service-logs").display
+            server.capabilities = {"logs"}
+            server.log_labels = lambda: ["System journal"]
+            server.log_tail = lambda conn, label, tail: "journal"
+            screen._apply_selection(SelectionInfo(type="server", server=server, bundle=bundle))
+            await pilot.pause()
+            assert logs.display and not history.display
+            assert screen.query_one("#show-service-logs").display
 
     asyncio.run(exercise())
 

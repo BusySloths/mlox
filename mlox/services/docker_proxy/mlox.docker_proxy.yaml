@@ -19,6 +19,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - health
   - proxy
   backend:

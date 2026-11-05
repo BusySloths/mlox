@@ -23,6 +23,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - app
   - web_ui
   - health

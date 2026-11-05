@@ -23,7 +23,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, cast
 
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractLogService, AbstractService, ServiceCapability
 from mlox.services.redis.docker import RedisDockerService
 from mlox.services.postgres.docker import PostgresDockerService
 
@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class FeastDockerService(AbstractService):
-    capabilities = {ServiceCapability.FEATURE_STORE}
+class FeastDockerService(AbstractService, AbstractLogService):
+    capabilities = {ServiceCapability.FEATURE_STORE, ServiceCapability.LOGS}
     """Deploy the Feast registry while reusing remote online/offline stores."""
 
     dockerfile: str

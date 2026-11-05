@@ -35,6 +35,7 @@ class MLFlowGatewayDockerService(
         ServiceCapability.HEALTH,
         ServiceCapability.SECRET_MANAGER_BINDING,
         ServiceCapability.TELEMETRY_BINDING,
+        ServiceCapability.LOGS,
     }
 
     hashed_pw: str = field(default="", init=False)

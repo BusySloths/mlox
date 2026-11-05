@@ -27,6 +27,7 @@ from typing import Any, Dict
 from dataclasses import dataclass, field
 
 from mlox.service import (
+    AbstractLogService,
     AbstractHealthService,
     AbstractSecretManagerBindingService,
     AbstractService,
@@ -48,12 +49,14 @@ class AirflowDockerService(
     AbstractHealthService,
     AbstractWebUIService,
     AbstractWorkflowOrchestratorService,
+    AbstractLogService,
 ):
     capabilities = {
         ServiceCapability.WORKFLOW_ORCHESTRATOR,
         ServiceCapability.WEB_UI,
         ServiceCapability.HEALTH,
         ServiceCapability.SECRET_MANAGER_BINDING,
+        ServiceCapability.LOGS,
     }
     web_ui_url_label = "Airflow UI"
     web_ui_login_fields = ("username", "password")

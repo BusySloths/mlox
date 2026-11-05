@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, cast
 
 from mlox.service import (
+    AbstractLogService,
     AbstractHealthService,
     AbstractModelRegistryService,
     AbstractModelServerService,
@@ -31,11 +32,11 @@ def _resolved_setting(value: str | int | float, default: str) -> str:
 
 @dataclass
 class MLFlowGatewayService(
-    AbstractService, AbstractHealthService, AbstractModelServerService
+    AbstractService, AbstractHealthService, AbstractModelServerService, AbstractLogService
 ):
     """Common MLflow Gateway configuration and model-server operations."""
 
-    capabilities = {ServiceCapability.MODEL_SERVER, ServiceCapability.HEALTH}
+    capabilities = {ServiceCapability.MODEL_SERVER, ServiceCapability.HEALTH, ServiceCapability.LOGS}
 
     dockerfile: str
     serve_script: str

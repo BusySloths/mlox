@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from mlox.service import (
+    AbstractLogService,
     AbstractHealthService,
     AbstractService,
     ServiceCapability,
@@ -44,8 +45,8 @@ def _generate_cluster_id() -> str:
 
 
 @dataclass
-class KafkaDockerService(AbstractService, AbstractHealthService):
-    capabilities = {ServiceCapability.MESSAGE_BROKER, ServiceCapability.HEALTH}
+class KafkaDockerService(AbstractService, AbstractHealthService, AbstractLogService):
+    capabilities = {ServiceCapability.MESSAGE_BROKER, ServiceCapability.HEALTH, ServiceCapability.LOGS}
     """Docker based deployment for a single-node Kafka broker."""
 
     ssl_password: str

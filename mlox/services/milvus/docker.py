@@ -21,7 +21,7 @@ import base64
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractLogService, AbstractService, ServiceCapability
 
 
 # Configure logging (optional, but recommended)
@@ -40,8 +40,8 @@ def _generate_htpasswd_sha1(user: str, password: str) -> str:
 
 
 @dataclass
-class MilvusDockerService(AbstractService):
-    capabilities = {ServiceCapability.VECTOR_DATABASE}
+class MilvusDockerService(AbstractService, AbstractLogService):
+    capabilities = {ServiceCapability.VECTOR_DATABASE, ServiceCapability.LOGS}
     config: str
     user: str
     pw: str

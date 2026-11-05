@@ -77,6 +77,7 @@ from mlox.application.use_cases.services import (
     teardown_service_in_workspace,
 )
 from mlox.service import ServiceCapability
+from mlox.logs import supports_logs
 from mlox.tui.screens.project_switcher import ProjectSwitchDialog
 from mlox.tui.template_forms import (
     TemplateFormSpec,
@@ -331,9 +332,8 @@ class DashboardScreen(Screen):
         logs.selection = selection
         history = self.query_one(HistoryPanel)
         history.selection = selection
-        self._set_activity_view(
-            "logs" if selection and selection.type == "service" else "history"
-        )
+        target = self._activity_target(selection)
+        self._set_activity_view("logs" if supports_logs(target) else "history")
         self._clear_lazy_root_panels()
         self._update_template_tabs(selection)
         self._sync_active_root_panel()
@@ -342,18 +342,26 @@ class DashboardScreen(Screen):
 
     def _set_activity_view(self, view: str) -> None:
         selection = self._current_selection
-        is_service = bool(selection and selection.type == "service" and selection.service)
-        view = "logs" if view == "logs" and is_service else "history"
+        target = self._activity_target(selection)
+        can_log = supports_logs(target)
+        view = "logs" if view == "logs" and can_log else "history"
         self.query_one("#selection-logs", LogPanel).display = view == "logs"
         self.query_one("#selection-history", HistoryPanel).display = view == "history"
         logs_button = self.query_one("#show-service-logs", Button)
         history_button = self.query_one("#show-execution-history", Button)
-        logs_button.display = is_service
+        logs_button.display = can_log
         logs_button.variant = "primary" if view == "logs" else "default"
         history_button.variant = "primary" if view == "history" else "default"
-        target = selection.service if is_service else getattr(selection, "server", None)
         name = getattr(target, "name", None) or getattr(target, "ip", "")
         self.query_one("#activity-context", Static).update(str(name or ""))
+
+    @staticmethod
+    def _activity_target(selection: SelectionInfo | None):
+        if selection and selection.type == "service":
+            return selection.service
+        if selection and selection.type == "server":
+            return selection.server
+        return None
 
     @on(Button.Pressed, "#show-service-logs")
     def show_service_logs(self) -> None:

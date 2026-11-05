@@ -91,6 +91,17 @@ class MLFlowMLServerK3sService(MLFlowMLServerDockerService):
         logger.info("🔄 no spinning up needed for k3s manifests")
         return True
 
+    def log_labels(self) -> list[str]:
+        return ["MLServer"]
+
+    def service_log_tail(self, conn, label: str | None = None, tail: int = 200) -> str:
+        if label not in (None, "MLServer"):
+            raise ValueError(f"Unknown service log source: {label}")
+        return self.exec.k8s_resource_log_tail(
+            conn, f"deployment/{self.deployment_name}", namespace=self.namespace,
+            tail=tail, kubeconfig=self.kubeconfig, container="mlserver",
+        )
+
     def spin_down(self, conn) -> bool:
         logger.info("🔄 no spinning down needed for k3s manifests")
         return True

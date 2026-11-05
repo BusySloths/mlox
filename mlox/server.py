@@ -49,6 +49,7 @@ import socket
 
 from mlox.utils import generate_password
 from mlox.executors import UbuntuTaskExecutor
+from mlox.logs import LogSource
 
 logging.basicConfig(
     level=logging.INFO,
@@ -111,6 +112,7 @@ class ServerCapability(StrEnum):
     """User-facing server capabilities advertised by configs and classes."""
 
     HEALTH = "health"
+    LOGS = "logs"
     GIT = "git"
     FIREWALL = "firewall"
     INITIAL_AUTH_PASSWORD = "initial_auth_password"
@@ -139,6 +141,12 @@ def _redact_health_values(value: Any) -> Any:
     if isinstance(value, list):
         return [_redact_health_values(item) for item in value]
     return value
+
+
+class AbstractLogServer(LogSource):
+    """Optional server capability for named log sources."""
+
+    capabilities: ClassVar[set[ServerCapability]] = {ServerCapability.LOGS}
 
 
 class AbstractHealthServer(ABC):

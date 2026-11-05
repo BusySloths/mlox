@@ -164,6 +164,16 @@ become active requirements.
 
 A bundle contains one compute/server and the services deployed onto it. Servers advertise capabilities such as `git`, `docker`, `kubernetes`, `firewall`, `health`, or native execution support. Services declare their intended capabilities in config, including `health` when they provide a richer live probe than the generic lifecycle state.
 
+Services and servers may advertise `logs` when they implement `AbstractLogService`
+or `AbstractLogServer`. Both expose named sources through `log_labels()` and
+bounded retrieval through `log_tail(conn, label, tail)`. Docker services retain
+their existing Compose log implementation, while Kubernetes services supply
+their own retrieval. Ubuntu servers expose the system journal through sudo.
+Execution history is separate from these runtime logs. Plugins that want to
+expose logs must implement the contract and advertise `logs` in their class and
+template; inheriting the base service's legacy Compose helpers alone does not
+advertise the capability.
+
 - **Execution abstraction is not "SSH-only".** `mlox/execution/base.py`
   (`TaskRunnerABC`, `ExecutionRecorder`) is execution-target-agnostic by design.
   The current concrete implementation, `UbuntuTaskExecutor` (`mlox/executors.py`),

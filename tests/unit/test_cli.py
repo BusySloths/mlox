@@ -283,6 +283,18 @@ def test_service_logs_infers_optional_values_and_defaults(monkeypatch):
     mock_logs.assert_called_once_with(name="api", label=None, tail=200)
 
 
+def test_server_logs_uses_workspace_contract(monkeypatch):
+    operation = _patch_application(
+        monkeypatch, "server_logs", OperationResult(True, 0, "ok", {"logs": "journal line"})
+    )
+    result = runner.invoke(
+        cli.app, ["server", "logs", "example", "--project", "proj", "--password", "pw", "--tail", "5"]
+    )
+    assert result.exit_code == 0
+    assert "journal line" in result.stdout
+    operation.assert_called_once_with(ip="example", label=None, tail=5)
+
+
 def test_model_list_maps_registry_alias(monkeypatch):
     operation_result = OperationResult(True, 0, "No models found.", {"models": []})
     mock_list = _patch_application(monkeypatch, "list_models", operation_result)

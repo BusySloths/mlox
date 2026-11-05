@@ -637,6 +637,12 @@ class ProjectWorkspace:
 
         return servers.list_servers(self._state)
 
+    def server_logs(
+        self, *, ip: str, label: str | None = None, tail: int = 200
+    ) -> OperationResult[ServiceLogsData]:
+        """Return recent logs for a server source."""
+        return servers.server_logs(self._state, ip=ip, label=label, tail=tail)
+
     def inspect_project(self) -> OperationResult[dict[str, Any]]:
         """Return project identity and infrastructure counts."""
         return OperationResult(True, 0, "Project retrieved.", {

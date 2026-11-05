@@ -27,6 +27,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - web_ui
   - llm
   - model_server

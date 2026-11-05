@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 
 from mlox.executors import TaskGroup
 from mlox.service import (
+    AbstractLogService,
     AbstractHealthService,
     AbstractModelRegistryService,
     AbstractModelServerService,
@@ -40,9 +41,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MLFlowMLServerDockerService(
-    AbstractService, AbstractHealthService, AbstractModelServerService
+    AbstractService, AbstractHealthService, AbstractModelServerService, AbstractLogService
 ):
-    capabilities = {ServiceCapability.MODEL_SERVER, ServiceCapability.HEALTH}
+    capabilities = {ServiceCapability.MODEL_SERVER, ServiceCapability.HEALTH, ServiceCapability.LOGS}
 
     dockerfile: str
     port: str | int

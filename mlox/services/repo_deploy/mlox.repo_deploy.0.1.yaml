@@ -24,6 +24,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - deployment
   - app
   - health

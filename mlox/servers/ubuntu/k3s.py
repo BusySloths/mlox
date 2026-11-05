@@ -25,6 +25,7 @@ class UbuntuK3sServer(
 ):
     capabilities: ClassVar[set[ServerCapability]] = {
         ServerCapability.HEALTH,
+        ServerCapability.LOGS,
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,

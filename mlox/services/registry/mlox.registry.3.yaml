@@ -29,6 +29,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - container_registry
   backend:
   - docker

@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Literal, TypedDict
 
 from mlox.service import (
     AbstractHealthService,
+    AbstractLogService,
     AbstractProxyService,
     AbstractModelRegistryService,
     AbstractModelServerService,
@@ -28,6 +29,7 @@ from mlox.server import (
     AbstractFirewallServer,
     AbstractGitServer,
     AbstractHealthServer,
+    AbstractLogServer,
     AbstractInitialPasswordAuthServer,
     AbstractKubernetesServer,
     AbstractLocalServer,
@@ -43,6 +45,7 @@ PluginKind = Literal["service", "server"]
 
 SERVER_CAPABILITY_ABCS = {
     ServerCapability.HEALTH.value: AbstractHealthServer,
+    ServerCapability.LOGS.value: AbstractLogServer,
     ServerCapability.GIT.value: AbstractGitServer,
     ServerCapability.FIREWALL.value: AbstractFirewallServer,
     ServerCapability.INITIAL_AUTH_PASSWORD.value: AbstractInitialPasswordAuthServer,
@@ -57,6 +60,7 @@ SERVER_CAPABILITY_ABCS = {
 SERVICE_CAPABILITY_ABCS = {
     ServiceCapability.PROXY.value: AbstractProxyService,
     ServiceCapability.HEALTH.value: AbstractHealthService,
+    ServiceCapability.LOGS.value: AbstractLogService,
     ServiceCapability.WEB_UI.value: AbstractWebUIService,
     ServiceCapability.SECRET_MANAGER.value: AbstractSecretManagerService,
     ServiceCapability.SECRET_MANAGER_BINDING.value: AbstractSecretManagerBindingService,
@@ -73,6 +77,7 @@ SERVICE_GROUP_ALIASES = {
     "app": ServiceCapability.APP.value,
     "application": ServiceCapability.APP.value,
     "health": ServiceCapability.HEALTH.value,
+    "logs": ServiceCapability.LOGS.value,
     "web_ui": ServiceCapability.WEB_UI.value,
     "web-ui": ServiceCapability.WEB_UI.value,
     "secret_manager": ServiceCapability.SECRET_MANAGER.value,

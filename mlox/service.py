@@ -47,6 +47,7 @@ from typing import (
 from dataclasses import dataclass, field, asdict
 
 from mlox.executors import UbuntuTaskExecutor
+from mlox.logs import LogSource
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ class ServiceCapability(StrEnum):
     APP = "app"
     PROXY = "proxy"
     HEALTH = "health"
+    LOGS = "logs"
     WEB_UI = "web_ui"
     SECRET_MANAGER = "secret_manager"
     SECRET_MANAGER_BINDING = "secret_manager_binding"
@@ -150,6 +152,12 @@ def service_health_payload(
     payload["status"] = reported or state
     payload["healthy"] = payload["status"] in SERVICE_HEALTHY_STATUSES
     return payload
+
+
+class AbstractLogService(LogSource):
+    """Optional service capability for named log sources."""
+
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.LOGS}
 
 
 class AbstractHealthService(ABC):
@@ -920,6 +928,11 @@ class AbstractService(ABC):
         if not chosen_label:
             return "No log labels configured for this service."
         return self.compose_service_log_tail(conn, label=chosen_label, tail=tail)
+
+    def log_tail(self, conn, label: str | None = None, tail: int = 200) -> str:
+        if tail < 1:
+            raise ValueError("Log tail must be positive.")
+        return self.service_log_tail(conn, label=label, tail=tail)
 
     def get_dependent_service(
         self,

@@ -19,6 +19,7 @@ class UbuntuSimpleServer(UbuntuNativeServer):
 
     capabilities: ClassVar[set[ServerCapability]] = {
         ServerCapability.NATIVE,
+        ServerCapability.LOGS,
         ServerCapability.TERMINAL,
     }
 

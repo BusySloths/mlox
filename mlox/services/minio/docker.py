@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
+from mlox.service import AbstractLogService, AbstractService, AbstractWebUIService, ServiceCapability
 
 
 logging.basicConfig(
@@ -30,8 +30,8 @@ logging.basicConfig(
 
 
 @dataclass
-class MinioDockerService(AbstractService, AbstractWebUIService):
-    capabilities = {ServiceCapability.OBJECT_STORAGE, ServiceCapability.WEB_UI}
+class MinioDockerService(AbstractService, AbstractWebUIService, AbstractLogService):
+    capabilities = {ServiceCapability.OBJECT_STORAGE, ServiceCapability.WEB_UI, ServiceCapability.LOGS}
     web_ui_url_label = "MinIO Console"
     web_ui_login_fields = ("username", "password")
     root_user: str

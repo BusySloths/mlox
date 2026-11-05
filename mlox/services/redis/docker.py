@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractLogService, AbstractService, ServiceCapability
 
 
 # Configure logging (optional, but recommended)
@@ -31,8 +31,8 @@ logging.basicConfig(
 
 
 @dataclass
-class RedisDockerService(AbstractService):
-    capabilities = {ServiceCapability.CACHE, ServiceCapability.DATABASE}
+class RedisDockerService(AbstractService, AbstractLogService):
+    capabilities = {ServiceCapability.CACHE, ServiceCapability.DATABASE, ServiceCapability.LOGS}
     pw: str
     port: str | int
     compose_service_names: Dict[str, str] = field(

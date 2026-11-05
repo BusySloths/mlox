@@ -25,6 +25,7 @@ from typing import Any, Dict, Mapping
 from urllib.parse import unquote
 
 from mlox.service import (
+    AbstractLogService,
     AbstractHealthService,
     AbstractMonitorService,
     AbstractObservabilityService,
@@ -49,11 +50,13 @@ class OtelDockerService(
     AbstractHealthService,
     AbstractMonitorService,
     AbstractObservabilityService,
+    AbstractLogService,
 ):
     capabilities = {
         ServiceCapability.MONITOR,
         ServiceCapability.OBSERVABILITY,
         ServiceCapability.HEALTH,
+        ServiceCapability.LOGS,
     }
     relic_endpoint: str
     relic_key: str

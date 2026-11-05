@@ -27,6 +27,7 @@ groups:
     native: null
 capabilities:
   server:
+  - logs
   - git
   - firewall
   - initial_auth_password

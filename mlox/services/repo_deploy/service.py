@@ -9,6 +9,7 @@ import yaml
 
 from mlox.execution import TaskGroup
 from mlox.service import (
+    AbstractLogService,
     AbstractHealthService,
     AbstractSecretManagerBindingService,
     AbstractService,
@@ -30,6 +31,7 @@ class RepoDeployDockerService(
     AbstractTelemetryBindingService,
     AbstractHealthService,
     AbstractService,
+    AbstractLogService,
 ):
     capabilities = {
         ServiceCapability.DEPLOYMENT,
@@ -37,6 +39,7 @@ class RepoDeployDockerService(
         ServiceCapability.HEALTH,
         ServiceCapability.SECRET_MANAGER_BINDING,
         ServiceCapability.TELEMETRY_BINDING,
+        ServiceCapability.LOGS,
     }
     repo_uuid: str
     compose_file: str

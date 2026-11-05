@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractLogService, AbstractService, ServiceCapability
 
 
 # Configure logging (optional, but recommended)
@@ -31,8 +31,8 @@ logging.basicConfig(
 
 
 @dataclass
-class PostgresDockerService(AbstractService):
-    capabilities = {ServiceCapability.DATABASE}
+class PostgresDockerService(AbstractService, AbstractLogService):
+    capabilities = {ServiceCapability.DATABASE, ServiceCapability.LOGS}
     user: str
     pw: str
     db: str

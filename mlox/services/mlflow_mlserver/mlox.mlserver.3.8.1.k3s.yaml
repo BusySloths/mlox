@@ -29,6 +29,7 @@ groups:
     kubernetes: null
 capabilities:
   service:
+  - logs
   - model_server
   - health
   backend:

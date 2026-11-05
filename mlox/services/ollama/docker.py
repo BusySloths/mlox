@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 
 from mlox.executors import TaskGroup
 from mlox.service import (
+    AbstractLogService,
     AbstractModelServerService,
     AbstractService,
     ServiceCapability,
@@ -20,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class OllamaDockerService(AbstractService, AbstractModelServerService):
-    capabilities = {ServiceCapability.LLM, ServiceCapability.MODEL_SERVER}
+class OllamaDockerService(AbstractService, AbstractModelServerService, AbstractLogService):
+    capabilities = {ServiceCapability.LLM, ServiceCapability.MODEL_SERVER, ServiceCapability.LOGS}
     port: str | int
     user: str = "admin"
     pw: str = "s3cr3t"

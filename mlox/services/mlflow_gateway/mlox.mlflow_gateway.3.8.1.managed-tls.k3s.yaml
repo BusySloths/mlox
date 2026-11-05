@@ -25,6 +25,7 @@ groups:
     kubernetes: null
 capabilities:
   service:
+  - logs
   - model_server
   - health
   - secret_manager_binding

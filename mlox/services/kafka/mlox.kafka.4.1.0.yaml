@@ -32,6 +32,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - message_broker
   - health
   backend:

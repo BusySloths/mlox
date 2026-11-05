@@ -21,6 +21,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - database
   - health
   backend:

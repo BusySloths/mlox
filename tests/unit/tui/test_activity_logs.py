@@ -1,6 +1,7 @@
 """Tests for the focused service log viewer."""
 
 import asyncio
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +25,8 @@ def test_logs_have_room_and_ignore_late_results_after_source_change():
         service = SimpleNamespace(
             compose_service_names={"App": "app", "Worker": "worker"},
             exec=SimpleNamespace(history=[]),
+            capabilities={"logs"}, log_labels=lambda: ["App", "Worker"],
+            log_tail=lambda conn, label, tail: "",
         )
         async with app.run_test(size=(80, 24)) as pilot:
             panel = app.query_one(LogPanel)
@@ -51,7 +54,11 @@ def test_logs_have_room_and_ignore_late_results_after_source_change():
 def test_invalid_line_count_is_rejected():
     async def exercise():
         app = LogTestApp()
-        service = SimpleNamespace(compose_service_names={"App": "app"}, exec=SimpleNamespace(history=[]))
+        service = SimpleNamespace(
+            compose_service_names={"App": "app"}, exec=SimpleNamespace(history=[]),
+            capabilities={"logs"}, log_labels=lambda: ["App"],
+            log_tail=lambda conn, label, tail: "",
+        )
         bundle = SimpleNamespace(server=object())
         async with app.run_test() as pilot:
             panel = app.query_one(LogPanel)
@@ -75,5 +82,28 @@ def test_log_toolbar_fits_a_narrow_panel():
             fetch = app.query_one("#log-fetch", Button)
             assert fetch.region.right <= controls.region.right
             assert fetch.region.height == 3
+
+    asyncio.run(exercise())
+
+
+def test_server_logs_are_available_in_the_same_view():
+    async def exercise():
+        app = LogTestApp()
+        server = SimpleNamespace(
+            capabilities={"logs"}, log_labels=lambda: ["System journal"],
+            log_tail=lambda conn, label, tail: f"{label}: {tail}",
+            get_server_connection=lambda: nullcontext(object()),
+        )
+        async with app.run_test(size=(80, 24)) as pilot:
+            panel = app.query_one(LogPanel)
+            panel.selection = SelectionInfo(type="server", server=server)
+            await pilot.pause()
+            assert panel.label_input.value == "System journal"
+            panel.query_one("#log-fetch", Button).press()
+            for _ in range(50):
+                await pilot.pause(0.02)
+                if panel.log_output.line_count:
+                    break
+            assert panel.log_output.lines == ["System journal: 200"]
 
     asyncio.run(exercise())

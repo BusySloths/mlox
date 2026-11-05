@@ -27,6 +27,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - vector_database
   backend:
   - docker

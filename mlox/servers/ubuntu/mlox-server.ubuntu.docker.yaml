@@ -27,6 +27,7 @@ groups:
     docker: null
 capabilities:
   server:
+  - logs
   - health
   - git
   - firewall

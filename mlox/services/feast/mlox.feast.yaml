@@ -37,6 +37,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - feature_store
   backend:
   - docker

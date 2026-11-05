@@ -18,10 +18,12 @@ from mlox.application.payloads import (
     ServerCommandData,
     ServerOperationData,
     ServerSummary,
+    ServiceLogsData,
 )
 from mlox.application.result import OperationResult
 from mlox.config import load_all_server_configs
 from mlox.infra import Bundle
+from mlox.logs import supports_logs
 from mlox.project.state import WorkspaceState
 from mlox.server import ServerCapability
 from mlox.terminal import (
@@ -32,6 +34,32 @@ from mlox.terminal import (
 from mlox.utils import dataclass_to_dict
 
 logger = logging.getLogger(__name__)
+
+
+def server_logs(
+    project: WorkspaceState, *, ip: str, label: str | None = None, tail: int = 200
+) -> OperationResult[ServiceLogsData]:
+    """Retrieve logs from a server that advertises the logs capability."""
+    bundle = project.infrastructure.get_bundle_by_ip(ip)
+    if not bundle:
+        return OperationResult(False, 5, "Server not found in infrastructure.")
+    server = bundle.server
+    if not supports_logs(server):
+        return OperationResult(False, 13, "Selected server does not support logs.")
+    if tail < 1:
+        return OperationResult(False, 2, "Log tail must be positive.")
+    labels = server.log_labels()
+    chosen = label or (labels[0] if labels else None)
+    if not chosen:
+        return OperationResult(False, 9, "No log sources available for this server.")
+    if chosen not in labels:
+        return OperationResult(False, 2, f"Unknown server log source: {chosen}")
+    try:
+        with server.get_server_connection() as conn:
+            logs = server.log_tail(conn, label=chosen, tail=tail)
+    except Exception as exc:
+        return OperationResult(False, 12, f"Could not fetch server logs: {exc}")
+    return OperationResult(True, 0, "Fetched server logs.", {"logs": logs})
 
 
 def execute_server_command(

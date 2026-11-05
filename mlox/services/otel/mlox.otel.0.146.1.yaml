@@ -30,6 +30,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - monitor
   - observability
   - health

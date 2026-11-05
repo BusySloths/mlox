@@ -29,6 +29,7 @@ groups:
     docker: null
 capabilities:
   service:
+  - logs
   - web_ui
   - object_storage
   backend:

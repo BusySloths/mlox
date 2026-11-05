@@ -1,20 +1,7 @@
 import streamlit as st
 
 from mlox.project import ProjectWorkspace
-
-
-def _service_log_labels(service) -> list[str]:
-    labels = getattr(service, "log_labels", None)
-    if callable(labels):
-        return list(labels())
-    return list((getattr(service, "compose_service_names", {}) or {}).keys())
-
-
-def _service_log_tail(service, conn, *, label: str, tail: int) -> str:
-    log_tail = getattr(service, "service_log_tail", None)
-    if callable(log_tail):
-        return log_tail(conn, label=label, tail=tail)
-    return service.compose_service_log_tail(conn, label=label, tail=tail)
+from mlox.logs import supports_logs
 
 
 def show_service_logs_ui(application: ProjectWorkspace, service_name: str):
@@ -31,6 +18,9 @@ def show_service_logs_ui(application: ProjectWorkspace, service_name: str):
     if not svc:
         st.error("Service not found in infrastructure")
         return
+    if not supports_logs(svc):
+        st.info("This service does not support log retrieval.")
+        return
 
     bundle = infra.get_bundle_by_service(svc)
     if not bundle:
@@ -39,7 +29,7 @@ def show_service_logs_ui(application: ProjectWorkspace, service_name: str):
 
     conn_ctx = bundle.server.get_server_connection()
     with conn_ctx as conn:
-        labels = _service_log_labels(svc)
+        labels = svc.log_labels()
         if not labels:
             st.info("No log labels configured for this service")
             return
@@ -50,5 +40,5 @@ def show_service_logs_ui(application: ProjectWorkspace, service_name: str):
             "Lines", min_value=50, max_value=2000, value=200, step=50
         )
         if c3.button("Refresh"):
-            logs = _service_log_tail(svc, conn, label=label, tail=tail)
+            logs = svc.log_tail(conn, label=label, tail=tail)
             st.text_area("Logs", value=logs, height=600, disabled=True)

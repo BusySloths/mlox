@@ -8,6 +8,7 @@ from mlox.server import (
     AbstractFirewallServer,
     AbstractGitServer,
     AbstractInitialPasswordAuthServer,
+    AbstractLogServer,
     AbstractNativeServer,
     AbstractServer,
     ServerCapability,
@@ -27,6 +28,7 @@ class UbuntuNativeServer(
     AbstractFirewallServer,
     AbstractInitialPasswordAuthServer,
     AbstractNativeServer,
+    AbstractLogServer,
 ):
     capabilities: ClassVar[set[ServerCapability]] = {
         ServerCapability.GIT,
@@ -34,7 +36,9 @@ class UbuntuNativeServer(
         ServerCapability.INITIAL_AUTH_PASSWORD,
         ServerCapability.TERMINAL,
         ServerCapability.NATIVE,
+        ServerCapability.LOGS,
     }
+
     DEFAULT_SERVER_INFO: ClassVar[Dict[str, str | int | float]] = {
         "host": "Unknown",
         "cpu_count": 0,
@@ -48,6 +52,25 @@ class UbuntuNativeServer(
     def __post_init__(self):
         super().__post_init__()
         self.backend = ["native"]
+
+    def log_labels(self) -> list[str]:
+        return ["System journal"]
+
+    def log_tail(self, conn, label: str | None = None, tail: int = 200) -> str:
+        if label not in (None, "System journal"):
+            raise ValueError(f"Unknown server log source: {label}")
+        if not isinstance(tail, int) or isinstance(tail, bool) or tail < 1:
+            raise ValueError("Log tail must be a positive integer.")
+        result = conn.sudo(
+            f"journalctl --no-pager --output=short-iso -n {tail}",
+            hide=True, warn=True, pty=False, in_stream=False, timeout=30,
+        )
+        if result.exited:
+            detail = result.stderr.removeprefix("[sudo] password: ").strip()
+            raise RuntimeError(
+                f"Journal retrieval failed (exit {result.exited}): {detail}"
+            )
+        return result.stdout.rstrip("\n")
 
     def _apt_wait(self, conn) -> None:
         """Wait until apt/dpkg locks are free to avoid contention errors."""

@@ -441,6 +441,7 @@ def test_catalog_and_streamlit_handlers_are_registered() -> None:
 
     assert config.capabilities["backend"] == ["kubernetes"]
     assert config.capabilities["service"] == [
+        "logs",
         "model_server",
         "health",
         "secret_manager_binding",
