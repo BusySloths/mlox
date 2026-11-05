@@ -47,6 +47,7 @@ class ServerActions(Container):
     def compose(self) -> ComposeResult:
         with Horizontal(id="server-action-buttons"):
             with Horizontal(id="server-primary-action-buttons"):
+                yield Button("Add Service", id="add-service-to-bundle", variant="success")
                 yield Button("Open Terminal", id="open-server-terminal")
                 yield Button("Show Credentials", id="toggle-server-credentials")
                 yield Button("Refresh Server Info", id="refresh-runtime-info")
@@ -140,6 +141,9 @@ class ServerActions(Container):
         remove = self.query_one("#remove-bundle", Button)
         is_bundle = bool(selection and selection.type == "bundle" and selection.bundle)
         setup.display = is_bundle and not is_bundle_initialized(selection.bundle)
+        self.query_one("#add-service-to-bundle", Button).display = bool(
+            is_bundle and is_bundle_initialized(selection.bundle)
+        )
         remove.display = is_bundle
 
     def _render_bundle_rename_action(self, selection: Optional[SelectionInfo]) -> None:

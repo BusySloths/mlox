@@ -81,7 +81,6 @@ class ProjectActions(Container):
 
     def on_mount(self) -> None:
         self.border_title = "Project Actions"
-        self.query_one("#add-bundle-from-server-template", Button).can_focus = False
         self._update_visibility(self.selection)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:

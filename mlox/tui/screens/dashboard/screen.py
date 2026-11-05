@@ -45,7 +45,7 @@ from .service_actions import (
     runtime_provider_options,
 )
 from .secret_manager_panel import SecretManagerPanel
-from .template_panel import TemplatePanel
+from .template_panel import TemplateBrowserDialog, TemplatePanel
 from .tree import InfraTree
 from .workflow_panel import WorkflowPanel
 from mlox.application.use_cases.servers import (
@@ -200,12 +200,6 @@ class DashboardScreen(Screen):
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")
-                            with TabPane(
-                                "Server Templates", id=SERVER_TEMPLATES_TAB_ID
-                            ):
-                                yield TemplatePanel(
-                                    id="server-template-panel", template_type="server"
-                                )
                             with TabPane("Firewall", id=FIREWALL_TAB_ID):
                                 yield FirewallPanel(id="firewall-panel")
                             with TabPane("Secret Manager", id=SECRET_MANAGER_TAB_ID):
@@ -222,12 +216,6 @@ class DashboardScreen(Screen):
                                 yield WorkflowPanel(id="workflow-panel")
                             with TabPane("Repositories", id=REPOSITORY_TAB_ID):
                                 yield RepositoryPanel(id="repository-panel")
-                            with TabPane(
-                                "Service Templates", id=SERVICE_TEMPLATES_TAB_ID
-                            ):
-                                yield TemplatePanel(
-                                    id="service-template-panel", template_type="service"
-                                )
                             with TabPane("Service", id=SERVICE_TUI_TAB_ID):
                                 yield Container(id="service-tui-container")
         yield AppLogPanel(id="app-log-drawer")
@@ -340,8 +328,6 @@ class DashboardScreen(Screen):
         history = self.query_one(HistoryPanel)
         history.selection = selection
         self._clear_lazy_root_panels()
-        for templates in self.query(TemplatePanel):
-            templates.selection = selection
         self._update_template_tabs(selection)
         self._sync_active_root_panel()
         self._update_tui_panel(selection)
@@ -474,16 +460,49 @@ class DashboardScreen(Screen):
     @on(Button.Pressed, "#add-bundle-from-server-template")
     def handle_project_add_bundle_requested(self, event: Button.Pressed) -> None:
         event.stop()
-        self._set_tab_visible(SERVER_TEMPLATES_TAB_ID, True)
-        self._request_tab_activation(SERVER_TEMPLATES_TAB_ID)
-        self.notify("Choose a server template to create a new bundle.")
+        self._open_template_browser("server", self._current_selection)
 
-    def _activate_server_templates_tab(self) -> None:
-        tabs = self.query_one("#main-tabs", TabbedContent)
-        try:
-            tabs.active = SERVER_TEMPLATES_TAB_ID
-        except Tabs.TabError:
-            pass
+    @on(Button.Pressed, "#add-service-to-bundle")
+    def handle_bundle_add_service_requested(self, event: Button.Pressed) -> None:
+        event.stop()
+        selection = self._current_selection
+        if selection and selection.type == "bundle" and is_bundle_initialized(selection.bundle):
+            self._open_template_browser("service", selection)
+
+    def _open_template_browser(self, kind: str, selection: SelectionInfo | None) -> None:
+        workspace = getattr(self.app, "workspace", None)
+        infra = getattr(workspace, "infrastructure", None)
+        bundle = selection.bundle if selection and selection.type == "bundle" else None
+
+        def resolve(config: object) -> TemplateFormSpec | None:
+            if not workspace or not infra:
+                self.notify("Project workspace is unavailable.", severity="error")
+                return None
+            result = (resolve_service_template_setup(infra, bundle, config)
+                      if kind == "service" else resolve_server_template_setup(infra, config))
+            if not result.success:
+                self.notify(result.message, severity="error")
+                return None
+            spec = result.data.get("setup") if result.data else None
+            if not isinstance(spec, TemplateFormSpec):
+                self.notify("Selected template returned an unexpected setup form.", severity="error")
+                return None
+            missing = self._missing_required_select_options(spec)
+            if missing:
+                self.notify("Cannot add this template yet. Missing options for: " + ", ".join(missing) + ".", severity="error")
+                return None
+            return spec
+
+        def completed(result) -> None:
+            if result is None:
+                return
+            config, spec, values = result
+            if kind == "service":
+                self._add_service_from_template_values(config, bundle, spec, values)
+            else:
+                self._add_server_from_template_values(config, spec, values)
+
+        self.app.push_screen(TemplateBrowserDialog(kind, selection, resolve), completed)
 
     def _project_tags(self, preferred_tags: list[str]) -> list[str]:
         workspace = getattr(self.app, "workspace", None)
@@ -1134,7 +1153,7 @@ class DashboardScreen(Screen):
     ) -> None:
         workspace = getattr(self.app, "workspace", None)
         infra = getattr(workspace, "infrastructure", None)
-        selection = self.query_one("#service-template-panel", TemplatePanel).selection
+        selection = self._current_selection
         bundle = selection.bundle if selection and selection.type == "bundle" else None
         if not workspace or not infra:
             self.notify(
@@ -1208,8 +1227,6 @@ class DashboardScreen(Screen):
             )
             return
 
-        panel = self.query_one("#server-template-panel", TemplatePanel)
-        panel.set_adding(True)
         self._set_server_add_loading(True)
 
         def add_server() -> None:
@@ -1240,13 +1257,10 @@ class DashboardScreen(Screen):
         )
 
     def _finish_server_template_add_error(self, message: str) -> None:
-        self.query_one("#server-template-panel", TemplatePanel).set_adding(False)
         self._set_server_add_loading(False)
         self.notify(message, severity="error")
 
     def _finish_server_template_add(self, result) -> None:
-        panel = self.query_one("#server-template-panel", TemplatePanel)
-        panel.set_adding(False)
         self._set_server_add_loading(False)
         bundle = result.data.get("bundle") if result.data else None
         self._refresh_tree_after_server_add(bundle)
@@ -1269,8 +1283,6 @@ class DashboardScreen(Screen):
             )
             return
 
-        panel = self.query_one("#service-template-panel", TemplatePanel)
-        panel.set_adding(True)
         self._set_service_add_loading(True)
 
         def add_service() -> None:
@@ -1305,13 +1317,10 @@ class DashboardScreen(Screen):
         )
 
     def _finish_service_template_add_error(self, message: str) -> None:
-        self.query_one("#service-template-panel", TemplatePanel).set_adding(False)
         self._set_service_add_loading(False)
         self.notify(message, severity="error")
 
     def _finish_service_template_add(self, result, bundle: object | None) -> None:
-        panel = self.query_one("#service-template-panel", TemplatePanel)
-        panel.set_adding(False)
         self._set_service_add_loading(False)
         service = result.data.get("service") if result.data else None
         self._refresh_tree_after_service_change(bundle, service)
@@ -1484,16 +1493,6 @@ class DashboardScreen(Screen):
         self.notify(f"Reloaded project infrastructure for {project}.")
 
     def _update_template_tabs(self, selection: SelectionInfo | None) -> None:
-        server_templates_visible = selection.type == "root" if selection else False
-        service_templates_visible = (
-            selection.type == "bundle" and is_bundle_initialized(selection.bundle)
-            if selection
-            else False
-        )
-        self._set_tab_visible(
-            SERVER_TEMPLATES_TAB_ID,
-            server_templates_visible,
-        )
         self._set_tab_visible(
             SECRET_MANAGER_TAB_ID,
             selection.type == "root" if selection else False,
@@ -1529,10 +1528,6 @@ class DashboardScreen(Screen):
         self._set_tab_visible(
             REPOSITORY_TAB_ID,
             selection.type == "root" if selection else False,
-        )
-        self._set_tab_visible(
-            SERVICE_TEMPLATES_TAB_ID,
-            service_templates_visible,
         )
         self._set_tab_visible(
             LOGS_TAB_ID,

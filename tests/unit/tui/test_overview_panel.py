@@ -279,7 +279,7 @@ def test_empty_bundle_overview_points_to_service_templates() -> None:
 
     assert "No services installed yet" in overview
     assert "backend-specific services" in overview
-    assert "Service Templates" in overview
+    assert "Add Service" in overview
 
 
 def test_server_overview_shows_resource_info() -> None:

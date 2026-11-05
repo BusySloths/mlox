@@ -254,7 +254,7 @@ async def _visible_tabs_for(
         await pilot.pause(0.05)
 
         tabs = screen.query_one("#main-tabs", TabbedContent)
-        server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
+        assert not tabs.query(f"#{SERVER_TEMPLATES_TAB_ID}")
         secret_tab = tabs.get_tab(SECRET_MANAGER_TAB_ID)
         firewall_tab = tabs.get_tab(FIREWALL_TAB_ID)
         monitor_tab = tabs.get_tab(MONITOR_TAB_ID)
@@ -262,11 +262,11 @@ async def _visible_tabs_for(
         models_tab = tabs.get_tab(MODELS_TAB_ID)
         workflow_tab = tabs.get_tab(WORKFLOW_TAB_ID)
         repository_tab = tabs.get_tab(REPOSITORY_TAB_ID)
-        service_tab = tabs.get_tab(SERVICE_TEMPLATES_TAB_ID)
+        assert not tabs.query(f"#{SERVICE_TEMPLATES_TAB_ID}")
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
         await asyncio.to_thread(lambda: None)
         return (
-            server_tab.styles.display,
+            "none",
             secret_tab.styles.display,
             firewall_tab.styles.display,
             monitor_tab.styles.display,
@@ -274,7 +274,7 @@ async def _visible_tabs_for(
             models_tab.styles.display,
             workflow_tab.styles.display,
             repository_tab.styles.display,
-            service_tab.styles.display,
+            "none",
             logs_tab.styles.display,
         )
 
@@ -295,7 +295,7 @@ def test_root_selection_shows_project_tabs() -> None:
         _visible_tabs_for(SelectionInfo(type="root"))
     )
 
-    assert server_display == "block"
+    assert server_display == "none"
     assert secret_display == "block"
     assert firewall_display == "block"
     assert monitor_display == "block"
@@ -1150,7 +1150,7 @@ async def _initial_dashboard_overview() -> tuple[str, str, str]:
         screen = app.query_one(DashboardScreen)
         tabs = screen.query_one("#main-tabs", TabbedContent)
         overview = screen.query_one(OverviewPanel)
-        server_tab = tabs.get_tab(SERVER_TEMPLATES_TAB_ID)
+        server_tab = screen.query_one("#add-bundle-from-server-template", Button)
         return (
             tabs.active,
             server_tab.styles.display,
@@ -1211,19 +1211,14 @@ async def _add_bundle_project_action_opens_server_templates() -> str:
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         app.query_one("#add-bundle-from-server-template", Button).press()
-        tabs = app.query_one("#main-tabs", TabbedContent)
-        deadline = time.monotonic() + 2
-        while tabs.active != SERVER_TEMPLATES_TAB_ID:
-            if time.monotonic() > deadline:
-                return tabs.active
-            await pilot.pause(0.05)
-        return tabs.active
+        await pilot.pause()
+        return type(app.screen).__name__
 
 
-def test_project_add_bundle_action_opens_server_templates_tab() -> None:
+def test_project_add_bundle_action_opens_server_template_dialog() -> None:
     assert (
         asyncio.run(_add_bundle_project_action_opens_server_templates())
-        == SERVER_TEMPLATES_TAB_ID
+        == "TemplateBrowserDialog"
     )
 
 
@@ -2221,10 +2216,60 @@ async def _bundle_actions_button_ids() -> list[str | None]:
         return [getattr(child, "id", None) for child in row.children]
 
 
-def test_bundle_actions_do_not_show_add_service_button() -> None:
+def test_bundle_actions_include_add_service_button() -> None:
     button_ids = asyncio.run(_bundle_actions_button_ids())
 
-    assert "add-service-to-bundle" not in button_ids
+    assert "add-service-to-bundle" in button_ids
+
+
+def test_bundle_action_opens_service_browser_and_adds_service(monkeypatch) -> None:
+    async def exercise() -> None:
+        app = DashboardTestApp()
+        server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
+        bundle = SimpleNamespace(name="dev", server=server, services=[])
+        app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+        spec = TemplateFormSpec(
+            title="Add Test Service",
+            fields=[TemplateFieldSpec("name", "Name")],
+            materialize=lambda values, infra: {"${SERVICE_NAME}": values["name"]},
+        )
+        config = SimpleNamespace(
+            id="test-service", name="Test Service", version="1",
+            backend_capabilities=lambda: {"docker"},
+            get_ui_handler=lambda ui, handler: lambda infra, selected_bundle, cfg: spec,
+        )
+        monkeypatch.setattr(
+            "mlox.application.use_cases.services.load_all_service_configs",
+            lambda include_plugins=True: [config],
+        )
+        calls = []
+
+        def add_service(selected_config, *, server_ip, params):
+            calls.append((selected_config, server_ip, params))
+            service = SimpleNamespace(name="tracking", state="un-initialized")
+            bundle.services.append(service)
+            return OperationResult(True, 0, "Added service", {"service": service})
+
+        app.workspace.add_service_from_config = add_service
+        async with app.run_test(size=(140, 45)) as pilot:
+            screen = app.query_one(DashboardScreen)
+            screen._apply_selection(SelectionInfo(type="bundle", bundle=bundle, server=server))
+            await pilot.pause()
+            screen.query_one("#add-service-to-bundle", Button).press()
+            await pilot.pause()
+            dialog = app.screen
+            assert type(dialog).__name__ == "TemplateBrowserDialog"
+            await pilot.click("#configure-add-server")
+            dialog.query_one("#template-field-name", Input).value = "tracking"
+            await pilot.click("#confirm-template-setup")
+            deadline = time.monotonic() + 3
+            while not calls:
+                if time.monotonic() > deadline:
+                    raise AssertionError("Timed out waiting for service add")
+                await pilot.pause(0.05)
+            assert calls == [(config, "10.0.0.5", {"${SERVICE_NAME}": "tracking"})]
+
+    asyncio.run(exercise())
 
 
 async def _add_service_from_template_modal() -> tuple[list[tuple[object, dict]], str]:
@@ -2513,7 +2558,7 @@ def test_empty_bundle_tree_has_no_no_services_leaf() -> None:
     assert children == ["Docker: 10.0.0.5"]
 
 
-def test_bundle_selection_shows_only_service_templates_tab() -> None:
+def test_bundle_selection_has_no_template_tabs() -> None:
     (
         server_display,
         secret_display,
@@ -2535,7 +2580,7 @@ def test_bundle_selection_shows_only_service_templates_tab() -> None:
     assert models_display == "none"
     assert workflow_display == "none"
     assert repository_display == "none"
-    assert service_display == "block"
+    assert service_display == "none"
     assert logs_display == "none"
 
 
@@ -2550,11 +2595,10 @@ async def _service_tab_display_for_uninitialized_bundle() -> str:
             SelectionInfo(type="bundle", bundle=bundle, server=server)
         )
         await pilot.pause()
-        tabs = screen.query_one("#main-tabs", TabbedContent)
-        return tabs.get_tab(SERVICE_TEMPLATES_TAB_ID).styles.display
+        return screen.query_one("#add-service-to-bundle", Button).styles.display
 
 
-def test_uninitialized_bundle_selection_hides_service_templates_tab() -> None:
+def test_uninitialized_bundle_hides_add_service_action() -> None:
     assert asyncio.run(_service_tab_display_for_uninitialized_bundle()) == "none"
 
 

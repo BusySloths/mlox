@@ -197,7 +197,7 @@ class OverviewPanel(Static):
             details.add_row(
                 "Services",
                 (
-                    "No services installed yet. Use the Service Templates tab "
+                    "No services installed yet. Use Add Service in Bundle Actions "
                     "to add backend-specific services."
                 ),
             )

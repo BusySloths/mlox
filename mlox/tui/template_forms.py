@@ -10,6 +10,7 @@ from typing import Any, Callable, Literal
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
+from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static, TextArea
 
@@ -60,8 +61,16 @@ def valid_select_options(field_spec: TemplateFieldSpec) -> list[tuple[str, str]]
     ]
 
 
-class TemplateSetupDialog(ModalScreen[FormValues | None]):
-    """Modal prompt for collecting setup values for a template."""
+class TemplateSetupForm(Container):
+    """Reusable setup form that can be embedded in a template browser."""
+
+    class BackRequested(Message):
+        pass
+
+    class Submitted(Message):
+        def __init__(self, values: FormValues) -> None:
+            super().__init__()
+            self.values = values
 
     def __init__(self, spec: TemplateFormSpec) -> None:
         super().__init__()
@@ -120,7 +129,7 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
                     if field_spec.help:
                         yield Static(field_spec.help, classes="template-field-help", id=f"{widget_id}-help")
             with Horizontal(id="template-setup-actions"):
-                yield Button("Cancel", id="cancel-template-setup")
+                yield Button("Back", id="cancel-template-setup")
                 yield Button(
                     self.spec.submit_label,
                     id="confirm-template-setup",
@@ -217,7 +226,7 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
 
     @on(Button.Pressed, "#cancel-template-setup")
     def handle_cancel(self, _: Button.Pressed) -> None:
-        self.dismiss(None)
+        self.post_message(self.BackRequested())
 
     @on(Button.Pressed, "#confirm-template-setup")
     def handle_confirm(self, _: Button.Pressed) -> None:
@@ -240,7 +249,7 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
             self.query_one("#template-setup-error", Static).update("\n".join(errors))
             return
 
-        self.dismiss(values)
+        self.post_message(self.Submitted(values))
 
     def _read_field(self, field_spec: TemplateFieldSpec) -> str:
         widget = self.query_one(f"#{self._field_id(field_spec.name)}")
@@ -291,3 +300,27 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
         if field_spec.required and options:
             return options[0][1]
         return Select.BLANK
+
+
+class TemplateSetupDialog(ModalScreen[FormValues | None]):
+    """Standalone wrapper for existing setup form callers."""
+
+    def __init__(self, spec: TemplateFormSpec) -> None:
+        super().__init__()
+        self.spec = spec
+
+    def compose(self) -> ComposeResult:
+        yield TemplateSetupForm(self.spec)
+
+    def _dismiss_with_values(self) -> None:
+        self.query_one(TemplateSetupForm)._dismiss_with_values()
+
+    @on(TemplateSetupForm.BackRequested)
+    def handle_back(self, message: TemplateSetupForm.BackRequested) -> None:
+        message.stop()
+        self.dismiss(None)
+
+    @on(TemplateSetupForm.Submitted)
+    def handle_submitted(self, message: TemplateSetupForm.Submitted) -> None:
+        message.stop()
+        self.dismiss(message.values)

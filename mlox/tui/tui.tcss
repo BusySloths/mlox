@@ -273,7 +273,6 @@ ProjectSwitchDialog {
 }
 
 #overview-tab,
-#server-templates-tab,
 #secret-manager-tab,
 #firewall-tab,
 #monitor-tab,
@@ -282,7 +281,6 @@ ProjectSwitchDialog {
 #apps-tab,
 #workflow-tab,
 #knowledge-tab,
-#service-templates-tab,
 #service-tui-tab {
   height: 1fr;
 }
@@ -453,8 +451,7 @@ EditEntryScreen {
   border: round #35635bff;
 }
 
-#overview-scroll,
-.template-scroll-wrapper {
+#overview-scroll {
   height: 1fr;
   width: 1fr;
   overflow-y: auto;
@@ -1956,21 +1953,57 @@ SecretEditDialog {
   border: round #8fe388ff;
 }
 
-.template-table {
+.template-heading {
+  height: 1;
+  margin: 1 1 0 1;
+  text-style: bold;
+  color: #e5f5ee;
+}
+
+.template-help {
+  height: auto;
+  margin: 0 1;
+  color: #b5cec4;
+}
+
+.template-count {
+  height: 1;
+  margin: 1 1 0 1;
+  color: #a6c9bd;
+}
+
+.template-browser {
   height: 1fr;
-  min-height: 10;
-  border: round #1bd6f3ff;
+  min-height: 4;
+  margin: 0 1;
+}
+
+.template-table {
+  width: 2fr;
+  height: 1fr;
+  border: round #477a70;
+}
+
+.template-table:focus {
+  border: round #70e1be;
+}
+
+.template-scroll-wrapper {
+  height: 1fr;
+  width: 3fr;
+  margin-left: 1;
+  overflow-y: auto;
 }
 
 .template-details {
   width: 1fr;
   height: auto;
-  margin-top: 1;
+  margin-top: 0;
 }
 
 #template-action-row {
-  height: auto;
-  margin-top: 1;
+  height: 3;
+  margin: 0 1 1 1;
 }
 
 #configure-add-server {
@@ -1982,6 +2015,138 @@ SecretEditDialog {
 
 #configure-add-server:hover {
   background: #12b86aff;
+}
+
+#view-template-source {
+  width: auto;
+  margin-left: 1;
+  background: #234b48;
+  border: round #6b9c90;
+  color: #e5f5ee;
+}
+
+#view-template-source:hover {
+  background: #32635d;
+}
+
+.template-action-spacer {
+  width: 1fr;
+}
+
+#close-template-browser {
+  width: auto;
+  background: #263f3b;
+  border: round #6b9c90;
+  color: #e5f5ee;
+}
+
+TemplateSourceDialog {
+  align: center middle;
+  background: #000000 65%;
+}
+
+TemplateBrowserDialog {
+  align: center middle;
+  background: #000000 65%;
+}
+
+#template-browser-dialog {
+  width: 95%;
+  max-width: 150;
+  height: 90%;
+  padding: 0 1;
+  background: #0d2a24;
+  border: round #74d17a;
+}
+
+#template-browser-dialog.setup-active {
+  width: 76;
+  max-width: 95%;
+  height: auto;
+  max-height: 90%;
+  padding: 1 2;
+}
+
+#modal-template-panel {
+  height: 1fr;
+}
+
+#template-source-view,
+#template-form-view {
+  height: 1fr;
+  width: 1fr;
+  padding: 1;
+}
+
+#template-form-view {
+  align: center middle;
+}
+
+.setup-active #template-form-view {
+  height: auto;
+  max-height: 100%;
+  padding: 0;
+}
+
+TemplateSetupForm {
+  width: 100%;
+  height: 100%;
+  align: center middle;
+}
+
+#template-form-view #template-setup-dialog {
+  width: 100%;
+  max-width: 72;
+  height: auto;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+#template-form-view #template-setup-fields {
+  height: auto;
+  max-height: 10;
+}
+
+.setup-active TemplateSetupForm {
+  height: auto;
+  max-height: 100%;
+}
+
+#close-template-browser,
+#back-template-source {
+  width: auto;
+}
+
+#template-source-dialog {
+  width: 90%;
+  max-width: 120;
+  height: 85%;
+  padding: 1 2;
+  background: #0d2a24;
+  border: round #74d17a;
+}
+
+#template-source-title {
+  height: 1;
+  text-style: bold;
+  color: #e5f5ee;
+}
+
+#template-source-origin {
+  height: auto;
+  color: #b5cec4;
+  margin-bottom: 1;
+}
+
+#template-source-content {
+  height: 1fr;
+  border: round #477a70;
+}
+
+#close-template-source {
+  margin-top: 1;
 }
 
 #template-add-indicator {
@@ -2091,10 +2256,21 @@ SecretEditDialog {
 
 #refresh-runtime-info {
   width: auto;
-  margin-left: 2;
+  margin-left: 1;
   background: #0e9455ff;
   border: round #8fe388ff;
   color: #ffffff;
+}
+
+#add-service-to-bundle {
+  width: auto;
+  background: #a67924;
+  border: round #f1ce72;
+  color: #ffffff;
+}
+
+#add-service-to-bundle:hover {
+  background: #bc8d31;
 }
 
 #refresh-runtime-info:hover {
