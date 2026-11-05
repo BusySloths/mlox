@@ -2654,6 +2654,45 @@ def test_service_selection_shows_history_and_logs_tab() -> None:
     assert logs_display == "block"
 
 
+def test_activity_view_switches_between_full_height_logs_and_history() -> None:
+    async def exercise() -> None:
+        from pathlib import Path
+
+        class StyledDashboardTestApp(DashboardTestApp):
+            CSS_PATH = Path(__file__).resolve().parents[3] / "mlox/tui/tui.tcss"
+
+        app = StyledDashboardTestApp()
+        service = SimpleNamespace(
+            name="demo", compose_service_names={"App": "app"},
+            exec=SimpleNamespace(history=[]),
+        )
+        server = SimpleNamespace(ip="10.0.0.5", state="running")
+        bundle = SimpleNamespace(name="dev", server=server, services=[service])
+        app.workspace.infrastructure = SimpleNamespace(bundles=[bundle])
+        async with app.run_test(size=(140, 40)) as pilot:
+            screen = app.query_one(DashboardScreen)
+            screen._apply_selection(SelectionInfo(type="service", service=service, bundle=bundle, server=server))
+            await pilot.pause()
+            tabs = screen.query_one("#main-tabs", TabbedContent)
+            tabs.active = LOGS_TAB_ID
+            await pilot.pause()
+            logs = screen.query_one("#selection-logs")
+            history = screen.query_one("#selection-history")
+            assert logs.display and not history.display
+            screen.query_one("#show-execution-history", Button).press()
+            await pilot.pause()
+            assert history.display and not logs.display
+            screen.query_one("#show-service-logs", Button).press()
+            await pilot.pause()
+            assert logs.display and not history.display
+            screen._apply_selection(SelectionInfo(type="server", server=server, bundle=bundle))
+            await pilot.pause()
+            assert history.display and not logs.display
+            assert not screen.query_one("#show-service-logs").display
+
+    asyncio.run(exercise())
+
+
 async def _toggle_app_log_drawer() -> tuple[str, str]:
     app = DashboardTestApp()
     async with app.run_test() as pilot:

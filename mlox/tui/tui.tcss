@@ -2934,21 +2934,62 @@ TemplateSetupDialog {
 
 #logs-tab,
 #history-tab {
-  padding: 1;
+  padding: 0 1 1 1;
 }
 
 #selection-logs,
 #selection-history {
   layout: vertical;
   height: 1fr;
+  min-height: 0;
 }
 
-#history-table {
-  margin-top: 1;
+#activity-view-switcher {
+  height: 3;
+  width: 1fr;
+  margin-bottom: 1;
 }
 
-#history-status {
-  margin-top: 1;
+#show-service-logs,
+#show-execution-history {
+  width: 11;
+  min-width: 0;
+  height: 3;
+  padding: 0;
+  background: #1b3935;
+  border: round #4c746b;
+  color: #d5e9e2;
+}
+
+#show-service-logs.-primary,
+#show-execution-history.-primary {
+  background: #245b50;
+  border: round #80cdb4;
+  color: #ffffff;
+  text-style: bold;
+}
+
+#show-execution-history {
+  margin-left: 1;
+}
+
+#show-service-logs {
+  width: 9;
+}
+
+#activity-context {
+  width: 1fr;
+  height: 3;
+  content-align: right middle;
+  color: #a6c9bd;
+  padding-right: 1;
+}
+
+.activity-heading {
+  height: 1;
+  color: #b6ddd0;
+  text-style: bold;
+  margin: 0 1;
 }
 
 .section-title {
@@ -2959,15 +3000,28 @@ TemplateSetupDialog {
 
 #log-controls {
   layout: horizontal;
-  margin-bottom: 1;
+  margin: 0 1;
   align-horizontal: left;
   align-vertical: middle;
-  height: auto;
+  height: 3;
 }
 
 #log-label {
   width: 1fr;
-  min-width: 20;
+  max-width: 24;
+  min-width: 6;
+  height: 3;
+}
+
+#log-label SelectCurrent {
+  border: round #477a70;
+  background: #12352e;
+  color: #e5f5ee;
+  padding: 0 1;
+}
+
+#log-label:focus SelectCurrent {
+  border: round #80cdb4;
 }
 
 #log-tail,
@@ -2977,35 +3031,42 @@ TemplateSetupDialog {
 
 #log-tail {
   width: 12;
+  height: 3;
+  padding: 0 1;
+  border: round #477a70;
+  background: #12352e;
+  color: #e5f5ee;
 }
 
 #log-fetch {
-  width: auto;
-  min-width: 8;
-}
-
-#log-output,
-#log-status {
-  margin-top: 1;
+  width: 14;
+  min-width: 0;
+  height: 3;
+  padding: 0;
+  background: #146f58;
+  border: round #7ac6a5;
+  color: #ffffff;
 }
 
 #log-output {
   height: 1fr;
-  min-height: 10;
-  border: round #1bd6f3ff;
+  min-height: 3;
+  border: round #477a70;
   background: #031410ff;
+  padding: 0 1;
 }
 
 #history-table {
   height: 1fr;
-  min-height: 10;
-  border: round #1bd6f3ff;
+  min-height: 3;
+  border: round #477a70;
 }
 
 #log-status,
 #history-status {
-  color: #94a3b8;
-  margin-top: 1;
+  height: auto;
+  color: #b5cec4;
+  margin: 0 1;
 }
 
 Tree {

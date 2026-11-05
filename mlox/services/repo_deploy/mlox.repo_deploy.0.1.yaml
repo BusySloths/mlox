@@ -25,6 +25,10 @@ groups:
 capabilities:
   service:
   - deployment
+  - app
+  - health
+  - secret_manager_binding
+  - telemetry_binding
   backend:
   - docker
 build:

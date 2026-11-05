@@ -198,6 +198,10 @@ class DashboardScreen(Screen):
                             with TabPane("Knowledge", id=KNOWLEDGE_TAB_ID):
                                 yield KnowledgePanel(id="knowledge-panel")
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
+                                with Horizontal(id="activity-view-switcher"):
+                                    yield Button("Logs", id="show-service-logs", variant="primary")
+                                    yield Button("History", id="show-execution-history")
+                                    yield Static("", id="activity-context", markup=False)
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")
                             with TabPane("Firewall", id=FIREWALL_TAB_ID):
@@ -327,11 +331,37 @@ class DashboardScreen(Screen):
         logs.selection = selection
         history = self.query_one(HistoryPanel)
         history.selection = selection
+        self._set_activity_view(
+            "logs" if selection and selection.type == "service" else "history"
+        )
         self._clear_lazy_root_panels()
         self._update_template_tabs(selection)
         self._sync_active_root_panel()
         self._update_tui_panel(selection)
         self.refresh_bindings()
+
+    def _set_activity_view(self, view: str) -> None:
+        selection = self._current_selection
+        is_service = bool(selection and selection.type == "service" and selection.service)
+        view = "logs" if view == "logs" and is_service else "history"
+        self.query_one("#selection-logs", LogPanel).display = view == "logs"
+        self.query_one("#selection-history", HistoryPanel).display = view == "history"
+        logs_button = self.query_one("#show-service-logs", Button)
+        history_button = self.query_one("#show-execution-history", Button)
+        logs_button.display = is_service
+        logs_button.variant = "primary" if view == "logs" else "default"
+        history_button.variant = "primary" if view == "history" else "default"
+        target = selection.service if is_service else getattr(selection, "server", None)
+        name = getattr(target, "name", None) or getattr(target, "ip", "")
+        self.query_one("#activity-context", Static).update(str(name or ""))
+
+    @on(Button.Pressed, "#show-service-logs")
+    def show_service_logs(self) -> None:
+        self._set_activity_view("logs")
+
+    @on(Button.Pressed, "#show-execution-history")
+    def show_execution_history(self) -> None:
+        self._set_activity_view("history")
 
     @on(TabbedContent.TabActivated, "#main-tabs")
     def handle_main_tab_activated(self, _: TabbedContent.TabActivated) -> None:

@@ -1,11 +1,21 @@
-import re
+import json
 import logging
+import re
 import shlex
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
+import yaml
+
 from mlox.execution import TaskGroup
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import (
+    AbstractHealthService,
+    AbstractSecretManagerBindingService,
+    AbstractService,
+    AbstractTelemetryBindingService,
+    ServiceCapability,
+    service_health_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +25,19 @@ _ENV_TOKEN_PATTERN = re.compile(
 
 
 @dataclass
-class RepoDeployDockerService(AbstractService):
-    capabilities = {ServiceCapability.DEPLOYMENT}
+class RepoDeployDockerService(
+    AbstractSecretManagerBindingService,
+    AbstractTelemetryBindingService,
+    AbstractHealthService,
+    AbstractService,
+):
+    capabilities = {
+        ServiceCapability.DEPLOYMENT,
+        ServiceCapability.APP,
+        ServiceCapability.HEALTH,
+        ServiceCapability.SECRET_MANAGER_BINDING,
+        ServiceCapability.TELEMETRY_BINDING,
+    }
     repo_uuid: str
     compose_file: str
     env_vars: Dict[str, str] = field(default_factory=dict)
@@ -50,12 +71,23 @@ class RepoDeployDockerService(AbstractService):
     def _env_file_path(self) -> str:
         return f"{self.target_path}/{self.target_docker_env}"
 
-    def _compose_up(self, conn, compose_service: str = "") -> bool:
-        compose_path = self._use_repo_runtime_paths()
+    def _binding_path(self, binding: str) -> str:
+        return f"{self.target_path}/.mlox-{self.uuid}-{binding}.yaml"
+
+    def _compose_files(self, *, exclude: str = "") -> str:
+        paths = [f"{self.target_path}/{self.target_docker_script}"]
+        if self.secret_manager_uuid and exclude != "secret-manager":
+            paths.append(self._binding_path("secret-manager"))
+        if self.telemetry_uuid and exclude != "telemetry":
+            paths.append(self._binding_path("telemetry"))
+        return " ".join(f"-f {shlex.quote(path)}" for path in paths)
+
+    def _compose_up(self, conn, compose_service: str = "", *, exclude: str = "") -> bool:
+        self._use_repo_runtime_paths()
         compose_cmd = (
             f"docker compose --project-directory {shlex.quote(self.target_path)} "
             f"--env-file {shlex.quote(self._env_file_path())} "
-            f"-f {shlex.quote(compose_path)} up --build -d"
+            f"{self._compose_files(exclude=exclude)} up --build -d"
         )
         if compose_service:
             compose_cmd = f"{compose_cmd} {shlex.quote(compose_service)}"
@@ -69,11 +101,11 @@ class RepoDeployDockerService(AbstractService):
         return True
 
     def _compose_down(self, conn, *, remove_volumes: bool = False) -> bool:
-        compose_path = self._use_repo_runtime_paths()
+        self._use_repo_runtime_paths()
         compose_cmd = (
             f"docker compose --project-directory {shlex.quote(self.target_path)} "
             f"--env-file {shlex.quote(self._env_file_path())} "
-            f"-f {shlex.quote(compose_path)} down"
+            f"{self._compose_files()} down"
         )
         if remove_volumes:
             compose_cmd = f"{compose_cmd} --volumes"
@@ -169,9 +201,88 @@ class RepoDeployDockerService(AbstractService):
 
         for key, value in self.env_vars.items():
             self.exec.fs_append_line(conn, env_file_path, f"{key}={value}")
+        if self.secret_manager_uuid:
+            self._write_binding(
+                conn, "secret-manager", self.get_bound_secret_manager_env_binding() or {}
+            )
+        if self.telemetry_uuid:
+            self._write_binding(
+                conn, "telemetry", self.get_bound_telemetry_env_binding() or {}
+            )
+
+    def _write_binding(
+        self, conn, binding: str, environment: Dict[str, str], *, escaped: bool = False
+    ) -> None:
+        self._use_repo_runtime_paths()
+        if not self.compose_service_names:
+            self._discover_from_compose(conn, f"{self.target_path}/{self.target_docker_script}")
+        # Compose interpolates dollar signs even inside YAML strings.
+        values = {
+            key: str(value) if escaped else str(value).replace("$", "$$")
+            for key, value in environment.items()
+        }
+        document = {
+            "services": {
+                name: {"environment": values}
+                for name in self.compose_service_names.values()
+            }
+        }
+        path = self._binding_path(binding)
+        self.exec.execute(
+            conn, f"umask 077; touch {shlex.quote(path)}; chmod 600 {shlex.quote(path)}",
+            group=TaskGroup.FILESYSTEM,
+        )
+        self.exec.fs_write_file(conn, path, yaml.safe_dump(document, sort_keys=False))
+
+    def _change_binding(
+        self, conn, binding: str, environment: Dict[str, str] | None
+    ) -> None:
+        self._use_repo_runtime_paths()
+        path = self._binding_path(binding)
+        previous = None
+        if environment is not None:
+            try:
+                previous = self.exec.fs_read_file(conn, path, format="string")
+            except (FileNotFoundError, OSError, KeyError):
+                pass
+            try:
+                self._write_binding(conn, binding, environment)
+                if self.state in {"running", "unknown"}:
+                    self._compose_up(conn)
+            except Exception:
+                if previous is None:
+                    self.exec.execute(conn, f"rm -f -- {shlex.quote(path)}", group=TaskGroup.FILESYSTEM)
+                else:
+                    self.exec.fs_write_file(conn, path, previous)
+                raise
+        elif self.state in {"running", "unknown"}:
+            self._compose_up(conn, exclude=binding)
+        if environment is None:
+            self.exec.execute(conn, f"rm -f -- {shlex.quote(path)}", group=TaskGroup.FILESYSTEM)
+
+    def _apply_secret_manager_binding(
+        self, conn, *, manager_uuid: str, environment: Dict[str, str]
+    ) -> None:
+        self._change_binding(conn, "secret-manager", environment)
+
+    def _remove_secret_manager_binding(self, conn) -> None:
+        self._change_binding(conn, "secret-manager", None)
+
+    def _apply_telemetry_binding(
+        self, conn, *, telemetry_uuid: str, environment: Dict[str, str]
+    ) -> None:
+        self._change_binding(conn, "telemetry", environment)
+
+    def _remove_telemetry_binding(self, conn) -> None:
+        self._change_binding(conn, "telemetry", None)
 
     def teardown(self, conn) -> None:
         self._compose_down(conn, remove_volumes=True)
+        for binding in ("secret-manager", "telemetry"):
+            self.exec.execute(
+                conn, f"rm -f -- {shlex.quote(self._binding_path(binding))}",
+                group=TaskGroup.FILESYSTEM,
+            )
 
     def spin_up(self, conn) -> bool:
         return self._compose_up(conn)
@@ -182,19 +293,59 @@ class RepoDeployDockerService(AbstractService):
     def spin_down(self, conn) -> bool:
         return self._compose_down(conn, remove_volumes=True)
 
-    def check(self, conn) -> Dict[str, str]:
-        statuses = self.compose_service_status(conn)
+    def check(self, conn) -> Dict[str, Any]:
+        self._use_repo_runtime_paths()
+        command = (
+            f"docker compose --project-directory {shlex.quote(self.target_path)} "
+            f"--env-file {shlex.quote(self._env_file_path())} "
+            f"{self._compose_files()} ps --all --format json"
+        )
+        output = self.exec.execute(
+            conn, command, group=TaskGroup.CONTAINER_RUNTIME, sudo=True
+        ) or ""
+        try:
+            raw = json.loads(output) if output.strip().startswith("[") else [
+                json.loads(line) for line in output.splitlines() if line.strip()
+            ]
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Could not parse Docker Compose status output") from exc
+        statuses = {name: "unknown" for name in self.compose_service_names.values()}
+        priority = {
+            "running": 0, "starting": 1, "created": 1, "restarting": 1,
+            "unknown": 2, "stopped": 3, "exited": 3, "dead": 3, "unhealthy": 3,
+        }
+        seen: set[str] = set()
+        for item in raw:
+            name = item.get("Service")
+            if name not in statuses:
+                continue
+            state = str(item.get("State") or "unknown").lower()
+            health = str(item.get("Health") or "").lower()
+            if health == "unhealthy":
+                state = "unhealthy"
+            elif health == "starting":
+                state = "starting"
+            if name not in seen or priority.get(state, 2) > priority.get(statuses[name], 2):
+                statuses[name] = state
+            seen.add(name)
         if not statuses:
             return {"status": "unknown", "services": {}}
 
         service_states = [str(v).lower() for v in statuses.values()]
-        if all("running" in state for state in service_states):
+        if all(state == "running" for state in service_states):
             return {"status": "running", "services": statuses}
+        if any(state in {"unhealthy", "dead", "exited"} for state in service_states) and not all(
+            state in {"exited", "dead", "stopped"} for state in service_states
+        ):
+            return {"status": "error", "services": statuses}
         if any(state in {"created", "restarting", "starting"} for state in service_states):
             return {"status": "starting", "services": statuses}
         if all(state in {"exited", "dead", "stopped"} for state in service_states):
             return {"status": "stopped", "services": statuses}
         return {"status": "unknown", "services": statuses}
+
+    def get_health(self, conn) -> Dict[str, Any]:
+        return service_health_payload(self, self.check(conn))
 
     def get_secrets(self) -> Dict[str, Dict]:
         return {}
@@ -232,5 +383,17 @@ class RepoDeployDockerService(AbstractService):
             )
 
         self._discover_from_compose(conn, compose_source)
+        for binding, provider in (
+            ("secret-manager", self.secret_manager_uuid),
+            ("telemetry", self.telemetry_uuid),
+        ):
+            if provider:
+                document = self.exec.fs_read_file(
+                    conn, self._binding_path(binding), format="yaml"
+                )
+                services = document.get("services", {})
+                previous_service = next(iter(services.values()), {})
+                environment = previous_service.get("environment", {})
+                self._write_binding(conn, binding, environment, escaped=True)
         self.save_env_vars(conn, self.env_vars)
         self._compose_up(conn, compose_service=compose_service)

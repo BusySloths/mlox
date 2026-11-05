@@ -37,11 +37,19 @@ class LogPanel(Container):
 
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
+    def __init__(self, *children, **kwargs) -> None:
+        super().__init__(*children, **kwargs)
+        self._request_generation = 0
+
     def compose(self) -> ComposeResult:
+        yield Static("SERVICE LOGS", classes="activity-heading")
         with Horizontal(id="log-controls"):
-            yield Select(options=[], prompt="Log label", id="log-label")
-            yield Input(placeholder="Lines", id="log-tail", value="200")
-            yield Button("Fetch", id="log-fetch")
+            yield Select(options=[], prompt="Log source", id="log-label")
+            yield Input(
+                placeholder="Lines", id="log-tail", value="200",
+                tooltip="Number of lines to fetch",
+            )
+            yield Button("Fetch logs", id="log-fetch", variant="success")
         yield LogWidget(id="log-output", highlight=True)
         yield Static("", id="log-status")
 
@@ -62,11 +70,14 @@ class LogPanel(Container):
         return self.query_one("#log-status", Static)
 
     def on_mount(self) -> None:
+        self.tail_input.border_title = "Lines"
         self.status.update(
             "Select a service to fetch logs. Logs are retrieved on demand."
         )
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
+        self._request_generation += 1
+        self.query_one("#log-fetch", Button).disabled = False
         if selection and selection.type == "service" and selection.service:
             labels = _service_log_labels(selection.service)
             if labels:
@@ -79,6 +90,7 @@ class LogPanel(Container):
             else:
                 self.label_input.set_options([])
                 self.label_input.clear()
+                self.log_output.clear()
                 self.status.update("Selected service does not expose log labels.")
         else:
             self.label_input.set_options([])
@@ -87,6 +99,18 @@ class LogPanel(Container):
                 "Select a service to fetch logs. Logs are retrieved on demand."
             )
             self.log_output.clear()
+
+    @on(Select.Changed, "#log-label")
+    def handle_source_changed(self, event: Select.Changed) -> None:
+        if event.value != self.label_input.value:
+            return
+        self._request_generation += 1
+        self.query_one("#log-fetch", Button).disabled = False
+        label = event.value if isinstance(event.value, str) else ""
+        if label and self.selection and self.selection.type == "service":
+            if not self._show_cached_logs(self.selection, label):
+                self.log_output.clear()
+                self.status.update("Ready to fetch logs for the selected source.")
 
     @on(Button.Pressed, "#log-fetch")
     def handle_fetch(self, _: Button.Pressed) -> None:  # pragma: no cover - UI callback
@@ -111,10 +135,16 @@ class LogPanel(Container):
         try:
             tail = int(self.tail_input.value.strip() or "200")
         except ValueError:
-            self.status.update("Lines must be a number.")
+            self.status.update("Enter a positive number of lines.")
+            return
+        if tail <= 0:
+            self.status.update("Enter a positive number of lines.")
             return
 
         service = selection.service
+        self._request_generation += 1
+        generation = self._request_generation
+        self.query_one("#log-fetch", Button).disabled = True
         self.status.update(f"Fetching logs for '{label}'…")
 
         def fetch_logs() -> None:
@@ -123,21 +153,27 @@ class LogPanel(Container):
                     logs = _service_log_tail(service, conn, label=label, tail=tail)
             except Exception as exc:  # pragma: no cover - network/IO heavy
                 self.app.call_from_thread(
-                    self._show_logs, "", f"Failed to fetch logs: {exc}"
+                    self._finish_fetch, generation, "", f"Failed to fetch logs: {exc}"
                 )
                 return
-            self.app.call_from_thread(self._show_logs, logs, None)
+            self.app.call_from_thread(self._finish_fetch, generation, logs, None)
 
         self.app.run_worker(fetch_logs, thread=True, exclusive=True, group="log-fetch")
 
+    def _finish_fetch(self, generation: int, logs: str, error: str | None) -> None:
+        if generation != self._request_generation or not self.is_mounted:
+            return
+        self.query_one("#log-fetch", Button).disabled = False
+        self._show_logs(logs, error)
+
     def _show_logs(self, logs: str, error: str | None) -> None:
-        self.log_output.clear()
         if error:
             self.status.update(error)
             return
-        for line in logs.splitlines() or [""]:
+        self.log_output.clear()
+        for line in logs.splitlines():
             self.log_output.write_line(line)
-        self.status.update("Logs updated.")
+        self.status.update("Logs updated." if logs else "No log lines returned.")
 
     def _show_cached_logs(self, selection: SelectionInfo, label: str) -> bool:
         service = selection.service

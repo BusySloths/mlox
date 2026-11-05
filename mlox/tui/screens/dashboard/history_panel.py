@@ -18,6 +18,7 @@ class HistoryPanel(Container):
     selection: reactive[Optional[SelectionInfo]] = reactive(None)
 
     def compose(self) -> ComposeResult:
+        yield Static("EXECUTION HISTORY", classes="activity-heading")
         table = DataTable(id="history-table")
         table.add_columns("Timestamp", "Action", "Status", "Details")
         yield table
@@ -48,15 +49,12 @@ class HistoryPanel(Container):
 
         if selection.type == "service" and selection.service:
             history = getattr(getattr(selection.service, "exec", None), "history", [])
-            entries = self._prepare_entries(
-                history, getattr(selection.service, "name", "service")
-            )
+            entries = self._prepare_entries(history)
             label = getattr(selection.service, "name", "service")
         else:
             history = getattr(getattr(selection.server, "exec", None), "history", [])
-            entries = self._prepare_entries(
-                history, getattr(selection.server, "ip", "server")
-            )
+            entries = self._prepare_entries(history)
+            label = getattr(selection.server, "ip", "server")
 
         if not entries:
             self.status.update("No history available yet.")
@@ -72,7 +70,7 @@ class HistoryPanel(Container):
         self.status.update(f"Showing {len(entries)} most recent entries for {label}.")
 
     def _prepare_entries(
-        self, history: Iterable[dict[str, Any]], source: str
+        self, history: Iterable[dict[str, Any]]
     ) -> list[dict[str, str]]:
         entries: list[dict[str, str]] = []
         if not history:
@@ -87,7 +85,7 @@ class HistoryPanel(Container):
             entries.append(
                 {
                     "timestamp": timestamp,
-                    "action": f"{action} [{source}]" if source else action,
+                    "action": action,
                     "status": status,
                     "details": details,
                 }
