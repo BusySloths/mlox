@@ -44,7 +44,8 @@ def test_check_requires_lazyvim_compatible_neovim() -> None:
     assert service.check(object()) == {"status": "running"}
     assert commands
     assert "nvim --version" in commands[0]
-    assert "command -v zsh git nvim mc yazi atuin claude codex pyenv tmux zellij" in commands[0]
+    assert "for tool in zsh git nvim mc tmux zellij claude codex opencode omp herdr yazi atuin pyenv" in commands[0]
+    assert 'command -v "$tool" >/dev/null || exit 1' in commands[0]
     assert 'dpkg --compare-versions "$nvim_version" ge 0.11.2' in commands[0]
 
 
@@ -221,3 +222,55 @@ def test_teardown_runs_sensitive_cleanup_before_removing_target_path() -> None:
     )
     assert calls[3] == ("fs_delete_dir", "/tmp/dev-terminal", {})
     assert service.state == "un-initialized"
+
+
+def test_optional_harnesses_and_herdr_are_installed_and_checked() -> None:
+    service = _service()
+    script = service._install_script()
+    assert "npm install -g opencode-ai" in script
+    assert "https://omp.sh/install" in script
+    assert "PI_INSTALL_DIR=/usr/local/bin" in script
+    assert "https://herdr.dev/install.sh" in script
+    assert "HERDR_INSTALL_DIR=/usr/local/bin" in script
+    service.install_opencode = service.install_omp = service.install_herdr = False
+    assert "INSTALL_OPENCODE=false" in service._install_script()
+    commands = []
+
+    class Exec:
+        def execute(self, _conn, command, **_kwargs):
+            commands.append(command)
+
+    service.exec = Exec()  # type: ignore[assignment]
+    assert service.check(object()) == {"status": "running"}
+    checked_tools = commands[0].splitlines()[0].split()
+    assert all(name not in checked_tools for name in ("opencode", "omp", "herdr"))
+
+
+def test_setup_fails_when_sudo_installer_fails() -> None:
+    import pytest
+
+    service = _service()
+
+    class Exec:
+        def fs_create_dir(self, *_args):
+            pass
+
+        def fs_write_file(self, *_args):
+            pass
+
+        def execute(self, _conn, _command, **kwargs):
+            return None if kwargs.get("sudo") else ""
+
+    service.exec = Exec()  # type: ignore[assignment]
+    with pytest.raises(RuntimeError, match="installation failed"):
+        service.setup(object())
+    assert service.state == "unknown"
+
+
+def test_installer_provisions_a_separate_modern_node_runtime() -> None:
+    script = _service()._install_script()
+    assert "NODE_DIR=/opt/mlox/node" in script
+    assert "https://nodejs.org/dist/latest-v22.x" in script
+    assert "sha256sum -c -" in script
+    assert 'export PATH="$NODE_DIR/bin:$PATH"' in script
+    assert 'git clone https://github.com/LazyVim/starter "$TARGET_HOME/.config/nvim" || true' not in script
