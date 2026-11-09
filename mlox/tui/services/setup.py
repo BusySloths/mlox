@@ -117,31 +117,37 @@ def gcp_secret_backed(infra, bundle, config=None) -> TemplateFormSpec:
 
 
 
+def _ducklake_params(values, infra):
+    import re
+
+    name = values["lake_name"].strip().lower()
+    bucket = values["bucket"].strip()
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,47}", name):
+        raise ValueError("Lake name must start with a letter and contain only lowercase letters, digits and underscores (maximum 48 characters).")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", bucket) or ".." in bucket:
+        raise ValueError("Enter a valid existing S3 bucket name.")
+    schema = f"ducklake_{name}"
+    return {
+        "${POSTGRES_SERVICE_UUID}": values["postgres_service_uuid"],
+        "${STORAGE_SERVICE_UUID}": values["storage_service_uuid"],
+        "${DUCKLAKE_DATA_PATH}": f"s3://{bucket}/ducklake/{name}/",
+        "${DUCKLAKE_METADATA_SCHEMA}": schema,
+        "${DUCKLAKE_CATALOG_NAME}": name,
+    }
+
+
 def ducklake(infra, bundle, config=None) -> TemplateFormSpec:
     return TemplateFormSpec(
         title="Add DuckLake",
-        description="Select existing services and secrets; lake creation is an explicit client operation.",
+        description="Select existing services and a bucket. Optionally collect service secrets for remote clients.",
         fields=[
+            TemplateFieldSpec("lake_name", "Lake name", placeholder="sales"),
             TemplateFieldSpec("postgres_service_uuid", "PostgreSQL service", kind="select", options=_service_options(infra, config_prefix="postgres-")),
             TemplateFieldSpec("storage_service_uuid", "Object storage service", kind="select", options=_service_options(infra, capability="s3_object_storage")),
-            TemplateFieldSpec("secret_manager_uuid", "Secret manager", kind="select", options=_service_options(infra, group="secret-manager")),
-            TemplateFieldSpec("postgres_secret_name", "PostgreSQL connection secret"),
-            TemplateFieldSpec("s3_secret_name", "S3 connection secret"),
-            TemplateFieldSpec("data_path", "S3 data path", placeholder="s3://bucket/lake/"),
-            TemplateFieldSpec("metadata_schema", "PostgreSQL metadata schema", default="ducklake"),
-            TemplateFieldSpec("catalog_name", "DuckDB catalog name", default="lake"),
+            TemplateFieldSpec("bucket", "Existing S3 bucket", placeholder="my-bucket"),
         ],
         submit_label="Add Service",
-        materialize=lambda values, infra: {
-            "${POSTGRES_SERVICE_UUID}": values["postgres_service_uuid"],
-            "${STORAGE_SERVICE_UUID}": values["storage_service_uuid"],
-            "${SECRET_MANAGER_UUID}": values["secret_manager_uuid"],
-            "${POSTGRES_SECRET_NAME}": values["postgres_secret_name"],
-            "${S3_SECRET_NAME}": values["s3_secret_name"],
-            "${DUCKLAKE_DATA_PATH}": values["data_path"],
-            "${DUCKLAKE_METADATA_SCHEMA}": values["metadata_schema"],
-            "${DUCKLAKE_CATALOG_NAME}": values["catalog_name"],
-        },
+        materialize=_ducklake_params,
     )
 
 def feast(infra, bundle, config=None) -> TemplateFormSpec:

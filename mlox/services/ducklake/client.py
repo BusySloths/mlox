@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
+import tempfile
 from typing import Any, Mapping, Sequence
 from urllib.parse import urlsplit
 
@@ -41,6 +43,16 @@ class DuckLakeClient:
     postgres_defaults: Mapping[str, Any] = field(default_factory=dict)
     s3_defaults: Mapping[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_secret(cls, secret_manager: AbstractSecretManager, name: str) -> DuckLakeClient:
+        """Construct a portable client from one MLOX DuckLake connection secret."""
+        value = secret_manager.load_secret(name)
+        if not isinstance(value, Mapping) or not isinstance(value.get("ducklake_connection"), Mapping):
+            raise ValueError(f"Secret {name!r} is not a DuckLake connection secret")
+        info = value["ducklake_connection"]
+        return cls(secret_manager, name, name, str(_required(info, "data_path")),
+                   str(_required(info, "metadata_schema")), str(_required(info, "catalog_name")))
+
     def __post_init__(self) -> None:
         if not self.data_path.startswith("s3://") or not self.data_path[5:].split("/")[0]:
             raise ValueError("data_path must be an s3://bucket/prefix/ URL")
@@ -77,7 +89,22 @@ class DuckLakeClient:
         url_style = str(s3.get("url_style", "path"))
         if url_style not in ("path", "vhost"):
             raise ValueError("S3 url_style must be 'path' or 'vhost'")
-        conn = duckdb.connect(":memory:")
+        cert_dir = None
+        if (pg.get("certificate") and not pg.get("sslrootcert")) or (s3.get("certificate") and not s3.get("ca_cert_file")):
+            cert_dir = tempfile.TemporaryDirectory(prefix="mlox-ducklake-")
+            for secret, target, filename in ((pg, "sslrootcert", "postgres.pem"), (s3, "ca_cert_file", "s3.pem")):
+                if secret.get("certificate") and not secret.get(target):
+                    path = os.path.join(cert_dir.name, filename)
+                    with open(path, "w", encoding="utf-8") as cert_file:
+                        cert_file.write(str(secret["certificate"]))
+                    os.chmod(path, 0o600)
+                    secret[target] = path
+        try:
+            conn = duckdb.connect(":memory:")
+        except BaseException:
+            if cert_dir:
+                cert_dir.cleanup()
+            raise
         try:
             for extension in ("ducklake", "postgres", "httpfs"):
                 conn.execute(f"INSTALL {extension}")
@@ -108,9 +135,11 @@ class DuckLakeClient:
             if actual_path.rstrip("/") + "/" != self.data_path:
                 raise ValueError("Existing DuckLake data path does not match configured data path")
             conn.execute(f"USE {_identifier(self.catalog_name)}")
-            return conn
+            return _ConnectionWithCertificates(conn, cert_dir) if cert_dir else conn
         except BaseException:
             conn.close()
+            if cert_dir:
+                cert_dir.cleanup()
             raise
 
     def create_lake(self) -> None:
@@ -150,3 +179,29 @@ class DuckLakeClient:
             conn.execute(f"SELECT * FROM {_identifier(self.catalog_name)}.settings()").fetchone()
             conn.execute("SELECT count(*) FROM glob(?)", [self.data_path + "*"]).fetchone()
         return {"status": "running"}
+
+
+class _ConnectionWithCertificates:
+    """Keep temporary certificate files available until the connection closes."""
+    def __init__(self, connection, cert_dir):
+        self._connection = connection
+        self._cert_dir = cert_dir
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+    def close(self):
+        try:
+            self._connection.close()
+        finally:
+            self._cert_dir.cleanup()
+
+    def __enter__(self):
+        self._connection.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        try:
+            return self._connection.__exit__(*args)
+        finally:
+            self._cert_dir.cleanup()

@@ -1,5 +1,7 @@
 # DuckLake connector
 
+For a walkthrough of setup and first queries, see the [DuckLake guide](../../../docs/DUCKLAKE.md).
+
 This connector registers a DuckLake backed by an existing PostgreSQL database
 and an S3-compatible bucket. DuckDB runs in each client process; it is not a
 server. Install the client on every machine that uses it:
@@ -10,37 +12,48 @@ pip install 'busysloths-mlox[ducklake]'
 
 DuckLake 1.1 requires DuckDB 2.0. The client installs and loads the DuckDB
 `ducklake`, `postgres`, and `httpfs` extensions on first use. The client machine
-must reach the extension repository, PostgreSQL, S3 and the secret manager.
+must reach the extension repository, PostgreSQL and S3. Remote clients loading
+a collected secret also need access to its secret manager.
 The PostgreSQL database and S3 bucket must already exist. Choose a unique
 PostgreSQL metadata schema and an S3 bucket/prefix for each lake. The initial
 catalog user needs permission to create the metadata schema and its tables;
 regular readers and writers can use narrower permissions.
 
-Add the connector to a virtual connector backend and select the PostgreSQL,
-S3-compatible object storage and secret-manager services in the TUI. Services
-that advertise the `s3_object_storage` capability can be selected. Enter a data path such
-as `s3://my-bucket/my-lake/`, metadata schema (default `ducklake`), catalog
-name (default `lake`), and two existing secret names. CLI users can supply the
-same template parameters with `service add`; see `mlox service add --help`.
+Add the connector to a virtual connector backend. In the TUI, enter a lake
+name, select the existing PostgreSQL and S3-compatible storage services, and
+enter an existing S3 bucket name. For a lake named `sales`, MLOX
+derives catalog `sales`, metadata schema `ducklake_sales` and data path
+`s3://<bucket>/ducklake/sales/`. Choose a name that is not already used for a
+lake in the PostgreSQL database.
 
-Secrets exported by MLOX `get_secrets()` are also accepted in their nested
-`postgres_connection`, `s3_connection` and legacy `minio_root_credentials` form. For MinIO using a
-self-signed certificate, save the exported certificate as a PEM file on the
-client and provide its path as `ca_cert_file`.
+To distribute connection details to remote clients, use **Collect service
+secrets** in a secret manager.
+DuckLake's `get_secrets()` reads the selected services' exports and returns a
+complete connection. The collector stores it under the DuckLake service UUID;
+no separate PostgreSQL or S3 secrets are needed for the client. Recollect after
+credentials or endpoints change. Collection updates all collected service
+entries in that manager. The bucket and services must already exist; setup does
+not create or check the bucket. The stored credentials may be privileged
+(MinIO currently exports its root credentials), so restrict access.
 
-The PostgreSQL secret is a dictionary with `username` and `password`; it can
-also specify `host`, `port`, `database`, `sslmode`, and `sslrootcert` (a certificate file on the client). The S3 secret has `access_key`
-and `secret_key` (or MinIO's `username` and `password`) and may specify
-`endpoint` (for example `https://minio.example:9000`), `region`, `url_style`
-(`path` or `vhost`), `session_token`, and `ca_cert_file` (a trusted CA file on the client, needed for a self-signed MinIO certificate). Endpoint, database and port defaults
-are taken from the selected PostgreSQL and MinIO services when available;
-secret fields override them for client-specific network addresses. For other
-object storage connectors specify the endpoint in the secret. TLS is enabled
-for HTTPS endpoints. Credentials are loaded anew for each connection and passed
-to temporary DuckDB secrets; they are not persisted in the connector.
+A client on another machine can use the secret manager and DuckLake service UUID:
+
+```python
+from mlox.services.ducklake.client import DuckLakeClient
+
+client = DuckLakeClient.from_secret(secret_manager, "<ducklake-service-uuid>")
+```
+
+The client loads credentials for each connection. Exported PEM certificates
+are written to private temporary files for the lifetime of a connection and
+removed on close; close connections promptly. Existing connectors with separate
+PostgreSQL and S3 secret names continue to work. Those secrets may use the
+nested `postgres_connection`, `s3_connection`, or legacy
+`minio_root_credentials` format, or contain connection fields directly.
 
 ```python
 # `service` is the DuckLakeService from the MLOX infrastructure.
+# This obtains live credentials from the services without a secret manager.
 client = service.get_client(infra)
 
 # Explicit one-time initialization; ordinary connections never create a lake.
@@ -63,11 +76,8 @@ and explicit DuckLake maintenance. Close connections when done. Attaching an
 existing lake fails if its recorded data path differs from the configured one.
 Creation is opt-in and does not implicitly migrate existing catalogs.
 
-The selected service UUIDs identify and validate the MLOX dependencies. Secret
-references are independent of those services, so verify that their endpoint
-overrides refer to the intended instances. MLOX setup registers the connector;
-it does not initialize or probe the lake, and removing the connector does not
-delete the catalog, bucket, files, or secrets. Health probes require permission
+MLOX setup registers the connector but does not initialize or probe the lake. `create_lake()` is still explicit and can attach an existing catalog if
+its data path matches; choose a unique metadata schema for each new lake. Health probes require permission
 to list the configured S3 prefix; restricted read-only roles without list
 permission may report unknown even when they can read a known object.
 

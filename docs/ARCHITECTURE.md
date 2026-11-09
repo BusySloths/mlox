@@ -131,7 +131,11 @@ and writing binary objects. `AbstractS3ObjectStorageService` extends that
 contract without adding methods; the `s3_object_storage` capability marks an
 S3-compatible API. MinIO advertises both capabilities, while GCP Storage
 advertises `object_storage`. The DuckLake connector selects services with the S3
-capability. See `mlox/services/ducklake/README.md` for its setup and lifecycle.
+capability. New DuckLake connectors derive a lake-specific catalog, metadata
+schema and S3 prefix from the lake name. Their `get_secrets()` exports a
+self-contained connection using the selected services' credentials; the normal
+secret collection workflow stores it under the connector service UUID. See
+`mlox/services/ducklake/README.md` for setup, credential refresh and lifecycle.
 
 ## Config Model
 

@@ -247,6 +247,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, milestone, and PR workflow
 | [Architecture](docs/ARCHITECTURE.md) | Codebase walkthrough and invariants |
 | [Python API](docs/PYTHON_API.md) | Supported `ProjectWorkspace` SDK contract |
 | [Installation Guide](docs/INSTALLATION.md) | Setup from scratch |
+| [DuckLake Guide](docs/DUCKLAKE.md) | Set up a lake and connect a DuckDB client |
 | [Content Pipeline Recipe](docs/CONTENT_PIPELINE.md) | Script, record, redact, verify, and publish demos/tutorial media |
 | [Project Files](docs/PROJECT_FILES.md) | Encrypted project files, backup, migration |
 | [Contributing Guide](CONTRIBUTING.md) | How to contribute |

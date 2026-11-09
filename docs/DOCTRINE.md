@@ -308,6 +308,7 @@ notes. They do not establish product priority or status; this roadmap does.
 | Doctrine (status/roadmap/decisions) | `docs/DOCTRINE.md` | **Source of truth.** |
 | Service/service catalog | `mlox*/**/*.yaml` → `docs/SERVICES_CATALOG.md` | Generated, never hand-edited. |
 | Architecture + invariants (humans & agents) | `docs/ARCHITECTURE.md` | Single entry; no status/roadmap. |
+| DuckLake setup walkthrough | [docs/DUCKLAKE.md](DUCKLAKE.md) | User-facing setup and first queries; link to the [connector reference](../mlox/services/ducklake/README.md) for service details. |
 | Content-production procedure | `docs/CONTENT_PIPELINE.md` | Recipe for script-derived tutorial/demo media; sources live in `content/`. |
 | Contributor process | `CONTRIBUTING.md` | Issues, labels, milestones, PRs. |
 | Marketing/quickstart | `README.md` | Links only; no catalogs or status lists. |
