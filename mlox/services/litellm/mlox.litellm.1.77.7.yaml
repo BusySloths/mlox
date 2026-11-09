@@ -28,7 +28,7 @@ groups:
 capabilities:
   service:
   - logs
-  - web_ui
+  - app
   - llm
   - model_server
   backend:

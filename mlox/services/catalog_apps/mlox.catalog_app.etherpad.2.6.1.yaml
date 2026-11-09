@@ -25,7 +25,6 @@ capabilities:
   service:
   - logs
   - app
-  - web_ui
   - health
   backend:
   - docker

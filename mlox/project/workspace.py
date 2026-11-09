@@ -799,7 +799,7 @@ class ProjectWorkspace:
     def list_proxy_routes(self, *, name: str) -> OperationResult[dict[str, Any]]:
         return docker_proxy.list_routes(self._state, name=name)
 
-    def add_proxy_route(self, *, name: str, hostname: str, backend: str,
+    def add_proxy_route(self, *, name: str, hostname: str, backend: str = "",
                         tls_mode: str = "self-signed", insecure_backend: bool = False,
                         backend_host: str = "", tls_secret_manager_uuid: str = "",
                         tls_secret_name: str = "", service_uuid: str = "") -> OperationResult[dict[str, Any]]:

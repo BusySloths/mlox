@@ -145,3 +145,14 @@ async def _exercise_proxy_selection(monkeypatch):
 
 def test_selecting_proxy_filters_the_app_table(monkeypatch):
     asyncio.run(_exercise_proxy_selection(monkeypatch))
+
+
+def test_proxied_app_url_retains_direct_ui_path():
+    from mlox.services.docker_proxy.docker import DockerProxyService
+
+    service = _service('Vault', {ServiceCapability.APP}, 'https://192.0.2.1:8200/ui/')
+    gateway = DockerProxyService(name='Gateway', service_config_id='docker-proxy-1-docker', template='docker_proxy/mlox.docker_proxy.yaml', target_path='/tmp/proxy')
+    gateway.routes = {'vault.example.org': {'backend': 'https://host.docker.internal:8200', 'service_uuid': service.uuid}}
+    bundle = SimpleNamespace(name='One', server=SimpleNamespace(ip='192.0.2.1'), services=[service, gateway])
+    row = describe_apps(SimpleNamespace(bundles=[bundle])).data['apps_by_proxy'][gateway.uuid][0]
+    assert row['proxy_urls'] == ['https://vault.example.org/ui/']

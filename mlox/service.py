@@ -55,6 +55,7 @@ from mlox.contracts.services import (
     AbstractLogService,
     AbstractHealthService,
     AbstractProxyService,
+    AbstractAppService,
     AbstractWebUIService,
     AbstractObjectStorageService,
     AbstractS3ObjectStorageService,

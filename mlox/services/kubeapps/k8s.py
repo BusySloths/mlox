@@ -7,7 +7,7 @@ from mlox.executors import TaskGroup
 from mlox.service import (
     AbstractHealthService,
     AbstractService,
-    AbstractWebUIService,
+    AbstractAppService,
     ServiceCapability,
     service_health_payload,
 )
@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class KubeAppsService(AbstractService, AbstractHealthService, AbstractWebUIService):
+class KubeAppsService(AbstractService, AbstractHealthService, AbstractAppService):
     capabilities = {
         ServiceCapability.DASHBOARD,
-        ServiceCapability.WEB_UI,
+        ServiceCapability.APP,
         ServiceCapability.HEALTH,
     }
     web_ui_url_label = "KubeApps"

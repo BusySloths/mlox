@@ -25,7 +25,7 @@ groups:
 capabilities:
   service:
   - logs
-  - web_ui
+  - app
   - secret_manager
   backend:
   - docker

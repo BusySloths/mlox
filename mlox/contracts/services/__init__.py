@@ -5,6 +5,7 @@ from .common import (
     AbstractLogService,
     AbstractHealthService,
     AbstractProxyService,
+    AbstractAppService,
     AbstractWebUIService,
 )
 from .storage import (
@@ -32,6 +33,7 @@ __all__ = [
     "AbstractLogService",
     "AbstractHealthService",
     "AbstractProxyService",
+    "AbstractAppService",
     "AbstractWebUIService",
     "AbstractObjectStorageService",
     "AbstractS3ObjectStorageService",

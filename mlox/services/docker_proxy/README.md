@@ -29,11 +29,24 @@ applications and their published ports unchanged. The proxy deployment directory
 including ACME account data and any managed certificate copies, is retained on
 removal so certificates are not lost accidentally.
 
-Optionally select the relayed mlox service in the route form (or pass
-`--service-uuid` to the CLI) to associate it with this proxy in the Apps tab.
-The backend URL still determines where traffic goes; the service association
-does not change or validate that endpoint. Older routes without a service UUID
-are matched only when their local backend port identifies one app unambiguously.
+Optionally select a relayed app in the route form to populate an editable backend
+URL and Host override from its app contract. The CLI also accepts
+`--service-uuid`; when `--backend` is omitted it derives the endpoint from the
+selected app. An explicitly supplied backend is preserved and is not verified
+against the linked service. Apps without a known endpoint, such as some Compose
+repository deployments, require a manually entered backend. The resulting
+association groups the app under the proxy in the Apps tab. Older routes without
+a service UUID are matched only when their local backend port identifies one app
+unambiguously.
+
+The endpoint is a suggestion, not a connectivity test. The default contract uses
+the direct UI URL and rewrites the host to `host.docker.internal` for a
+host-published service on the same server, or to the app server's address for a
+remote service reporting localhost. Services can override the contract for their
+own networks. Check that the backend is actually bound to a reachable interface,
+that firewall rules allow the proxy, and that it accepts the requested Host
+header. Apps with path-based UIs retain their path in Apps tab links; the proxy
+does not rewrite paths or public URLs.
 
 Example for an existing Memos instance running on the same server:
 

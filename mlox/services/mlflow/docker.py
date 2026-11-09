@@ -26,7 +26,7 @@ from mlox.service import (
     AbstractHealthService,
     AbstractModelRegistryService,
     AbstractService,
-    AbstractWebUIService,
+    AbstractAppService,
     ServiceCapability,
     service_health_payload,
 )
@@ -49,12 +49,12 @@ class MLFlowDockerService(
     AbstractService,
     AbstractHealthService,
     AbstractModelRegistryService,
-    AbstractWebUIService,
+    AbstractAppService,
     AbstractLogService,
 ):
     capabilities = {
         ServiceCapability.MODEL_REGISTRY,
-        ServiceCapability.WEB_UI,
+        ServiceCapability.APP,
         ServiceCapability.HEALTH,
         ServiceCapability.LOGS,
     }

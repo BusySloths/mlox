@@ -68,7 +68,7 @@ def describe_apps(infra) -> OperationResult:
     for bundle in getattr(infra, "bundles", []) or []:
         for service in getattr(bundle, "services", []) or []:
             capabilities = _capabilities(service)
-            if ServiceCapability.APP.value in capabilities:
+            if capabilities & {ServiceCapability.APP.value, ServiceCapability.WEB_UI.value}:
                 address = get_service_web_ui_address(service)
                 apps.append({
                     "id": str(getattr(service, "uuid", "") or ""),
@@ -100,11 +100,15 @@ def describe_apps(infra) -> OperationResult:
             for row in matches:
                 marker = id(row["service_ref"])
                 linked.add(marker)
+                direct = urlsplit(row["url"])
+                proxy_url = f"https://{hostname}{direct.path}"
+                if direct.query:
+                    proxy_url += f"?{direct.query}"
                 if marker not in seen:
-                    groups[proxy_id].append({**row, "proxy_urls": [f"https://{hostname}"]})
+                    groups[proxy_id].append({**row, "proxy_urls": [proxy_url]})
                     seen.add(marker)
                 else:
-                    next(item for item in groups[proxy_id] if item["service_ref"] is row["service_ref"])["proxy_urls"].append(f"https://{hostname}")
+                    next(item for item in groups[proxy_id] if item["service_ref"] is row["service_ref"])["proxy_urls"].append(proxy_url)
         proxy["app_count"] = len(groups[proxy_id])
     groups[UNPROXIED_APPS] = [row for row in apps if id(row["service_ref"]) not in linked]
     proxies.insert(0, {"id": UNPROXIED_APPS, "name": "No proxy", "bundle": "—", "state": "—", "app_count": len(groups[UNPROXIED_APPS])})

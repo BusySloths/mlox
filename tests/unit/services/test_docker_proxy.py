@@ -296,3 +296,44 @@ def test_gateway_rechecks_ports_after_raced_docker_bind_failure():
     with pytest.raises(RuntimeError, match='80.*nginx'):
         service.spin_up(None)
     assert len(checks) == 2
+
+
+def test_route_can_use_selected_app_endpoint_and_keep_tls_verification():
+    from contextlib import nullcontext
+    from mlox.application.use_cases.docker_proxy import add_route
+    from mlox.service import AbstractAppService
+
+    class App(AbstractAppService):
+        uuid = 'app-id'
+        service_url = 'https://192.0.2.1:5230/'
+
+    app = App()
+    service = proxy()
+    service.state = 'running'
+    server = SimpleNamespace(ip='192.0.2.1', get_server_connection=lambda: nullcontext(None))
+    bundle = SimpleNamespace(server=server)
+    infra = SimpleNamespace(get_service=lambda name: service, get_bundle_by_service=lambda item: bundle,
+                            get_service_by_uuid=lambda uuid: app if uuid == 'app-id' else None)
+    result = add_route(SimpleNamespace(infrastructure=infra), name='docker-proxy', hostname='notes.example.org', service_uuid='app-id')
+    assert result.success
+    route = service.routes['notes.example.org']
+    assert route['backend'] == 'https://host.docker.internal:5230'
+    assert route['backend_host'] == '192.0.2.1'
+    assert route['insecure_backend'] is False
+
+
+def test_route_requires_endpoint_if_selected_app_cannot_supply_one():
+    from contextlib import nullcontext
+    from mlox.application.use_cases.docker_proxy import add_route
+    from mlox.service import AbstractAppService
+
+    app = AbstractAppService()
+    service = proxy()
+    service.state = 'running'
+    bundle = SimpleNamespace(server=SimpleNamespace(ip='192.0.2.1', get_server_connection=lambda: nullcontext(None)))
+    infra = SimpleNamespace(get_service=lambda name: service, get_bundle_by_service=lambda item: bundle,
+                            get_service_by_uuid=lambda uuid: app)
+    result = add_route(SimpleNamespace(infrastructure=infra), name='docker-proxy', hostname='notes.example.org', service_uuid='app-id')
+    assert not result.success
+    assert 'supply a backend URL' in result.message
+    assert not service.routes

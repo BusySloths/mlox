@@ -36,7 +36,7 @@ groups:
 capabilities:
   service:
   - logs
-  - web_ui
+  - app
   - model_registry
   - health
   backend:

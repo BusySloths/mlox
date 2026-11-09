@@ -34,7 +34,7 @@ SERVICE_CAPABILITY_PRIORITY = (
     "developer_tools",
     "llm",
     "dashboard",
-    "web_ui",
+    "web_ui",  # Legacy plugin capability.
 )
 
 CAPABILITY_LABELS = {
@@ -51,7 +51,7 @@ CAPABILITY_LABELS = {
     "message_broker": "Message Broker",
     "container_registry": "Container Registry",
     "developer_tools": "Developer Tools",
-    "web_ui": "Web UI",
+    "web_ui": "App",
     "llm": "LLM",
 }
 

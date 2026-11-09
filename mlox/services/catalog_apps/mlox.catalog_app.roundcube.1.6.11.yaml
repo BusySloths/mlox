@@ -21,7 +21,6 @@ capabilities:
   service:
   - logs
   - app
-  - web_ui
   - health
 description: Roundcube is a browser-based webmail client with folders, contacts and
   message search. It connects to an existing IMAP and SMTP provider; it does not run

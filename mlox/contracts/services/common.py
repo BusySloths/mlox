@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict
+from urllib.parse import urlsplit, urlunsplit
 from mlox.logs import LogSource
 from .capabilities import ServiceCapability
 
@@ -45,10 +46,10 @@ class AbstractProxyService(ABC):
         return {str(route['service_uuid']) for route in self.list_routes().values() if route.get('service_uuid')}
 
 
-class AbstractWebUIService(ABC):
-    """Service capability mixin for services with a browser-facing UI."""
+class AbstractAppService(ABC):
+    """A browser-facing application with an optional proxy backend endpoint."""
 
-    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.WEB_UI}
+    capabilities: ClassVar[set[ServiceCapability]] = {ServiceCapability.APP}
     web_ui_url_label: ClassVar[str | None] = None
     web_ui_login_fields: ClassVar[tuple[str, ...]] = ()
 
@@ -82,3 +83,42 @@ class AbstractWebUIService(ABC):
         if password:
             credentials["password"] = str(password)
         return credentials
+
+    def get_app_address(self) -> str:
+        """Return the URL a user can open directly in a browser."""
+        return self.get_web_ui_address()
+
+    def get_proxy_endpoint(self, *, app_host: str, proxy_host: str) -> dict[str, str]:
+        """Suggest a proxy-reachable origin and optional Host header.
+
+        Override when a service exposes a distinct internal endpoint. Network
+        reachability and backend TLS trust must be verified by the caller.
+        """
+        address = self.get_app_address()
+        if not address:
+            return {}
+        parsed = urlsplit(address)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return {}
+        if parsed.username is not None or parsed.password is not None:
+            return {}
+        try:
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        except ValueError:
+            return {}
+        host = parsed.hostname
+        original_host = host
+        same_host = bool(app_host and proxy_host and app_host == proxy_host)
+        if host in ("localhost", "127.0.0.1", "::1"):
+            if not app_host:
+                return {}
+            host = "host.docker.internal" if same_host else app_host
+        elif same_host and host == app_host:
+            host = "host.docker.internal"
+        host_part = f"[{host}]" if ":" in host else host
+        endpoint = urlunsplit((parsed.scheme, f"{host_part}:{port}", "", "", ""))
+        return {"url": endpoint, "host_header": original_host if host != original_host else ""}
+
+
+# Compatibility for plugins and persisted references using the former name.
+AbstractWebUIService = AbstractAppService

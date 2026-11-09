@@ -28,7 +28,7 @@ groups:
 capabilities:
   service:
   - logs
-  - web_ui
+  - app
   - workflow_orchestrator
   - health
   - secret_manager_binding

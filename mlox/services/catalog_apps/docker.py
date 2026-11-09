@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 import yaml
 
 from mlox.execution import TaskGroup
-from mlox.service import AbstractLogService, AbstractService, AbstractWebUIService, AbstractHealthService, AbstractSecretManagerService, ServiceCapability, service_health_payload
+from mlox.service import AbstractLogService, AbstractService, AbstractAppService, AbstractHealthService, AbstractSecretManagerService, ServiceCapability, service_health_payload
 from mlox.services.mlflow_gateway.k3s_managed_tls import _valid_hostname, _validate_certificate
 
 
@@ -21,10 +21,10 @@ def _option(value: str, default: str = "") -> str:
 
 
 @dataclass
-class CatalogAppDockerService(AbstractService, AbstractWebUIService, AbstractHealthService, AbstractLogService):
+class CatalogAppDockerService(AbstractService, AbstractAppService, AbstractHealthService, AbstractLogService):
     """Run one curated app and a socket-free Traefik instance per installation."""
 
-    capabilities = {ServiceCapability.APP, ServiceCapability.WEB_UI, ServiceCapability.HEALTH, ServiceCapability.LOGS}
+    capabilities = {ServiceCapability.APP, ServiceCapability.HEALTH, ServiceCapability.LOGS}
     port: str | int
     app_port: int
     password: str = field(default="", repr=False)

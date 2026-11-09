@@ -31,7 +31,7 @@ from mlox.service import (
     AbstractHealthService,
     AbstractSecretManagerBindingService,
     AbstractService,
-    AbstractWebUIService,
+    AbstractAppService,
     AbstractWorkflowOrchestratorService,
     ServiceCapability,
     service_health_payload,
@@ -47,13 +47,13 @@ class AirflowDockerService(
     AbstractSecretManagerBindingService,
     AbstractService,
     AbstractHealthService,
-    AbstractWebUIService,
+    AbstractAppService,
     AbstractWorkflowOrchestratorService,
     AbstractLogService,
 ):
     capabilities = {
         ServiceCapability.WORKFLOW_ORCHESTRATOR,
-        ServiceCapability.WEB_UI,
+        ServiceCapability.APP,
         ServiceCapability.HEALTH,
         ServiceCapability.SECRET_MANAGER_BINDING,
         ServiceCapability.LOGS,
@@ -84,6 +84,13 @@ class AirflowDockerService(
             "Redis": "redis",
         },
     )
+
+    def get_proxy_endpoint(self, *, app_host: str, proxy_host: str) -> dict[str, str]:
+        """Preserve the public Host header for Airflow login redirect checks."""
+        endpoint = super().get_proxy_endpoint(app_host=app_host, proxy_host=proxy_host)
+        if endpoint:
+            endpoint["host_header"] = ""
+        return endpoint
 
     def __str__(self):
         return (

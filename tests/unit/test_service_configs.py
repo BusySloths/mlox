@@ -324,7 +324,7 @@ def test_builtin_service_configs_have_matching_explicit_capabilities():
         assert config.service_capabilities() <= class_capabilities, config.path
 
 
-def test_builtin_web_ui_service_configs_advertise_web_ui_capability():
+def test_builtin_web_ui_service_configs_advertise_app_capability():
     configs = {
         config.id: config for config in load_all_service_configs(include_plugins=False)
     }
@@ -343,7 +343,7 @@ def test_builtin_web_ui_service_configs_advertise_web_ui_capability():
 
     assert web_ui_config_ids <= set(configs)
     for config_id in web_ui_config_ids:
-        assert "web_ui" in configs[config_id].service_capabilities()
+        assert "app" in configs[config_id].service_capabilities()
 
 
 def test_dev_terminal_supports_kubernetes_agent_backends():

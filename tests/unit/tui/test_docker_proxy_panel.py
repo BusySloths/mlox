@@ -53,7 +53,7 @@ def test_proxy_panel_adds_and_removes_routes():
 
 async def _open_add_route_with_optional_service():
     app = ProxyApp()
-    service = SimpleNamespace(name="backend", uuid="backend-1")
+    service = SimpleNamespace(name="backend", uuid="backend-1", capabilities={"app"})
     infra = SimpleNamespace(bundles=[SimpleNamespace(name="host", services=[service])])
     async with app.run_test() as pilot:
         panel = app.query_one(DockerProxyPanel)
@@ -84,3 +84,32 @@ async def _route_buttons_are_separated():
 
 def test_route_action_buttons_have_spacing():
     asyncio.run(_route_buttons_are_separated())
+
+
+async def _select_app_suggests_proxy_endpoint():
+    from textual.widgets import Input
+    from mlox.service import AbstractAppService
+
+    class AppService(AbstractAppService):
+        name = "notes"
+        uuid = "notes-1"
+        service_url = "https://192.0.2.8:5230/ui"
+
+    app = ProxyApp()
+    local_bundle = SimpleNamespace(name="host", server=SimpleNamespace(ip="192.0.2.8"), services=[app.service, AppService(), SimpleNamespace(name="database", uuid="db", capabilities={"database"})])
+    async with app.run_test() as pilot:
+        panel = app.query_one(DockerProxyPanel)
+        panel.infra = SimpleNamespace(bundles=[local_bundle])
+        panel.bundle = local_bundle
+        await pilot.click("#proxy-route-add")
+        await pilot.pause()
+        select = app.screen.query_one("#template-field-service-uuid", Select)
+        select.value = "notes-1"
+        await pilot.pause()
+        assert app.screen.query_one("#template-field-backend", Input).value == "https://host.docker.internal:5230"
+        assert app.screen.query_one("#template-field-backend-host", Input).value == "192.0.2.8"
+        assert app.screen.query_one("#template-field-insecure-backend", Select).value == "false"
+
+
+def test_selecting_app_suggests_backend_without_disabling_tls_verification():
+    asyncio.run(_select_app_suggests_proxy_endpoint())

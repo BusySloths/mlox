@@ -30,10 +30,10 @@ def service_has_web_ui(service: object | None) -> bool:
         value = capability.value if hasattr(capability, "value") else capability
         if (
             str(value).strip().lower().replace("-", "_")
-            == ServiceCapability.WEB_UI.value
+            in {ServiceCapability.APP.value, ServiceCapability.WEB_UI.value}
         ):
             return True
-    return callable(getattr(service, "get_web_ui_address", None))
+    return callable(getattr(service, "get_app_address", None)) or callable(getattr(service, "get_web_ui_address", None))
 
 
 def service_has_health(service: object | None) -> bool:
@@ -168,7 +168,9 @@ def get_service_web_ui_address(service: object | None) -> OperationResult:
     if not service_has_web_ui(service):
         return OperationResult(False, 21, "Selected service does not provide a web UI.")
 
-    getter = getattr(service, "get_web_ui_address", None)
+    getter = getattr(service, "get_app_address", None)
+    if not callable(getter):
+        getter = getattr(service, "get_web_ui_address", None)
     if not callable(getter):
         return OperationResult(
             False,

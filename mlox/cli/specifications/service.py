@@ -19,7 +19,7 @@ SERVICE_COMMANDS = (
         parameters=(CliParameter("name", "Proxy service name"),), renderer=render_inspection),
     WorkspaceCommand(name="proxy-route-add", method="add_proxy_route", help="Add a live route to a Docker reverse proxy.",
         parameters=(CliParameter("name", "Proxy service name"), CliParameter("hostname", "Public hostname"),
-                    CliParameter("backend", "Backend URL; use host.docker.internal for published host ports"),
+                    CliParameter("backend", "Backend URL; omitted to use the selected app endpoint"),
                     CliParameter("tls_mode", "Public TLS: self-signed, letsencrypt, or managed"),
                     CliParameter("insecure_backend", "Disable backend TLS certificate verification"),
                     CliParameter("backend_host", "Optional backend Host header"),

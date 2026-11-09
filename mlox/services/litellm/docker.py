@@ -26,7 +26,7 @@ from mlox.service import (
     AbstractLogService,
     AbstractModelServerService,
     AbstractService,
-    AbstractWebUIService,
+    AbstractAppService,
     ServiceCapability,
 )
 
@@ -41,12 +41,12 @@ logging.basicConfig(
 
 @dataclass
 class LiteLLMDockerService(
-    AbstractService, AbstractModelServerService, AbstractWebUIService, AbstractLogService
+    AbstractService, AbstractModelServerService, AbstractAppService, AbstractLogService
 ):
     capabilities = {
         ServiceCapability.LLM,
         ServiceCapability.MODEL_SERVER,
-        ServiceCapability.WEB_UI,
+        ServiceCapability.APP,
         ServiceCapability.LOGS,
     }
     web_ui_url_label = "Login"

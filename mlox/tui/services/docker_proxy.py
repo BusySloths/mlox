@@ -4,10 +4,53 @@ import json
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, DataTable, Static
+from textual.widgets import Button, DataTable, Input, Select, Static
 
 from mlox.tui.services.setup import _tls_secret_reference_options
+from mlox.service import AbstractAppService, ServiceCapability
 from mlox.tui.template_forms import TemplateFieldSpec, TemplateFormSpec, TemplateSetupDialog
+
+
+def _app_options(infra, proxy_service):
+    return [(f"{getattr(bundle, 'name', '')} / {item.name}", str(item.uuid))
+            for bundle in getattr(infra, 'bundles', []) or []
+            for item in getattr(bundle, 'services', []) or []
+            if getattr(item, 'uuid', None) and item is not proxy_service
+            and (isinstance(item, AbstractAppService) or
+                 set(getattr(item, 'capabilities', set()) or ()) & {ServiceCapability.APP, ServiceCapability.WEB_UI})]
+
+
+class ProxyRouteDialog(TemplateSetupDialog):
+    """Suggest a backend when an application is selected; fields remain editable."""
+
+    def __init__(self, spec, infra, proxy_bundle):
+        super().__init__(spec)
+        self.infra = infra
+        self.proxy_bundle = proxy_bundle
+
+    @on(Select.Changed, '#template-field-service-uuid')
+    def app_selected(self, event):
+        if event.value is Select.NULL:
+            return
+        for bundle in getattr(self.infra, 'bundles', []) or []:
+            for service in getattr(bundle, 'services', []) or []:
+                if str(getattr(service, 'uuid', '')) != str(event.value):
+                    continue
+                getter = getattr(service, 'get_proxy_endpoint', None)
+                if not callable(getter):
+                    self.notify('This app has no proxy endpoint; enter its backend URL.', severity='warning')
+                    return
+                try:
+                    endpoint = getter(app_host=str(getattr(getattr(bundle, 'server', None), 'ip', '') or ''),
+                                      proxy_host=str(getattr(getattr(self.proxy_bundle, 'server', None), 'ip', '') or ''))
+                except (ValueError, TypeError):
+                    endpoint = {}
+                if not isinstance(endpoint, dict) or not endpoint.get('url'):
+                    self.notify('This app has no proxy endpoint; enter its backend URL.', severity='warning')
+                    return
+                self.query_one('#template-field-backend', Input).value = str(endpoint['url'])
+                self.query_one('#template-field-backend-host', Input).value = str(endpoint.get('host_header', ''))
+                return
 
 
 class DockerProxyPanel(Vertical):
@@ -50,20 +93,17 @@ class DockerProxyPanel(Vertical):
             title='Add proxy route', description='For a host-published endpoint, use https://host.docker.internal:PORT. A backend Host override may be needed.',
             fields=[
                 TemplateFieldSpec('hostname', 'Public hostname', placeholder='notes.example.org'),
-                TemplateFieldSpec('backend', 'Backend URL', placeholder='https://host.docker.internal:5230'),
                 TemplateFieldSpec('service_uuid', 'Relayed mlox service', kind='select', required=False,
-                                  options=[(f"{getattr(bundle, 'name', '')} / {item.name}", str(item.uuid))
-                                           for bundle in getattr(self.infra, 'bundles', []) or []
-                                           for item in getattr(bundle, 'services', []) or []
-                                           if getattr(item, 'uuid', None) and item is not self.service],
-                                  help='Optional: link this route to an installed service.'),
+                                  options=_app_options(self.infra, self.service),
+                                  help='Optional: selecting an app suggests its backend address.'),
+                TemplateFieldSpec('backend', 'Backend URL', placeholder='https://host.docker.internal:5230'),
                 TemplateFieldSpec('tls_mode', 'Public TLS', kind='select', default='self-signed', options=[('Self-signed', 'self-signed'), ("Let’s Encrypt", 'letsencrypt'), ('Managed certificate', 'managed')]),
                 TemplateFieldSpec('tls_secret_ref', 'TLS secret (manager / name)', kind='select', visible_when=('tls_mode', 'managed'), options_loader=lambda: _tls_secret_reference_options(self.infra)),
                 TemplateFieldSpec('insecure_backend', 'Backend certificate verification', kind='select', default='false', options=[('Verify', 'false'), ('Skip verification (self-signed backend)', 'true')]),
                 TemplateFieldSpec('backend_host', 'Backend Host header override', required=False),
             ], materialize=lambda values, infra: values, submit_label='Add route',
         )
-        self.app.push_screen(TemplateSetupDialog(spec), self._add_values)
+        self.app.push_screen(ProxyRouteDialog(spec, self.infra, self.bundle), self._add_values)
 
     def _add_values(self, values):
         if values is None:

@@ -194,6 +194,16 @@ become active requirements.
 
 A bundle contains one compute/server and the services deployed onto it. Servers advertise capabilities such as `git`, `docker`, `kubernetes`, `firewall`, `health`, or native execution support. Services declare their intended capabilities in config, including `health` when they provide a richer live probe than the generic lifecycle state.
 
+Browser-facing services advertise `app` and implement `AbstractAppService`.
+The contract supplies a direct browser URL and a proxy endpoint suggestion for
+a given app-server/proxy-server pair; the latter may include a backend Host
+header. The proxy form allows editing the suggestion and keeps backend TLS
+verification enabled by default. An explicit per-route exception can be used
+for a self-signed backend. The suggestion is not a reachability check. The old
+`web_ui` capability and `AbstractWebUIService` import remain recognized for
+existing plugins and project configurations. See
+`mlox/services/docker_proxy/README.md` for routing and TLS details.
+
 Services and servers may advertise `logs` when they implement `AbstractLogService`
 or `AbstractLogServer`. Both expose named sources through `log_labels()` and
 bounded retrieval through `log_tail(conn, label, tail)`. Docker services retain

@@ -17,7 +17,6 @@ capabilities:
   service:
   - logs
   - app
-  - web_ui
   - health
 description: Wiki.js lets a team write and organize a knowledge base, manage access
   and search its documentation. This deployment includes a PostgreSQL database.

@@ -23,11 +23,27 @@ def list_routes(project, *, name):
         return OperationResult(False, 1, str(exc))
 
 
-def add_route(project, *, name, hostname, backend, tls_mode='self-signed', insecure_backend=False, backend_host='', tls_secret_manager_uuid='', tls_secret_name='', service_uuid=''):
+def add_route(project, *, name, hostname, backend="", tls_mode='self-signed', insecure_backend=False, backend_host='', tls_secret_manager_uuid='', tls_secret_name='', service_uuid=''):
     try:
         service, bundle = _get_proxy(project, name)
-        if service_uuid and project.infrastructure.get_service_by_uuid(service_uuid) is None:
+        app = project.infrastructure.get_service_by_uuid(service_uuid) if service_uuid else None
+        if service_uuid and app is None:
             raise ValueError('The selected relayed service no longer exists.')
+        if not backend and app is not None:
+            app_bundle = project.infrastructure.get_bundle_by_service(app)
+            getter = getattr(app, 'get_proxy_endpoint', None)
+            if app_bundle is None or not callable(getter):
+                raise ValueError('The selected app does not provide a proxy endpoint; supply a backend URL.')
+            endpoint = getter(
+                app_host=str(getattr(app_bundle.server, 'ip', '') or ''),
+                proxy_host=str(getattr(bundle.server, 'ip', '') or ''),
+            )
+            if not isinstance(endpoint, dict) or not endpoint.get('url'):
+                raise ValueError('The selected app has no proxy endpoint; supply a backend URL.')
+            backend = str(endpoint['url'])
+            backend_host = backend_host or str(endpoint.get('host_header', ''))
+        if not backend:
+            raise ValueError('Select an app or supply a backend URL.')
         with bundle.server.get_server_connection() as conn:
             service.add_route(conn, hostname=hostname, backend=backend, tls_mode=tls_mode,
                               insecure_backend=insecure_backend, backend_host=backend_host,

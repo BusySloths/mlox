@@ -22,6 +22,7 @@ from mlox.service import (
     AbstractSecretManagerService,
     AbstractService,
     AbstractTelemetryBindingService,
+    AbstractAppService,
     AbstractWebUIService,
     ServiceCapability,
 )
@@ -65,6 +66,7 @@ SERVICE_CAPABILITY_ABCS = {
     ServiceCapability.PROXY.value: AbstractProxyService,
     ServiceCapability.HEALTH.value: AbstractHealthService,
     ServiceCapability.LOGS.value: AbstractLogService,
+    ServiceCapability.APP.value: AbstractAppService,
     ServiceCapability.WEB_UI.value: AbstractWebUIService,
     ServiceCapability.SECRET_MANAGER.value: AbstractSecretManagerService,
     ServiceCapability.SECRET_MANAGER_BINDING.value: AbstractSecretManagerBindingService,

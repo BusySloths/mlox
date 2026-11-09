@@ -9,7 +9,7 @@ from mlox.executors import TaskGroup
 from mlox.service import (
     AbstractHealthService,
     AbstractService,
-    AbstractWebUIService,
+    AbstractAppService,
     ServiceCapability,
     service_health_payload,
 )
@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class KubeflowService(AbstractService, AbstractHealthService, AbstractWebUIService):
+class KubeflowService(AbstractService, AbstractHealthService, AbstractAppService):
     """Install the upstream Kubeflow manifests on a Kubernetes cluster."""
 
     capabilities = {
         ServiceCapability.DASHBOARD,
-        ServiceCapability.WEB_UI,
+        ServiceCapability.APP,
         ServiceCapability.HEALTH,
     }
     web_ui_url_label = "Kubeflow"

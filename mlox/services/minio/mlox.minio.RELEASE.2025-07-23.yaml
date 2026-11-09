@@ -30,7 +30,7 @@ groups:
 capabilities:
   service:
   - logs
-  - web_ui
+  - app
   - object_storage
   - s3_object_storage
   backend:

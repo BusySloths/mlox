@@ -2,14 +2,14 @@ import logging
 from dataclasses import dataclass
 from typing import Dict
 
-from mlox.service import AbstractService, AbstractWebUIService, ServiceCapability
+from mlox.service import AbstractService, AbstractAppService, ServiceCapability
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class K8sDashboardService(AbstractService, AbstractWebUIService):
-    capabilities = {ServiceCapability.DASHBOARD, ServiceCapability.WEB_UI}
+class K8sDashboardService(AbstractService, AbstractAppService):
+    capabilities = {ServiceCapability.DASHBOARD, ServiceCapability.APP}
     web_ui_url_label = "Kubernetes Dashboard"
     web_ui_login_fields = ("token",)
     namespace: str = "kubernetes-dashboard"
