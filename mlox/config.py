@@ -15,6 +15,8 @@ from mlox.service import (
     AbstractModelServerService,
     AbstractMonitorService,
     AbstractObservabilityService,
+    AbstractObjectStorageService,
+    AbstractS3ObjectStorageService,
     AbstractRepositoryService,
     AbstractSecretManagerBindingService,
     AbstractSecretManagerService,
@@ -58,6 +60,8 @@ SERVER_CAPABILITY_ABCS = {
 
 
 SERVICE_CAPABILITY_ABCS = {
+    ServiceCapability.OBJECT_STORAGE.value: AbstractObjectStorageService,
+    ServiceCapability.S3_OBJECT_STORAGE.value: AbstractS3ObjectStorageService,
     ServiceCapability.PROXY.value: AbstractProxyService,
     ServiceCapability.HEALTH.value: AbstractHealthService,
     ServiceCapability.LOGS.value: AbstractLogService,
@@ -91,6 +95,7 @@ SERVICE_GROUP_ALIASES = {
     "telemetry_binding": ServiceCapability.TELEMETRY_BINDING.value,
     "data_warehouse": ServiceCapability.DATA_WAREHOUSE.value,
     "object_storage": ServiceCapability.OBJECT_STORAGE.value,
+    "s3_object_storage": ServiceCapability.S3_OBJECT_STORAGE.value,
     "spreadsheet": ServiceCapability.SPREADSHEET.value,
     "database": ServiceCapability.DATABASE.value,
     "vector_database": ServiceCapability.VECTOR_DATABASE.value,

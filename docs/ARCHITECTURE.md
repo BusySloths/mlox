@@ -92,6 +92,9 @@ A `Bundle` (`mlox/infra.py`) ties one server to its deployed services;
 - `mlox/project/state.py`: internal `WorkspaceState` for metadata and infrastructure.
 - `mlox/project/repository.py`: internal `SqlCipherRepository` for SQLCipher persistence.
 - `mlox/infra.py`: topology model containing bundles, servers, and services.
+- `mlox/contracts/services/` and `mlox/contracts/servers/`: capability enums and
+  domain-specific interface contracts. `mlox/service.py` and `mlox/server.py`
+  retain the base classes and re-export these contracts for existing imports.
 - `mlox/application/use_cases/`: project-based server, service, and model actions.
 - `mlox/project/workspace.py`: public `ProjectWorkspace` API and mutation boundary.
 - `mlox/cli/specifications/`: domain-specific, declarative CLI contracts and the
@@ -102,6 +105,33 @@ A `Bundle` (`mlox/infra.py`) ties one server to its deployed services;
 - `mlox/config.py`: YAML and plugin config loading.
 - `mlox/executors.py` and `mlox/execution/`: command execution and backend helpers.
 - `mlox/ui/registry.py`: frontend handler lookup for frontend-specific setup panels.
+
+## Capability contracts and import boundaries
+
+Service contracts are grouped by domain under `mlox/contracts/services/`,
+including storage, secrets, observability, models, repositories and workflow.
+Server contracts under `mlox/contracts/servers/` cover backends, operations,
+and health. New code can import from `mlox.contracts.services` or
+`mlox.contracts.servers`; existing imports from `mlox.service` and `mlox.server`
+resolve to the same classes. Concrete implementations remain in `mlox/services/`
+and `mlox/servers/`.
+
+The dependency direction is implementations and base modules → contracts.
+Contract modules must not import `mlox.service`, `mlox.server`, `mlox.infra`,
+`mlox.services`, or `mlox.servers` at module load. Use `TYPE_CHECKING` for
+annotations that would otherwise reverse this direction; deferred imports in
+functions are permitted when needed. The static test
+`tests/unit/test_contract_import_boundaries.py` enforces this boundary for
+Python import statements in module and class bodies. It does not detect dynamic
+imports. `tests/unit/test_contract_facades.py` verifies the compatibility exports.
+
+Object-storage services implement `AbstractObjectStorageService` and provide a
+client implementing `AbstractObjectStorageClient` for listing keys and reading
+and writing binary objects. `AbstractS3ObjectStorageService` extends that
+contract without adding methods; the `s3_object_storage` capability marks an
+S3-compatible API. MinIO advertises both capabilities, while GCP Storage
+advertises `object_storage`. The DuckLake connector selects services with the S3
+capability. See `mlox/services/ducklake/README.md` for its setup and lifecycle.
 
 ## Config Model
 
@@ -179,7 +209,8 @@ advertise the capability.
   The current concrete implementation, `UbuntuTaskExecutor` (`mlox/executors.py`),
   is Fabric/SSH-based, but the ABC boundary anticipates local and embedded
   execution too — don't assume "execution == remote SSH".
-- **Secrets:** route access credentials/endpoints through `get_secret()`.
+- **Secrets:** export service credentials and endpoints through `get_secrets()`
+  and store them in a secret manager when sharing access.
 - Route system operations through executors; never scatter shell calls in UI code.
 
 ## High-Risk Areas
@@ -238,7 +269,10 @@ reload, and tests when changing them:
 - Use executors for commands on target machines; don't scatter shell calls in UI code.
 - Route health checks through the application use cases so the reported state is
   normalized and persisted before the UI refreshes.
-- Return credentials/endpoints from `get_secret()` where applicable.
+- Return credentials/endpoints from `get_secrets()` where applicable.
+- Import the capability contract from `mlox.contracts.services` or
+  `mlox.contracts.servers` and advertise the matching capability in the class
+  and YAML; the config loader warns about mismatches.
 - Store service dependencies by UUID and resolve them through infrastructure/session helpers.
 - Register custom frontend setup/settings handlers in frontend modules through
   `mlox/ui/registry.py`.

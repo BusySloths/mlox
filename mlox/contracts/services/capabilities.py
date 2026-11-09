@@ -1,0 +1,36 @@
+"""Service capability contracts."""
+
+from enum import StrEnum
+
+
+class ServiceCapability(StrEnum):
+    """User-facing service capabilities advertised by service configs/classes."""
+
+    APP = "app"
+    PROXY = "proxy"
+    HEALTH = "health"
+    LOGS = "logs"
+    WEB_UI = "web_ui"
+    SECRET_MANAGER = "secret_manager"
+    SECRET_MANAGER_BINDING = "secret_manager_binding"
+    REPOSITORY = "repository"
+    MODEL_REGISTRY = "model_registry"
+    MODEL_SERVER = "model_server"
+    MONITOR = "monitor"
+    OBSERVABILITY = "observability"
+    TELEMETRY_BINDING = "telemetry_binding"
+    DATA_WAREHOUSE = "data_warehouse"
+    OBJECT_STORAGE = "object_storage"
+    S3_OBJECT_STORAGE = "s3_object_storage"
+    SPREADSHEET = "spreadsheet"
+    DATABASE = "database"
+    VECTOR_DATABASE = "vector_database"
+    CACHE = "cache"
+    MESSAGE_BROKER = "message_broker"
+    WORKFLOW_ORCHESTRATOR = "workflow_orchestrator"
+    FEATURE_STORE = "feature_store"
+    CONTAINER_REGISTRY = "container_registry"
+    DEPLOYMENT = "deployment"
+    LLM = "llm"
+    DASHBOARD = "dashboard"
+    DEVELOPER_TOOLS = "developer_tools"

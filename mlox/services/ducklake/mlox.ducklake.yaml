@@ -1,0 +1,41 @@
+id: ducklake-1.1-connector
+name: DuckLake
+version: '1.1'
+maintainer: Busy Sloths
+description_short: Connect an embedded DuckDB client to a PostgreSQL and S3 DuckLake.
+description: >-
+  Connects DuckDB 2.0 clients to a DuckLake catalog in PostgreSQL and data files
+  in S3-compatible object storage. Requires existing PostgreSQL, object storage,
+  and secret-manager services. No query server is deployed.
+links:
+  project: https://ducklake.select/
+  documentation: https://ducklake.select/docs/stable/duckdb/
+requirements:
+  cpus: 0.0
+  ram_gb: 0.0
+  disk_gb: 0.0
+groups:
+  service: null
+  database:
+    warehouse: null
+  backend:
+    connector: null
+capabilities:
+  service:
+  - data_warehouse
+  backend:
+  - connector
+build:
+  class_name: mlox.services.ducklake.service.DuckLakeService
+  params:
+    name: ducklake
+    template: ducklake/mlox.ducklake.yaml
+    target_path: ${MLOX_USER_HOME}/ducklake
+    postgres_service_uuid: ${POSTGRES_SERVICE_UUID}
+    storage_service_uuid: ${STORAGE_SERVICE_UUID}
+    secret_manager_uuid: ${SECRET_MANAGER_UUID}
+    postgres_secret_name: ${POSTGRES_SECRET_NAME}
+    s3_secret_name: ${S3_SECRET_NAME}
+    data_path: ${DUCKLAKE_DATA_PATH}
+    metadata_schema: ${DUCKLAKE_METADATA_SCHEMA}
+    catalog_name: ${DUCKLAKE_CATALOG_NAME}

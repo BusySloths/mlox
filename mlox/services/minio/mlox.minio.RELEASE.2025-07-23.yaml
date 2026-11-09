@@ -32,6 +32,7 @@ capabilities:
   - logs
   - web_ui
   - object_storage
+  - s3_object_storage
   backend:
   - docker
 ports:

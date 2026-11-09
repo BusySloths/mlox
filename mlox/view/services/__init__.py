@@ -11,6 +11,10 @@ _STREAMLIT_SERVICE_BINDINGS: dict[str, dict[str, tuple[str, ...]]] = {
         "config_ids": ("airflow-2.9.2-docker", "airflow-3.1.3-docker"),
         "function_names": ("settings",),
     },
+    "mlox.view.services.ducklake": {
+        "config_ids": ("ducklake-1.1-connector",),
+        "function_names": ("setup",),
+    },
     "mlox.view.services.feast": {
         "config_ids": ("feast-0.54.0",),
         "function_names": ("settings", "setup"),

@@ -27,7 +27,9 @@ from .firewall_panel import FirewallPanel
 from .history_panel import HistoryPanel
 from .knowledge_panel import KnowledgePanel
 from .log_panel import LogPanel
-from .model import SelectionChanged, SelectionInfo, is_bundle_initialized
+from .model import (
+    SelectionChanged, SelectionInfo, is_bundle_initialized, log_target_for_selection,
+)
 from .models_panel import ModelsPanel
 from .apps_panel import AppsPanel
 from .monitor_panel import MonitorPanel
@@ -45,7 +47,7 @@ from .service_actions import (
     runtime_provider_options,
 )
 from .secret_manager_panel import SecretManagerPanel
-from .template_panel import TemplateBrowserDialog, TemplatePanel
+from .template_panel import TemplateBrowserDialog
 from .tree import InfraTree
 from .workflow_panel import WorkflowPanel
 from mlox.application.use_cases.servers import (
@@ -81,7 +83,6 @@ from mlox.logs import supports_logs
 from mlox.tui.screens.project_switcher import ProjectSwitchDialog
 from mlox.tui.template_forms import (
     TemplateFormSpec,
-    TemplateSetupDialog,
     valid_select_options,
 )
 
@@ -97,8 +98,6 @@ WORKFLOW_TAB_ID = "workflow-tab"
 SERVICE_TUI_TAB_ID = "service-tui-tab"
 SECRET_MANAGER_TAB_ID = "secret-manager-tab"
 REPOSITORY_TAB_ID = "repository-tab"
-SERVER_TEMPLATES_TAB_ID = "server-templates-tab"
-SERVICE_TEMPLATES_TAB_ID = "service-templates-tab"
 OVERVIEW_TAB_ID = "overview-tab"
 LOGS_TAB_ID = "logs-tab"
 SIDEBAR_DEFAULT_WIDTH = 44
@@ -160,7 +159,6 @@ class DashboardScreen(Screen):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._sidebar_width = SIDEBAR_DEFAULT_WIDTH
-        self._requested_tab_id: str | None = None
         self._current_selection: SelectionInfo | None = None
 
     def compose(self) -> ComposeResult:
@@ -332,17 +330,17 @@ class DashboardScreen(Screen):
         logs.selection = selection
         history = self.query_one(HistoryPanel)
         history.selection = selection
-        target = self._activity_target(selection)
+        target = log_target_for_selection(selection)
         self._set_activity_view("logs" if supports_logs(target) else "history")
         self._clear_lazy_root_panels()
-        self._update_template_tabs(selection)
+        self._update_context_tabs(selection)
         self._sync_active_root_panel()
         self._update_tui_panel(selection)
         self.refresh_bindings()
 
     def _set_activity_view(self, view: str) -> None:
         selection = self._current_selection
-        target = self._activity_target(selection)
+        target = log_target_for_selection(selection)
         can_log = supports_logs(target)
         view = "logs" if view == "logs" and can_log else "history"
         self.query_one("#selection-logs", LogPanel).display = view == "logs"
@@ -354,14 +352,6 @@ class DashboardScreen(Screen):
         history_button.variant = "primary" if view == "history" else "default"
         name = getattr(target, "name", None) or getattr(target, "ip", "")
         self.query_one("#activity-context", Static).update(str(name or ""))
-
-    @staticmethod
-    def _activity_target(selection: SelectionInfo | None):
-        if selection and selection.type == "service":
-            return selection.service
-        if selection and selection.type == "server":
-            return selection.server
-        return None
 
     @on(Button.Pressed, "#show-service-logs")
     def show_service_logs(self) -> None:
@@ -1144,99 +1134,6 @@ class DashboardScreen(Screen):
         self._refresh_tree_after_service_change(bundle, None)
         self.notify(result.message)
 
-    @on(TemplatePanel.ConfigureTemplateRequested)
-    async def handle_template_configure_requested(
-        self, message: TemplatePanel.ConfigureTemplateRequested
-    ) -> None:
-        if message.template_type == "service":
-            await self._handle_service_template_configure_requested(message)
-            return
-        await self.handle_server_template_configure_requested(message)
-
-    async def handle_server_template_configure_requested(
-        self, message: TemplatePanel.ConfigureTemplateRequested
-    ) -> None:
-        workspace = getattr(self.app, "workspace", None)
-        infra = getattr(workspace, "infrastructure", None)
-        if not workspace or not infra:
-            self.notify(
-                "Cannot add a server because the project workspace is unavailable.",
-                severity="error",
-            )
-            return
-
-        result = resolve_server_template_setup(infra, message.config)
-        if not result.success:
-            self.notify(result.message, severity="error")
-            return
-
-        setup = result.data["setup"] if result.data else None
-        if not isinstance(setup, TemplateFormSpec):
-            self.notify(
-                "Selected server template returned an unexpected setup form.",
-                severity="error",
-            )
-            return
-
-        await self.app.push_screen(
-            TemplateSetupDialog(setup),
-            lambda values: self._add_server_from_template_values(
-                message.config, setup, values
-            ),
-        )
-
-    async def _handle_service_template_configure_requested(
-        self,
-        message: TemplatePanel.ConfigureTemplateRequested,
-    ) -> None:
-        workspace = getattr(self.app, "workspace", None)
-        infra = getattr(workspace, "infrastructure", None)
-        selection = self._current_selection
-        bundle = selection.bundle if selection and selection.type == "bundle" else None
-        if not workspace or not infra:
-            self.notify(
-                "Cannot add a service because the project workspace is unavailable.",
-                severity="error",
-            )
-            return
-        if not bundle:
-            self.notify("Select a bundle before adding a service.", severity="warning")
-            return
-
-        result = resolve_service_template_setup(infra, bundle, message.config)
-        if not result.success:
-            self.notify(result.message, severity="error")
-            return
-
-        setup = result.data["setup"] if result.data else None
-        if not isinstance(setup, TemplateFormSpec):
-            self.notify(
-                "Selected service template returned an unexpected setup form.",
-                severity="error",
-            )
-            return
-        missing_options = self._missing_required_select_options(setup)
-        if missing_options:
-            self.notify(
-                (
-                    "Cannot add this service yet. Missing options for: "
-                    + ", ".join(missing_options)
-                    + "."
-                ),
-                severity="error",
-            )
-            return
-        if not setup.fields:
-            self._add_service_from_template_values(message.config, bundle, setup, {})
-            return
-
-        await self.app.push_screen(
-            TemplateSetupDialog(setup),
-            lambda values: self._add_service_from_template_values(
-                message.config, bundle, setup, values
-            ),
-        )
-
     def _missing_required_select_options(self, setup: TemplateFormSpec) -> list[str]:
         return [
             field.label
@@ -1530,7 +1427,7 @@ class DashboardScreen(Screen):
         self._set_project_reload_loading(False)
         self.notify(f"Reloaded project infrastructure for {project}.")
 
-    def _update_template_tabs(self, selection: SelectionInfo | None) -> None:
+    def _update_context_tabs(self, selection: SelectionInfo | None) -> None:
         self._set_tab_visible(
             SECRET_MANAGER_TAB_ID,
             selection.type == "root" if selection else False,
@@ -1571,46 +1468,6 @@ class DashboardScreen(Screen):
             LOGS_TAB_ID,
             selection.type in {"server", "service"} if selection else False,
         )
-        self._activate_requested_tab_if_visible(clear=False)
-
-    def _request_tab_activation(self, tab_id: str) -> None:
-        self._requested_tab_id = tab_id
-        self._activate_requested_tab_if_visible(clear=False)
-        self.call_after_refresh(self._activate_requested_tab_if_visible, False)
-        self.set_timer(
-            0.4,
-            lambda: self._finish_requested_tab_activation(tab_id),
-        )
-
-    def _finish_requested_tab_activation(self, tab_id: str) -> None:
-        if self._requested_tab_id != tab_id:
-            return
-        self._requested_tab_id = None
-        self._update_template_tabs(self._current_selection)
-
-    def _activate_requested_tab_if_visible(self, clear: bool = True) -> bool:
-        requested = self._requested_tab_id
-        if not requested:
-            return False
-        tabs = self.query_one("#main-tabs", TabbedContent)
-        try:
-            tab = tabs.get_tab(requested)
-        except Tabs.TabError:
-            if clear:
-                self._requested_tab_id = None
-            return False
-        if tab.styles.display != "none":
-            try:
-                tabs.active = requested
-            except Tabs.TabError:
-                return False
-            if clear:
-                self._requested_tab_id = None
-            return True
-        if clear:
-            self._requested_tab_id = None
-        return False
-
     def _update_tui_panel(self, selection: SelectionInfo | None) -> None:
         container = self.query_one("#service-tui-container", Container)
         for child in list(container.children):
@@ -1622,8 +1479,6 @@ class DashboardScreen(Screen):
             and selection.service
             and getattr(selection.service, "state", None) == "running"
         )
-        if not running and self._requested_tab_id == SERVICE_TUI_TAB_ID:
-            self._requested_tab_id = None
         self._set_service_tui_tab_visible(False)
 
         if not selection or selection.type != "service" or not selection.service:
@@ -1672,9 +1527,6 @@ class DashboardScreen(Screen):
             if visible:
                 tabs.show_tab(tab_id)
             else:
-                if tab_id == self._requested_tab_id:
-                    tabs.show_tab(tab_id)
-                    return
                 if tabs.active == tab_id:
                     tabs.active = OVERVIEW_TAB_ID
                 tabs.hide_tab(tab_id)

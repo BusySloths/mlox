@@ -236,6 +236,10 @@ SERVICE_CASES = [
                 "username": "minio",
                 "password": "minio-pass",
             },
+            "s3_connection": {
+                "username": "minio",
+                "password": "minio-pass",
+            },
         },
         None,
     ),

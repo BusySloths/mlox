@@ -604,8 +604,6 @@ MLflowGatewaySettingsPanel {
   width: 1fr;
 }
 
-#server-template-panel,
-#service-template-panel,
 #secret-manager-panel,
 #firewall-panel,
 #monitor-panel,
@@ -2040,11 +2038,6 @@ SecretEditDialog {
   color: #e5f5ee;
 }
 
-TemplateSourceDialog {
-  align: center middle;
-  background: #000000 65%;
-}
-
 TemplateBrowserDialog {
   align: center middle;
   background: #000000 65%;
@@ -2114,18 +2107,8 @@ TemplateSetupForm {
   max-height: 100%;
 }
 
-#close-template-browser,
 #back-template-source {
   width: auto;
-}
-
-#template-source-dialog {
-  width: 90%;
-  max-width: 120;
-  height: 85%;
-  padding: 1 2;
-  background: #0d2a24;
-  border: round #74d17a;
 }
 
 #template-source-title {
@@ -2143,25 +2126,6 @@ TemplateSetupForm {
 #template-source-content {
   height: 1fr;
   border: round #477a70;
-}
-
-#close-template-source {
-  margin-top: 1;
-}
-
-#template-add-indicator {
-  display: none;
-  width: 4;
-  height: 1;
-  margin-left: 1;
-}
-
-#template-add-status {
-  display: none;
-  width: 1fr;
-  height: auto;
-  margin-left: 1;
-  color: #a6c9bdff;
 }
 
 #selection-overview {
@@ -2920,20 +2884,7 @@ TemplateSetupDialog {
   margin-top: 1;
 }
 
-#activity-tabs {
-  height: 1fr;
-  min-height: 50%;
-}
-
-#activity-container {
-  border: round #2fa527ff;
-  background: #13270fff;
-  padding: 1;
-  margin-top: 1;
-}
-
-#logs-tab,
-#history-tab {
+#logs-tab {
   padding: 0 1 1 1;
 }
 

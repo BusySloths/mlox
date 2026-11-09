@@ -13,11 +13,10 @@ from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
-from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, LoadingIndicator, Static, TextArea
+from textual.widgets import Button, DataTable, Static, TextArea
 from textual.widgets._data_table import RowKey
 
 from mlox.application.use_cases.servers import browse_server_templates
@@ -28,56 +27,15 @@ from mlox.tui.template_forms import TemplateFormSpec, TemplateSetupForm
 from .model import SelectionInfo, get_server_backends
 
 
-class TemplateDataTable(DataTable):
-    """DataTable that notifies its parent when the cursor moves."""
-
-    def watch_cursor_coordinate(self, _old: object, _new: object) -> None:
-        panel = self.query_ancestor(TemplatePanel)
-        if panel:
-            panel.show_current_row_details()
-
-
-class TemplateSourceDialog(ModalScreen[None]):
-    """Read-only view of a template's source or generated configuration."""
-
-    BINDINGS = [("escape", "dismiss", "Close")]
-
-    def __init__(self, name: str, origin: str, source: str) -> None:
-        super().__init__()
-        self.template_name = name
-        self.origin = origin
-        self.source = source
-
-    def compose(self) -> ComposeResult:
-        with Container(id="template-source-dialog"):
-            yield Static(
-                f"{self.template_name} · Configuration", id="template-source-title",
-                markup=False,
-            )
-            yield Static(self.origin, id="template-source-origin", markup=False)
-            yield TextArea(
-                self.source,
-                read_only=True,
-                show_line_numbers=True,
-                id="template-source-content",
-            )
-            yield Button("Close", id="close-template-source")
-
-    @on(Button.Pressed, "#close-template-source")
-    def close_source(self) -> None:
-        self.dismiss(None)
-
-
 class TemplatePanel(Container):
     """Template browser for one template category."""
 
     class ConfigureTemplateRequested(Message):
         """Request setup for the currently selected template."""
 
-        def __init__(self, config: Any, template_type: str = "server") -> None:
+        def __init__(self, config: Any) -> None:
             super().__init__()
             self.config = config
-            self.template_type = template_type
 
     class SourceRequested(Message):
         def __init__(self, name: str, origin: str, source: str) -> None:
@@ -96,7 +54,6 @@ class TemplatePanel(Container):
         self.template_type = template_type
         self._configs_by_key: dict[str, Any] = {}
         self.selected_config_id: str | None = None
-        self._adding = False
 
     def compose(self) -> ComposeResult:
         kind = "Service" if self.template_type == "service" else "Server"
@@ -107,7 +64,7 @@ class TemplatePanel(Container):
         )
         yield Static(classes="template-count")
         with Horizontal(classes="template-browser"):
-            table = TemplateDataTable(classes="template-table")
+            table = DataTable(classes="template-table")
             table.cursor_type = "row"
             table.add_columns("Name", "Version")
             yield table
@@ -120,8 +77,6 @@ class TemplatePanel(Container):
                 variant="success",
             )
             yield Button("View configuration", id="view-template-source")
-            yield LoadingIndicator(id="template-add-indicator")
-            yield Static("Adding server...", id="template-add-status")
             yield Static(classes="template-action-spacer")
             yield Button("Close", id="close-template-browser")
 
@@ -135,7 +90,6 @@ class TemplatePanel(Container):
 
     def on_mount(self) -> None:
         self._show_templates()
-        self.set_adding(False)
         self.query_one("#close-template-browser", Button).display = isinstance(
             self.screen, TemplateBrowserDialog
         )
@@ -185,22 +139,12 @@ class TemplatePanel(Container):
                 )
             first_key = next(iter(self._configs_by_key))
             table.cursor_coordinate = (0, 0)
-            self._show_config_details(first_key, title)
+            self._show_config_details(first_key)
         else:
             self.details.update(
                 Panel(Text(empty_message), title=title, border_style="yellow")
             )
         self._update_action_visibility()
-
-    def show_current_row_details(self) -> None:
-        table = self.table
-        if table.row_count == 0:
-            return
-        cursor_row = table.cursor_row
-        if cursor_row < 0 or cursor_row >= table.row_count:
-            return
-        row_key = table.coordinate_to_cell_key(Coordinate(cursor_row, 0)).row_key
-        self._show_config_details(row_key)
 
     def _show_server_templates(self) -> None:
         result = browse_server_templates()
@@ -226,7 +170,7 @@ class TemplatePanel(Container):
             return str(row_key.value)
         return str(row_key)
 
-    def _show_config_details(self, row_key: object, title: str | None = None) -> None:
+    def _show_config_details(self, row_key: object) -> None:
         key = self._row_key_value(row_key)
         config = self._configs_by_key.get(key)
         if not config:
@@ -318,52 +262,26 @@ class TemplatePanel(Container):
             return None
         return self._configs_by_key.get(self.selected_config_id)
 
-    def set_adding(self, adding: bool) -> None:
-        self._adding = adding
-        if not self.is_mounted:
-            return
-        button = self.query_one("#configure-add-server", Button)
-        indicator = self.query_one("#template-add-indicator", LoadingIndicator)
-        status = self.query_one("#template-add-status", Static)
-        button.disabled = adding or not bool(self.selected_config())
-        self.query_one("#view-template-source", Button).disabled = not bool(
-            self.selected_config()
-        )
-        button.label = self._action_label(adding=adding)
-        indicator.display = adding
-        status.display = adding
-        status.update("Adding service..." if self.template_type == "service" else "Adding server...")
-
     def _update_action_visibility(self) -> None:
         if not self.is_mounted:
             return
         action_row = self.query_one("#template-action-row", Horizontal)
         button = self.query_one("#configure-add-server", Button)
         action_row.display = self.template_type in {"server", "service"}
-        button.label = self._action_label(adding=self._adding)
-        button.disabled = self._adding or not bool(self.selected_config())
+        button.label = self._action_label()
+        button.disabled = not bool(self.selected_config())
         self.query_one("#view-template-source", Button).disabled = not bool(
             self.selected_config()
         )
-        self.query_one("#template-add-indicator", LoadingIndicator).display = self._adding
-        status = self.query_one("#template-add-status", Static)
-        status.display = self._adding
-        status.update("Adding service..." if self.template_type == "service" else "Adding server...")
 
-    def _action_label(self, *, adding: bool = False) -> str:
+    def _action_label(self) -> str:
         if self.template_type == "service":
-            return "Adding Service..." if adding else "Configure & Add Service"
-        return "Adding Server..." if adding else "Configure & Add Server"
+            return "Configure & Add Service"
+        return "Configure & Add Server"
 
     @on(DataTable.RowHighlighted)
     def handle_row_highlighted(
         self, event: DataTable.RowHighlighted
-    ) -> None:  # pragma: no cover - UI callback
-        self._show_config_details(event.row_key)
-
-    @on(DataTable.RowSelected)
-    def handle_row_selected(
-        self, event: DataTable.RowSelected
     ) -> None:  # pragma: no cover - UI callback
         self._show_config_details(event.row_key)
 
@@ -372,7 +290,7 @@ class TemplatePanel(Container):
         config = self.selected_config()
         if config:
             self.post_message(
-                self.ConfigureTemplateRequested(config, self.template_type)
+                self.ConfigureTemplateRequested(config)
             )
 
     @on(Button.Pressed, "#view-template-source")
@@ -399,10 +317,7 @@ class TemplatePanel(Container):
             source = f"Could not read the configuration: {exc}"
             origin = "Source unavailable"
         name = str(getattr(config, "name", "Template"))
-        if isinstance(self.screen, TemplateBrowserDialog):
-            self.post_message(self.SourceRequested(name, origin, source))
-        else:
-            self.app.push_screen(TemplateSourceDialog(name, origin, source))
+        self.post_message(self.SourceRequested(name, origin, source))
 
 
 class TemplateBrowserDialog(ModalScreen[tuple[Any, TemplateFormSpec, dict[str, str]] | None]):

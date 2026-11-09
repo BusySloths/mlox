@@ -16,17 +16,7 @@ try:
 except ImportError:  # pragma: no cover - fallback for older textual releases
     from textual.widgets import TextLog as LogWidget  # type: ignore
 
-from .model import SelectionInfo
-
-
-def _log_target(selection: SelectionInfo | None):
-    if not selection:
-        return None
-    if selection.type == "service":
-        return selection.service
-    if selection.type == "server":
-        return selection.server
-    return None
+from .model import SelectionInfo, log_target_for_selection
 
 
 class LogPanel(Container):
@@ -75,7 +65,7 @@ class LogPanel(Container):
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         self._request_generation += 1
         self.query_one("#log-fetch", Button).disabled = False
-        target = _log_target(selection)
+        target = log_target_for_selection(selection)
         self.query_one("#log-heading", Static).update(
             "SERVER LOGS" if selection and selection.type == "server" else "SERVICE LOGS"
         )
@@ -108,7 +98,7 @@ class LogPanel(Container):
         self._request_generation += 1
         self.query_one("#log-fetch", Button).disabled = False
         label = event.value if isinstance(event.value, str) else ""
-        if label and supports_logs(_log_target(self.selection)):
+        if label and supports_logs(log_target_for_selection(self.selection)):
             if not self._show_cached_logs(self.selection, label):
                 self.log_output.clear()
                 self.status.update("Ready to fetch logs for the selected source.")
@@ -116,7 +106,7 @@ class LogPanel(Container):
     @on(Button.Pressed, "#log-fetch")
     def handle_fetch(self, _: Button.Pressed) -> None:  # pragma: no cover - UI callback
         selection = self.selection
-        target = _log_target(selection)
+        target = log_target_for_selection(selection)
         if not supports_logs(target):
             self.status.update("Select a server or service that supports logs.")
             return

@@ -116,6 +116,34 @@ def gcp_secret_backed(infra, bundle, config=None) -> TemplateFormSpec:
     )
 
 
+
+def ducklake(infra, bundle, config=None) -> TemplateFormSpec:
+    return TemplateFormSpec(
+        title="Add DuckLake",
+        description="Select existing services and secrets; lake creation is an explicit client operation.",
+        fields=[
+            TemplateFieldSpec("postgres_service_uuid", "PostgreSQL service", kind="select", options=_service_options(infra, config_prefix="postgres-")),
+            TemplateFieldSpec("storage_service_uuid", "Object storage service", kind="select", options=_service_options(infra, capability="s3_object_storage")),
+            TemplateFieldSpec("secret_manager_uuid", "Secret manager", kind="select", options=_service_options(infra, group="secret-manager")),
+            TemplateFieldSpec("postgres_secret_name", "PostgreSQL connection secret"),
+            TemplateFieldSpec("s3_secret_name", "S3 connection secret"),
+            TemplateFieldSpec("data_path", "S3 data path", placeholder="s3://bucket/lake/"),
+            TemplateFieldSpec("metadata_schema", "PostgreSQL metadata schema", default="ducklake"),
+            TemplateFieldSpec("catalog_name", "DuckDB catalog name", default="lake"),
+        ],
+        submit_label="Add Service",
+        materialize=lambda values, infra: {
+            "${POSTGRES_SERVICE_UUID}": values["postgres_service_uuid"],
+            "${STORAGE_SERVICE_UUID}": values["storage_service_uuid"],
+            "${SECRET_MANAGER_UUID}": values["secret_manager_uuid"],
+            "${POSTGRES_SECRET_NAME}": values["postgres_secret_name"],
+            "${S3_SECRET_NAME}": values["s3_secret_name"],
+            "${DUCKLAKE_DATA_PATH}": values["data_path"],
+            "${DUCKLAKE_METADATA_SCHEMA}": values["metadata_schema"],
+            "${DUCKLAKE_CATALOG_NAME}": values["catalog_name"],
+        },
+    )
+
 def feast(infra, bundle, config=None) -> TemplateFormSpec:
     redis = _service_options(infra, config_prefix="redis-")
     postgres_services = _service_options(infra, config_prefix="postgres-")
@@ -583,6 +611,7 @@ SETUP_HANDLERS = {
     "airflow-2.9.2-docker": no_params,
     "airflow-3.1.3-docker": no_params,
     "dev-terminal-0.1-beta": no_params,
+    "ducklake-1.1-connector": ducklake,
     "feast-0.54.0": feast,
     "gcp-bigquery-0.1.0": gcp_secret_backed,
     "gcp-secret-manager-0.1.0": gcp_secret_backed,

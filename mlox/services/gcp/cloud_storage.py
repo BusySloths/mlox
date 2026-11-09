@@ -10,6 +10,7 @@ from google.cloud.storage import Client  # type: ignore
 from google.oauth2.service_account import Credentials
 
 from mlox.services.gcp.secret_manager import dict_to_service_account_credentials
+from mlox.object_storage import AbstractObjectStorageClient
 
 
 # Configure logging (optional, but recommended)
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class GCPStorage:
+class GCPStorage(AbstractObjectStorageClient):
     keyfile_dict: Dict = field(default_factory=dict, init=True)
     _project_id: str = field(default="", init=False)
     _credentials: Credentials | None = field(default=None, init=False)
@@ -33,6 +34,15 @@ class GCPStorage:
 
     def _get_storage_client(self) -> Client:
         return Client(project=self._project_id, credentials=self._credentials)
+
+    def list_keys(self, bucket: str, prefix: str = "") -> list[str]:
+        return [blob.name for blob in self._get_storage_client().list_blobs(bucket, prefix=prefix)]
+
+    def read_bytes(self, bucket: str, key: str) -> bytes:
+        return self._get_storage_client().bucket(bucket).blob(key).download_as_bytes()
+
+    def write_bytes(self, bucket: str, key: str, data: bytes) -> None:
+        self._get_storage_client().bucket(bucket).blob(key).upload_from_string(data)
 
     def list_buckets(self) -> List:
         """List all buckets in the project.

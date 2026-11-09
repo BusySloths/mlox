@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, cast
 
 from mlox.service import AbstractSecretManagerService
-from mlox.service import AbstractService, ServiceCapability
+from mlox.service import AbstractObjectStorageService, AbstractService, ServiceCapability
 from mlox.infra import Infrastructure
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ logging.basicConfig(
 
 
 @dataclass
-class GCPStorageService(AbstractService):
+class GCPStorageService(AbstractService, AbstractObjectStorageService):
     capabilities = {ServiceCapability.OBJECT_STORAGE}
     secret_name: str
     secret_manager_uuid: str = field(kw_only=True)

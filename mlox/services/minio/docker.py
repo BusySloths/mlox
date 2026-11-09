@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
-from mlox.service import AbstractLogService, AbstractService, AbstractWebUIService, ServiceCapability
+from mlox.service import AbstractLogService, AbstractService, AbstractS3ObjectStorageService, AbstractWebUIService, ServiceCapability
 
 
 logging.basicConfig(
@@ -30,8 +30,8 @@ logging.basicConfig(
 
 
 @dataclass
-class MinioDockerService(AbstractService, AbstractWebUIService, AbstractLogService):
-    capabilities = {ServiceCapability.OBJECT_STORAGE, ServiceCapability.WEB_UI, ServiceCapability.LOGS}
+class MinioDockerService(AbstractService, AbstractWebUIService, AbstractLogService, AbstractS3ObjectStorageService):
+    capabilities = {ServiceCapability.OBJECT_STORAGE, ServiceCapability.S3_OBJECT_STORAGE, ServiceCapability.WEB_UI, ServiceCapability.LOGS}
     web_ui_url_label = "MinIO Console"
     web_ui_login_fields = ("username", "password")
     root_user: str
@@ -121,6 +121,15 @@ class MinioDockerService(AbstractService, AbstractWebUIService, AbstractLogServi
             self.state = "unknown"
         return {"status": "unknown"}
 
+    def get_storage(self, infra):
+        from mlox.services.minio.client import S3ObjectStorageClient
+
+        endpoint = self.service_url or self.service_urls.get("MinIO API", "")
+        if not endpoint:
+            raise ValueError("MinIO endpoint is not available; set up the service first")
+        return S3ObjectStorageClient(endpoint, self.root_user, self.root_password,
+                                     certificate=self.certificate)
+
     def get_secrets(self) -> Dict[str, Dict]:
         credentials = {
             key: value
@@ -132,4 +141,9 @@ class MinioDockerService(AbstractService, AbstractWebUIService, AbstractLogServi
         }
         if not credentials:
             return {}
-        return {"minio_root_credentials": credentials}
+        endpoint = self.service_url or self.service_urls.get("MinIO API", "")
+        if endpoint:
+            credentials["endpoint"] = endpoint
+        if self.certificate:
+            credentials["certificate"] = self.certificate
+        return {"minio_root_credentials": credentials, "s3_connection": dict(credentials)}

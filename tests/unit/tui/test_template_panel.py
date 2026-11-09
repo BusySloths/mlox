@@ -7,12 +7,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from textual.app import App, ComposeResult
-from textual.widgets import Button, LoadingIndicator, Static, TextArea
+from textual.widgets import Button, Static, TextArea
 
 from mlox.tui.screens.dashboard.model import SelectionInfo
 from mlox.config import BuildConfig, ServiceConfig
 from mlox.tui.screens.dashboard.template_panel import (
-    TemplateBrowserDialog, TemplatePanel, TemplateSourceDialog,
+    TemplateBrowserDialog, TemplatePanel,
 )
 from mlox.tui.template_forms import TemplateFieldSpec, TemplateFormSpec
 
@@ -138,18 +138,20 @@ def test_view_selected_template_source_is_read_only(monkeypatch, tmp_path) -> No
         )
         app = TemplatePanelTestApp("server")
         async with app.run_test(size=(100, 30)) as pilot:
-            panel = app.query_one(TemplatePanel)
+            dialog = TemplateBrowserDialog("server", None, lambda config: None)
+            app.push_screen(dialog)
+            await pilot.pause()
+            panel = dialog.query_one(TemplatePanel)
             panel.table.focus()
             assert panel.table.region.right <= panel.details.region.x
             await pilot.press("down")
             await pilot.click("#view-template-source")
-            dialog = app.screen
-            assert isinstance(dialog, TemplateSourceDialog)
+            assert app.screen is dialog and dialog.view == "source"
             source = dialog.query_one("#template-source-content", TextArea)
             assert source.read_only
             assert source.text == "name: Two\nexample: true\n"
             await pilot.press("escape")
-            assert app.screen is not dialog
+            assert app.screen is dialog and dialog.view == "browse"
 
     asyncio.run(exercise())
 
@@ -167,10 +169,12 @@ def test_plugin_without_source_shows_generated_configuration(monkeypatch) -> Non
         )
         app = TemplatePanelTestApp("service")
         async with app.run_test(size=(100, 30)) as pilot:
+            dialog = TemplateBrowserDialog("service", None, lambda config: None)
+            app.push_screen(dialog)
+            await pilot.pause()
             await pilot.click("#view-template-source")
-            dialog = app.screen
-            assert isinstance(dialog, TemplateSourceDialog)
-            assert "Generated" in dialog.origin
+            assert app.screen is dialog and dialog.view == "source"
+            assert "Generated" in str(dialog.query_one("#template-source-origin", Static).render())
             assert "id: plugin" in dialog.query_one("#template-source-content", TextArea).text
 
     asyncio.run(exercise())
@@ -270,31 +274,6 @@ def test_service_template_panel_shows_add_service_action(monkeypatch) -> None:
     assert display == "block"
     assert disabled is False
     assert "Add Service" in label
-
-
-async def _server_template_loading_state(monkeypatch) -> tuple[bool, bool]:
-    configs = [_fake_config("template-one", "Template One")]
-    monkeypatch.setattr(
-        "mlox.application.use_cases.servers.load_all_server_configs",
-        lambda include_plugins=True: configs,
-    )
-
-    app = TemplatePanelTestApp("server")
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        panel = app.query_one(TemplatePanel)
-        indicator = panel.query_one("#template-add-indicator", LoadingIndicator)
-        status = panel.query_one("#template-add-status", Static)
-        return indicator.display, status.display
-
-
-def test_server_template_panel_does_not_show_add_spinner_initially(monkeypatch) -> None:
-    indicator_display, status_display = asyncio.run(
-        _server_template_loading_state(monkeypatch)
-    )
-
-    assert indicator_display is False
-    assert status_display is False
 
 
 async def _service_template_ids_for_bundle(monkeypatch) -> tuple[int, set[str]]:

@@ -52,6 +52,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# DuckLake 1.1 requires DuckDB 2.0.
+ducklake = [
+    "duckdb>=2.0,<2.1",
+]
+
 # GCP related extras
 gcp = [
     "pandas>=2.2",

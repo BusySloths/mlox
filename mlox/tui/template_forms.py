@@ -255,7 +255,7 @@ class TemplateSetupForm(Container):
         widget = self.query_one(f"#{self._field_id(field_spec.name)}")
         if isinstance(widget, Select):
             value = widget.value
-            if value is Select.NULL or value is Select.BLANK:
+            if value is Select.NULL:
                 return ""
             return str(value)
         if isinstance(widget, TextArea):
@@ -299,7 +299,7 @@ class TemplateSetupForm(Container):
             return field_spec.default
         if field_spec.required and options:
             return options[0][1]
-        return Select.BLANK
+        return Select.NULL
 
 
 class TemplateSetupDialog(ModalScreen[FormValues | None]):
@@ -311,9 +311,6 @@ class TemplateSetupDialog(ModalScreen[FormValues | None]):
 
     def compose(self) -> ComposeResult:
         yield TemplateSetupForm(self.spec)
-
-    def _dismiss_with_values(self) -> None:
-        self.query_one(TemplateSetupForm)._dismiss_with_values()
 
     @on(TemplateSetupForm.BackRequested)
     def handle_back(self, message: TemplateSetupForm.BackRequested) -> None:

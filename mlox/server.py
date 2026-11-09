@@ -51,6 +51,28 @@ from mlox.utils import generate_password
 from mlox.executors import UbuntuTaskExecutor
 from mlox.logs import LogSource
 
+# Re-export contracts to preserve existing imports.
+from mlox.contracts.servers import (
+    ServerCapability,
+    AbstractLogServer,
+    AbstractHealthServer,
+    AbstractGitServer,
+    AbstractFirewallServer,
+    AbstractInitialPasswordAuthServer,
+    AbstractBackendServer,
+    AbstractNativeServer,
+    AbstractDockerServer,
+    AbstractKubernetesServer,
+    AbstractLocalServer,
+    AbstractConnectorServer,
+)
+from mlox.contracts.servers.health import (
+    SERVER_HEALTHY_STATES,
+    SENSITIVE_HEALTH_KEY_PARTS,
+    _redact_health_values,
+)
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="[%(levelname)s] %(asctime)s | %(name)s | %(message)s",
@@ -108,86 +130,6 @@ def close_connection(
     logger.debug("SSH connection closed and tmp dir deleted.")
 
 
-class ServerCapability(StrEnum):
-    """User-facing server capabilities advertised by configs and classes."""
-
-    HEALTH = "health"
-    LOGS = "logs"
-    GIT = "git"
-    FIREWALL = "firewall"
-    INITIAL_AUTH_PASSWORD = "initial_auth_password"
-    TERMINAL = "terminal"
-    NATIVE = "native"
-    DOCKER = "docker"
-    KUBERNETES = "kubernetes"
-    LOCAL = "local"
-    CONNECTOR = "connector"
-
-
-SERVER_HEALTHY_STATES = {"running"}
-SENSITIVE_HEALTH_KEY_PARTS = ("token", "password", "secret")
-
-
-def _redact_health_values(value: Any) -> Any:
-    if isinstance(value, dict):
-        redacted: Dict[str, Any] = {}
-        for key, item in value.items():
-            key_text = str(key).lower()
-            if any(part in key_text for part in SENSITIVE_HEALTH_KEY_PARTS):
-                redacted[key] = "<redacted>"
-            else:
-                redacted[key] = _redact_health_values(item)
-        return redacted
-    if isinstance(value, list):
-        return [_redact_health_values(item) for item in value]
-    return value
-
-
-class AbstractLogServer(LogSource):
-    """Optional server capability for named log sources."""
-
-    capabilities: ClassVar[set[ServerCapability]] = {ServerCapability.LOGS}
-
-
-class AbstractHealthServer(ABC):
-    """Optional server capability for richer live health information."""
-
-    capabilities: ClassVar[set[ServerCapability]] = {ServerCapability.HEALTH}
-
-    def get_health(self, no_cache: bool = True) -> Dict[str, Any]:
-        state = str(getattr(self, "state", "unknown") or "unknown")
-        health: Dict[str, Any] = {
-            "state": state,
-            "status": state,
-            "healthy": state in SERVER_HEALTHY_STATES,
-        }
-
-        try:
-            health["connection.is_reachable"] = bool(self.test_connection())
-        except Exception as exc:
-            health["connection.is_reachable"] = False
-            health["connection.error"] = str(exc)
-
-        try:
-            health["server_info"] = _redact_health_values(
-                self.get_server_info(no_cache=no_cache)
-            )
-        except Exception as exc:
-            health["server_info.error"] = str(exc)
-
-        try:
-            backend_status = _redact_health_values(self.get_backend_status())
-            if isinstance(backend_status, dict):
-                health.update(backend_status)
-                if backend_status.get("backend.is_running") is False:
-                    health["healthy"] = False
-        except Exception as exc:
-            health["backend.error"] = str(exc)
-            health["healthy"] = False
-
-        if health.get("connection.is_reachable") is False:
-            health["healthy"] = False
-        return health
 
 
 @dataclass
@@ -326,118 +268,6 @@ class RemoteUser:
     ssh_passphrase: str
     ssh_key: str = field(default="", init=False)
     ssh_pub_key: str = field(default="", init=False)
-
-
-@dataclass
-class AbstractGitServer(ABC):
-    # GIT
-    @abstractmethod
-    def git_clone(self, repo_url: str, path: str) -> None:
-        pass
-
-    @abstractmethod
-    def git_pull(self, path: str) -> None:
-        pass
-
-    @abstractmethod
-    def git_remove(self, path: str) -> None:
-        pass
-
-
-@dataclass
-class AbstractFirewallServer(ABC):
-    @abstractmethod
-    def firewall_up(
-        self,
-        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
-        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
-    ) -> None:
-        pass
-
-    @abstractmethod
-    def firewall_down(self) -> None:
-        pass
-
-    @abstractmethod
-    def firewall_status(self) -> str | None:
-        pass
-
-    @abstractmethod
-    def firewall_update(
-        self,
-        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
-        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
-    ) -> None:
-        pass
-
-
-@dataclass
-class AbstractInitialPasswordAuthServer(ABC):
-    @abstractmethod
-    def add_mlox_user(self) -> None:
-        pass
-
-    @abstractmethod
-    def setup_users(self) -> None:
-        pass
-
-    @abstractmethod
-    def enable_password_authentication(self) -> None:
-        pass
-
-    @abstractmethod
-    def disable_password_authentication(self) -> None:
-        pass
-
-
-@dataclass
-class AbstractBackendServer(ABC):
-    @abstractmethod
-    def setup_backend(self) -> None:
-        pass
-
-    @abstractmethod
-    def teardown_backend(self) -> None:
-        pass
-
-    @abstractmethod
-    def get_backend_status(self) -> Dict[str, Any]:
-        pass
-
-    @abstractmethod
-    def start_backend_runtime(self) -> None:
-        pass
-
-    @abstractmethod
-    def stop_backend_runtime(self) -> None:
-        pass
-
-
-@dataclass
-class AbstractNativeServer(AbstractBackendServer):
-    pass
-
-
-@dataclass
-class AbstractDockerServer(AbstractBackendServer):
-    pass
-
-
-@dataclass
-class AbstractKubernetesServer(AbstractBackendServer):
-    pass
-
-
-@dataclass
-class AbstractLocalServer(AbstractBackendServer):
-    pass
-
-
-@dataclass
-class AbstractConnectorServer(AbstractBackendServer):
-    """Backend contract for virtual, externally hosted service connectors."""
-
-    pass
 
 
 @dataclass

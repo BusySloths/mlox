@@ -25,6 +25,15 @@ class SelectionInfo:
     service: Any | None = None
 
 
+def log_target_for_selection(selection: SelectionInfo | None) -> Any | None:
+    """Return the selected server or service whose logs can be inspected."""
+    if selection and selection.type == "service":
+        return selection.service
+    if selection and selection.type == "server":
+        return selection.server
+    return None
+
+
 class SelectionChanged(Message):
     """Message broadcast whenever the tree selection changes."""
 

@@ -34,7 +34,6 @@ from mlox.tui.screens.dashboard.service_actions import (
     runtime_provider_options,
 )
 from mlox.tui.screens.dashboard.secret_manager_panel import SecretManagerPanel
-from mlox.tui.screens.dashboard.template_panel import TemplatePanel
 from mlox.tui.screens.dashboard.tree import InfraTree
 from mlox.tui.widgets.file_browser import FileBrowser
 from mlox.tui.screens.dashboard.app_log_panel import AppLogPanel
@@ -51,8 +50,6 @@ from mlox.tui.screens.dashboard.screen import (
     SECRET_MANAGER_TAB_ID,
     SIDEBAR_DEFAULT_WIDTH,
     SIDEBAR_STEP,
-    SERVER_TEMPLATES_TAB_ID,
-    SERVICE_TEMPLATES_TAB_ID,
     SERVICE_TUI_TAB_ID,
     WORKFLOW_TAB_ID,
 )
@@ -83,10 +80,8 @@ def test_service_page_requires_running_state(monkeypatch) -> None:
                 "failed", "error", "unknown", None,
             ):
                 service.state = state
-                screen._requested_tab_id = SERVICE_TUI_TAB_ID
                 screen._update_tui_panel(selection)
                 assert tabs.get_tab(SERVICE_TUI_TAB_ID).styles.display == "none"
-                assert screen._requested_tab_id is None
             assert calls == []
 
             service.state = "running"
@@ -250,11 +245,11 @@ async def _visible_tabs_for(
     app = DashboardTestApp()
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
-        screen._update_template_tabs(selection)
+        screen._update_context_tabs(selection)
         await pilot.pause(0.05)
 
         tabs = screen.query_one("#main-tabs", TabbedContent)
-        assert not tabs.query(f"#{SERVER_TEMPLATES_TAB_ID}")
+        assert not tabs.query("#server-templates-tab")
         secret_tab = tabs.get_tab(SECRET_MANAGER_TAB_ID)
         firewall_tab = tabs.get_tab(FIREWALL_TAB_ID)
         monitor_tab = tabs.get_tab(MONITOR_TAB_ID)
@@ -262,7 +257,7 @@ async def _visible_tabs_for(
         models_tab = tabs.get_tab(MODELS_TAB_ID)
         workflow_tab = tabs.get_tab(WORKFLOW_TAB_ID)
         repository_tab = tabs.get_tab(REPOSITORY_TAB_ID)
-        assert not tabs.query(f"#{SERVICE_TEMPLATES_TAB_ID}")
+        assert not tabs.query("#service-templates-tab")
         logs_tab = tabs.get_tab(LOGS_TAB_ID)
         await asyncio.to_thread(lambda: None)
         return (
@@ -2018,7 +2013,7 @@ def test_bundle_rename_action_updates_bundle_and_tree_label() -> None:
     assert "renamed-dev" in overview
 
 
-async def _add_server_from_template_modal() -> tuple[list[tuple[object, dict]], str, str]:
+async def _add_server_from_template_modal(monkeypatch) -> tuple[list[tuple[object, dict]], str, str]:
     app = DashboardTestApp()
     calls = []
     bundle = SimpleNamespace(
@@ -2043,12 +2038,16 @@ async def _add_server_from_template_modal() -> tuple[list[tuple[object, dict]], 
         name="Test Server",
         get_ui_handler=lambda ui, handler: lambda infra, cfg: spec,
     )
+    monkeypatch.setattr(
+        "mlox.application.use_cases.servers.load_all_server_configs",
+        lambda include_plugins=True: [config],
+    )
 
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
-        await screen.handle_server_template_configure_requested(
-            TemplatePanel.ConfigureTemplateRequested(config)
-        )
+        screen.query_one("#add-bundle-from-server-template", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#configure-add-server", Button).press()
         await pilot.pause()
         app.screen.query_one("#template-field-host", Input).value = "127.0.0.1"
         await pilot.click("#confirm-template-setup")
@@ -2063,8 +2062,8 @@ async def _add_server_from_template_modal() -> tuple[list[tuple[object, dict]], 
         return calls, tree.root.children[0].label.plain, tree.cursor_node.label.plain
 
 
-def test_server_template_modal_adds_server_and_refreshes_tree() -> None:
-    calls, bundle_label, selected_label = asyncio.run(_add_server_from_template_modal())
+def test_server_template_modal_adds_server_and_refreshes_tree(monkeypatch) -> None:
+    calls, bundle_label, selected_label = asyncio.run(_add_server_from_template_modal(monkeypatch))
 
     assert calls[0][1] == {"${MLOX_IP}": "127.0.0.1"}
     assert bundle_label == "Bundle: 127.0.0.1"
@@ -2272,7 +2271,7 @@ def test_bundle_action_opens_service_browser_and_adds_service(monkeypatch) -> No
     asyncio.run(exercise())
 
 
-async def _add_service_from_template_modal() -> tuple[list[tuple[object, dict]], str]:
+async def _add_service_from_template_modal(monkeypatch) -> tuple[list[tuple[object, dict]], str]:
     app = DashboardTestApp()
     calls = []
     server = SimpleNamespace(ip="10.0.0.5", backend=["docker"], state="running")
@@ -2294,16 +2293,21 @@ async def _add_service_from_template_modal() -> tuple[list[tuple[object, dict]],
     config = SimpleNamespace(
         id="test-service",
         name="Test Service",
+        backend_capabilities=lambda: {"docker"},
         get_ui_handler=lambda ui, handler: lambda infra, bundle_arg, cfg: spec,
+    )
+    monkeypatch.setattr(
+        "mlox.application.use_cases.services.load_all_service_configs",
+        lambda include_plugins=True: [config],
     )
 
     async with app.run_test() as pilot:
         screen = app.query_one(DashboardScreen)
         selection = SelectionInfo(type="bundle", bundle=bundle, server=server)
         screen._apply_selection(selection)
-        await screen._handle_service_template_configure_requested(
-            TemplatePanel.ConfigureTemplateRequested(config, "service")
-        )
+        screen.query_one("#add-service-to-bundle", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#configure-add-server", Button).press()
         await pilot.pause()
         app.screen.query_one("#template-field-name", Input).value = "tracking"
         await pilot.click("#confirm-template-setup")
@@ -2318,8 +2322,8 @@ async def _add_service_from_template_modal() -> tuple[list[tuple[object, dict]],
         return calls, tree.cursor_node.label.plain
 
 
-def test_service_template_modal_adds_service_without_setup() -> None:
-    calls, selected_label = asyncio.run(_add_service_from_template_modal())
+def test_service_template_modal_adds_service_without_setup(monkeypatch) -> None:
+    calls, selected_label = asyncio.run(_add_service_from_template_modal(monkeypatch))
 
     assert calls[0][1] == {
         "server_ip": "10.0.0.5",

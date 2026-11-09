@@ -2,7 +2,7 @@ import asyncio
 from types import SimpleNamespace
 
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable
+from textual.widgets import Button, DataTable, Select
 
 from mlox.application.result import OperationResult
 from mlox.tui.services.docker_proxy import DockerProxyPanel
@@ -49,3 +49,38 @@ async def _exercise_panel():
 
 def test_proxy_panel_adds_and_removes_routes():
     asyncio.run(_exercise_panel())
+
+
+async def _open_add_route_with_optional_service():
+    app = ProxyApp()
+    service = SimpleNamespace(name="backend", uuid="backend-1")
+    infra = SimpleNamespace(bundles=[SimpleNamespace(name="host", services=[service])])
+    async with app.run_test() as pilot:
+        panel = app.query_one(DockerProxyPanel)
+        panel.infra = infra
+        await pilot.click("#proxy-route-add")
+        await pilot.pause()
+        select = app.screen.query_one("#template-field-service-uuid", Select)
+        assert select.value is Select.NULL
+        select.value = "backend-1"
+        select.clear()
+        assert select.value is Select.NULL
+        form = app.screen.query_one("#template-setup-dialog")
+        assert form is not None
+
+
+def test_add_route_dialog_opens_with_optional_service_unselected():
+    asyncio.run(_open_add_route_with_optional_service())
+
+
+async def _route_buttons_are_separated():
+    app = ProxyApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        add = app.query_one("#proxy-route-add", Button)
+        remove = app.query_one("#proxy-route-remove", Button)
+        assert remove.region.x >= add.region.right + 2
+
+
+def test_route_action_buttons_have_spacing():
+    asyncio.run(_route_buttons_are_separated())

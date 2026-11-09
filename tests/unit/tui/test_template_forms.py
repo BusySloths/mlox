@@ -6,7 +6,7 @@ import asyncio
 
 from rich.console import Console
 from textual.app import App, ComposeResult
-from textual.widgets import Input, Select, Static
+from textual.widgets import Button, Input, Select, Static
 
 from mlox.tui.template_forms import (
     TemplateFieldSpec,
@@ -193,7 +193,7 @@ async def _catalog_tls_visibility():
         mode.value = "managed"
         await pilot.pause()
         assert not host.display and secret.display
-        app.screen._dismiss_with_values()
+        app.screen.query_one("#confirm-template-setup", Button).press()
         await pilot.pause()
         assert "TLS secret (manager / name) is required" in _render_text(app.screen.query_one("#template-setup-error", Static).render())
         mode.value = "self-signed"

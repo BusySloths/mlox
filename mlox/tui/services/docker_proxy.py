@@ -11,6 +11,11 @@ from mlox.tui.template_forms import TemplateFieldSpec, TemplateFormSpec, Templat
 
 
 class DockerProxyPanel(Vertical):
+    DEFAULT_CSS = """
+    DockerProxyPanel #proxy-route-actions { height: auto; }
+    DockerProxyPanel #proxy-route-add { margin-right: 2; }
+    """
+
     def __init__(self, infra, bundle, service):
         super().__init__()
         self.infra, self.bundle, self.service = infra, bundle, service
@@ -18,7 +23,7 @@ class DockerProxyPanel(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static('Public HTTPS routes. Existing backend services remain unchanged.')
-        with Horizontal():
+        with Horizontal(id="proxy-route-actions"):
             yield Button('Add route', id='proxy-route-add', variant='primary')
             yield Button('Remove selected route', id='proxy-route-remove', variant='warning')
         table = DataTable(id='proxy-routes')
