@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from hashlib import blake2b
+
 from rich.text import Text
 from textual.binding import Binding
 from textual.widgets import Tree
@@ -12,29 +14,6 @@ from .model import (
     get_server_backends,
     get_service_capabilities,
     is_bundle_initialized,
-)
-
-SERVICE_CAPABILITY_PRIORITY = (
-    "app",
-    "proxy",
-    "secret_manager",
-    "monitor",
-    "model_registry",
-    "model_server",
-    "repository",
-    "database",
-    "object_storage",
-    "data_warehouse",
-    "vector_database",
-    "feature_store",
-    "workflow_orchestrator",
-    "message_broker",
-    "container_registry",
-    "deployment",
-    "developer_tools",
-    "llm",
-    "dashboard",
-    "web_ui",  # Legacy plugin capability.
 )
 
 CAPABILITY_LABELS = {
@@ -51,9 +30,51 @@ CAPABILITY_LABELS = {
     "message_broker": "Message Broker",
     "container_registry": "Container Registry",
     "developer_tools": "Developer Tools",
-    "web_ui": "App",
+    "web_ui": "Web UI",
     "llm": "LLM",
 }
+
+# Muted colors stay consistent across services and dashboard refreshes. Plugin
+# capabilities use a stable hash so their appearance does not depend on order.
+CAPABILITY_COLORS = {
+    "app": "#a58bb8",
+    "proxy": "#b58979",
+    "secret_manager": "#bd9a68",
+    "secret_manager_binding": "#ad8e72",
+    "health": "#8da276",
+    "logs": "#899596",
+    "repository": "#a18c80",
+    "model_registry": "#b189a7",
+    "model_server": "#8d8eb7",
+    "monitor": "#83a39a",
+    "observability": "#779b9b",
+    "telemetry_binding": "#7995a9",
+    "data_warehouse": "#b39b70",
+    "object_storage": "#809fac",
+    "s3_object_storage": "#7890ab",
+    "spreadsheet": "#83a581",
+    "database": "#8d9cbd",
+    "vector_database": "#9d8fae",
+    "cache": "#bba477",
+    "message_broker": "#b58a84",
+    "workflow_orchestrator": "#83a6a1",
+    "feature_store": "#9da482",
+    "container_registry": "#9c92a8",
+    "deployment": "#9e9d78",
+    "llm": "#af87a0",
+    "dashboard": "#8d9ca0",
+    "developer_tools": "#ac947d",
+    "web_ui": "#a38ca8",
+}
+
+
+def capability_color(capability: str) -> str:
+    if capability in CAPABILITY_COLORS:
+        return CAPABILITY_COLORS[capability]
+    colors = tuple(CAPABILITY_COLORS.values())
+    index = int.from_bytes(blake2b(capability.encode(), digest_size=4).digest(), "big") % len(colors)
+    return colors[index]
+
 
 BACKEND_STYLES = {
     "connector": "bold bright_magenta",
@@ -113,7 +134,7 @@ class InfraTree(Tree[SelectionInfo]):
 
         for bundle in infra.bundles:
             server = getattr(bundle, "server", None)
-            bundle_label = Text(f"Bundle: {bundle.name}")
+            bundle_label = Text(str(bundle.name))
             if not is_bundle_initialized(bundle):
                 bundle_label.append("  State: ", style="dim")
                 bundle_label.append("pending", style="bold yellow")
@@ -172,22 +193,19 @@ def server_tree_label(server: object | None) -> Text:
     return label
 
 
-def service_tree_label(service: object) -> str:
+def service_tree_label(service: object) -> Text:
     """Return the compact service label used in the infrastructure tree."""
 
-    name = str(getattr(service, "name", "-"))
-    capability = primary_service_capability(service)
-    return f"{capability}: {name}"
-
-
-def primary_service_capability(service: object) -> str:
-    """Return the most useful service capability label for tree scanning."""
-
-    capabilities = set(get_service_capabilities(service))
-    for capability in SERVICE_CAPABILITY_PRIORITY:
-        if capability in capabilities:
-            return CAPABILITY_LABELS.get(capability, format_tree_token(capability))
-    return "Service"
+    label = Text(str(getattr(service, "name", "-")), style="#ffffff")
+    capabilities = get_service_capabilities(service)
+    if capabilities:
+        label.append("  [", style="dim")
+        for index, capability in enumerate(capabilities):
+            if index:
+                label.append(", ", style="dim")
+            label.append(CAPABILITY_LABELS.get(capability, format_tree_token(capability)), style=capability_color(capability))
+        label.append("]", style="dim")
+    return label
 
 
 def format_tree_token(value: str) -> str:

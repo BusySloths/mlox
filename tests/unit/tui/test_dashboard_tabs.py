@@ -1306,7 +1306,7 @@ async def _server_tree_label_styles() -> tuple[str, list[str]]:
 def test_bundle_tree_label_keeps_backend_on_server_leaf() -> None:
     bundle_label, server_label = asyncio.run(_bundle_tree_labels())
 
-    assert bundle_label == "Bundle: dev"
+    assert bundle_label == "dev"
     assert server_label == "Docker, K3s Agent: 10.0.0.5"
 
 
@@ -1334,8 +1334,25 @@ async def _service_capability_tree_label() -> str:
         return tree.root.children[0].children[1].label.plain
 
 
-def test_service_tree_label_uses_primary_capability() -> None:
-    assert asyncio.run(_service_capability_tree_label()) == "Monitor: Otel"
+def test_service_tree_label_shows_all_capabilities() -> None:
+    assert asyncio.run(_service_capability_tree_label()) == "Otel  [Monitor, Web UI]"
+
+
+def test_service_tree_label_styles_names_and_all_capabilities() -> None:
+    from mlox.tui.screens.dashboard.tree import capability_color, service_tree_label
+
+    label = service_tree_label(SimpleNamespace(
+        name="airflow", capabilities={ServiceCapability.APP, ServiceCapability.WORKFLOW_ORCHESTRATOR, "custom_capability"}
+    ))
+    assert label.plain == "airflow  [App, Custom Capability, Workflow]"
+    assert str(label.style) == "#ffffff"
+    styles = [str(span.style) for span in label.spans]
+    assert capability_color("app") in styles
+    assert capability_color("workflow_orchestrator") in styles
+    assert capability_color("app") != capability_color("workflow_orchestrator")
+    assert capability_color("custom_capability") in styles
+    assert all("bright" not in style for style in styles)
+    assert service_tree_label(SimpleNamespace(name="bare", capabilities=set())).plain == "bare"
 
 
 async def _service_actions_display_for(selection: SelectionInfo) -> bool:
@@ -1804,7 +1821,7 @@ def test_service_health_action_uses_application_layer(monkeypatch) -> None:
     tree_label, checked = asyncio.run(_check_service_health_from_action(monkeypatch))
 
     assert len(checked) == 1
-    assert tree_label == "Service: mlflow"
+    assert tree_label == "mlflow  [Health]"
 
 
 async def _restart_service_from_action(monkeypatch) -> tuple[list[object], str]:
@@ -1855,7 +1872,7 @@ def test_service_restart_action_uses_application_layer(monkeypatch) -> None:
     restarted, tree_label = asyncio.run(_restart_service_from_action(monkeypatch))
 
     assert len(restarted) == 1
-    assert tree_label == "Service: mlflow"
+    assert tree_label == "mlflow"
 
 
 async def _rename_service_from_action_modal() -> tuple[str, str]:
@@ -1910,7 +1927,7 @@ def test_service_rename_action_updates_service_and_tree_label() -> None:
     service_name, tree_label = asyncio.run(_rename_service_from_action_modal())
 
     assert service_name == "tracking"
-    assert tree_label == "Service: tracking"
+    assert tree_label == "tracking"
 
 
 async def _edit_bundle_tags_from_action_modal() -> tuple[list[str], list[str], str]:
@@ -1987,7 +2004,7 @@ async def _rename_bundle_from_action_modal() -> tuple[str, list[str], str, str]:
         tree = screen.query_one("#infra-tree", InfraTree)
         deadline = time.monotonic() + 2
         while bundle.name != "renamed-dev" or tree.cursor_node.label.plain != (
-            "Bundle: renamed-dev"
+            "renamed-dev"
         ):
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for bundle rename.")
@@ -2009,7 +2026,7 @@ def test_bundle_rename_action_updates_bundle_and_tree_label() -> None:
 
     assert bundle_name == "renamed-dev"
     assert commits == ["test-project"]
-    assert tree_label == "Bundle: renamed-dev"
+    assert tree_label == "renamed-dev"
     assert "renamed-dev" in overview
 
 
@@ -2053,7 +2070,7 @@ async def _add_server_from_template_modal(monkeypatch) -> tuple[list[tuple[objec
         await pilot.click("#confirm-template-setup")
 
         deadline = time.monotonic() + 2
-        while not calls or tree_label(app.query_one(InfraTree)) != "Bundle: 127.0.0.1":
+        while not calls or tree_label(app.query_one(InfraTree)) != "127.0.0.1":
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for server add.")
             await pilot.pause(0.05)
@@ -2066,7 +2083,7 @@ def test_server_template_modal_adds_server_and_refreshes_tree(monkeypatch) -> No
     calls, bundle_label, selected_label = asyncio.run(_add_server_from_template_modal(monkeypatch))
 
     assert calls[0][1] == {"${MLOX_IP}": "127.0.0.1"}
-    assert bundle_label == "Bundle: 127.0.0.1"
+    assert bundle_label == "127.0.0.1"
     assert selected_label == bundle_label
 
 
@@ -2192,7 +2209,7 @@ def test_setup_bundle_action_initializes_bundle_and_refreshes_tree() -> None:
     ) = asyncio.run(_setup_uninitialized_bundle_from_action())
 
     assert state == "running"
-    assert label == "Bundle: dev"
+    assert label == "dev"
     assert calls == ["10.0.0.5"]
     assert loading_while_setup is True
     assert loading_after_setup is False
@@ -2329,7 +2346,7 @@ def test_service_template_modal_adds_service_without_setup(monkeypatch) -> None:
         "server_ip": "10.0.0.5",
         "params": {"${SERVICE_NAME}": "tracking"},
     }
-    assert selected_label == "Service: tracking"
+    assert selected_label == "tracking"
 
 
 async def _setup_uninitialized_service_from_action() -> tuple[str, list[str], bool]:
@@ -2403,7 +2420,7 @@ async def _teardown_service_from_action() -> tuple[list[str], list[object], str]
         deadline = time.monotonic() + 2
         while (
             calls == []
-            or tree.cursor_node.label.plain != "Bundle: dev"
+            or tree.cursor_node.label.plain != "dev"
         ):
             if time.monotonic() > deadline:
                 raise AssertionError(
@@ -2420,7 +2437,7 @@ def test_teardown_service_action_uses_workspace_and_refreshes_tree() -> None:
 
     assert calls == ["tracking"]
     assert services == []
-    assert selected_label == "Bundle: dev"
+    assert selected_label == "dev"
 
 
 async def _remove_bundle_from_action() -> tuple[int, list[str]]:
@@ -2537,7 +2554,7 @@ def test_uninitialized_bundle_tree_entry_is_leaf() -> None:
     allow_expand, label = asyncio.run(_uninitialized_bundle_tree_entry())
 
     assert allow_expand is False
-    assert label == "Bundle: dev  State: pending"
+    assert label == "dev  State: pending"
 
 
 async def _empty_bundle_tree_children() -> list[str]:
