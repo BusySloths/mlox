@@ -115,13 +115,13 @@ bound registry, telemetry, and secret manager. With multiple gateways:
 
 ```text
 gateways
-use <gateway-uuid>
+use <gateway-name>
 ```
 
-You can also select one at startup (an unambiguous UUID prefix is accepted):
+You can also select one at startup by its exact name (quote names containing spaces):
 
 ```sh
-uv run -m examples.operations_demo.traffic --gateway <gateway-uuid>
+uv run -m examples.operations_demo.traffic --gateway <gateway-name>
 ```
 
 Leave corruption off for the first ten runs of each observed workload. A new
@@ -133,7 +133,7 @@ off     restore normal PCA behavior
 labels on/off  include or omit target labels (controls immediate RMSE telemetry)
 status  show the current mode
 gateways list configured gateways and mark the selected one
-use ID  send subsequent requests through gateway ID
+use NAME  send subsequent requests through the gateway with that exact name
 quit    stop traffic
 ```
 

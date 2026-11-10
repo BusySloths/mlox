@@ -136,7 +136,7 @@ def test_traffic_loop_reports_and_switches_gateway_dependencies(monkeypatch):
     assert "Secret manager: not bound" in status
     assert "* Gateway A" in "\n".join(loop.gateway_lines())
 
-    loop.select_gateway("gateway-b")
+    loop.select_gateway("Gateway B")
     assert loop.gateway is second
     assert "* Gateway B" in "\n".join(loop.gateway_lines())
 
@@ -152,7 +152,7 @@ def test_traffic_loop_reports_and_switches_gateway_dependencies(monkeypatch):
     assert "Labels: OFF (prediction-only)." in "\n".join(loop.status_lines())
 
     with pytest.raises(ValueError, match="not running"):
-        loop.select_gateway("gateway-cccc")
+        loop.select_gateway("Gateway stopped")
 
 
 def test_traffic_loop_rejects_unknown_or_ambiguous_gateway(monkeypatch):
@@ -160,8 +160,8 @@ def test_traffic_loop_rejects_unknown_or_ambiguous_gateway(monkeypatch):
         pass
 
     gateways = [
-        _Gateway(name="A", uuid="shared-a", state="running", service_url="https://a"),
-        _Gateway(name="B", uuid="shared-b", state="running", service_url="https://b"),
+        _Gateway(name="shared", uuid="shared-a", state="running", service_url="https://a"),
+        _Gateway(name="shared", uuid="shared-b", state="running", service_url="https://b"),
     ]
     workspace = SimpleNamespace(
         infrastructure=SimpleNamespace(

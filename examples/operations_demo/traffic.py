@@ -22,7 +22,7 @@ class TrafficLoop:
     def __init__(
         self,
         interval: float,
-        gateway_uuid: str | None = None,
+        gateway_name: str | None = None,
         *,
         feature_noise: float = 0.03,
         label_noise: float = 0.02,
@@ -50,22 +50,22 @@ class TrafficLoop:
         self.send_labels = send_labels
         self._rng = np.random.default_rng(seed)
         self.console = Console()
-        if gateway_uuid:
-            self.select_gateway(gateway_uuid)
+        if gateway_name:
+            self.select_gateway(gateway_name)
 
-    def select_gateway(self, gateway_uuid: str) -> None:
-        """Select a running gateway by its full UUID or an unambiguous prefix."""
+    def select_gateway(self, gateway_name: str) -> None:
+        """Select a running gateway by its exact name."""
 
-        selector = gateway_uuid.strip()
+        selector = gateway_name.strip()
         matches = [
             gateway
             for gateway in self.gateways
-            if gateway.uuid == selector or gateway.uuid.startswith(selector)
+            if gateway.name == selector
         ]
         if not matches:
-            raise ValueError(f"No MLflow Gateway matches UUID {selector!r}.")
+            raise ValueError(f"No MLflow Gateway matches name {selector!r}.")
         if len(matches) > 1:
-            raise ValueError(f"Gateway UUID prefix {selector!r} is ambiguous.")
+            raise ValueError(f"Gateway name {selector!r} is ambiguous.")
         gateway = matches[0]
         if gateway.state != "running":
             raise ValueError(
@@ -257,8 +257,8 @@ def main() -> None:
     parser.add_argument("--interval", type=float, default=2.0, help="Seconds between requests")
     parser.add_argument(
         "--gateway",
-        metavar="UUID",
-        help="Select a running MLflow Gateway by UUID or an unambiguous UUID prefix",
+        metavar="NAME",
+        help="Select a running MLflow Gateway by its exact name",
     )
     parser.add_argument(
         "--feature-noise",
@@ -281,7 +281,7 @@ def main() -> None:
     args = parser.parse_args()
     loop = TrafficLoop(
         max(0.1, args.interval),
-        gateway_uuid=args.gateway,
+        gateway_name=args.gateway,
         feature_noise=args.feature_noise,
         label_noise=args.label_noise,
         send_labels=not args.without_labels,
@@ -293,7 +293,7 @@ def main() -> None:
         Panel(
             "[bold]on/off[/] fault injection  ·  [bold]labels on/off[/] quality labels\n"
             "[bold]status[/] wiring  ·  [bold]gateways[/] choose source  ·  "
-            "[bold]use <uuid>[/] switch  ·  [bold]quit[/] stop",
+            "[bold]use <name>[/] switch  ·  [bold]quit[/] stop",
             title="[bold cyan]Sending Operations demo traffic[/]",
             border_style="cyan",
         )
@@ -324,7 +324,7 @@ def main() -> None:
             elif normalized in {"quit", "q", "exit"}:
                 break
             elif command:
-                print("Commands: on, off, labels on/off, status, gateways, use <uuid>, quit")
+                print("Commands: on, off, labels on/off, status, gateways, use <name>, quit")
     except (EOFError, KeyboardInterrupt):
         pass
     finally:
