@@ -24,6 +24,53 @@ variables remain supported for projects outside the current directory.
 
 Press `P` from the dashboard to switch to another discovered project.
 
+## Copy projects between computers
+
+The project registry stores encrypted snapshots in `~/.mlox/project-registry`
+in the SSH user's home directory on a server. A registered MLOX server name,
+address, or unique address suffix uses that server's managed SSH credentials.
+Both commands currently require an existing local project containing the
+server; bootstrapping a first project on a new computer is not yet supported:
+
+```bash
+export MLOX_PROJECT_PATH=./sales.mlox
+export MLOX_PROJECT_PASSWORD='your-project-password'
+mlox project push --ip my-server
+mlox project pull --ip my-server --name sales
+```
+
+`--name` selects a project by filename stem (the `.mlox` suffix is optional).
+When omitted, the commands use the name from `MLOX_PROJECT_PATH` or
+`MLOX_PROJECT_NAME`. Push reads that local file (or the named file in the
+project directory) without opening or decrypting it; its password is not needed.
+It holds a SQLite shared lock during copying and rejects files with a WAL
+sidecar. Pull uses the current project's
+password to load its registered servers. It writes into
+`MLOX_PROJECT_DIR`, or the current directory by default, and appends `_1`,
+`_2`, and so on when a filename already exists.
+
+Push resolves the server from the current project configured by
+`MLOX_PROJECT_PATH`, using that project's password from its project-specific
+environment variable, `MLOX_PROJECT_PASSWORD`, or `--password`.
+
+For pull, supply the local project and password via the environment or `--project`
+and `--password`. The registry lives in the managed account's home directory.
+
+To push a suffixed local copy back under its original registry name, specify
+both the source path and registry name, for example:
+
+```bash
+mlox project push --ip my-server --project sales_1.mlox --name sales --force
+```
+
+Pushing a name already in the registry fails unless `--force` is supplied.
+Force atomically replaces the registry copy without making a backup. Push and
+pull are explicit snapshots, not automatic
+or bidirectional synchronization: coordinate concurrent edits and pushes to avoid
+replacing newer work. The project file contains the active secret-manager
+configuration, but data in an external secret manager is not copied. The remote
+registry does not retain project passwords. Back up the password separately.
+
 ## Python API
 
 Use `ProjectWorkspace` for application mutations:

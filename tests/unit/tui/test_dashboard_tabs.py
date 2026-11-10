@@ -1335,24 +1335,27 @@ async def _service_capability_tree_label() -> str:
 
 
 def test_service_tree_label_shows_all_capabilities() -> None:
-    assert asyncio.run(_service_capability_tree_label()) == "Otel  [Monitor, Web UI]"
+    assert asyncio.run(_service_capability_tree_label()) == "Otel   monitor   web ui "
 
 
-def test_service_tree_label_styles_names_and_all_capabilities() -> None:
+def test_service_tree_label_styles_purpose_capabilities() -> None:
     from mlox.tui.screens.dashboard.tree import capability_color, service_tree_label
 
     label = service_tree_label(SimpleNamespace(
-        name="airflow", capabilities={ServiceCapability.APP, ServiceCapability.WORKFLOW_ORCHESTRATOR, "custom_capability"}
+        name="airflow", capabilities={ServiceCapability.APP, ServiceCapability.WORKFLOW_ORCHESTRATOR,
+                                      ServiceCapability.HEALTH, ServiceCapability.LOGS,
+                                      ServiceCapability.SECRET_MANAGER_BINDING, "custom_capability"}
     ))
-    assert label.plain == "airflow  [App, Custom Capability, Workflow]"
+    assert label.plain == "airflow   app   workflow "
     assert str(label.style) == "#ffffff"
     styles = [str(span.style) for span in label.spans]
-    assert capability_color("app") in styles
-    assert capability_color("workflow_orchestrator") in styles
+    assert f"#052628 on {capability_color('app')}" in styles
+    assert f"#052628 on {capability_color('workflow_orchestrator')}" in styles
     assert capability_color("app") != capability_color("workflow_orchestrator")
-    assert capability_color("custom_capability") in styles
     assert all("bright" not in style for style in styles)
     assert service_tree_label(SimpleNamespace(name="bare", capabilities=set())).plain == "bare"
+    assert service_tree_label(SimpleNamespace(name="ops", capabilities={ServiceCapability.HEALTH, ServiceCapability.LOGS})).plain == "ops"
+    assert service_tree_label(SimpleNamespace(name="redis", capabilities={ServiceCapability.CACHE, ServiceCapability.DATABASE})).plain == "redis   cache   database "
 
 
 async def _service_actions_display_for(selection: SelectionInfo) -> bool:
@@ -1821,7 +1824,7 @@ def test_service_health_action_uses_application_layer(monkeypatch) -> None:
     tree_label, checked = asyncio.run(_check_service_health_from_action(monkeypatch))
 
     assert len(checked) == 1
-    assert tree_label == "mlflow  [Health]"
+    assert tree_label == "mlflow"
 
 
 async def _restart_service_from_action(monkeypatch) -> tuple[list[object], str]:

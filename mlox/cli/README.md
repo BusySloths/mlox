@@ -30,6 +30,11 @@ Ubuntu servers currently expose the system journal. The optional `--label`
 selects a source for either service or server logs.
 The former positional project argument is replaced by `--project`.
 
+`mlox project push --ip my-server` and `mlox project pull --ip my-server`
+transfer encrypted project snapshots through a registered server. Add `--name project-name` to
+select a project; see the [project-file guide](../../docs/PROJECT_FILES.md#copy-projects-between-computers)
+for registry, SSH, replacement, and collision behavior.
+
 Use `project inspect`, `server inspect <UUID-or-server-identifier>`, or
 `service inspect <UUID-or-name>` to examine individual resources. Service and
 server lists include UUIDs and capabilities; services also include their server

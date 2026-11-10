@@ -18,6 +18,50 @@ logger = logging.getLogger(__name__)
 
 
 class FilesystemMixin(TaskRunnerABC):
+    def fs_home_directory(self, connection: Connection) -> str:
+        """Return the connected user's home directory."""
+        home = self._run_task(connection, group=TaskGroup.FILESYSTEM, command='printf "%s" "$HOME"')
+        if not home or not str(home).startswith("/"):
+            raise ValueError("Could not determine the remote user's home directory")
+        return str(home)
+
+    def fs_download(self, connection: Connection, remote_path: str, local_path: str) -> None:
+        """Download a file without decoding its contents."""
+        connection.get(remote_path, local_path)
+
+    def fs_publish_private_file(self, connection: Connection, local_path: str, destination: str, *, force: bool = False) -> bool:
+        """Publish atomically; return False if the destination already exists."""
+        import posixpath
+        from uuid import uuid4
+
+        directory = posixpath.dirname(destination)
+        temporary = posixpath.join(directory, ".upload-" + uuid4().hex)
+        self._run_task(connection, group=TaskGroup.FILESYSTEM,
+                       command=f"umask 077; mkdir -p {shlex.quote(directory)} && chmod 700 {shlex.quote(directory)}")
+        try:
+            connection.put(local_path, temporary)
+            self._run_task(connection, group=TaskGroup.FILESYSTEM,
+                           command=f"chmod 600 {shlex.quote(temporary)}")
+            script = ("import os,sys\n"
+                      "tmp,dest,force=sys.argv[1:]\n"
+                      "if force == '1':\n os.replace(tmp,dest)\n"
+                      "else:\n"
+                      " try:\n  os.link(tmp,dest)\n"
+                      " except FileExistsError:\n  print('exists')\n  sys.exit(0)\n"
+                      " os.unlink(tmp)\n"
+                      "print('published')\n")
+            args = " ".join(shlex.quote(value) for value in (temporary, destination, "1" if force else "0"))
+            result = self._run_task(connection, group=TaskGroup.FILESYSTEM,
+                                    command=f"python3 -c {shlex.quote(script)} {args}")
+            if result == "exists":
+                return False
+            if result != "published":
+                raise RuntimeError("Could not confirm remote file publication")
+            return True
+        finally:
+            self._run_task(connection, group=TaskGroup.FILESYSTEM,
+                           command=f"rm -f {shlex.quote(temporary)}")
+
     def fs_copy(self, connection: Connection, src_file: str, dst_path: str) -> None:
         try:
             connection.put(src_file, dst_path)

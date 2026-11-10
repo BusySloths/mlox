@@ -34,6 +34,16 @@ CAPABILITY_LABELS = {
     "llm": "LLM",
 }
 
+# Only capabilities that describe a service's purpose belong in the tree.
+# Operational contracts (health, logs, and bindings) remain available elsewhere.
+SERVICE_PURPOSE_CAPABILITIES = frozenset({
+    "app", "web_ui", "proxy", "secret_manager", "repository", "model_registry",
+    "model_server", "monitor", "observability", "data_warehouse", "object_storage",
+    "s3_object_storage", "spreadsheet", "database", "vector_database", "cache",
+    "message_broker", "workflow_orchestrator", "feature_store", "container_registry",
+    "deployment", "llm", "dashboard", "developer_tools",
+})
+
 # Muted colors stay consistent across services and dashboard refreshes. Plugin
 # capabilities use a stable hash so their appearance does not depend on order.
 CAPABILITY_COLORS = {
@@ -197,14 +207,15 @@ def service_tree_label(service: object) -> Text:
     """Return the compact service label used in the infrastructure tree."""
 
     label = Text(str(getattr(service, "name", "-")), style="#ffffff")
-    capabilities = get_service_capabilities(service)
+    capabilities = [capability for capability in get_service_capabilities(service)
+                    if capability in SERVICE_PURPOSE_CAPABILITIES]
     if capabilities:
-        label.append("  [", style="dim")
+        label.append("  ")
         for index, capability in enumerate(capabilities):
             if index:
-                label.append(", ", style="dim")
-            label.append(CAPABILITY_LABELS.get(capability, format_tree_token(capability)), style=capability_color(capability))
-        label.append("]", style="dim")
+                label.append(" ")
+            name = CAPABILITY_LABELS.get(capability, format_tree_token(capability)).lower()
+            label.append(f" {name} ", style=f"#052628 on {capability_color(capability)}")
     return label
 
 
