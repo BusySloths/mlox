@@ -15,6 +15,9 @@ from mlox.secret_manager import AbstractSecretManager
 
 logger = logging.getLogger(__name__)
 
+TEN_YEAR_PERIOD = "87600h"  # Ten 365-day years.
+TEN_YEAR_SECONDS = 10 * 365 * 24 * 60 * 60
+
 
 @dataclass
 class OpenBaoSecretManager(AbstractSecretManager):
@@ -476,6 +479,18 @@ class OpenBaoSecretManager(AbstractSecretManager):
         if not client_token:
             raise RuntimeError("OpenBao did not return a client token.")
         return auth
+
+    def ensure_token_max_ttl(self, minimum_seconds: int) -> None:
+        """Raise the token auth mount maximum only when it is too low."""
+        path = "/v1/sys/auth/token/tune"
+        config = self._request("GET", path).get("data", {})
+        current = int(config.get("max_lease_ttl") or 0)
+        if current >= minimum_seconds:
+            return
+        self._request("POST", path, data={"max_lease_ttl": str(minimum_seconds)})
+        updated = self._request("GET", path).get("data", {})
+        if int(updated.get("max_lease_ttl") or 0) < minimum_seconds:
+            raise RuntimeError("OpenBao token auth maximum TTL could not be raised to the requested period")
 
     def lookup_self(self) -> Dict[str, Any]:
         """Lookup the current token and return the OpenBao data block."""

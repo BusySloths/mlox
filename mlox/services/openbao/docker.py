@@ -36,7 +36,7 @@ from mlox.service import (
     AbstractAppService,
     ServiceCapability,
 )
-from .client import OpenBaoSecretManager
+from .client import OpenBaoSecretManager, TEN_YEAR_PERIOD, TEN_YEAR_SECONDS
 from mlox.utils import generate_password
 
 logger = logging.getLogger(__name__)
@@ -249,7 +249,7 @@ class OpenBaoDockerService(
         manager = self.create_keyfile_secret_manager(
             getattr(self, "_service_lookup", None),
             application_name=application,
-            period="7d",
+            period=TEN_YEAR_PERIOD,
         )
         credential = self.application_credentials.get(application, {})
         credential["binding_id"] = binding_id
@@ -380,7 +380,7 @@ class OpenBaoDockerService(
         infra: Infrastructure | None = None,
         *,
         application_name: str = "",
-        period: str | int = "24h",
+        period: str | int = TEN_YEAR_PERIOD,
     ) -> OpenBaoSecretManager:
         """Create or rotate a periodic application token for a keyfile."""
 
@@ -388,15 +388,8 @@ class OpenBaoDockerService(
         manager = self.get_root_secret_manager(infra)
         previous = self.application_credentials.get(application, {})
         previous_accessor = previous.get("accessor")
-        if previous_accessor:
-            try:
-                manager.revoke_accessor(str(previous_accessor))
-            except Exception as exc:  # pragma: no cover - best-effort cleanup
-                logger.info(
-                    "Could not revoke previous OpenBao token for application %s: %s",
-                    application,
-                    exc,
-                )
+        if str(period) == TEN_YEAR_PERIOD:
+            manager.ensure_token_max_ttl(TEN_YEAR_SECONDS)
         metadata = {
             "managed_by": "mlox",
             "service_uuid": self.uuid,
@@ -410,12 +403,21 @@ class OpenBaoDockerService(
             "metadata": metadata,
         }
         auth = manager.create_token(**token_options)
+        if str(period) == TEN_YEAR_PERIOD and int(auth.get("lease_duration") or 0) < TEN_YEAR_SECONDS:
+            if auth.get("accessor"):
+                manager.revoke_accessor(str(auth["accessor"]))
+            raise RuntimeError("OpenBao granted a shorter token TTL than the requested ten-year period")
         self._store_application_credential(
             application,
             auth,
             ttl="",
             period=str(period),
         )
+        if previous_accessor:
+            try:
+                manager.revoke_accessor(str(previous_accessor))
+            except Exception as exc:  # pragma: no cover - best-effort cleanup
+                logger.info("Could not revoke previous OpenBao token for application %s: %s", application, exc)
         return OpenBaoSecretManager(
             address=manager.address,
             token=str(auth["client_token"]),
@@ -428,7 +430,7 @@ class OpenBaoDockerService(
         application_name: str,
         infra: Infrastructure | None = None,
         *,
-        period: str | int = "24h",
+        period: str | int = TEN_YEAR_PERIOD,
     ) -> Dict[str, Any]:
         """Create a renewable application credential without exposing its token."""
 

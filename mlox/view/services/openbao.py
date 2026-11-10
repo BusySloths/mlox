@@ -25,6 +25,7 @@ APPLICATION_PERIOD_OPTIONS: dict[str, str] = {
     "7 days": "168h",
     "30 days": "720h",
     "90 days": "2160h",
+    "10 years": "87600h",
 }
 
 
@@ -264,7 +265,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
             new_period_label = add_cols[1].selectbox(
                 "Renewal period",
                 options=list(APPLICATION_PERIOD_OPTIONS.keys()),
-                index=2,
+                index=list(APPLICATION_PERIOD_OPTIONS).index("10 years"),
                 key=f"openbao_new_application_ttl_{service.uuid}",
             )
             with add_cols[2]:
@@ -339,7 +340,7 @@ def settings(infra: Infrastructure, bundle: Bundle, service: OpenBaoDockerServic
                 period_label = app_action_cols[1].selectbox(
                     "Rotation period",
                     options=list(APPLICATION_PERIOD_OPTIONS.keys()),
-                    index=2,
+                    index=list(APPLICATION_PERIOD_OPTIONS).index("10 years"),
                     key=f"openbao_selected_keyfile_period_{service.uuid}_{selected_application}",
                 )
                 if app_action_cols[2].button(

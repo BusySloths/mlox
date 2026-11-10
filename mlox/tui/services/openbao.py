@@ -69,7 +69,7 @@ class OpenBaoSettingsPanel(VerticalScroll):
                         (label, value)
                         for label, value in APPLICATION_PERIOD_OPTIONS.items()
                     ],
-                    value=APPLICATION_PERIOD_OPTIONS["24 hours"],
+                    value=APPLICATION_PERIOD_OPTIONS["10 years"],
                     id="openbao-application-period",
                 )
                 yield Button(

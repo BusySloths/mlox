@@ -344,7 +344,7 @@ async def _add_application_from_panel() -> tuple[list[tuple], int, int]:
 def test_openbao_panel_adds_application_and_commits() -> None:
     calls, commits, rows = asyncio.run(_add_application_from_panel())
 
-    assert ("create_application", "new-app", "24h") in calls
+    assert ("create_application", "new-app", "87600h") in calls
     assert commits == 2
     assert rows == 2
 

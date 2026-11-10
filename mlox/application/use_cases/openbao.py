@@ -14,6 +14,7 @@ APPLICATION_PERIOD_OPTIONS: dict[str, str] = {
     "7 days": "168h",
     "30 days": "720h",
     "90 days": "2160h",
+    "10 years": "87600h",
 }
 
 

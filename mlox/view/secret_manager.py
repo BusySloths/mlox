@@ -19,6 +19,7 @@ APPLICATION_PERIOD_OPTIONS = {
     "7 days": "168h",
     "30 days": "720h",
     "90 days": "2160h",
+    "10 years": "87600h",
 }
 
 
@@ -179,7 +180,7 @@ def _render_keyfile(
             st.selectbox(
                 "Renewal period",
                 list(APPLICATION_PERIOD_OPTIONS),
-                index=2,
+                index=list(APPLICATION_PERIOD_OPTIONS).index("10 years"),
             )
             if periodic
             else None

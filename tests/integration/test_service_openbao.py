@@ -5,7 +5,7 @@ import pytest
 from mlox.config import load_config, get_stacks_path
 from mlox.infra import Infrastructure, Bundle
 from mlox.secret_manager import load_secret_manager_from_env
-from mlox.services.openbao.client import OpenBaoSecretManager
+from mlox.services.openbao.client import OpenBaoSecretManager, TEN_YEAR_SECONDS
 from mlox.utils import generate_password
 
 from tests.integration.conftest import wait_for_service_ready
@@ -101,6 +101,10 @@ def test_openbao_scoped_runtime_binding_roundtrip_and_revoke(
         scoped_manager = load_secret_manager_from_env(environ=environment)
         assert isinstance(scoped_manager, OpenBaoSecretManager)
         assert application in service.application_credentials
+        credential = service.application_credentials[application]
+        assert credential["period"] == "87600h"
+        assert credential["lease_duration"] >= TEN_YEAR_SECONDS
+        assert scoped_manager.lookup_self()["ttl"] >= TEN_YEAR_SECONDS - 60
 
         scoped_manager.save_secret("scoped-runtime-secret", {"bound": True})
         assert scoped_manager.load_secret("scoped-runtime-secret") == {"bound": True}

@@ -536,6 +536,47 @@ def test_openbao_create_keyfile_secret_manager_uses_fresh_scoped_token(monkeypat
     assert credential["period"] == "2160h"
 
 
+def test_openbao_ten_year_credential_preserves_previous_token_on_short_grant(monkeypatch):
+    from mlox.services.openbao.client import TEN_YEAR_SECONDS
+
+    service = OpenBaoDockerService(**BASE, port="8200", root_token="root")
+    service.application_credentials["airflow"] = {"accessor": "old"}
+    calls = []
+    manager = SimpleNamespace(
+        address="https://example.test:8200", verify_tls=False,
+        ensure_token_max_ttl=lambda seconds: calls.append(("tune", seconds)),
+        create_token=lambda **kwargs: {"client_token": "new", "accessor": "new-accessor", "lease_duration": 3600},
+        revoke_accessor=lambda accessor: calls.append(("revoke", accessor)),
+    )
+    monkeypatch.setattr(service, "get_root_secret_manager", lambda *_: manager)
+    with pytest.raises(RuntimeError, match="shorter token TTL"):
+        service.create_application_credential("airflow")
+    assert calls == [("tune", TEN_YEAR_SECONDS), ("revoke", "new-accessor")]
+    assert service.application_credentials["airflow"]["accessor"] == "old"
+
+    manager.create_token = lambda **kwargs: {"client_token": "new", "accessor": "new-accessor", "lease_duration": TEN_YEAR_SECONDS}
+    result = service.create_application_credential("airflow")
+    assert result["period"] == "87600h"
+    assert result["lease_duration"] == TEN_YEAR_SECONDS
+    assert calls[-1] == ("revoke", "old")
+
+
+def test_openbao_tunes_token_max_only_when_needed(monkeypatch):
+    from mlox.services.openbao.client import TEN_YEAR_SECONDS
+
+    manager = OpenBaoSecretManager(address="http://example.test", token="root")
+    calls = []
+    limits = iter([768 * 3600, TEN_YEAR_SECONDS, TEN_YEAR_SECONDS + 1])
+    def request(method, path, *, data=None):
+        calls.append((method, path, data))
+        return {"data": {"max_lease_ttl": next(limits)}} if method == "GET" else {}
+    monkeypatch.setattr(manager, "_request", request)
+    manager.ensure_token_max_ttl(TEN_YEAR_SECONDS)
+    manager.ensure_token_max_ttl(TEN_YEAR_SECONDS)
+    assert [call[0] for call in calls] == ["GET", "POST", "GET", "GET"]
+    assert calls[1][2] == {"max_lease_ttl": str(TEN_YEAR_SECONDS)}
+
+
 def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
     service = OpenBaoDockerService(
         **BASE,
@@ -578,7 +619,7 @@ def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
         "PROVIDER_ENV": "value"
     }
     application = "runtime-Airflow-Worker-consumer"
-    assert captured["created"] == (lookup, application, "7d")
+    assert captured["created"] == (lookup, application, "87600h")
     assert service.get_secret_manager_binding_label("consumer-1") == application
     assert service.application_credentials[application]["binding_id"] == "consumer-1"
     assert service.application_credentials[application]["consumer_name"] == (
@@ -587,7 +628,7 @@ def test_openbao_scoped_binding_owns_credential_lifecycle(monkeypatch):
 
     consumer.name = "Renamed Airflow"
     service.get_secret_manager_env_binding("consumer-1")
-    assert captured["created"] == (lookup, application, "7d")
+    assert captured["created"] == (lookup, application, "87600h")
     assert service.get_secret_manager_binding_label("consumer-1") == application
 
     service.revoke_secret_manager_env_binding()

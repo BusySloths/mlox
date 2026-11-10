@@ -42,6 +42,8 @@ Use one named credential per application, for example `training-worker` or
 `feature-store-sync`.
 
 - Add the application in the Applications tab and choose a renewal period.
+  New application credentials and scoped service bindings default to ten
+  365-day years (`87600h`). Existing credentials retain their periods.
 - Use `Renew` before the selected period expires.
 - Use `Revoke` when an application should lose access.
 - Use `Rotate keyfile` only when the application needs a new downloadable token.
@@ -52,6 +54,13 @@ access.
 
 Application credentials are periodic renewable tokens. They can run indefinitely
 only if the application renews them before each selected period expires.
+For ten-year credentials, MLOX raises the token auth mount's maximum TTL if
+necessary and verifies the lifetime OpenBao grants. This mount-wide limit also
+permits other token-auth clients to request longer lifetimes. Existing OpenBao
+instances are tuned when a new ten-year credential is created; no service
+restart is needed. A ten-year token remains usable for that period if leaked,
+unless it is revoked. It does not automatically renew, and explicit revocation
+or revocation of its parent can end it sooner.
 
 Application credentials are not separate secret namespaces in the current mlox
 OpenBao integration. They are separate tokens for the same shared project KV

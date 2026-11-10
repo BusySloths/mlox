@@ -225,6 +225,10 @@ and the bootstrap call is container-local. mlox clients also default
   access instead of the root token.
 - Application keyfile tokens are periodic renewable tokens. They can keep
   running indefinitely if they are renewed before each selected period expires.
+- New application credentials and service bindings default to a ten-year
+  period. MLOX raises the token auth mount's maximum TTL when needed and
+  checks the granted lifetime. Existing credentials keep their current period;
+  see [USAGE.md](USAGE.md#application-credentials) for details.
 - Application keyfile tokens access the shared mlox KV mount. A secret created
   in the mlox Secret Manager tab is therefore visible to workloads using
   keyfiles from the same OpenBao service.
