@@ -28,6 +28,13 @@ apt-get install -yq \
   python3-pip ripgrep tar tk-dev tmux unzip wget xz-utils \
   zlib1g-dev zsh
 
+# Older Ubuntu releases do not include Ghostty's terminal definition. Install
+# the bundled source system-wide so the SSH user and sudo can both resolve it.
+if ! env -u TERMINFO -u TERMINFO_DIRS HOME=/nonexistent infocmp -x xterm-ghostty >/dev/null 2>&1; then
+  tic -x -o /usr/share/terminfo "$(dirname "${BASH_SOURCE[0]}")/ghostty.terminfo"
+  env -u TERMINFO -u TERMINFO_DIRS HOME=/nonexistent infocmp -x xterm-ghostty >/dev/null
+fi
+
 locale-gen C.UTF-8 >/dev/null 2>&1 || true
 update-locale LANG=C.UTF-8 LC_CTYPE=C.UTF-8 >/dev/null 2>&1 || true
 

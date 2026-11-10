@@ -65,20 +65,54 @@ def push_project(name: str, source: Path, *, server, force: bool = False) -> dic
     return {"name": name, "remote_path": destination, "size_bytes": size_bytes}
 
 
-def pull_project(name: str, directory: Path | None = None, *, server) -> dict:
+def _replace_local_project(temporary: Path, destination: Path) -> None:
+    """Replace a local project only while no SQLite transaction holds a lock."""
+    for suffix in ("-wal", "-shm", "-journal"):
+        if Path(f"{destination}{suffix}").exists():
+            raise RuntimeError(f"Cannot overwrite {destination}: SQLite sidecar {suffix} exists. Close MLOX first.")
+    try:
+        fd = os.open(destination, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        try:
+            os.link(temporary, destination)
+        except FileExistsError:
+            _replace_local_project(temporary, destination)
+        return
+    try:
+        try:
+            fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, 512, 0x40000000)
+        except BlockingIOError as exc:
+            raise RuntimeError(f"Cannot overwrite {destination}: project is in use. Close MLOX first.") from exc
+        for suffix in ("-wal", "-shm", "-journal"):
+            if Path(f"{destination}{suffix}").exists():
+                raise RuntimeError(f"Cannot overwrite {destination}: SQLite sidecar {suffix} exists. Close MLOX first.")
+        locked = os.fstat(fd)
+        current = destination.stat()
+        if (locked.st_dev, locked.st_ino) != (current.st_dev, current.st_ino):
+            raise RuntimeError("Local project changed during pull; retry the operation")
+        os.replace(temporary, destination)
+    finally:
+        os.close(fd)
+
+
+def pull_project(name: str, directory: Path | None = None, *, server, force: bool = False) -> dict:
     name = project_name(name)
     directory = directory or resolve_project_path(name).parent
     directory.mkdir(parents=True, exist_ok=True)
-    with server.get_server_connection() as connection:
-        executor = server.exec
-        remote = posixpath.join(executor.fs_home_directory(connection), REGISTRY_DIRECTORY, name + ".mlox")
-        with tempfile.NamedTemporaryFile(prefix=".mlox-pull-", dir=directory, delete=False) as target:
-            temporary = Path(target.name)
-        try:
+    with tempfile.NamedTemporaryFile(prefix=".mlox-pull-", dir=directory, delete=False) as target:
+        temporary = Path(target.name)
+    try:
+        with server.get_server_connection() as connection:
+            executor = server.exec
+            remote = posixpath.join(executor.fs_home_directory(connection), REGISTRY_DIRECTORY, name + ".mlox")
             executor.fs_download(connection, remote, str(temporary))
-            size_bytes = temporary.stat().st_size
-            with temporary.open("rb") as downloaded:
-                os.fsync(downloaded.fileno())
+        size_bytes = temporary.stat().st_size
+        with temporary.open("rb") as downloaded:
+            os.fsync(downloaded.fileno())
+        if force:
+            destination = directory / (name + ".mlox")
+            _replace_local_project(temporary, destination)
+        else:
             for suffix in range(1000000):
                 filename = name + (f"_{suffix}" if suffix else "") + ".mlox"
                 destination = directory / filename
@@ -89,6 +123,6 @@ def pull_project(name: str, directory: Path | None = None, *, server) -> dict:
                     continue
             else:
                 raise FileExistsError("Could not find an available project filename")
-        finally:
-            temporary.unlink(missing_ok=True)
+    finally:
+        temporary.unlink(missing_ok=True)
     return {"name": name, "path": str(destination), "remote_path": remote, "size_bytes": size_bytes}

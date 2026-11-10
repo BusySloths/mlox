@@ -49,6 +49,13 @@ password to load its registered servers. It writes into
 `MLOX_PROJECT_DIR`, or the current directory by default, and appends `_1`,
 `_2`, and so on when a filename already exists.
 
+`mlox project pull --ip my-server --name sales --force` replaces `sales.mlox`
+atomically instead. Close any TUI, CLI, or other process using that project
+first. MLOX refuses replacement while a SQLite transaction holds a lock or
+SQLite sidecar files exist, but an open workspace can hold stale project state
+in memory without an active lock. Such a workspace could later overwrite the
+pulled version. Restart or reopen it after pulling.
+
 Push resolves the server from the current project configured by
 `MLOX_PROJECT_PATH`, using that project's password from its project-specific
 environment variable, `MLOX_PROJECT_PASSWORD`, or `--password`.

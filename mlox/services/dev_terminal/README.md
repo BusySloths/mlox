@@ -7,6 +7,19 @@ Herdr keeps processes running after a client disconnect; after a machine restart
 processes must be restarted, although supported sessions can be restored. Press
 Ctrl-b q to detach and run `herdr` to reconnect.
 
+The installer provides the `xterm-ghostty` terminfo entry when the host lacks
+it, so Ghostty can be used over SSH on older Ubuntu releases. Existing
+installations can be fixed without reinstalling the service by running this on
+the local Ghostty machine (substitute the SSH host):
+
+```sh
+infocmp -x xterm-ghostty | ssh user@host 'tic -x -o "$HOME/.terminfo" -'
+```
+
+This installs the entry for that SSH user. For a temporary fallback, connect
+with `ssh -o SetEnv=TERM=xterm-256color user@host`; some Ghostty-specific
+terminal features will then be unavailable.
+
 For richer agent status and session restoration, run the following as the SSH
 user after initializing the agents' configuration directories:
 

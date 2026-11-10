@@ -54,6 +54,9 @@ class DeveloperTerminalService(AbstractService):
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
+        terminfo_path = f"{self.target_path}/ghostty.terminfo"
+        terminfo = (self.service_dir() / "ghostty.terminfo.tmpl").read_text(encoding="utf-8")
+        self.exec.fs_write_file(conn, terminfo_path, terminfo)
         script_path = f"{self.target_path}/install-developer-terminal.sh"
         self.exec.fs_write_file(conn, script_path, self._install_script())
         quoted_script_path = shlex.quote(script_path)

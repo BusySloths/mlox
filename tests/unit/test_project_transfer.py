@@ -1,6 +1,8 @@
 from pathlib import Path
 import os
 import json
+import subprocess
+import sys
 from contextlib import nullcontext
 from types import SimpleNamespace
 
@@ -45,6 +47,51 @@ def test_push_force_and_pull_collision(registry, tmp_path):
     assert Path(pulled["path"]).name == "sales_1.mlox"
     assert ProjectWorkspace.open(pulled["path"], "password").descr == "updated"
     assert transfer.pull_project("sales", tmp_path, server=registry)["path"].endswith("sales_2.mlox")
+
+
+def test_pull_force_replaces_exact_file(registry, tmp_path):
+    path = tmp_path / "sales.mlox"
+    path.write_bytes(b"remote version")
+    transfer.push_project("sales", path, server=registry)
+    path.write_bytes(b"local version")
+    result = transfer.pull_project("sales", tmp_path, server=registry, force=True)
+    assert result["path"] == str(path)
+    assert path.read_bytes() == b"remote version"
+    assert not (tmp_path / "sales_1.mlox").exists()
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_pull_force_rejects_sqlite_sidecars(registry, tmp_path, suffix):
+    path = tmp_path / "sales.mlox"
+    path.write_bytes(b"remote version")
+    transfer.push_project("sales", path, server=registry)
+    path.write_bytes(b"local version")
+    (tmp_path / f"sales.mlox{suffix}").write_bytes(b"pending")
+    with pytest.raises(RuntimeError, match="sidecar"):
+        transfer.pull_project("sales", tmp_path, server=registry, force=True)
+    assert path.read_bytes() == b"local version"
+    assert not list(tmp_path.glob(".mlox-pull-*"))
+
+
+def test_pull_force_rejects_active_sqlite_transaction(registry, tmp_path):
+    path = tmp_path / "sales.mlox"
+    ProjectWorkspace.create(path, "password")
+    transfer.push_project("sales", path, server=registry)
+    original = path.read_bytes()
+    code = ("import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); "
+            "c.execute('BEGIN EXCLUSIVE'); print('ready', flush=True); sys.stdin.readline()")
+    process = subprocess.Popen([sys.executable, "-c", code, str(path)], stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE, text=True)
+    try:
+        assert process.stdout.readline().strip() == "ready"
+        with pytest.raises(RuntimeError, match="in use"):
+            transfer.pull_project("sales", tmp_path, server=registry, force=True)
+        assert path.read_bytes() == original
+        assert not list(tmp_path.glob(".mlox-pull-*"))
+    finally:
+        process.stdin.write("\n")
+        process.stdin.flush()
+        process.communicate(timeout=5)
 
 
 def test_push_copies_file_without_project_password(registry, tmp_path):
@@ -121,6 +168,9 @@ def test_cli_commands_use_named_and_current_project(registry, tmp_path, monkeypa
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["data"]["size_bytes"] > 0
     assert (tmp_path / "sales_1.mlox").exists()
+    result = runner.invoke(cli.app, ["project", "pull", "--ip", "example", "--name", "sales", "--force"])
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / "sales_2.mlox").exists()
     result = runner.invoke(cli.app, ["project", "push", "--ip", "example", "--project", "sales_1.mlox", "--name", "sales", "--force"])
     assert result.exit_code == 0, result.output
     assert not list((registry.home / ".mlox" / "project-registry").glob("sales.backup-*.mlox"))

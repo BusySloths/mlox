@@ -11,6 +11,42 @@ def _service() -> DeveloperTerminalService:
     )
 
 
+def test_bundled_ghostty_terminfo_compiles(tmp_path) -> None:
+    import os
+    import shutil
+    import subprocess
+    import pytest
+
+    if not shutil.which("tic") or not shutil.which("infocmp"):
+        pytest.skip("ncurses terminfo tools are unavailable")
+    source = _service().service_dir() / "ghostty.terminfo.tmpl"
+    subprocess.run(["tic", "-x", "-o", str(tmp_path), str(source)], check=True, capture_output=True)
+    env = {**os.environ, "TERMINFO": str(tmp_path), "TERMINFO_DIRS": str(tmp_path)}
+    result = subprocess.run(["infocmp", "-x", "xterm-ghostty"], env=env, check=True, capture_output=True, text=True)
+    assert "xterm-ghostty|ghostty|" in result.stdout
+    assert (tmp_path / "x" / "xterm-ghostty").is_file()
+
+
+def test_setup_uploads_ghostty_terminfo_before_installer() -> None:
+    service = _service()
+    writes = []
+
+    class Exec:
+        def fs_create_dir(self, *_args):
+            pass
+        def fs_write_file(self, _conn, path, content):
+            writes.append((path, content))
+        def execute(self, *_args, **_kwargs):
+            return ""
+
+    service.exec = Exec()  # type: ignore[assignment]
+    service.setup(object())
+    assert writes[0][0] == "/tmp/dev-terminal/ghostty.terminfo"
+    assert "xterm-ghostty|ghostty|" in writes[0][1]
+    assert writes[1][0] == "/tmp/dev-terminal/install-developer-terminal.sh"
+    assert 'tic -x -o /usr/share/terminfo' in writes[1][1]
+
+
 def test_install_script_installs_modern_neovim_from_release_tarball_when_needed() -> None:
     script = _service()._install_script()
 

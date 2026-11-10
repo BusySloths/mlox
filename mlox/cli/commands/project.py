@@ -94,8 +94,9 @@ def project_pull(
     name: Optional[str] = typer.Option(None, "--name", help="Project name; defaults to the current project"),
     project: Optional[str] = typer.Option(None, "--project", help="Local project containing a managed server"),
     password: Optional[str] = typer.Option(None, "--password", help="Password for the local project", show_default=False),
+    force: bool = typer.Option(False, "--force", help="Replace the local project file"),
 ) -> None:
-    """Download an encrypted project without replacing existing local files."""
+    """Download an encrypted project; replace a local file only with --force."""
     from mlox.project.transfer import project_name, pull_project
 
     try:
@@ -105,7 +106,7 @@ def project_pull(
         current_path = resolve_project_path(current)
         project_password = _project_password(current_path, password)
         server = _managed_transfer_server(current_path, project_password, ip)
-        data = pull_project(registry_name, server=server)
+        data = pull_project(registry_name, server=server, force=force)
         result = OperationResult(True, 0, f"Pulled project to {data['path']} ({data['size_bytes'] / 1_000_000:.2f} MB).", data)
     except Exception as exc:
         result = OperationResult(False, 1, f"Could not pull project: {exc}")
