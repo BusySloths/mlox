@@ -141,6 +141,9 @@ uv tool install 'busysloths-mlox[tui]'
 #    to make your first encrypted, portable project file
 mlox tui
 
+# ... or open the same UI in your browser (http://localhost:8000)
+mlox ui
+
 # ... or explore the CLI
 mlox --help
 ```
@@ -169,7 +172,6 @@ mlox/
 │   ├── executors.py         # UbuntuTaskExecutor, the current (Fabric/SSH) executor
 │   ├── secret_manager.py    # Secret manager interface and TinySecretManager
 │   ├── ui/                  # Frontend handler registry
-│   ├── view/, app.py        # Streamlit web UI: deprecated, maintenance only
 │   ├── assets/              # Cloud-init and Multipass helper scripts
 │   └── resources/           # Logos and README media
 ├── tests/

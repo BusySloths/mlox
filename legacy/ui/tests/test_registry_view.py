@@ -1,0 +1,107 @@
+from contextlib import contextmanager
+
+import pytest
+
+from mlox.ui.registry import clear_handlers, get_handler
+from legacy.ui.view import services as streamlit_services
+from legacy.ui.view.services import registry as registry_view
+
+
+def test_registry_streamlit_settings_handler_is_registered(monkeypatch):
+    clear_handlers(bootstrapped=True)
+    monkeypatch.setattr(streamlit_services, "_REGISTERED", False)
+
+    streamlit_services.register_builtin_streamlit_services()
+
+    handler = get_handler(
+        config_id="registry-3-docker",
+        frontend="streamlit",
+        function_name="settings",
+    )
+    assert callable(handler)
+
+    secret_manager_handler = get_handler(
+        config_id="openbao-docker",
+        frontend="streamlit",
+        function_name="settings",
+    )
+    assert callable(secret_manager_handler)
+    assert secret_manager_handler.is_secret_manager_settings
+
+    clear_handlers()
+
+
+def test_list_registry_images_fetches_catalog_and_tags(monkeypatch):
+    session = _FakeRegistrySession(
+        {
+            "https://registry.test/v2/_catalog": {
+                "repositories": ["team/app", "base/python"]
+            },
+            "https://registry.test/v2/team/app/tags/list": {
+                "name": "team/app",
+                "tags": ["latest", "1.0.0"],
+            },
+            "https://registry.test/v2/base/python/tags/list": {
+                "name": "base/python",
+                "tags": ["3.12"],
+            },
+        }
+    )
+
+    @contextmanager
+    def fake_registry_session(username, password, certificate):
+        assert username == "alice"
+        assert password == "secret"
+        assert certificate == "CERT"
+        yield session
+
+    monkeypatch.setattr(registry_view, "_registry_session", fake_registry_session)
+
+    images = registry_view.list_registry_images(
+        registry_url="https://registry.test",
+        username="alice",
+        password="secret",
+        certificate="CERT",
+    )
+
+    assert [image.repository for image in images] == ["base/python", "team/app"]
+    assert images[0].tags == ["3.12"]
+    assert images[1].tags == ["1.0.0", "latest"]
+
+
+def test_list_registry_images_rejects_malformed_catalog(monkeypatch):
+    session = _FakeRegistrySession(
+        {"https://registry.test/v2/_catalog": {"repositories": "team/app"}}
+    )
+
+    @contextmanager
+    def fake_registry_session(username, password, certificate):
+        yield session
+
+    monkeypatch.setattr(registry_view, "_registry_session", fake_registry_session)
+
+    with pytest.raises(ValueError, match="repository list"):
+        registry_view.list_registry_images(
+            registry_url="https://registry.test",
+            username="alice",
+            password="secret",
+        )
+
+
+class _FakeRegistrySession:
+    def __init__(self, payloads):
+        self.payloads = payloads
+
+    def get(self, url, timeout):
+        return _FakeRegistryResponse(self.payloads[url])
+
+
+class _FakeRegistryResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.payload

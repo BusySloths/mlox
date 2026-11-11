@@ -18,6 +18,6 @@ This package owns encrypted project state and the public project API.
 
 ## System Role
 
-CLI, TUI, and Streamlit all operate on this API. Persistence details stay here;
+The CLI and the TUI (also served in the browser by `mlox ui`) operate on this API. Persistence details stay here;
 use cases and frontends must not access SQLCipher directly.
 

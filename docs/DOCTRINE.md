@@ -19,7 +19,8 @@ architecture lives in `docs/ARCHITECTURE.md`; everything else derives.
 | ----------- | -------- | ------- |
 | **CLI** (`mlox/cli/`) | **Primary interface** | Maintained, fully supported. |
 | **TUI** (`mlox/tui/`) | **Primary interface** | Maintained, fully supported. |
-| **Web UI / Streamlit** (`mlox/view/`, `mlox/app.py`) | **Deprecated** | Will be extracted to a plugin repo. See [Decision ADR](#adr-streamlit-web-ui-extraction). No new features or investments. |
+| **Web UI** (`mlox ui`) | **Maintained** | The TUI served in the browser via `textual-serve`; same code as the TUI. |
+| **Streamlit web UI** (`legacy/ui/`) | **Archived** | Removed from the package; kept outside `mlox/` until deleted. See [Decision ADR](#adr-streamlit-web-ui-extraction). |
 | Kubernetes execution | **Stable** | Works well in practice, including Kubernetes-native services. |
 | Connector backends | **Beta** | Externally hosted integrations. |
 | Native / Docker execution | **Stable** | Primary execution paths. |
@@ -40,16 +41,24 @@ until explicitly reversed here.
 
 ### ADR: Streamlit web UI extraction
 
-**Date:** 2026-09 — **Status:** Accepted
-The Streamlit web UI (`mlox/view/` and `mlox/app.py`) is being **phased out and
-moved into a separate plugin repository**. The TUI and CLI are the primary points
-of contact for the platform. Consequently:
+**Date:** 2026-09, updated 2026-11 — **Status:** Accepted, removal started
+The Streamlit web UI is being **removed**. The TUI and CLI are the primary points
+of contact for the platform, and the browser is served by the TUI itself.
 
-- No new features or architectural investment in `mlox/view/` or `mlox/app.py`.
-- Changes there are **maintenance only** (bug fixes, keeping tests green).
-- UI-specific handlers in `mlox/ui/registry.py` move with the streamlit plugin.
-- Documentation and agents must not describe the web UI as a maintained
-  interface going forward (see `docs/ARCHITECTURE.md`).
+- **Step 1 (2026-11, done):** `mlox/app.py` and `mlox/view/` moved to
+  `legacy/ui/`, outside the package. `mlox/ui/registry.py` no longer loads
+  Streamlit handlers; the archived app registers its own. Streamlit
+  dependencies left `pyproject.toml` and `uv.lock`.
+- `mlox ui` (and `task ui:web`) now serve the Textual TUI in the browser via
+  `textual-serve` (in the `tui` extra). It binds to localhost by default; it
+  has no login of its own and inherits the shell environment.
+- `legacy/ui/` is not installed, linted or tested in CI and gets no changes.
+  Its tests run only by hand (`uv run --with streamlit --with
+  streamlit-vis-timeline pytest legacy/ui/tests`).
+- **Next:** delete `legacy/ui/`, or extract it to a plugin repository if
+  someone wants to maintain it.
+- Documentation and agents must not describe the Streamlit UI as a maintained
+  interface (see `docs/ARCHITECTURE.md`).
 
 ### ADR: SQLModel deferred
 

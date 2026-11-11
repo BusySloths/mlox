@@ -103,6 +103,9 @@ uv tool install 'busysloths-mlox[tui]'
 #    to make your first encrypted, portable project file
 mlox tui
 
+# ... or open the same UI in your browser (http://localhost:8000)
+mlox ui
+
 # ... or explore the CLI
 mlox --help
 ```

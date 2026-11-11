@@ -4,8 +4,6 @@ from mlox.infra import Infrastructure
 from mlox.project.state import WorkspaceState
 from mlox.server import ServerCapability
 from mlox.servers.connector.virtual import VirtualConnectorServer
-from mlox.ui.registry import clear_handlers
-from mlox.view.servers import connector as connector_view
 
 
 def make_server() -> VirtualConnectorServer:
@@ -101,29 +99,6 @@ def test_connector_server_config_can_be_added_and_filtered():
         first_bundle,
         second_bundle,
     ]
-
-
-def test_connector_server_has_streamlit_setup_handler(monkeypatch):
-    clear_handlers()
-    monkeypatch.setattr(connector_view, "_REGISTERED", False)
-    monkeypatch.setattr(
-        connector_view.st,
-        "text_input",
-        lambda *args, **kwargs: "analytics-connectors",
-    )
-
-    config = load_config(
-        get_stacks_path(prefix="mlox-server"),
-        "/connector",
-        "mlox-server.connector.yaml",
-    )
-
-    assert config is not None
-    setup = config.get_ui_handler("streamlit", "setup")
-    assert callable(setup)
-    assert setup(Infrastructure(), config) == {"${MLOX_IP}": "analytics-connectors"}
-
-    clear_handlers()
 
 
 def test_connector_backend_lifecycle_is_virtual_and_idempotent():

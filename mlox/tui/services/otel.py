@@ -23,7 +23,7 @@ from mlox.application.use_cases.services import send_otel_connectivity_probe
 from mlox.infra import Bundle, Infrastructure
 from mlox.service import ServiceCapability
 from mlox.services.otel.docker import OtelDockerService
-from mlox.view.services.otel import (
+from mlox.services.otel.telemetry import (
     STANDARD_METRIC_GROUPS,
     _build_metric_frames,
     _extract_log_records,

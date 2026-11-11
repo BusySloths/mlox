@@ -99,7 +99,7 @@ jobs:
 
             - name: Build pdoc documentation
               run: |
-                  uv run pdoc mlox !mlox.view !mlox.assets !mlox.resources !mlox.stacks -o temp_docs/ --no-show-source --logo "https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox.png?raw=true"
+                  uv run pdoc mlox !mlox.assets !mlox.resources !mlox.stacks -o temp_docs/ --no-show-source --logo "https://github.com/BusySloths/mlox/blob/main/mlox/resources/mlox.png?raw=true"
 
             - name: Combine website and docs
               run: |

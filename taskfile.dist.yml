@@ -272,16 +272,10 @@ tasks:
   # -----------------------
   # UI helpers (local dev)
   # -----------------------
-  ui:streamlit:
-    desc: Start the Streamlit UI (local, deprecated)
+  ui:web:
+    desc: Serve the TUI in the browser (mlox ui, http://localhost:8000)
     cmds:
-      - |
-        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('streamlit') else 1)"; then \
-          printf '\n\033[1;31m✖ streamlit is not installed.\033[0m\n'; \
-          printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
-          exit 1; \
-        fi
-      - "uv run streamlit run mlox/app.py"
+      - "uv run mlox ui {{.CLI_ARGS}}"
 
   ui:landing:
     desc: Start the astro landing page locally (dev server)

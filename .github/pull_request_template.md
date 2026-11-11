@@ -19,4 +19,4 @@ relevant. Write `None` if there is no user-visible impact.
 
 - [ ] Updated `docs/DOCTRINE.md` if this changes status, roadmap, or a binding decision
 - [ ] Regenerated the services catalog if this adds/changes a service or server YAML config
-- [ ] Changes to `mlox/view/` or `mlox/app.py` are maintenance-only (Streamlit is deprecated)
+- [ ] No changes to the archived Streamlit UI in `legacy/ui/`

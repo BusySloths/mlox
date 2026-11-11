@@ -15,8 +15,8 @@ enthusiasm.
 >   that file if your change affects them.
 > - The service/server catalog is generated (`docs/SERVICES_CATALOG.md`); never
 >   hand-edit it.
-> - The Streamlit web UI (`mlox/view/` and `mlox/app.py`) is deprecated and moving
->   to a plugin repo; PRs there are maintenance-only.
+> - The Streamlit web UI is archived in `legacy/ui/` and no longer maintained;
+>   `mlox ui` serves the TUI in the browser instead. Don't send PRs there.
 
 ## Where to Start
 

@@ -139,7 +139,7 @@ dmypy.json
 
 .apps
 .airflow
-.streamlit/secrets.toml
+**/.streamlit/secrets.toml
 .tmp
 .grav
 .vscode

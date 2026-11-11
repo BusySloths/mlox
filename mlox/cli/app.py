@@ -108,19 +108,37 @@ def _version_callback(value: Optional[bool]) -> None:
 
 
 @app.command("ui")
-def start_ui() -> None:
-    """Start the Web UI."""
+def start_ui(
+    host: str = typer.Option("localhost", "--host", help="Interface to listen on."),
+    port: int = typer.Option(8000, "--port", help="Port to listen on."),
+) -> None:
+    """Serve the terminal TUI in your browser."""
+
+    import shlex
 
     from mlox.cli.common import json_output, handle_result
     from mlox.application.result import OperationResult
     if json_output():
         handle_result(OperationResult(False, 2, "The interactive UI cannot run in JSON mode."))
+    try:
+        from textual_serve.server import Server
+    except ImportError:
+        handle_result(OperationResult(
+            False, 2, "The web UI needs the TUI extra: pip install 'busysloths-mlox[tui]'.",
+        ))
+        return
 
-    app_path = Path(__file__).resolve().parents[1] / "app.py"
-    command = [sys.executable, "-m", "streamlit", "run", str(app_path)]
-    result = subprocess.run(command, check=False)
-    if result.returncode != 0:
-        raise typer.Exit(code=result.returncode)
+    if host not in {"localhost", "127.0.0.1", "::1"}:
+        typer.echo(
+            f"Warning: listening on {host}. The web UI has no login of its own; anyone who "
+            "can reach this port gets a TUI with this shell's environment.",
+            err=True,
+        )
+    # Every browser session starts its own TUI process with this environment.
+    os.environ["MLOX_TUI"] = "true"
+    app_path = Path(__file__).resolve().parents[1] / "tui" / "app.py"
+    command = f"{shlex.quote(sys.executable)} {shlex.quote(str(app_path))}"
+    Server(command, host=host, port=port, title="MLOX").serve()
 
 
 @app.command("tui")

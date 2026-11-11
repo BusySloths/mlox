@@ -77,6 +77,8 @@ minio = [
 
 tui = [
     "textual>=8.2.7",
+    "textual-serve>=1.1",  # `mlox ui`: the TUI in the browser
+    "pandas>=2.2",  # telemetry frames in the TUI monitor views
     "psycopg2-binary>=2.9",
 ]
 
@@ -88,10 +90,9 @@ dev = [
     # MinIO
     "boto3>=1.40.56",
     # developer extras (includes 'all')
-    "streamlit>=1.57.0",
-    "streamlit-vis-timeline>=0.3.0",
     "textual>=8.2.7",
     "textual-dev>=1.8.0",
+    "textual-serve>=1.1",
     "backports.tarfile>=1.0",
     "pandas>=2.2",
     "numpy>=1.26",

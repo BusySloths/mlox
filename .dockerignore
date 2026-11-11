@@ -1,6 +1,6 @@
 .grav
 .tmp
 dist
-.streamlit/secrets.toml
+**/.streamlit/secrets.toml
 
 CLAUDE.md

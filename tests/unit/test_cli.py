@@ -1,4 +1,5 @@
 import pytest
+import os
 import json
 from types import SimpleNamespace
 from unittest import mock
@@ -377,20 +378,49 @@ def test_service_configs_list_outputs(monkeypatch):
     assert "services/svc.yaml" in result.stdout
 
 
-def test_start_ui_invokes_streamlit(monkeypatch):
-    mock_run = mock.Mock(return_value=mock.Mock(returncode=0))
-    monkeypatch.setattr(cli.subprocess, "run", mock_run)
+def _fake_textual_serve(monkeypatch):
+    import types
+
+    servers = []
+
+    class Server:
+        def __init__(self, command, **kwargs):
+            self.command, self.kwargs, self.served = command, kwargs, False
+            servers.append(self)
+
+        def serve(self):
+            self.served = True
+
+    module = types.ModuleType("textual_serve.server")
+    module.Server = Server
+    monkeypatch.setitem(cli.sys.modules, "textual_serve.server", module)
+    monkeypatch.delenv("MLOX_TUI", raising=False)
+    return servers
+
+
+def test_start_ui_serves_the_tui_in_the_browser(monkeypatch):
+    servers = _fake_textual_serve(monkeypatch)
 
     result = runner.invoke(cli.app, ["ui"])
 
     assert result.exit_code == 0
-    mock_run.assert_called_once()
-    call_args = mock_run.call_args
-    command = call_args.args[0]
-    assert command[0] == cli.sys.executable
-    assert command[1:4] == ["-m", "streamlit", "run"]
-    assert command[4].endswith("mlox/app.py")
-    assert call_args.kwargs["check"] is False
+    [server] = servers
+    assert server.served
+    assert server.command.startswith(cli.sys.executable)
+    assert server.command.endswith("mlox/tui/app.py")
+    assert server.kwargs == {"host": "localhost", "port": 8000, "title": "MLOX"}
+    assert os.environ["MLOX_TUI"] == "true"
+    assert "Warning" not in result.output
+
+
+def test_start_ui_warns_when_listening_beyond_localhost(monkeypatch):
+    servers = _fake_textual_serve(monkeypatch)
+
+    result = runner.invoke(cli.app, ["ui", "--host", "0.0.0.0", "--port", "9000"])
+
+    assert result.exit_code == 0
+    assert servers[0].kwargs["port"] == 9000
+    assert "no login of its own" in result.output
 
 
 def test_start_tui_invokes_app_with_tui_environment(monkeypatch):

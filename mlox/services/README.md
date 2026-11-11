@@ -21,7 +21,7 @@ status, and teardown through the service and its server executor.
 ## System Role
 
 Service classes own provider-specific behavior and persisted runtime state.
-Frontend panels belong in `mlox.view.services` or `mlox.tui.services`.
+Frontend panels belong in `mlox.tui.services`.
 
 
 ## Object storage contract

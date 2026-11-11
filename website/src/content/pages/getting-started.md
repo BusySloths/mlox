@@ -15,7 +15,7 @@ steps:
   - title: "Launch and create a project"
     description: "Start the TUI and press Create on the login screen. MLOX writes your first encrypted, portable project file."
     code: "mlox tui"
-    note: "Prefer scripts? <code>mlox --help</code> lists every command."
+    note: "Prefer the browser? <code>mlox ui</code> serves the same UI at localhost:8000. Prefer scripts? <code>mlox --help</code> lists every command."
   - title: "Go deeper"
     description: "Guides for installing, contributing and where MLOX is heading."
     note: >

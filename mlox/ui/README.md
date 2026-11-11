@@ -10,12 +10,14 @@ Handlers are keyed by frontend, function name, and service or server config ID.
 
 ## Workflow
 
-1. Streamlit or TUI modules register built-in handlers.
+1. TUI modules (`mlox.tui.services`, `mlox.tui.servers`) register built-in
+   handlers. The archived Streamlit UI in `legacy/ui/` registers its own when it
+   runs.
 2. A loaded config requests a handler such as `setup` or `settings`.
 3. The active frontend invokes it with infrastructure and runtime objects.
 
 ## System Role
 
 The registry keeps frontend imports out of domain and service configuration
-models. Do not put Streamlit or Textual callables in YAML files.
+models. Do not put Textual callables in YAML files.
 

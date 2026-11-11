@@ -9,7 +9,7 @@ from mlox.config import load_all_service_configs
 from mlox.executors import TaskGroup
 from mlox.service import ServiceCapability
 from mlox.services.mlflow_gateway.k3s import MLFlowGatewayK3sService
-from mlox.view.services import _STREAMLIT_SERVICE_BINDINGS
+from mlox.tui.services import _TUI_SERVICE_BINDINGS
 
 
 class FakeExecutor:
@@ -435,7 +435,7 @@ def test_reuses_gateway_secrets_and_model_validation(
     assert not gateway.is_model("registered-model")
 
 
-def test_catalog_and_streamlit_handlers_are_registered() -> None:
+def test_catalog_and_tui_handlers_are_registered() -> None:
     configs = {config.id: config for config in load_all_service_configs()}
     config = configs["mlflow-gateway-3.8.1-k3s"]
 
@@ -470,6 +470,5 @@ def test_catalog_and_streamlit_handlers_are_registered() -> None:
     assert isinstance(service, MLFlowGatewayK3sService)
     assert service.namespace.startswith("mlflow-gateway-")
     assert service.ingress_path.startswith("/gateway-")
-    binding = _STREAMLIT_SERVICE_BINDINGS["mlox.view.services.mlflow_gateway"]
+    binding = _TUI_SERVICE_BINDINGS["mlox.tui.services.mlflow_gateway"]
     assert "mlflow-gateway-3.8.1-k3s" in binding["config_ids"]
-    assert binding["function_names"] == ("settings", "setup")

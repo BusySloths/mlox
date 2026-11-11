@@ -8,7 +8,6 @@ import yaml
 
 from mlox.services.repo_deploy.service import RepoDeployDockerService
 from mlox.service import ServiceCapability
-from mlox.view.services.repo_deploy import _env_vars_to_text, _parse_env_text
 
 
 BASE = {
@@ -92,24 +91,6 @@ def _svc(compose_file="docker-compose.yaml"):
         target_path="/repos",
     )
     return service
-
-
-def test_env_text_helpers_parse_dotenv_style_content():
-    text = "\n".join(
-        [
-            "# ignored",
-            "A=1",
-            "export B=two",
-            "C=value=with=equals",
-            "NO_EQUALS",
-            "",
-        ]
-    )
-
-    parsed = _parse_env_text(text)
-
-    assert parsed == {"A": "1", "B": "two", "C": "value=with=equals"}
-    assert _env_vars_to_text({"B": "2", "A": "1"}) == "A=1\nB=2"
 
 
 def test_setup_discovers_services_ports_and_env_tokens():
@@ -313,7 +294,7 @@ def test_save_env_text_writes_raw_content_and_updates_env_vars():
     service = _svc()
     content = "# keep comment\nA=1\nexport B=two"
 
-    service.save_env_text(conn, content, _parse_env_text(content))
+    service.save_env_text(conn, content, {"A": "1", "B": "two"})
 
     assert service.env_vars == {"A": "1", "B": "two"}
     assert service.exec.files["/repos/my-repo/.env"] == f"{content}\n"

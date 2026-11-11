@@ -2,7 +2,7 @@
 
 This is the **single entry point** into the MLOX codebase, for both humans and
 coding agents. Read `docs/DOCTRINE.md` for **status, roadmap, and binding
-decisions** (including the deprecated Streamlit UI). The generated service/server
+decisions** (including the Streamlit UI removal). The generated service/server
 catalog lives in `docs/SERVICES_CATALOG.md`. This file covers **architecture and
 code invariants only** — do not restate doctrine or catalog facts here.
 
@@ -23,9 +23,9 @@ code invariants only** — do not restate doctrine or catalog facts here.
 > `docs/PLUGIN_CONFIGS.md`). A thriving OSS community of service and server
 > plugins covering many domains is the explicit goal.
 
-> **Do not invest in `mlox/view/` or `mlox/app.py`.** The Streamlit web UI is
-> being phased out into a plugin repo; the TUI and CLI are the primary
-> interfaces. Treat web-UI changes as maintenance-only. (ADR in `docs/DOCTRINE.md`.)
+> **The Streamlit web UI is gone from the package.** It is archived in
+> `legacy/ui/` (not installed, not tested in CI). The TUI and CLI are the
+> interfaces; `mlox ui` serves the TUI in a browser. (ADR in `docs/DOCTRINE.md`.)
 
 ## Runtime Shape
 

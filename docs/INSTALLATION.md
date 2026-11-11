@@ -8,7 +8,7 @@ There are two supported paths, depending on who you are:
 - **Developers** — clone the repository and bootstrap a reproducible dev environment (also uv-based).
 
 > We deliberately keep this list short. Docker-based delivery was removed along
-> with the deprecated Streamlit web UI (see `docs/DOCTRINE.md`).
+> with the Streamlit web UI, now archived in `legacy/ui/` (see `docs/DOCTRINE.md`).
 
 ## Users
 
@@ -31,6 +31,7 @@ Verify and upgrade:
 ```bash
 mlox --help          # CLI
 mlox tui             # terminal UI
+mlox ui              # the same UI in your browser (http://localhost:8000)
 uv tool upgrade busysloths-mlox
 ```
 
@@ -57,6 +58,7 @@ There is nothing to activate: run commands through `uv run`, e.g.:
 ```bash
 uv run mlox --help
 uv run mlox tui             # Textual TUI
+uv run mlox ui              # the TUI in the browser (textual-serve)
 task tests:unit:run         # unit tests (uses uv run internally)
 task dev:lint               # flake8
 ```
