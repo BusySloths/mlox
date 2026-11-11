@@ -1,0 +1,70 @@
+---
+// The hero's TUI tour: redacted terminal captures (174x61 cells) that crossfade in a loop.
+// Text scales with the container; with reduced motion only the overview is shown.
+
+const captures = import.meta.glob<string>('../captures/teaser/*.html', { query: '?raw', import: 'default', eager: true });
+const slides = [
+  { name: 'login', label: 'login' },
+  { name: 'overview', label: 'overview' },
+  { name: 'catalog', label: 'service catalog' },
+  { name: 'service', label: 'mlflow' },
+  { name: 'monitor', label: 'monitor' },
+  { name: 'models', label: 'models' },
+  { name: 'workflow', label: 'workflows' },
+].map((s) => {
+  const html = captures[`../captures/teaser/${s.name}.html`];
+  if (!html) throw new Error(`Unknown teaser capture: ${s.name}`);
+  return { ...s, html };
+});
+const start = slides.findIndex((s) => s.name === 'overview');
+---
+
+<div
+  class="teaser"
+  role="img"
+  aria-label="A tour of the MLOX terminal UI on a real project: login, the infrastructure overview, the service catalog, an MLflow service, live monitoring, models and workflows."
+  data-teaser
+>
+  {slides.map((s, i) => (
+    <pre class="teaser__slide" data-label={s.label} data-on={i === start ? 'true' : 'false'} aria-hidden="true"><Fragment set:html={s.html} /></pre>
+  ))}
+</div>
+
+<style>
+  .teaser { display: grid; container-type: inline-size; background: #121212; }
+  .teaser__slide {
+    /* 16px = pre padding; 0.6em is JetBrains Mono's advance */
+    --fs: calc((100cqw - 16px) / (174 * 0.6));
+    grid-area: 1 / 1;
+    margin: 0;
+    padding: 8px;
+    height: calc(61 * 1.24 * var(--fs));
+    font-family: var(--font-mono);
+    font-size: var(--fs);
+    line-height: 1.24;
+    color: #d8dee9;
+    white-space: pre;
+    font-variant-ligatures: none;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.7s ease;
+  }
+  .teaser__slide[data-on='true'] { opacity: 1; }
+</style>
+
+<script>
+  // Advance every few seconds; stay on the overview when motion is reduced.
+  document.querySelectorAll<HTMLElement>('[data-teaser]').forEach((teaser) => {
+    const slides = [...teaser.querySelectorAll<HTMLElement>('.teaser__slide')];
+    const title = teaser.closest('.term')?.querySelector<HTMLElement>('[data-teaser-title]');
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || slides.length < 2) return;
+    let i = 0;
+    const show = () => {
+      slides.forEach((s, j) => (s.dataset.on = String(j === i)));
+      if (title) title.textContent = `mlox tui · ${slides[i].dataset.label}`;
+      i = (i + 1) % slides.length;
+    };
+    show();
+    setInterval(() => { if (!document.hidden) show(); }, 3200);
+  });
+</script>

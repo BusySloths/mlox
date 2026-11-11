@@ -2,7 +2,7 @@
 slug: tui-teaser
 title: "MLOX in a minute: the terminal UI on real infrastructure"
 type: showcase
-status: scripted
+status: recorded
 # One capture name per shot; each becomes content/.work/tui-teaser/captures/<name>.html.
 shots:
   - command
@@ -29,13 +29,27 @@ A shot list, not a narrated recording. Each shot is one screen held still while
 mouse pointer in the result. Frames are picked and redacted afterwards (see
 `docs/CONTENT_PIPELINE.md`, "Terminal captures without screen recording").
 
+## Producing the outputs
+
+The GIF and hero use 174-column crops (the main panel; the login dialog and
+the catalog modal centred), the gallery uses full frames.
+
+```sh
+W=content/.work/tui-teaser
+uv run python -m content.scripts.captures $W/captures.json --frames $W/frames --map $W/redact.json --out $W/captures
+uv run python -m content.scripts.stills $W/stills.json --captures $W/captures --work $W/stills
+for n in login overview catalog service monitor models workflow; do
+  cp $W/captures/teaser_$n.html website/src/captures/teaser/$n.html
+done
+```
+
 ## Where the shots go
 
 | Output | Shots |
 | --- | --- |
-| README GIF (`tui-demo.gif`, ≤ 15 s, about 2 s per screen) | command, login, overview, catalog, monitor, operations |
+| README GIF (`tui-demo.gif`, ≤ 15 s, about 2 s per screen) | command (typed), login, overview, catalog, monitor |
 | README screenshot (`tui-overview.png`) | overview |
-| Website hero teaser (looping text captures) | login, overview, catalog, service, monitor, models, workflow, operations |
+| Website hero teaser (`HeroTeaser.astro`, looping text captures) | login, overview, catalog, service, monitor, models, workflow |
 | Website gallery and how-it-works (`mlox_tui_<shot>.png`) | overview, monitor, models, workflow, catalog, service, repositories, databases, firewall, knowledge, cli |
 
 ## Setup
@@ -46,11 +60,12 @@ mouse pointer in the result. Frames are picked and redacted afterwards (see
 - Export the project path and password in the shell beforehand
   (`MLOX_PROJECT_PATH`, `MLOX_PROJECT_PASSWORD`) so the login screen is
   prefilled. Never type the password while capturing.
-- Fix the TUI pane at **160×45** and do not resize it during the session; every
-  shot must share the same grid for the GIF and the hero loop.
-- Open a second, smaller pane (about 100×30) for the CLI shot.
-- Start capture for both panes before shot 1:
-  `uv run python -m content.scripts.capture --pane <tui> --pane <cli> --out content/.work/tui-teaser/frames --duration 900 --interval 2`
+- Record in one terminal pane and keep its size fixed for the whole session
+  (the 2026-11-11 session used 219×61). The CLI shot comes last, in the same
+  pane after quitting the TUI.
+- Start capture before shot 1:
+  `uv run python -m content.scripts.capture --pane <id> --out content/.work/tui-teaser/frames --duration 1800 --interval 2`
+- Set the password without echo: `read -s MLOX_PROJECT_PASSWORD; export MLOX_PROJECT_PASSWORD`.
 - Hold every shot for at least 4 s so two identical snapshots land on disk.
 
 Never press: **Configure & Add Service**, **Reveal Secret** (Enter on the
@@ -131,6 +146,6 @@ Secret Manager tab), service lifecycle buttons, or anything in Project Actions.
 
 ## Shot 14 · cli
 
-- In the CLI pane: `mlox --help`, then `mlox server list`.
+- After quitting the TUI with `q`: `mlox --help`, then `mlox server list`.
 - Hold on each; the gallery uses the server list.
 - Redact: server names and IPs.

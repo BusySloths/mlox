@@ -120,14 +120,15 @@ def parse(text: str) -> list[list[tuple[str, Style]]]:
     return rows
 
 
-GAP = re.compile(r"  +|[│┃║]")
+# Column gaps: a run of spaces or a table border (box drawing or ASCII).
+GAP = re.compile(r"  +|[│┃║|]")
 
 
 def redact(rows, mapping: dict[str, str]):
     """Replace substrings cell by cell without changing the row length.
 
     A shorter fake is closed up; the freed cells are re-inserted as spaces at
-    the next gap (a run of 2+ spaces or a box border) so later columns and
+    the next gap (a run of 2+ spaces or a box or ASCII table border) so later columns and
     borders stay aligned and no stray spaces appear inside a value.
     """
     if any(not old for old in mapping):

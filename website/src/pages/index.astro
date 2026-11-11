@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import TuiGallery from '../components/TuiGallery.astro';
+import HeroTeaser from '../components/HeroTeaser.astro';
 import Footer from '../components/Footer.astro';
 import { learnEntries } from '../data/learn';
 import { paper } from '../data/paper';
@@ -70,25 +71,12 @@ const featured = learnEntries[0];
           <div class="term">
             <div class="term__chrome" aria-hidden="true">
               <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-              <span class="term__title mono">mlox tui</span>
+              <span class="term__title mono" data-teaser-title>mlox tui</span>
               <span class="term__live mono"><i></i> live tour</span>
             </div>
-            <video
-              class="term__video"
-              src={`${base}mlox_tui_tour.mp4`}
-              poster={`${base}mlox_tui_tour_poster.webp`}
-              autoplay
-              muted
-              loop
-              playsinline
-              preload="metadata"
-              width="1600"
-              height="968"
-              aria-label="A 40-second tour of the MLOX terminal UI: logging in, the infrastructure overview, knowledge board, firewall, repositories, workflows, models, databases and live monitoring."
-              data-hero-video
-            ></video>
+            <HeroTeaser />
           </div>
-          <p class="hero__note mono">real project · real servers · private details blurred</p>
+          <p class="hero__note mono">real project · real servers · private details redacted</p>
         </div>
       </div>
     </section>
@@ -203,7 +191,7 @@ const featured = learnEntries[0];
                   <div class="how__shot">
                     <picture>
                       <source srcset={`${base}${step.image}.webp`} type="image/webp" />
-                      <img src={`${base}${step.image}.png`} alt={step.alt ?? ''} width="1920" height="1163" loading="lazy" decoding="async" />
+                      <img src={`${base}${step.image}.png`} alt={step.alt ?? ''} width="1920" height="1112" loading="lazy" decoding="async" />
                     </picture>
                   </div>
                 )}
@@ -234,7 +222,7 @@ const featured = learnEntries[0];
         <div class="cli__shot reveal">
           <picture>
             <source srcset={`${base}mlox_tui_cli.webp`} type="image/webp" />
-            <img src={`${base}mlox_tui_cli.png`} alt="The MLOX command line showing mlox --help and a table from mlox server list." width="1600" height="1387" loading="lazy" decoding="async" />
+            <img src={`${base}mlox_tui_cli.png`} alt="The MLOX command line showing mlox --help and a table from mlox server list." width="1600" height="928" loading="lazy" decoding="async" />
           </picture>
         </div>
       </div>
@@ -431,7 +419,6 @@ const featured = learnEntries[0];
   .term__title { margin: 0 auto; font-size: 12px; color: #7c867f; }
   .term__live { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--rose); }
   .term__live i { width: 7px; height: 7px; border-radius: 50%; background: var(--rose); animation: blink 1.6s steps(1) infinite; }
-  .term__video { width: 100%; height: auto; aspect-ratio: 1600 / 968; background: #0d1d15; }
   .hero__note { margin: 16px 0 0; font-size: 12px; color: #6f8170; text-align: right; }
 
   /* ---------- stats ---------- */
@@ -723,11 +710,4 @@ const featured = learnEntries[0];
     reveals.forEach((el) => el.classList.add('is-visible'));
   }
 
-  // respect reduced motion: no autoplaying video, show controls instead
-  const video = document.querySelector<HTMLVideoElement>('[data-hero-video]');
-  if (video && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    video.removeAttribute('autoplay');
-    video.pause();
-    video.controls = true;
-  }
 </script>

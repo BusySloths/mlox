@@ -69,3 +69,39 @@ def test_redaction_preserves_row_width():
     redacted = ansi2html.redact(rows, {"private": "demo"})
     assert len(redacted[0]) == len(rows[0])
     assert "".join(c for c, _ in redacted[0]) == "│ demo     │"
+
+
+def test_redaction_keeps_ascii_table_columns():
+    rows = ansi2html.parse("| 194.163.165.102 | sartre |")
+    redacted = ansi2html.redact(rows, {"194.163.165.102": "198.51.100.10"})
+    assert "".join(c for c, _ in redacted[0]) == "| 198.51.100.10   | sartre |"
+
+
+def test_stills_grid_and_size_follow_the_capture():
+    from content.scripts import stills
+
+    fragment = '<span style="color:red">ab&lt;</span>\n<span>cd</span>'
+    assert stills.grid(fragment) == (3, 2)
+    font_size, height = stills.size(cols=100, rows=10, width=624)
+    assert font_size == 10
+    assert height == 144
+
+
+def test_stills_gif_holds_each_frame(tmp_path):
+    from PIL import Image
+
+    from content.scripts import stills
+
+    frames = []
+    for i, colour in enumerate(["red", "blue"]):
+        path = tmp_path / f"{i}.png"
+        Image.new("RGB", (200, 100), colour).save(path)
+        frames.append((path, 0.5 + i))
+    out = stills.gif(frames, tmp_path / "out.gif", width=100)
+    with Image.open(out) as gif:
+        assert gif.size == (100, 50)
+        durations = []
+        for n in range(gif.n_frames):
+            gif.seek(n)
+            durations.append(gif.info["duration"])
+    assert durations == [500, 1500]

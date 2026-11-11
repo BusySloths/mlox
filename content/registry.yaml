@@ -38,9 +38,9 @@ pieces:
   - slug: tui-teaser
     type: showcase
     title: "MLOX in a minute: the terminal UI on real infrastructure"
-    # Being redone from terminal captures; the published files below still come
-    # from the earlier screen recordings.
-    status: scripted
+    # Terminal captures (content/.work/tui-teaser/); mlox_tui_repositories.png is
+    # still from the earlier screen recording.
+    status: recorded
     services: []
     outputs:
       # README
@@ -48,9 +48,9 @@ pieces:
         dest: mlox/resources/tui-demo.gif
       - type: screenshot
         dest: mlox/resources/tui-overview.png
-      # Website hero teaser
-      - type: clip
-        dest: website/public/mlox_tui_tour.mp4
+      # Website hero teaser (HeroTeaser.astro)
+      - type: captures
+        dest: website/src/captures/teaser/
       # Website gallery, how-it-works and social preview
       - type: screenshot
         dest: website/public/mlox_tui_overview.png

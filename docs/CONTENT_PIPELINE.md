@@ -87,6 +87,16 @@ uv run python content/operator-demo/deck/build.py
 uv run python content/operator-demo/deck/build.py --html-only
 ```
 
+For images, `stills` renders captures with local Chrome and the bundled
+JetBrains Mono: PNG (optionally WebP) at a given width, and looping GIFs whose
+frames each have their own hold time. All frames of a GIF share one grid size.
+`content/tui-teaser/script.md` shows a complete run.
+
+```sh
+uv run python -m content.scripts.stills content/.work/<slug>/stills.json \
+  --captures content/.work/<slug>/captures --work content/.work/<slug>/stills
+```
+
 The deck template uses `{{capture:setup_traffic}}` slots for these fragments.
 The existing builder also embeds CSS and resolves local assets; the default PDF
 output is `content/.work/operator-demo/operator-demo-deck.pdf`. Review the
