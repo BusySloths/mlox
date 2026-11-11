@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MLOX Operations — catching a silent model failure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Instrument+Serif:ital@0;1&display=block" rel="stylesheet">
+<link rel="stylesheet" href="deck.css">
+</head>
+<body>
+
+<!-- 01 · Title -->
+<section class="slide title">
+  <div class="logo">ml<span>ox</span></div>
+  <img class="sloth" src="{{repo}}/content/operator-demo/deck/assets/sloth_fade.png" alt="">
+  <div class="eyebrow">Operations demo · Reasonable AI for ML pipelines</div>
+  <h1>Catching a <em>silent</em><br>model failure, live.</h1>
+  <p class="lede">A real model on a real Kubernetes cluster starts giving wrong answers without throwing a single error. MLOX notices, points to the broken step, and an AI assistant explains what happened. A person decides what to do.</p>
+  <div class="meta"><span><b>●</b> live infrastructure</span><span><b>●</b> no hand-written rules</span><span><b>●</b> human in control</span></div>
+</section>
+
+<!-- 02 · Overview -->
+<section class="slide" style="justify-content:center">
+  <div class="eyebrow">The demo in four acts</div>
+  <h2>From normal traffic to a <em>diagnosed</em> incident and back.</h2>
+  <p class="lede">Everything you see runs on our own servers: a model served from Kubernetes, telemetry flowing into a time-series database, and the MLOX terminal UI watching it all.</p>
+  <div class="flow">
+    <div class="card"><div class="k">ACT 1 · SET UP</div><h3>Users and operator</h3><p>A traffic simulator plays the users. The MLOX TUI plays the operator's control room.</p></div>
+    <div class="card"><div class="k">ACT 2 · OBSERVE</div><h3>Learn what is normal</h3><p>MLOX discovers the pipeline from its telemetry and calibrates a baseline from the first runs.</p></div>
+    <div class="card"><div class="k">ACT 3 · BREAK</div><h3>Inject a hidden fault</h3><p>One step inside the model goes wrong. Requests still succeed, but predictions drift.</p></div>
+    <div class="card"><div class="k">ACT 4 · RECOVER</div><h3>Explain, fix, learn</h3><p>MLOX flags the step, the assistant tells the story, and the pipeline recovers once the fault is gone.</p></div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>02</b></span></div>
+</section>
+
+<!-- 03 · Setup: split screen -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">1</span>The setup</div>
+  <h2>One window for the <em>users</em>, one for the <em>operator</em>.</h2>
+  <div class="setup">
+    <div class="term" style="--fs:13px">
+      <div class="bar"><i></i><i></i><i></i><span>tab · demo-traffic</span></div>
+      <pre>{{capture:setup_traffic}}<span class="mark" style="--r:17;--c:50">1</span><span class="mark red" style="--r:3;--c:62">2</span></pre>
+    </div>
+    <div class="term" style="--fs:6.4px">
+      <div class="bar"><i></i><i></i><i></i><span>tab · demo-tui</span></div>
+      <pre>{{capture:setup_tui}}<span class="mark" style="--r:8;--c:44">3</span></pre>
+    </div>
+  </div>
+  <ul class="points setup-points">
+    <li><span class="n">1</span><div><b>User simulation</b>Sends a small batch of prediction requests to the model every two seconds, with realistic noise.</div></li>
+    <li><span class="n red">2</span><div><b>Corruption switch</b>Typing <code>on</code> breaks one step inside the model; <code>off</code> repairs it. The fault itself is never reported to MLOX.</div></li>
+    <li><span class="n">3</span><div><b>The MLOX control room</b>The whole infrastructure in one tree: five servers, their services, and the Operations view next to it.</div></li>
+  </ul>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>03</b></span></div>
+</section>
+
+<!-- 04 · Services -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">2</span>The services involved</div>
+  <h2>Five services, wired together <em>by MLOX</em>.</h2>
+  <p class="lede">MLOX deployed each of these and connected them: the gateway knows its registry, its telemetry collector and its secret store without anyone copying URLs or passwords around.</p>
+  <div class="arch">
+    <svg viewBox="0 0 1680 640" preserveAspectRatio="none">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="rgba(197,240,106,0.8)"/></marker>
+        <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7fd6d0"/></marker>
+        <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f2b541"/></marker>
+      </defs>
+      <!-- traffic -> gateway -->
+      <path class="edge" marker-end="url(#a)" d="M300,110 L440,110"/>
+      <text class="elabel" text-anchor="middle" x="370" y="74">predict<tspan x="370" dy="19">requests</tspan></text>
+      <!-- registry -> gateway -->
+      <path class="edge" marker-end="url(#a)" d="M610,420 L610,230"/>
+      <text class="elabel" x="626" y="330">loads the "champion" model</text>
+      <!-- secrets -> gateway -->
+      <path class="secret edge" marker-end="url(#s)" d="M300,420 C380,420 380,200 440,190"/>
+      <text class="elabel" x="200" y="300">credentials</text>
+      <!-- gateway -> otel -->
+      <path class="edge data" marker-end="url(#d)" d="M780,110 L920,110"/>
+      <text class="elabel" text-anchor="middle" x="850" y="74">spans<tspan x="850" dy="19">per step</tspan></text>
+      <!-- otel -> influx -->
+      <path class="edge data" marker-end="url(#d)" d="M1090,190 L1090,410"/>
+      <text class="elabel" x="1106" y="300">stores telemetry</text>
+      <!-- influx -> mlox -->
+      <path class="edge data" marker-end="url(#d)" d="M1260,490 L1350,490"/>
+      <text class="elabel" text-anchor="middle" x="1305" y="474">queries</text>
+    </svg>
+
+    <div class="node you" style="left:0;top:40px;width:300px">
+      <div class="role">Your laptop</div>
+      <h4>Traffic simulator</h4>
+      <p>Plays the users and, on command, the fault.</p>
+    </div>
+    <div class="node mlox" style="left:440px;top:20px;width:340px">
+      <div class="role">Model serving</div>
+      <h4>MLflow Gateway</h4>
+      <p>Serves the model over HTTPS and reports every pipeline step as a trace.</p>
+      <div class="where"><span class="k8s">Kubernetes · k3s</span><span>beauvoir</span></div>
+    </div>
+    <div class="node" style="left:440px;top:420px;width:340px">
+      <div class="role">Model registry</div>
+      <h4>MLflow</h4>
+      <p>Holds the trained model versions; the alias <code>champion</code> marks the live one.</p>
+      <div class="where"><span>Docker</span><span>poincare</span></div>
+    </div>
+    <div class="node" style="left:0;top:360px;width:300px">
+      <div class="role">Secrets</div>
+      <h4>OpenBao</h4>
+      <p>Hands the gateway its credentials.</p>
+      <div class="where"><span>Docker</span><span>sartre</span></div>
+    </div>
+    <div class="node" style="left:920px;top:20px;width:340px">
+      <div class="role">Telemetry</div>
+      <h4>OpenTelemetry Collector</h4>
+      <p>Receives traces, metrics and logs from the gateway and forwards them.</p>
+      <div class="where"><span>Docker</span><span>sartre</span></div>
+    </div>
+    <div class="node" style="left:920px;top:420px;width:340px">
+      <div class="role">Time-series store</div>
+      <h4>InfluxDB</h4>
+      <p>Keeps seven days of telemetry that MLOX can query.</p>
+      <div class="where"><span>Docker</span><span>sartre</span></div>
+    </div>
+    <div class="node you mlox" style="left:1350px;top:380px;width:330px">
+      <div class="role">Your laptop</div>
+      <h4>MLOX TUI · Operations</h4>
+      <p>Reads the traces, builds the baseline, flags incidents and asks the assistant.</p>
+    </div>
+    <div class="legend"><span><i></i>requests &amp; models</span><span><i class="data"></i>telemetry</span><span><i class="secret"></i>secrets</span></div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>04</b></span></div>
+</section>
+
+<!-- 05 · Operations pane -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">2</span>The Operations view</div>
+  <h2>One tab for <em>watching</em>, planning and recovering.</h2>
+  <div class="body" style="grid-template-columns:430px minmax(0,1fr)">
+    <ul class="points">
+      <li><span class="n">1</span><div><b>Five focused views</b>Team (the AI assistant), Pipelines (live health), Plan, Activity log and Settings.</div></li>
+      <li><span class="n">2</span><div><b>Pick the telemetry source</b>Which database MLOX reads the gateway's traces from.</div></li>
+      <li><span class="n">3</span><div><b>Start watching</b>From now on, every completed request becomes evidence.</div></li>
+      <li><span class="n amber">4</span><div><b>The reasoning model</b>Step two of our Reasonable AI. A pluggable slot for any model behind a standard API, self-hosted or hosted, built for our own efficient reasoning models. Its key stays in the project's secret store.</div></li>
+    </ul>
+    <div class="term" style="--fs:10.2px">
+      <div class="bar"><i></i><i></i><i></i><span>mlox tui · Operations › Settings</span></div>
+      <pre>{{capture:ops_settings}}<span class="mark" style="--r:16;--c:3">1</span><span class="ring" style="--r:15;--c:27;--w:157;--h:3"></span><span class="mark" style="--r:16;--c:25">2</span><span class="ring" style="--r:22;--c:28;--w:50;--h:3"></span><span class="mark" style="--r:23;--c:25">3</span><span class="mark amber" style="--r:26;--c:25">4</span></pre>
+    </div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>05</b></span></div>
+</section>
+
+<!-- 06 · Start -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">3</span>Start watching, start traffic</div>
+  <h2>Press <em>Start Watching</em>, then let the users in.</h2>
+  <p class="lede">Watching starts from a clean slate: older telemetry is ignored, so the baseline only ever reflects what happens from here on.</p>
+  <div class="body split">
+    <div class="term" style="--fs:14px">
+      <div class="bar"><i></i><i></i><i></i><span>tab · demo-traffic</span></div>
+      <pre>{{capture:start_traffic}}</pre>
+    </div>
+    <div class="term" style="--fs:8.9px">
+      <div class="bar"><i></i><i></i><i></i><span>mlox tui · Operations › Pipelines</span></div>
+      <pre>{{capture:start_pipelines}}<span class="ring" style="--r:7;--c:89;--w:14;--h:1"></span></pre>
+    </div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>06</b></span></div>
+</section>
+
+<!-- 07 · Pipelines explained -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">4</span>How MLOX sees a pipeline</div>
+  <h2>Pipelines are <em>discovered</em>, not drawn by hand.</h2>
+  <p class="lede">The model reports each step it runs as a span in one trace. MLOX assembles those traces into a pipeline and keeps, for every step, how long it took and what its output looked like. Nobody configures the structure.</p>
+  <div class="pipe" style="margin-top:44px">
+    <div class="stage">input.normalize<small>scales the raw features</small></div>
+    <div class="stage">pca.transform<small>compresses them to principal components</small></div>
+    <div class="stage">regression.predict<small>turns components into a prediction</small></div>
+    <div class="stage">quality.evaluate<small>compares predictions with labels (RMSE)</small></div>
+  </div>
+  <div class="tiers">
+    <div class="tier">
+      <div class="k">Step 1 · seconds</div>
+      <h3>Early-detection anomaly models</h3>
+      <ul>
+        <li>Fast statistical and ML detectors watch every step and signal.</li>
+        <li>One-class models learn normal from historical runs, no labels needed.</li>
+        <li>Short and long windows catch both sudden and creeping change.</li>
+        <li>Deviations are traced through the pipeline graph to their origin.</li>
+      </ul>
+    </div>
+    <div class="tier deep">
+      <div class="k">Step 2 · automatic or on demand</div>
+      <h3>Reasoning: investigation and mitigation</h3>
+      <ul>
+        <li>Starts as soon as step 1 raises an incident, or when an operator asks.</li>
+        <li>Reasons over the incident subgraph: baselines, deviations, likely origin.</li>
+        <li>Returns a diagnosis, a recovery check and real MLOX actions.</li>
+        <li>Routine actions run on their own; critical ones wait for approval.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>07</b></span></div>
+</section>
+
+<!-- 08 · Calibration -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">5</span>Calibrate</div>
+  <h2>Ten normal runs <em>teach</em> MLOX what healthy looks like.</h2>
+  <div class="body">
+    <ul class="points">
+      <li><span class="n">1</span><div><b>Baseline 10 / 10</b>The pipeline appeared with its first complete trace; its first ten runs became the baseline.</div></li>
+      <li><span class="n">2</span><div><b>Watching</b>Every new request is now compared with the baseline, step by step.</div></li>
+      <li><span class="n">3</span><div><b>Four steps, all normal</b>Each step's output is compared over a 1-minute and a 5-minute window. Prediction error (RMSE) sits at about 0.02.</div></li>
+    </ul>
+    <div class="term" style="--fs:11.9px">
+      <div class="bar"><i></i><i></i><i></i><span>mlox tui · Operations › Pipelines</span></div>
+      <pre>{{capture:calibrated}}<span class="mark" style="--r:7;--c:67">1</span><span class="mark" style="--r:7;--c:102">2</span><span class="ring" style="--r:16;--c:2;--w:91;--h:6"></span><span class="mark" style="--r:21;--c:97">3</span></pre>
+    </div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>08</b></span></div>
+</section>
+
+<!-- 09 · Corruption -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">6</span>Break it</div>
+  <h2>One command, one <em>hidden</em> fault.</h2>
+  <div class="body">
+    <div>
+      <p class="lede" style="margin:0">Typing <code>on</code> shifts the first principal component inside <code>pca.transform</code>. Every request still returns <strong>200 OK</strong>; only the answers are wrong.</p>
+      <div class="note"><b>What MLOX is not told:</b> the fault flag is never part of the telemetry. MLOX has to work out where the problem is from the step observations alone.</div>
+    </div>
+    <div class="term" style="--fs:19px">
+      <div class="bar"><i></i><i></i><i></i><span>tab · demo-traffic</span></div>
+      <pre>{{capture:corrupt_on}}</pre>
+    </div>
+  </div>
+  <div class="pipe" style="margin-top:30px">
+    <div class="stage">input.normalize<small>unchanged</small></div>
+    <div class="stage bad">pca.transform<small>first component shifted</small></div>
+    <div class="stage">regression.predict<small>receives bad inputs</small></div>
+    <div class="stage">quality.evaluate<small>error climbs</small></div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>09</b></span></div>
+</section>
+
+<!-- 10 · Detection -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">7</span>Detect</div>
+  <h2>MLOX points at <em>pca.transform</em>, not just "error went up".</h2>
+  <div class="body">
+    <ul class="points">
+      <li><span class="n red">1</span><div><b>Incident</b>Two requests after the fault, the pipeline switches from watching to incident.</div></li>
+      <li><span class="n red">2</span><div><b>Likely origin: pca.transform</b>Its output jumped from a baseline of 2.79 to 14.55, while the step before it stayed normal.</div></li>
+      <li><span class="n amber">3</span><div><b>The damage spreads</b>Seconds later the steps downstream turn red too: predictions drift and the error rises from 0.02 to 2.4, a hundredfold.</div></li>
+    </ul>
+    <div class="term" style="--fs:11.9px">
+      <div class="bar"><i></i><i></i><i></i><span>mlox tui · Operations › Pipelines</span></div>
+      <pre>{{capture:incident}}<span class="mark red" style="--r:7;--c:102">1</span><span class="ring red" style="--r:19;--c:5;--w:85;--h:1"></span><span class="mark red" style="--r:19;--c:94">2</span><span class="ring amber" style="--r:20;--c:5;--w:85;--h:2"></span><span class="mark amber" style="--r:20.5;--c:94">3</span><span class="ring red" style="--r:28;--c:3;--w:144;--h:1"></span></pre>
+    </div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>10</b></span></div>
+</section>
+
+<!-- 11 · Investigate -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">7</span>Investigate</div>
+  <h2>An incident, and the assistant <em>tells the story</em>.</h2>
+  <div class="body">
+    <ul class="points">
+      <li><span class="n">1</span><div><b>Evidence, not guesses</b>The investigation starts from the frozen incident, by itself or, as here, with Investigate. It confirms pca.transform with numbers.</div></li>
+      <li><span class="n">2</span><div><b>A plain-language diagnosis</b>Inputs and runtime are healthy, so it rules out a data or infrastructure fault, and says how to verify recovery.</div></li>
+      <li><span class="n amber">3</span><div><b>A concrete fix, held for approval</b>It proposes rolling the live model back from version 7 to version 6. A rollback is a critical action, so it waits for a person to choose Execute. In this demo, we remove the injected fault instead.</div></li>
+    </ul>
+    <div class="term" style="--fs:16.5px;justify-self:start">
+      <div class="bar"><i></i><i></i><i></i><span>mlox tui · Pipeline Observer · remediation proposal</span></div>
+      <pre>{{capture:investigate}}<span class="mark" style="--r:2;--c:73">1</span><span class="mark" style="--r:11;--c:73">2</span><span class="mark amber" style="--r:15;--c:73">3</span></pre>
+    </div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>11</b></span></div>
+</section>
+
+<!-- 12 · Recover -->
+<section class="slide">
+  <div class="eyebrow"><span class="step">8</span>Recover</div>
+  <h2>Fault off, windows drain, <em>recovered</em>.</h2>
+  <div class="body">
+    <ul class="points">
+      <li><span class="n">1</span><div><b>Repair</b>Typing <code>off</code> restores the PCA step.<div class="term" style="--fs:12px;margin-top:14px"><pre>{{capture:corrupt_off}}</pre></div></div></li>
+      <li><span class="n">2</span><div><b>Proof, not hope</b>The state turns to recovered only when every step is back within its baseline, here about 30 seconds after the fix.</div></li>
+      <li><span class="n">3</span><div><b>Keep what was learned</b>Save Postmortem writes the incident into the project's knowledge base; the assistant's proposal is already on the Operations plan.</div></li>
+    </ul>
+    <div class="term" style="--fs:11.9px">
+      <div class="bar"><i></i><i></i><i></i><span>mlox tui · Operations › Pipelines</span></div>
+      <pre>{{capture:recovered}}<span class="mark" style="--r:7;--c:104">2</span><span class="mark" style="--r:0;--c:131">3</span></pre>
+    </div>
+  </div>
+  <div class="folio"><span>MLOX · Operations demo</span><span><b>12</b></span></div>
+</section>
+
+<!-- 13 · Closing -->
+<section class="slide closing" style="justify-content:center">
+  <div class="eyebrow">What this shows</div>
+  <h2>Self-hosted ML with an <em>operator</em> built in.</h2>
+  <div class="takeaways">
+    <div><b>Zero setup monitoring</b><span>Pipelines, baselines and incidents come from telemetry the model already emits.</span></div>
+    <div><b>Root cause, fast</b><span>Early detection finds the broken step in seconds; the reasoning model explains it and proposes a fix.</span></div>
+    <div><b>You set the boundaries</b><span>Routine actions run on their own, critical ones wait for a person, and every step is logged.</span></div>
+  </div>
+  <div class="next">
+    <div><b>Our own reasoning models</b><span>Compact ternary-weight models that merge both steps into one and spend compute only when an incident needs it.</span></div>
+    <div><b>From diagnosis to fix</b><span>The pipeline observer hands a confirmed fault to a specialist: an ML engineer agent that retrains and redeploys, or an infrastructure agent that updates or rolls back services.</span></div>
+    <div><b>Autonomy with limits</b><span>Every agent gets scoped permissions: what it may do alone, and what needs a sign-off.</span></div>
+  </div>
+  <div class="folio"><span>MLOX · github.com/BusySloths/mlox</span><span><b>13</b></span></div>
+</section>
+
+</body>
+</html>

@@ -91,3 +91,18 @@ pieces:
         dest: docs/tutorial-install-to-first-service.md
       - type: readme_gif
         dest: mlox/resources/tui-demo.gif
+
+  - slug: operator-demo
+    type: demo
+    title: "MLOX Operations: catching a silent model failure, live"
+    # Deck finished (content/operator-demo/deck/); narrated video not yet produced.
+    status: draft
+    services: [mlflow-gateway, mlflow, otel, influx, openbao]
+    outputs:
+      # Deck and video stay local until a commit is explicitly requested (no media in git).
+      - type: deck
+        dest: content/.work/operator-demo/operator-demo-deck.pdf
+      - type: video
+        dest: content/.work/operator-demo/operator-demo.mp4
+      - type: page
+        dest: website/src/pages/learn/operations-demo.astro

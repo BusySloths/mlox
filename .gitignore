@@ -183,3 +183,18 @@ recordings/
 
 # Content pipeline: local intermediates
 content/.work/
+
+# Video and audio never go into git (intermediate or final) unless explicitly
+# decided; force-add with `git add -f` in that case.
+*.mp4
+*.mov
+*.m4v
+*.webm
+*.avi
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.ogg
+*.opus
