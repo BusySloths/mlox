@@ -40,7 +40,7 @@ pieces:
     title: "MLOX in a minute: the terminal UI on real infrastructure"
     # Being redone from terminal captures; the published files below still come
     # from the earlier screen recordings.
-    status: draft
+    status: scripted
     services: []
     outputs:
       # README
