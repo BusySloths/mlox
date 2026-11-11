@@ -1,5 +1,12 @@
 /* MLOX — "night canopy": the TUI's own palette, softened for reading. */
 
+/* Full JetBrains Mono, self-hosted: the Google Fonts subset lacks the box-drawing
+   glyphs, and terminal captures misalign when they fall back to another font. */
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: normal; font-display: swap; src: url("../assets/fonts/JetBrainsMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-style: normal; font-display: swap; src: url("../assets/fonts/JetBrainsMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; font-style: normal; font-display: swap; src: url("../assets/fonts/JetBrainsMono-Bold.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-style: italic; font-display: swap; src: url("../assets/fonts/JetBrainsMono-Italic.woff2") format("woff2"); }
+
 :root {
   --bg: #0b1912;
   --bg-deep: #07110c;

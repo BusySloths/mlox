@@ -1,0 +1,104 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import { learnEntries } from '../../data/learn';
+
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const kindLabel = { tutorial: 'Tutorial', demo: 'Demo' } as const;
+---
+
+<BaseLayout
+  title="Tutorials & demos · MLOX"
+  description="Step-by-step tutorials and live demos of MLOX running real infrastructure on your own servers."
+>
+  <Header />
+
+  <main id="main">
+    <section class="learn-hero">
+      <div class="wrap">
+        <p class="eyebrow rise rise-1">Tutorials &amp; demos</p>
+        <h1 class="h-section rise rise-2">Learn MLOX on <span class="serif accent">real infrastructure.</span></h1>
+        <p class="lede rise rise-3">
+          Tutorials walk you through a task step by step, from install to your first running service. Demos show what
+          MLOX can do on live servers, including features that are still taking shape. Everything here was recorded on
+          real machines; private details are redacted.
+        </p>
+      </div>
+    </section>
+
+    <section class="learn-list">
+      <div class="wrap">
+        <ul class="cards">
+          {learnEntries.map((entry) => (
+            <li>
+              <a class="card rise rise-4" href={`${base}learn/${entry.slug}/`}>
+                <div class="card__meta mono">
+                  <span class:list={['badge', `badge--${entry.kind}`]}>{kindLabel[entry.kind]}</span>
+                  {entry.experimental && <span class="badge badge--exp">Experimental</span>}
+                  <span class="card__time">{entry.minutes} min read</span>
+                </div>
+                <h2>{entry.title}</h2>
+                <p>{entry.summary}</p>
+                <ul class="card__tags mono">
+                  {entry.tags.map((tag) => <li>{tag}</li>)}
+                </ul>
+                <span class="card__cta mono">Open <span aria-hidden="true">→</span></span>
+              </a>
+            </li>
+          ))}
+          <li>
+            <div class="card card--soon rise rise-5">
+              <div class="card__meta mono"><span class="badge badge--tutorial">Tutorial</span><span class="card__time">coming soon</span></div>
+              <h2>More tutorials are on the way</h2>
+              <p>
+                Installing MLOX, opening a project in the TUI and deploying a first service will be next. Until then, the
+                getting-started guide covers the basics.
+              </p>
+              <a class="card__cta mono" href={`${base}#get-started`}>Get started <span aria-hidden="true">→</span></a>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .learn-hero { padding: clamp(56px, 8vw, 110px) 0 36px; }
+  .learn-hero .wrap { display: grid; gap: 18px; justify-items: start; }
+  .accent { color: var(--lime); }
+  .learn-list { padding-bottom: clamp(70px, 10vw, 120px); }
+  .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 0; padding: 0; list-style: none; }
+  .card {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 30px 28px 26px;
+    border-radius: 18px;
+    border: 1px solid var(--line-strong);
+    background: linear-gradient(180deg, rgba(16, 36, 26, 0.85), rgba(11, 25, 18, 0.85));
+    text-decoration: none;
+    transition: border-color 0.3s, transform 0.4s var(--ease);
+  }
+  a.card:hover { border-color: var(--lime); transform: translateY(-4px); }
+  .card--soon { border-style: dashed; border-color: var(--line); background: rgba(16, 36, 26, 0.35); }
+  .card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+  .badge { padding: 4px 9px; border-radius: 6px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .badge--demo { background: rgba(127, 214, 208, 0.14); color: var(--tree); }
+  .badge--tutorial { background: rgba(197, 240, 106, 0.14); color: var(--lime); }
+  .badge--exp { background: rgba(242, 181, 65, 0.14); color: var(--amber); }
+  .card__time { margin-left: auto; color: #6f8170; }
+  .card h2 { margin: 4px 0 0; font-weight: 700; font-size: clamp(24px, 2.4vw, 32px); line-height: 1.1; letter-spacing: -0.025em; color: var(--cream); }
+  .card p { margin: 0; color: var(--muted); }
+  .card__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 12px; }
+  .card__tags li { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .card__cta { margin-top: 6px; color: var(--lime); font-size: 14px; text-decoration: none; }
+  @media (max-width: 800px) {
+    .cards { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

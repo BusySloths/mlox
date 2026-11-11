@@ -1,0 +1,110 @@
+---
+// The operations demo wiring. Drawn on a fixed 1680x680 stage and scaled to fit
+// (zoom keeps the layout box in sync); on narrow screens it becomes a stacked list.
+
+const nodes = [
+  { id: 'traffic', role: 'Your laptop', title: 'Traffic simulator', text: 'Plays the users and, on command, the fault.', you: true, x: 0, y: 40, w: 300, link: 'sends predict requests to the gateway' },
+  { id: 'gateway', role: 'Model serving', title: 'MLflow Gateway', text: 'Serves the model over HTTPS and reports every pipeline step as a trace.', where: ['Kubernetes · k3s'], k8s: true, mlox: true, x: 440, y: 20, w: 340, link: 'exports a span per pipeline step to the collector' },
+  { id: 'mlflow', role: 'Model registry', title: 'MLflow', text: 'Holds the trained model versions; the alias champion marks the live one.', where: ['Docker'], x: 440, y: 420, w: 340, link: 'the gateway loads the "champion" model from it' },
+  { id: 'openbao', role: 'Secrets', title: 'OpenBao', text: 'Hands the gateway its credentials.', where: ['Docker'], x: 0, y: 360, w: 300, link: 'supplies the gateway its credentials' },
+  { id: 'otel', role: 'Telemetry', title: 'OpenTelemetry Collector', text: 'Receives traces, metrics and logs from the gateway and forwards them.', where: ['Docker'], x: 920, y: 20, w: 340, link: 'stores all telemetry in InfluxDB' },
+  { id: 'influx', role: 'Time-series store', title: 'InfluxDB', text: 'Keeps seven days of telemetry that MLOX can query.', where: ['Docker'], x: 920, y: 420, w: 340, link: 'is queried by the MLOX TUI' },
+  { id: 'tui', role: 'Your laptop', title: 'MLOX TUI · Operations', text: 'Reads the traces, builds the baseline, flags incidents and asks the reasoning model.', you: true, mlox: true, x: 1350, y: 380, w: 330 },
+];
+---
+
+<div class="arch" data-arch>
+  <div class="arch__stage" data-arch-stage>
+    <svg viewBox="0 0 1680 640" aria-hidden="true">
+      <defs>
+        <marker id="arch-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="rgba(197,240,106,0.8)" /></marker>
+        <marker id="arch-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7fd6d0" /></marker>
+        <marker id="arch-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f2b541" /></marker>
+      </defs>
+      <path class="edge" marker-end="url(#arch-a)" d="M300,110 L440,110" />
+      <text class="elabel" text-anchor="middle" x="370" y="74">predict<tspan x="370" dy="19">requests</tspan></text>
+      <path class="edge" marker-end="url(#arch-a)" d="M610,420 L610,230" />
+      <text class="elabel" x="626" y="330">loads the "champion" model</text>
+      <path class="edge secret" marker-end="url(#arch-s)" d="M300,420 C380,420 380,200 440,190" />
+      <text class="elabel" x="200" y="300">credentials</text>
+      <path class="edge data" marker-end="url(#arch-d)" d="M780,110 L920,110" />
+      <text class="elabel" text-anchor="middle" x="850" y="74">spans<tspan x="850" dy="19">per step</tspan></text>
+      <path class="edge data" marker-end="url(#arch-d)" d="M1090,190 L1090,410" />
+      <text class="elabel" x="1106" y="300">stores telemetry</text>
+      <path class="edge data" marker-end="url(#arch-d)" d="M1260,490 L1350,490" />
+      <text class="elabel" text-anchor="middle" x="1305" y="474">queries</text>
+    </svg>
+    {nodes.map((n) => (
+      <div class:list={['node', { you: n.you, mlox: n.mlox }]} style={`left:${n.x}px;top:${n.y}px;width:${n.w}px`}>
+        <div class="role">{n.role}</div>
+        <h4>{n.title}</h4>
+        <p>{n.text}</p>
+        {n.where && <div class="where">{n.where.map((w) => <span class:list={{ k8s: n.k8s }}>{w}</span>)}</div>}
+      </div>
+    ))}
+    <div class="legend" aria-hidden="true"><span><i></i>requests &amp; models</span><span><i class="data"></i>telemetry</span><span><i class="secret"></i>secrets</span></div>
+  </div>
+
+  <ol class="arch__list">
+    {nodes.map((n) => (
+      <li class:list={['node', { you: n.you, mlox: n.mlox }]}>
+        <div class="role">{n.role}</div>
+        <h4>{n.title}</h4>
+        <p>{n.text}</p>
+        {n.link && <p class="link"><span aria-hidden="true">↓</span> {n.link}</p>}
+      </li>
+    ))}
+  </ol>
+</div>
+
+<style>
+  .arch { position: relative; overflow-x: auto; }
+  .arch__stage { position: relative; width: 1680px; height: 690px; transform-origin: 0 0; }
+  .arch__stage svg { position: absolute; inset: 0; width: 1680px; height: 640px; overflow: visible; }
+  .node {
+    position: absolute;
+    padding: 20px 22px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, #11281c, #0c1d14);
+  }
+  .role { font: 500 13px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  h4 { margin: 10px 0 6px; font-size: 27px; line-height: 1.1; color: var(--cream); letter-spacing: -0.02em; }
+  .node p { margin: 0; font-size: 17.5px; line-height: 1.4; color: var(--muted); }
+  .where { margin-top: 12px; display: inline-flex; gap: 8px; font: 500 13.5px/1 var(--font-mono); }
+  .where span { padding: 6px 9px; border-radius: 6px; background: rgba(127, 214, 208, 0.1); color: var(--tree); }
+  .where span.k8s { background: rgba(197, 240, 106, 0.12); color: var(--lime); }
+  .node.you { border-style: dashed; border-color: rgba(242, 181, 65, 0.45); background: rgba(242, 181, 65, 0.04); }
+  .node.you .role { color: var(--amber); }
+  .node.mlox { border-color: var(--line-strong); }
+  .edge { fill: none; stroke: rgba(197, 240, 106, 0.55); stroke-width: 2.5; }
+  .edge.data { stroke: var(--tree); }
+  .edge.secret { stroke: rgba(242, 181, 65, 0.6); stroke-dasharray: 7 7; }
+  .elabel { font: 500 15px var(--font-mono); fill: var(--muted); }
+  .legend { position: absolute; right: 0; bottom: 0; display: flex; gap: 28px; font: 500 15px/1 var(--font-mono); color: var(--muted); }
+  .legend i { display: inline-block; width: 30px; height: 0; border-top: 2.5px solid var(--lime); vertical-align: middle; margin-right: 8px; }
+  .legend i.data { border-color: var(--tree); }
+  .legend i.secret { border-top-style: dashed; border-color: var(--amber); }
+
+  .arch__list { display: none; margin: 0; padding: 0; list-style: none; gap: 12px; }
+  .arch__list .node { position: static; padding: 18px 18px; }
+  .arch__list h4 { font-size: 22px; }
+  .arch__list .node p { font-size: 16px; }
+  .arch__list .link { margin-top: 10px !important; font: 500 13px/1.4 var(--font-mono) !important; color: var(--tree) !important; }
+
+  @media (max-width: 760px) {
+    .arch__stage { display: none; }
+    .arch__list { display: grid; }
+  }
+</style>
+
+<script>
+  // Scale the fixed stage to its container; zoom (unlike transform) also shrinks the layout box.
+  document.querySelectorAll<HTMLElement>('[data-arch]').forEach((arch) => {
+    const stage = arch.querySelector<HTMLElement>('[data-arch-stage]');
+    if (!stage) return;
+    const fit = () => { stage.style.zoom = String(Math.min(1, arch.clientWidth / 1680)); };
+    new ResizeObserver(fit).observe(arch);
+    fit();
+  });
+</script>

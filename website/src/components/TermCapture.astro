@@ -1,0 +1,114 @@
+---
+// A redacted terminal snapshot rendered as text. The font size is derived from the
+// container width so every column fits; below a readable minimum it scrolls instead.
+// Callouts sit on the character grid: r = row, c = column (0-based), w/h in cells.
+
+export interface Callout {
+  kind: 'mark' | 'ring';
+  r: number;
+  c: number;
+  w?: number;
+  h?: number;
+  label?: string;
+  tone?: 'lime' | 'amber' | 'red';
+}
+
+interface Props {
+  name: string;
+  cols: number;
+  title?: string;
+  max?: number;
+  callouts?: Callout[];
+  label: string;
+}
+
+const captures = import.meta.glob<string>('../captures/operations/*.html', { query: '?raw', import: 'default', eager: true });
+const { name, cols, title, max = 13, callouts = [], label } = Astro.props;
+const html = captures[`../captures/operations/${name}.html`];
+if (!html) throw new Error(`Unknown capture: ${name}`);
+---
+
+<figure class="tcap" style={`--cols:${cols};--fmax:${max}px`}>
+  <div class="tcap__frame">
+    {title && <div class="tcap__bar" aria-hidden="true"><i></i><i></i><i></i><span>{title}</span></div>}
+    <div class="tcap__scroll">
+      <pre role="img" aria-label={label}><Fragment set:html={html} />{callouts.map((m) =>
+        m.kind === 'mark'
+          ? <span class={`tcap__mark tcap--${m.tone ?? 'lime'}`} style={`--r:${m.r};--c:${m.c}`} aria-hidden="true">{m.label}</span>
+          : <span class={`tcap__ring tcap--${m.tone ?? 'lime'}`} style={`--r:${m.r};--c:${m.c};--w:${m.w};--h:${m.h}`} aria-hidden="true"></span>
+      )}</pre>
+    </div>
+  </div>
+</figure>
+
+<style>
+  .tcap { margin: 0; container-type: inline-size; }
+  .tcap__frame {
+    width: fit-content;
+    max-width: 100%;
+    border-radius: 14px;
+    border: 1px solid rgba(197, 240, 106, 0.24);
+    background: #121212;
+    overflow: hidden;
+    box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.9);
+  }
+  .tcap__bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 32px;
+    padding: 0 14px;
+    background: #1a211d;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font: 500 12px/1 var(--font-mono);
+    color: #85917f;
+    white-space: nowrap;
+  }
+  .tcap__bar i { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #39423c; }
+  .tcap__bar span { margin-left: 8px; overflow: hidden; text-overflow: ellipsis; }
+  .tcap__scroll { overflow-x: auto; scrollbar-width: thin; }
+  pre {
+    /* 26px = frame border + pre padding; 0.6em is JetBrains Mono's advance */
+    --fs: clamp(6px, calc((100cqw - 26px) / (var(--cols) * 0.6)), var(--fmax));
+    position: relative;
+    width: max-content;
+    margin: 0;
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: var(--fs);
+    line-height: 1.24;
+    color: #d8dee9;
+    white-space: pre;
+    font-variant-ligatures: none;
+  }
+  .tcap__mark {
+    position: absolute;
+    left: calc(12px + var(--c) * 0.6 * var(--fs));
+    top: calc(10px + (var(--r) + 0.5) * 1.24 * var(--fs));
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    width: clamp(18px, calc(var(--fs) * 2.3), 28px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 3px solid #0b1912;
+    outline: 2px solid color-mix(in srgb, var(--tone) 60%, transparent);
+    background: var(--tone);
+    color: #0b1912;
+    font: 700 clamp(10px, calc(var(--fs) * 1.2), 15px)/1 var(--font-display);
+    z-index: 2;
+  }
+  .tcap__ring {
+    position: absolute;
+    left: calc(12px + var(--c) * 0.6 * var(--fs));
+    top: calc(10px + var(--r) * 1.24 * var(--fs));
+    width: calc(var(--w) * 0.6 * var(--fs));
+    height: calc(var(--h) * 1.24 * var(--fs));
+    border: 2px solid var(--tone);
+    border-radius: 6px;
+    z-index: 1;
+  }
+  .tcap--lime { --tone: var(--lime); }
+  .tcap--amber { --tone: var(--amber); }
+  .tcap--red { --tone: #ff6b5e; }
+</style>

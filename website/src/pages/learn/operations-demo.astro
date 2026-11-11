@@ -1,0 +1,720 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import TermCapture from '../../components/TermCapture.astro';
+import OpsArchitecture from '../../components/OpsArchitecture.astro';
+
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const repo = 'https://github.com/BusySloths/mlox';
+
+const chapters = [
+  ['setup', 'The setup'],
+  ['services', 'Five services, wired together'],
+  ['operations', 'The Operations view'],
+  ['start', 'Start watching, start traffic'],
+  ['pipelines', 'How MLOX sees a pipeline'],
+  ['calibrate', 'Calibrate'],
+  ['break', 'Break it'],
+  ['detect', 'Detect'],
+  ['investigate', 'Investigate'],
+  ['recover', 'Recover'],
+  ['try', 'Try it yourself'],
+];
+---
+
+<BaseLayout
+  title="Catching a silent model failure, live · MLOX demo"
+  description="A model on Kubernetes starts giving wrong answers without throwing an error. MLOX discovers the pipeline from telemetry, flags the broken step and lets a reasoning model explain it. An experimental feature, shown on real infrastructure."
+>
+  <Header />
+
+  <main id="main">
+    <!-- ============ INTRO ============ -->
+    <header class="intro">
+      <div class="wrap intro__grid">
+        <div class="intro__copy">
+          <a class="back mono rise rise-1" href={`${base}learn/`}><span aria-hidden="true">←</span> Tutorials &amp; demos</a>
+          <p class="eyebrow rise rise-1">Demo · Operations · 8 min read</p>
+          <h1 class="h-display intro__title rise rise-2">Catching a <span class="serif accent">silent</span> model failure, live.</h1>
+          <p class="lede rise rise-3">
+            A model served from Kubernetes starts giving wrong answers without throwing a single error. MLOX notices within a
+            few requests, points at the step inside the model that broke, and a reasoning model explains what happened and
+            proposes a fix.
+          </p>
+          <ul class="chips mono rise rise-4">
+            <li>live infrastructure</li>
+            <li>no hand-written rules</li>
+            <li>two-step Reasonable AI</li>
+          </ul>
+        </div>
+
+        <aside class="exp rise rise-4" aria-label="Status of this feature">
+          <p class="exp__k mono">Experimental feature</p>
+          <p>
+            Everything shown here is real code in MLOX. It ships since <strong>v0.5.0</strong> as the
+            <strong>Operations (experimental)</strong> tab of the terminal UI, together with the demo in
+            <a href={`${repo}/tree/main/examples/operations_demo`} target="_blank" rel="noopener noreferrer"><code>examples/operations_demo</code></a>.
+          </p>
+          <p>
+            It is a technology preview. Interfaces, defaults and behaviour will change, and it is
+            <strong>not ready for production environments yet</strong>. Try it on a test project, not on systems you depend on.
+          </p>
+        </aside>
+      </div>
+    </header>
+
+    <!-- ============ WHY ============ -->
+    <section class="prose-section">
+      <div class="wrap prose-grid">
+        <div class="prose">
+          <h2 class="h-sub">The failures that don't crash</h2>
+          <p>
+            The hardest problems in machine learning rarely announce themselves. A model behind an API keeps answering
+            <code>200 OK</code> while its predictions drift: a preprocessing step changed, a dependency was upgraded, a feature
+            now arrives on a different scale. Health checks stay green, dashboards show the usual traffic and latency, and the
+            first one to notice is often a customer.
+          </p>
+          <p>
+            This demo shows how MLOX approaches that problem on infrastructure you run yourself. We serve a small model from a
+            real Kubernetes cluster, send it realistic traffic, and then break one step inside it on purpose. Nobody tells MLOX
+            about the fault. It has to find it from the telemetry the model already emits.
+          </p>
+          <p>
+            The approach has two steps, which we call <em>Reasonable AI</em>. Fast early-detection models watch every step of
+            every request and raise an incident within seconds. A reasoning model then investigates the incident, explains it in
+            plain language and proposes concrete actions inside MLOX. Neither step needs hand-written rules or a hand-drawn
+            pipeline.
+          </p>
+        </div>
+        <nav class="toc" aria-label="Chapters">
+          <p class="toc__k mono">In this demo</p>
+          <ol>
+            {chapters.map(([id, title], i) => (
+              <li><a href={`#${id}`}><span class="mono">{String(i + 1).padStart(2, '0')}</span>{title}</a></li>
+            ))}
+          </ol>
+        </nav>
+      </div>
+    </section>
+
+    <!-- ============ 01 SETUP ============ -->
+    <section id="setup" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">01</p>
+          <h2 class="h-sub">One window for the <span class="serif accent">users</span>, one for the <span class="serif accent">operator</span>.</h2>
+        </div>
+        <div class="chapter__text">
+          <p>
+            The demo runs in two terminal tabs. On the left, a small traffic simulator plays the users: every two seconds it
+            sends a batch of prediction requests with realistic noise to the model, and labels so the prediction error can be
+            measured. It also has a corruption switch. Typing <code>on</code> breaks one step inside the model, <code>off</code>
+            repairs it. The fault itself is never reported anywhere, so MLOX has no shortcut.
+          </p>
+          <p>
+            On the right is the MLOX terminal UI, the operator's control room. Its tree shows the whole project: the servers,
+            the services running on each of them, and the Operations tab we will use for the rest of the demo.
+          </p>
+        </div>
+        <div class="duo">
+          <TermCapture
+            name="setup_traffic"
+            cols={84}
+            max={13}
+            title="tab · demo-traffic"
+            label="The traffic simulator after start: a help panel with the on/off commands, a status panel showing the gateway, registry, telemetry and secret manager, and the first successful requests."
+            callouts={[{ kind: 'mark', r: 17, c: 50, label: '1' }, { kind: 'mark', r: 3, c: 62, label: '2', tone: 'red' }]}
+          />
+          <TermCapture
+            name="setup_tui"
+            cols={219}
+            max={8}
+            title="tab · demo-tui"
+            label="The MLOX terminal UI showing the project tree with servers and services."
+            callouts={[{ kind: 'mark', r: 8, c: 44, label: '3' }]}
+          />
+        </div>
+        <ol class="legend-list">
+          <li><span class="n">1</span><b>User simulation.</b> Batches of prediction requests, every two seconds.</li>
+          <li><span class="n red">2</span><b>Corruption switch.</b> <code>on</code> breaks a step, <code>off</code> repairs it.</li>
+          <li><span class="n">3</span><b>The control room.</b> Servers, services and the Operations tab in one tree.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ 02 SERVICES ============ -->
+    <section id="services" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">02</p>
+          <h2 class="h-sub">Five services, wired together <span class="serif accent">by MLOX</span>.</h2>
+        </div>
+        <div class="chapter__text">
+          <p>
+            Everything in this demo was deployed by MLOX from its service catalog. The model is served by an
+            <strong>MLflow Gateway</strong> on a k3s cluster. It loads whichever model version carries the <code>champion</code>
+            alias in the <strong>MLflow</strong> registry, gets its credentials from <strong>OpenBao</strong>, and exports a trace
+            for every request to an <strong>OpenTelemetry Collector</strong>, which stores it in <strong>InfluxDB</strong>.
+          </p>
+          <p>
+            The important part is what nobody had to do. When a service is added to an MLOX project it is bound to the services
+            it depends on, so the gateway already knows its registry, its collector and its secret store. No URLs or passwords
+            were copied between configuration files to set this up.
+          </p>
+        </div>
+        <OpsArchitecture />
+      </div>
+    </section>
+
+    <!-- ============ 03 OPERATIONS ============ -->
+    <section id="operations" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">03</p>
+          <h2 class="h-sub">One tab for <span class="serif accent">watching</span>, planning and recovering.</h2>
+        </div>
+        <div class="stack">
+          <div class="chapter__text">
+            <p>
+              The Operations tab is where the observer lives. It has five focused views: <em>Team</em> (the AI assistant),
+              <em>Pipelines</em> (live health), <em>Plan</em>, <em>Activity</em> log and <em>Settings</em>. Setting up a watch
+              takes three choices.
+            </p>
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>Settings.</b> The view where a watch is configured.</li>
+              <li><span class="n">2</span><b>Telemetry source.</b> The database MLOX reads the gateway's traces from. Any monitor in the project can be chosen.</li>
+              <li><span class="n">3</span><b>Start watching.</b> From now on, every completed request becomes evidence.</li>
+              <li><span class="n amber">4</span><b>The reasoning model.</b> Step two of Reasonable AI: a pluggable slot for any model behind a standard API, self-hosted or hosted, built for our own efficient reasoning models. Its key stays in the project's secret store.</li>
+            </ol>
+          </div>
+          <TermCapture
+            name="ops_settings"
+            cols={187}
+            max={11}
+            title="mlox tui · Operations › Settings"
+            label="Operations settings: the telemetry monitor selection, Start Watching, Stop Watching and Reset buttons, and the reasoning assistant configuration."
+            callouts={[
+              { kind: 'mark', r: 16, c: 3, label: '1' },
+              { kind: 'ring', r: 15, c: 27, w: 157, h: 3 },
+              { kind: 'mark', r: 16, c: 25, label: '2' },
+              { kind: 'ring', r: 22, c: 28, w: 50, h: 3 },
+              { kind: 'mark', r: 23, c: 25, label: '3' },
+              { kind: 'mark', r: 26, c: 25, label: '4', tone: 'amber' },
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 04 START ============ -->
+    <section id="start" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">04</p>
+          <h2 class="h-sub">Press <span class="serif accent">Start Watching</span>, then let the users in.</h2>
+        </div>
+        <div class="chapter__text">
+          <p>
+            A watch always starts from a clean slate. Telemetry that arrived before the button was pressed is ignored, so the
+            baseline only ever reflects what happens from this moment on. Then the traffic simulator starts sending requests,
+            and a few seconds later the first complete trace arrives: the pipeline appears in the <em>Pipelines</em> view and
+            starts calibrating.
+          </p>
+        </div>
+        <div class="duo duo--wide-right">
+          <TermCapture
+            name="start_traffic"
+            cols={84}
+            max={13}
+            title="tab · demo-traffic"
+            label="The traffic simulator sending its first requests with fault off and labels on."
+          />
+          <TermCapture
+            name="start_pipelines"
+            cols={149}
+            max={11}
+            title="mlox tui · Operations › Pipelines"
+            label="The Pipelines view with the newly discovered operations-demonstrator workload in the calibrating state."
+            callouts={[{ kind: 'ring', r: 7, c: 89, w: 14, h: 1 }]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 05 PIPELINES ============ -->
+    <section id="pipelines" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">05</p>
+          <h2 class="h-sub">Pipelines are <span class="serif accent">discovered</span>, not drawn by hand.</h2>
+        </div>
+        <div class="split split--code">
+          <div class="chapter__text">
+            <p>
+              The served model reports each step it runs as a span, and all steps of one request share a trace. MLOX assembles
+              those traces into a pipeline and keeps, for every step, how long it took and what its output looked like. Nobody
+              configures the structure: add a step to the model and it appears in the pipeline with the next request.
+            </p>
+            <p>
+              Instrumenting a model takes a few lines in its <code>live_predict</code> method. Each step is a context manager,
+              and <code>observe_array</code> records a compact summary of the step's output, not the data itself.
+            </p>
+          </div>
+          <pre class="snippet"><code><span class="k">def</span> live_predict(self, model_input, params=None, artifacts=None):
+    <span class="c"># … unpack features</span>
+    <span class="k">with</span> self.model_step(<span class="s">"pipeline"</span>, kind=<span class="s">"pipeline"</span>):
+        <span class="k">with</span> self.model_step(<span class="s">"input.normalize"</span>) <span class="k">as</span> step:
+            normalized = (features - self.mean) / self.scale
+            step.observe_array(<span class="s">"output"</span>, normalized)
+
+        <span class="k">with</span> self.model_step(<span class="s">"pca.transform"</span>) <span class="k">as</span> step:
+            transformed = normalized @ self.components
+            step.observe_array(<span class="s">"output"</span>, transformed)
+
+        <span class="c"># regression.predict, quality.evaluate …</span></code></pre>
+        </div>
+        <div class="pipe" role="list" aria-label="The demo pipeline">
+          <div class="stage" role="listitem">input.normalize<small>scales the raw features</small></div>
+          <div class="stage" role="listitem">pca.transform<small>compresses them to principal components</small></div>
+          <div class="stage" role="listitem">regression.predict<small>turns components into a prediction</small></div>
+          <div class="stage" role="listitem">quality.evaluate<small>compares predictions with labels (RMSE)</small></div>
+        </div>
+        <div class="tiers">
+          <article class="tier">
+            <p class="tier__k mono">Step 1 · seconds</p>
+            <h3>Early-detection anomaly models</h3>
+            <ul>
+              <li>Fast statistical and ML detectors watch every step and signal.</li>
+              <li>One-class models learn normal from historical runs, no labels needed.</li>
+              <li>Short and long windows catch both sudden and creeping change.</li>
+              <li>Deviations are traced through the pipeline graph to their origin.</li>
+            </ul>
+          </article>
+          <article class="tier tier--deep">
+            <p class="tier__k mono">Step 2 · automatic or on demand</p>
+            <h3>Reasoning: investigation and mitigation</h3>
+            <ul>
+              <li>Starts as soon as step 1 raises an incident, or when an operator asks.</li>
+              <li>Reasons over the incident subgraph: baselines, deviations, likely origin.</li>
+              <li>Returns a diagnosis, a recovery check and real MLOX actions.</li>
+              <li>Routine actions run on their own; critical ones wait for approval.</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 06 CALIBRATE ============ -->
+    <section id="calibrate" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">06</p>
+          <h2 class="h-sub">Ten normal runs <span class="serif accent">teach</span> MLOX what healthy looks like.</h2>
+        </div>
+        <div class="stack">
+          <div class="chapter__text">
+            <p>
+              The first ten complete runs of a pipeline become its baseline. That is deliberately small: the demo only needs
+              about twenty seconds of normal traffic before it can tell normal from abnormal. Once the baseline is full, the
+              state switches from calibrating to watching.
+            </p>
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>Baseline 10 / 10.</b> The first ten runs define normal.</li>
+              <li><span class="n">2</span><b>Watching.</b> Every new request is compared with the baseline, step by step.</li>
+              <li><span class="n">3</span><b>All steps normal.</b> Each step is checked over a 1-minute and a 5-minute window. The prediction error (RMSE) sits at about 0.02.</li>
+            </ol>
+          </div>
+          <TermCapture
+            name="calibrated"
+            cols={149}
+            max={11}
+            title="mlox tui · Operations › Pipelines"
+            label="The pipeline in the watching state with a full baseline of ten runs; all four steps are normal."
+            callouts={[
+              { kind: 'mark', r: 7, c: 67, label: '1' },
+              { kind: 'mark', r: 7, c: 102, label: '2' },
+              { kind: 'ring', r: 16, c: 2, w: 91, h: 6 },
+              { kind: 'mark', r: 21, c: 97, label: '3' },
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 07 BREAK ============ -->
+    <section id="break" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">07</p>
+          <h2 class="h-sub">One command, one <span class="serif accent">hidden</span> fault.</h2>
+        </div>
+        <div class="split split--small">
+          <div class="chapter__text">
+            <p>
+              Typing <code>on</code> shifts the first principal component inside <code>pca.transform</code>, the kind of
+              mistake a bad refit or a changed preprocessing library could cause. Every request still returns
+              <code>200 OK</code>. Latency is unchanged. Only the answers are wrong.
+            </p>
+            <p class="note">
+              <b>What MLOX is not told:</b> the fault flag is never part of the telemetry. MLOX has to work out where the problem
+              is from the step observations alone.
+            </p>
+          </div>
+          <TermCapture
+            name="corrupt_on"
+            cols={54}
+            max={17}
+            title="tab · demo-traffic"
+            label="The traffic simulator after typing on: fault injection is now on and requests continue to succeed."
+          />
+        </div>
+        <div class="pipe" role="list" aria-label="Where the fault sits">
+          <div class="stage" role="listitem">input.normalize<small>unchanged</small></div>
+          <div class="stage bad" role="listitem">pca.transform<small>first component shifted</small></div>
+          <div class="stage" role="listitem">regression.predict<small>receives bad inputs</small></div>
+          <div class="stage" role="listitem">quality.evaluate<small>error climbs</small></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 08 DETECT ============ -->
+    <section id="detect" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">08</p>
+          <h2 class="h-sub">MLOX points at <span class="serif accent">pca.transform</span>, not just “error went up”.</h2>
+        </div>
+        <div class="chapter__text">
+          <p>
+            Two requests after the fault, the pipeline switches from watching to incident. The output of
+            <code>pca.transform</code> jumped from a baseline of 2.79 to 14.55, while <code>input.normalize</code>, the step
+            before it, stayed normal. That contrast is what makes the origin credible: the problem starts where healthy inputs
+            produce unhealthy outputs.
+          </p>
+          <p>
+            Seconds later the damage spreads downstream. <code>regression.predict</code> receives bad components and its
+            predictions drift, and <code>quality.evaluate</code> sees the error rise from 0.02 to 2.4, a hundredfold. An alert
+            on the error alone would have told you <em>that</em> something broke. The pipeline view tells you <em>where</em>.
+          </p>
+        </div>
+        <TermCapture
+          name="incident"
+          cols={149}
+          max={13}
+          title="mlox tui · Operations › Pipelines"
+          label="The pipeline in incident: pca.transform, regression.predict and quality.evaluate are anomalous; the likely origin is pca.transform."
+          callouts={[
+            { kind: 'mark', r: 7, c: 102, label: '1', tone: 'red' },
+            { kind: 'ring', r: 19, c: 5, w: 85, h: 1, tone: 'red' },
+            { kind: 'mark', r: 19, c: 94, label: '2', tone: 'red' },
+            { kind: 'ring', r: 20, c: 5, w: 85, h: 2, tone: 'amber' },
+            { kind: 'mark', r: 20.5, c: 94, label: '3', tone: 'amber' },
+            { kind: 'ring', r: 28, c: 3, w: 144, h: 1, tone: 'red' },
+          ]}
+        />
+        <ol class="legend-list">
+          <li><span class="n red">1</span><b>Incident.</b> Two requests after the fault.</li>
+          <li><span class="n red">2</span><b>Likely origin.</b> pca.transform: 2.79 → 14.55.</li>
+          <li><span class="n amber">3</span><b>The damage spreads.</b> Downstream steps follow within seconds.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ 09 INVESTIGATE ============ -->
+    <section id="investigate" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">09</p>
+          <h2 class="h-sub">An incident, and the assistant <span class="serif accent">tells the story</span>.</h2>
+        </div>
+        <div class="split">
+          <div class="chapter__text">
+            <p>
+              The second step works from the frozen incident: the affected part of the pipeline, its baselines, the current
+              values and the likely origin. In this run we started it with <em>Investigate</em>; it can also start by itself
+              as soon as an incident is raised.
+            </p>
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>Evidence, not guesses.</b> It confirms <code>pca.transform</code> with numbers: mean, spread and maximum of its output before and after.</li>
+              <li><span class="n">2</span><b>A plain-language diagnosis.</b> Inputs and runtime are healthy, so it rules out a data or infrastructure fault, and says how to verify recovery.</li>
+              <li><span class="n amber">3</span><b>A concrete fix, held for approval.</b> It proposes rolling the live model back from version 7 to version 6. A rollback is a critical action, so it waits for a person to choose <em>Execute</em>.</li>
+            </ol>
+            <p>
+              The diagnosis is a reasonable reading of the evidence: from the outside, a broken PCA step in the live model
+              version looks exactly like a bad deployment. In this demo we know the real cause, so instead of rolling back we
+              remove the injected fault.
+            </p>
+          </div>
+          <TermCapture
+            name="investigate"
+            cols={75}
+            max={15}
+            title="mlox tui · Pipeline Observer · remediation proposal"
+            label="The remediation proposal: an assessment that locates the fault at pca.transform, a verification step, and Add to Plan, Execute and Dismiss buttons."
+            callouts={[
+              { kind: 'mark', r: 2, c: 73, label: '1' },
+              { kind: 'mark', r: 11, c: 73, label: '2' },
+              { kind: 'mark', r: 15, c: 73, label: '3', tone: 'amber' },
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 10 RECOVER ============ -->
+    <section id="recover" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">10</p>
+          <h2 class="h-sub">Fault off, windows drain, <span class="serif accent">recovered</span>.</h2>
+        </div>
+        <div class="stack">
+          <div class="chapter__text">
+            <p>
+              Typing <code>off</code> restores the PCA step. MLOX does not take that on faith: the state turns to
+              <em>recovered</em> only when every step is back within its baseline across its windows, here about 30 seconds after
+              the fix.
+            </p>
+            <TermCapture
+              name="corrupt_off"
+              cols={54}
+              max={13}
+              label="The traffic simulator after typing off: fault injection is off again."
+            />
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>Proof, not hope.</b> Recovered only when every step is back within its baseline.</li>
+              <li><span class="n">2</span><b>Keep what was learned.</b> <em>Save Postmortem</em> writes the incident into the project's knowledge base; the assistant's proposal is already on the Operations plan.</li>
+            </ol>
+          </div>
+          <TermCapture
+            name="recovered"
+            cols={149}
+            max={11}
+            title="mlox tui · Operations › Pipelines"
+            label="The pipeline in the recovered state with all steps back to normal."
+            callouts={[{ kind: 'mark', r: 7, c: 104, label: '1' }, { kind: 'mark', r: 0, c: 131, label: '2' }]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TRY IT ============ -->
+    <section id="try" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">11</p>
+          <h2 class="h-sub">Try it <span class="serif accent">yourself</span>.</h2>
+        </div>
+        <div class="split split--code">
+          <div class="chapter__text">
+            <p>
+              You need an MLOX project with running MLflow, OpenTelemetry Collector and MLflow Gateway services, with the
+              collector bound to the gateway. The reasoning model is optional for detection; without it you get incidents and
+              likely origins, but no investigation. Remember this is experimental: use a test project.
+            </p>
+            <p>
+              The full walkthrough, including the telemetry contract and how to debug an empty Pipelines view, is in the
+              <a href={`${repo}/tree/main/examples/operations_demo`} target="_blank" rel="noopener noreferrer">demo README</a>.
+            </p>
+          </div>
+          <pre class="snippet"><code><span class="c"># point the examples at your project</span>
+<span class="p">$</span> export MLOX_PROJECT_PATH="/path/to/project.mlox"
+<span class="p">$</span> export MLOX_PROJECT_PASSWORD="…"
+
+<span class="c"># register the model and set its champion alias</span>
+<span class="p">$</span> uv run -m examples.operations_demo.register
+
+<span class="c"># TUI: Operations › Settings › Start Watching, then</span>
+<span class="p">$</span> uv run -m examples.operations_demo.traffic
+<span class="p">operations-demo&gt;</span> on    <span class="c"># inject the fault</span>
+<span class="p">operations-demo&gt;</span> off   <span class="c"># repair it</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ NEXT ============ -->
+    <section class="chapter chapter--last">
+      <div class="wrap">
+        <div class="ahead">
+          <p class="eyebrow">Where this is heading</p>
+          <div class="ahead__grid">
+            <div><b>Our own reasoning models</b><span>Compact, efficient models built for this slot, merging both steps into one and spending compute only when an incident needs it.</span></div>
+            <div><b>From diagnosis to fix</b><span>The pipeline observer hands a confirmed fault to a specialist agent: one that retrains and redeploys a model, or one that updates or rolls back services.</span></div>
+            <div><b>Autonomy with limits</b><span>Every agent gets scoped permissions: what it may do alone, and what needs a sign-off. Every step is logged.</span></div>
+          </div>
+          <div class="ahead__ctas">
+            <a class="btn" href={`${repo}/tree/main/examples/operations_demo`} target="_blank" rel="noopener noreferrer">Open the demo on GitHub <span aria-hidden="true">→</span></a>
+            <a class="btn btn--ghost" href={`${base}learn/`}>All tutorials &amp; demos</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .accent { color: var(--lime); }
+  code { font-family: var(--font-mono); font-size: 0.88em; color: var(--tree); }
+
+  /* ---------- intro ---------- */
+  .intro { padding: clamp(40px, 6vw, 80px) 0 20px; }
+  .intro__grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); align-items: end; }
+  .intro__copy { display: grid; gap: 22px; justify-items: start; }
+  .intro__title { font-size: clamp(42px, 6.2vw, 88px); }
+  .back { color: var(--muted); font-size: 13px; text-decoration: none; }
+  .back:hover { color: var(--lime); }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .chips li { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); }
+  .chips li::before { content: "●"; margin-right: 8px; color: var(--lime); }
+  .exp {
+    padding: 24px 26px;
+    border-radius: 16px;
+    border: 1px solid rgba(242, 181, 65, 0.5);
+    background: rgba(242, 181, 65, 0.07);
+    font-size: 16px;
+    color: var(--text);
+  }
+  .exp p { margin: 0 0 12px; }
+  .exp p:last-child { margin-bottom: 0; }
+  .exp__k { font-size: 12.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber) !important; }
+  .exp strong { color: var(--cream); }
+  .exp a { color: var(--amber); text-underline-offset: 3px; }
+
+  /* ---------- prose ---------- */
+  .prose-section { padding: clamp(50px, 7vw, 90px) 0 0; }
+  .prose-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.8fr); gap: clamp(28px, 5vw, 72px); align-items: start; }
+  .h-sub { margin: 0; font-size: clamp(28px, 3.4vw, 46px); font-weight: 720; line-height: 1.06; letter-spacing: -0.03em; color: var(--cream); }
+  .prose { display: grid; gap: 16px; }
+  .prose p { margin: 0; }
+  .prose p, .chapter__text p { color: var(--muted); font-size: 18px; max-width: 68ch; }
+  .prose p strong, .chapter__text p strong, .chapter__text b, .legend-list b { color: var(--cream); }
+  .toc {
+    position: sticky;
+    top: calc(var(--header-h) + 24px);
+    padding: 22px 24px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(16, 36, 26, 0.55);
+  }
+  .toc__k { margin: 0 0 12px; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lime); }
+  .toc ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  .toc a { display: flex; gap: 12px; padding: 5px 0; color: var(--muted); text-decoration: none; font-size: 15.5px; }
+  .toc a:hover { color: var(--cream); }
+  .toc a .mono { color: var(--amber); font-size: 12.5px; padding-top: 3px; }
+
+  /* ---------- chapters ---------- */
+  .chapter { padding: clamp(70px, 9vw, 120px) 0 0; }
+  .chapter--last { padding-bottom: clamp(70px, 10vw, 120px); }
+  .chapter__head { display: grid; gap: 10px; margin-bottom: 22px; max-width: 1100px; }
+  .chapter__num { margin: 0; font-size: 14px; color: var(--amber); }
+  .chapter__text { display: grid; gap: 0; margin-bottom: 30px; }
+  .chapter__text p { margin: 0 0 16px; }
+  .chapter__text > :global(.tcap) { margin: 4px 0 22px; }
+
+  .duo { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 24px; align-items: start; }
+  .duo--wide-right { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); }
+  .split { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(24px, 4vw, 56px); align-items: start; }
+  .stack { display: grid; gap: 4px; }
+  .stack .legend-list--stacked { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 30px; max-width: none; }
+  .split--small { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+  .split--code { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+  .legend-list { display: flex; flex-wrap: wrap; gap: 14px 30px; margin: 24px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 16px; }
+  .legend-list--stacked { display: grid; gap: 14px; margin: 6px 0 22px; }
+  .legend-list li { display: flex; gap: 12px; align-items: baseline; }
+  .legend-list--stacked li { display: block; position: relative; padding-left: 38px; }
+  .legend-list--stacked .n { position: absolute; left: 0; top: 0; }
+  .n {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--lime);
+    color: var(--bg-deep);
+    font: 700 13px/1 var(--font-display);
+    transform: translateY(-1px);
+  }
+  .n.amber { background: var(--amber); }
+  .n.red { background: #ff6b5e; }
+
+  .note {
+    padding: 16px 20px;
+    border-left: 3px solid var(--amber);
+    background: rgba(242, 181, 65, 0.06);
+    border-radius: 0 12px 12px 0;
+    font-size: 16.5px !important;
+  }
+
+  .snippet {
+    margin: 0;
+    padding: 20px 22px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(7, 17, 12, 0.8);
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--cream);
+    overflow-x: auto;
+  }
+  .snippet code { color: inherit; font-size: inherit; }
+  .snippet .c { color: #6f8170; }
+  .snippet .p { color: var(--lime); }
+  .snippet .k { color: var(--rose); }
+  .snippet .s { color: var(--amber); }
+
+  /* ---------- pipeline strip + tiers ---------- */
+  .pipe { display: flex; margin-top: 36px; }
+  .stage {
+    flex: 1;
+    position: relative;
+    padding: 18px 18px 16px;
+    border: 1px solid var(--line);
+    background: rgba(16, 36, 26, 0.7);
+    font: 500 15px/1.2 var(--font-mono);
+    color: var(--cream);
+  }
+  .stage + .stage { border-left: 0; }
+  .stage:first-child { border-radius: 14px 0 0 14px; }
+  .stage:last-child { border-radius: 0 14px 14px 0; }
+  .stage small { display: block; margin-top: 8px; font: 400 14px/1.35 var(--font-display); color: var(--muted); }
+  .stage.bad { border-color: rgba(255, 107, 94, 0.7); background: rgba(255, 107, 94, 0.09); }
+  .stage.bad::before { content: "fault"; position: absolute; top: -12px; left: 14px; padding: 4px 8px; border-radius: 6px; background: #ff6b5e; color: #1a0705; font: 700 11px/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+  .tiers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; margin-top: 26px; }
+  .tier { padding: 26px 28px; border-radius: 18px; border: 1px solid var(--line); background: rgba(16, 36, 26, 0.65); }
+  .tier__k { margin: 0; font-size: 12.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lime); }
+  .tier--deep .tier__k { color: var(--amber); }
+  .tier h3 { margin: 12px 0 12px; font-size: clamp(22px, 2.2vw, 28px); line-height: 1.1; color: var(--cream); letter-spacing: -0.02em; }
+  .tier ul { margin: 0; padding-left: 20px; list-style: disc; color: var(--muted); font-size: 16.5px; line-height: 1.55; }
+  .tier li::marker { color: var(--lime); }
+  .tier--deep li::marker { color: var(--amber); }
+
+  /* ---------- ahead ---------- */
+  .ahead { padding-top: 40px; border-top: 1px solid var(--line); }
+  .ahead__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 22px; }
+  .ahead__grid div { padding-left: 22px; border-left: 2px solid rgba(242, 181, 65, 0.5); }
+  .ahead__grid b { display: block; margin-bottom: 8px; font-size: 20px; color: var(--cream); letter-spacing: -0.01em; }
+  .ahead__grid span { color: var(--muted); font-size: 16px; }
+  .ahead__ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 40px; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1000px) {
+    .intro__grid, .prose-grid, .duo, .duo--wide-right, .split, .split--small, .split--code, .tiers, .ahead__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .toc { position: static; }
+  }
+  @media (max-width: 700px) {
+    .pipe { flex-direction: column; }
+    .stage + .stage { border-left: 1px solid var(--line); border-top: 0; }
+    .stage:first-child { border-radius: 14px 14px 0 0; }
+    .stage:last-child { border-radius: 0 0 14px 14px; }
+    .stage.bad + .stage { border-top: 0; }
+    .legend-list { display: grid; }
+  }
+</style>

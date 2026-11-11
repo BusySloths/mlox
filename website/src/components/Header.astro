@@ -4,10 +4,11 @@ const releaseTag = import.meta.env.PUBLIC_MLOX_RELEASE_TAG;
 const releaseUrl = import.meta.env.PUBLIC_MLOX_RELEASE_URL || 'https://github.com/BusySloths/mlox/releases/latest';
 
 const navItems = [
-  { name: 'Tour', href: '#tour' },
-  { name: 'Features', href: '#features' },
-  { name: 'How it works', href: '#how' },
-  { name: 'Get started', href: '#get-started' },
+  { name: 'Tour', href: `${base}#tour` },
+  { name: 'Features', href: `${base}#features` },
+  { name: 'How it works', href: `${base}#how` },
+  { name: 'Tutorials & demos', href: `${base}learn/` },
+  { name: 'Get started', href: `${base}#get-started` },
   { name: 'Docs', href: `${base}docs/`, external: true },
   { name: releaseTag ? releaseTag : 'Releases', href: releaseUrl, external: true },
 ];

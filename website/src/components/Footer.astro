@@ -1,0 +1,80 @@
+---
+import { paper } from '../data/paper';
+
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+---
+
+<footer class="footer">
+  <div class="wrap footer__grid">
+    <div class="footer__brand">
+      <picture aria-hidden="true">
+        <source srcset={`${base}mlox_sloth_branch.webp`} type="image/webp" />
+        <img src={`${base}mlox_sloth_branch.png`} alt="" width="220" height="109" loading="lazy" />
+      </picture>
+      <p class="footer__tag"><span class="mono">MLOX</span>, MLOps-in-a-Box. <span class="serif">Slothfully simple.</span></p>
+      <p class="footer__small">Open source under the MIT license.</p>
+      <p class="footer__paper">
+        <span class="mono">Paper</span>
+        <a href={paper.url} target="_blank" rel="noopener noreferrer"><em>{paper.title}</em></a>,
+        {paper.venue}, ACM {paper.year}.
+      </p>
+    </div>
+    <nav aria-label="Resources">
+      <h4>Resources</h4>
+      <ul>
+        <li><a href={`${base}learn/`}>Tutorials &amp; demos</a></li>
+        <li><a href="https://github.com/BusySloths/mlox" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+        <li><a href={`${base}docs/`} target="_blank" rel="noopener noreferrer">API documentation</a></li>
+        <li><a href="https://github.com/BusySloths/mlox/blob/main/docs/INSTALLATION.md" target="_blank" rel="noopener noreferrer">Installation guide</a></li>
+        <li><a href="https://github.com/BusySloths/mlox/issues" target="_blank" rel="noopener noreferrer">Issues</a></li>
+        <li><a href="https://github.com/BusySloths/mlox/discussions" target="_blank" rel="noopener noreferrer">Discussions</a></li>
+      </ul>
+    </nav>
+    <nav aria-label="Community">
+      <h4>Community</h4>
+      <ul>
+        <li><a href="https://github.com/BusySloths/mlox/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a></li>
+        <li><a href="https://github.com/BusySloths/mlox/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener noreferrer">Code of conduct</a></li>
+        <li><a href="https://github.com/BusySloths/mlox/blob/main/docs/DOCTRINE.md" target="_blank" rel="noopener noreferrer">Doctrine</a></li>
+      </ul>
+    </nav>
+    <div>
+      <h4>Contact</h4>
+      <ul>
+        <li><a href="mailto:contact@mlox.org">contact@mlox.org</a></li>
+        <li><a href="https://mastodon.social/@drbusysloth" target="_blank" rel="noopener noreferrer">@drbusysloth on Mastodon</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="wrap footer__bottom mono">
+    <span>© 2026 BusySloths</span>
+    <a href="#top">back to the canopy ↑</a>
+  </div>
+</footer>
+
+<style>
+  .footer { border-top: 1px solid var(--line); background: rgba(7, 17, 12, 0.6); padding: 60px 0 30px; }
+  .footer__grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 36px; }
+  .footer__brand img { width: 170px; height: auto; opacity: 0.9; }
+  .footer__tag { margin: 18px 0 6px; color: var(--cream); font-size: 18px; }
+  .footer__tag .mono { letter-spacing: 0.12em; }
+  .footer__tag .serif { color: var(--lime); }
+  .footer__small { margin: 0; color: #6f8170; font-size: 14px; }
+  .footer__paper { margin: 16px 0 0; max-width: 36ch; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .footer__paper .mono { display: block; margin-bottom: 4px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber); }
+  .footer__paper a { color: var(--cream); text-underline-offset: 3px; }
+  .footer h4 { margin: 0 0 14px; font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lime); }
+  .footer ul { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+  .footer ul a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+  .footer ul a:hover { color: var(--cream); }
+  .footer__bottom { display: flex; justify-content: space-between; gap: 20px; margin-top: 50px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 12.5px; color: #6f8170; }
+  .footer__bottom a { color: var(--muted); text-decoration: none; }
+  .footer__bottom a:hover { color: var(--lime); }
+
+  @media (max-width: 1000px) {
+    .footer__grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .footer__grid { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

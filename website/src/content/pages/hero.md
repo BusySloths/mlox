@@ -1,8 +1,8 @@
 ---
-title: "Your ML stack. Your servers."
-eyebrow: "Open-source MLOps · MIT licensed"
-subtitle: "Slothfully simple."
-description: "MLOX deploys and runs MLflow, Airflow, LiteLLM, databases, model serving and monitoring on servers you own, and keeps it all connected around your product, in one encrypted project file you drive from the terminal."
+title: "Ditch the cloud."
+eyebrow: "Open-source infrastructure control plane · MIT licensed"
+subtitle: "Your infrastructure. Your rules."
+description: "MLOX turns servers you own into a platform you control. It sets up machines, Docker and Kubernetes, deploys databases, workflows, model serving, monitoring and many more services, wires them together, and keeps their credentials in a secret manager such as OpenBao. No managed platform, no lock-in, all from your terminal."
 cta_primary: "Get started"
 cta_primary_link: "#get-started"
 cta_secondary: "Star on GitHub"
@@ -21,6 +21,6 @@ stats:
 
 Keep your product at the center.
 
-MLOX manages servers, sets up Docker and Kubernetes clusters, deploys open-source services, stores project state and secrets in an encrypted project file, and wires dependencies across databases, workflows, experiment tracking, model serving, data services, and monitoring.
+MLOX manages servers, sets up Docker and Kubernetes clusters, deploys open-source services, keeps credentials in a secret manager such as OpenBao, and wires dependencies across databases, workflows, experiment tracking, model serving, data services, and monitoring.
 
 Built for solopreneurs, startups, and small teams that want to build their product instead of assembling infrastructure.
