@@ -25,7 +25,7 @@ const chapters = [
 
 <BaseLayout
   title="Catching a silent model failure, live · MLOX demo"
-  description="A model on Kubernetes starts giving wrong answers without throwing an error. MLOX discovers the pipeline from telemetry, flags the broken step and lets a reasoning model explain it. An experimental feature, shown on real infrastructure."
+  description="A model on Kubernetes starts giving wrong answers without throwing an error. MLOX discovers the pipeline from telemetry, flags the broken step, and a reasoning model explains the cause and proposes a fix. A person decides. An experimental feature, shown on real infrastructure."
 >
   <Header />
 
@@ -39,8 +39,8 @@ const chapters = [
           <h1 class="h-display intro__title rise rise-2">Catching a <span class="serif accent">silent</span> model failure, live.</h1>
           <p class="lede rise rise-3">
             A model served from Kubernetes starts giving wrong answers without throwing a single error. MLOX notices within a
-            few requests, points at the step inside the model that broke, and a reasoning model explains what happened and
-            proposes a fix.
+            few requests, points at the step inside the model that broke, and a reasoning model explains the cause and proposes a
+            fix. A person decides.
           </p>
           <ul class="chips mono rise rise-4">
             <li>live infrastructure</li>

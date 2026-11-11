@@ -18,7 +18,7 @@ export const learnEntries: LearnEntry[] = [
     kind: 'demo',
     title: 'Catching a silent model failure, live',
     summary:
-      'A model on Kubernetes starts giving wrong answers without a single error. Watch MLOX discover the pipeline from telemetry, flag the broken step and let a reasoning model explain what happened.',
+      'A model on Kubernetes starts giving wrong answers without a single error. Watch MLOX discover the pipeline from telemetry, flag the broken step and let a reasoning model explain the cause and propose a fix.',
     minutes: 8,
     tags: ['Operations', 'MLflow Gateway', 'OpenTelemetry', 'InfluxDB', 'OpenBao'],
     experimental: true,
