@@ -7,8 +7,12 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
+
+# On-screen clocks change every second; ignore them when deciding if a pane changed.
+CLOCK = re.compile(rb"\d{2}:\d{2}:\d{2}")
 
 
 def capture(panes: list[str], out: Path, *, duration: float, interval: float) -> None:
@@ -16,15 +20,23 @@ def capture(panes: list[str], out: Path, *, duration: float, interval: float) ->
         raise ValueError("duration and interval must be positive")
     out.mkdir(parents=True, exist_ok=True)
     previous: dict[str, str] = {}
+    warned: set[str] = set()
     started = time.monotonic()
     with (out / "frames.jsonl").open("a", encoding="utf-8") as index:
         while time.monotonic() - started < duration:
             for pane in panes:
                 result = subprocess.run(
                     ["herdr", "pane", "read", pane, "--source", "visible", "--format", "ansi"],
-                    capture_output=True, check=True,
+                    capture_output=True,
                 )
-                digest = hashlib.sha256(result.stdout).hexdigest()
+                if result.returncode != 0:
+                    # Briefly unreadable (e.g. while resizing): skip it and retry next round.
+                    if pane not in warned:
+                        print(f"cannot read pane {pane}: {result.stderr.decode(errors='replace').strip()}",
+                              file=sys.stderr)
+                        warned.add(pane)
+                    continue
+                digest = hashlib.sha256(CLOCK.sub(b"", result.stdout)).hexdigest()
                 if previous.get(pane) == digest:
                     continue
                 name = re.sub(r"[^\w-]", "_", pane)

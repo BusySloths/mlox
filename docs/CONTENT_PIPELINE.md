@@ -42,10 +42,12 @@ uv run python -m scripts.content_pipeline.capture \
   --out content/.work/operator-demo/frames --duration 600 --interval 2
 ```
 
-Only changed snapshots are saved, as truecolour `.ansi` files. `frames.jsonl`
-records the pane and elapsed time for each frame. Ctrl+C stops capture cleanly.
-Raw snapshots and maps belong under the gitignored `content/.work/` directory.
-Capture uses the installed Herdr CLI and fails if a pane cannot be read.
+Only changed snapshots are saved, as truecolour `.ansi` files; clock times
+(`HH:MM:SS`) are ignored when comparing, so a ticking clock alone does not
+create frames. `frames.jsonl` records the pane and elapsed time for each frame.
+Ctrl+C stops capture cleanly. Raw snapshots and maps belong under the
+gitignored `content/.work/` directory. Capture uses the installed Herdr CLI; a
+pane that cannot be read is skipped for that round and retried on the next.
 
 Create `content/.work/operator-demo/redact.json` as a reviewed JSON object
 mapping original strings to replacement strings. Use the existing `entities`

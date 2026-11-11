@@ -10,10 +10,33 @@ def test_capture_saves_only_changed_pane_frames(tmp_path, monkeypatch):
     times = iter([0, 0, 0, 0, 1, 1, 2, 3])
     monkeypatch.setattr(capture.time, "monotonic", lambda: next(times))
     monkeypatch.setattr(capture.time, "sleep", lambda _: None)
-    monkeypatch.setattr(capture.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=b"hello"))
+    monkeypatch.setattr(capture.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=b"hello", returncode=0))
     capture.capture(["w1:p1"], tmp_path, duration=2, interval=1)
     assert len(list(tmp_path.glob("*.ansi"))) == 1
     assert len((tmp_path / "frames.jsonl").read_text().splitlines()) == 1
+
+
+def test_capture_ignores_clock_ticks_and_skips_unreadable_panes(tmp_path, monkeypatch):
+    outputs = iter([
+        SimpleNamespace(stdout=b"12:00:01 ok", returncode=0),
+        SimpleNamespace(stdout=b"", stderr=b"busy", returncode=1),
+        SimpleNamespace(stdout=b"12:00:05 ok", returncode=0),
+        SimpleNamespace(stdout=b"12:00:07 changed", returncode=0),
+    ])
+
+    def run(*args, **kwargs):
+        try:
+            return next(outputs)
+        except StopIteration:
+            raise KeyboardInterrupt  # end capture once every output was read
+
+    monkeypatch.setattr(capture.time, "monotonic", lambda: 0)
+    monkeypatch.setattr(capture.time, "sleep", lambda _: None)
+    monkeypatch.setattr(capture.subprocess, "run", run)
+    with pytest.raises(KeyboardInterrupt):
+        capture.capture(["w1:p1"], tmp_path, duration=5, interval=1)
+    frames = sorted(tmp_path.glob("*.ansi"))
+    assert [f.read_bytes() for f in frames] == [b"12:00:01 ok", b"12:00:07 changed"]
 
 
 def test_capture_render_redacts_before_cropping_and_escapes_html(tmp_path):
