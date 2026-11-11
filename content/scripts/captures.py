@@ -6,7 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
-from scripts.content_pipeline import ansi2html
+from content.scripts import ansi2html
 
 
 def build(manifest: Path, frames: Path, out: Path, mapping: Path) -> list[Path]:

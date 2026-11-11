@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.content_pipeline.redact import (
-    DEFAULT_IP_PREFIX,
-    DEFAULT_LITERALS,
-    DEFAULT_PREFIXES,
+from content.scripts.redact import (
     Patch,
     build_filter_chain,
     classify_word,
@@ -104,7 +101,7 @@ def test_scene_pairs_covers_full_duration():
 
 
 def test_default_font_prefers_env_override(tmp_path, monkeypatch):
-    from scripts.content_pipeline.redact import default_font
+    from content.scripts.redact import default_font
 
     font = tmp_path / "Custom.ttf"
     font.write_bytes(b"")
@@ -113,7 +110,7 @@ def test_default_font_prefers_env_override(tmp_path, monkeypatch):
 
 
 def test_default_font_falls_back_to_first_existing_candidate(tmp_path, monkeypatch):
-    from scripts.content_pipeline import redact
+    from content.scripts import redact
 
     present = tmp_path / "Menlo.ttc"
     present.write_bytes(b"")
@@ -124,7 +121,7 @@ def test_default_font_falls_back_to_first_existing_candidate(tmp_path, monkeypat
 
 
 def test_default_font_raises_when_no_font_exists(tmp_path, monkeypatch):
-    from scripts.content_pipeline import redact
+    from content.scripts import redact
 
     monkeypatch.delenv("MLOX_CONTENT_FONT", raising=False)
     monkeypatch.setattr(redact, "FONT_CANDIDATES", (str(tmp_path / "missing.ttf"),))
@@ -143,7 +140,7 @@ def test_build_filter_chain_escapes_drawtext_specials(tmp_path):
 
 
 def test_match_entity_finds_contained_and_truncated_entities():
-    from scripts.content_pipeline.redact import match_entity
+    from content.scripts.redact import match_entity
 
     known = ["acme-sw-ag", "10.44.171.73", "demouser"]
     assert match_entity("Github:git@github.com:acme-sw-ag/x.git", known) == "acme-sw-ag"
@@ -157,7 +154,7 @@ def test_match_entity_finds_contained_and_truncated_entities():
 
 
 def test_scene_window_returns_enclosing_scene():
-    from scripts.content_pipeline.redact import scene_window
+    from content.scripts.redact import scene_window
 
     scenes = [(0.0, 4.0), (4.0, 9.5), (9.5, 12.0)]
     assert scene_window(5.0, scenes) == (4.0, 9.5)
@@ -202,7 +199,7 @@ def test_unknown_style_is_rejected():
 def test_style_roundtrips_through_redaction_json(tmp_path):
     import json
 
-    from scripts.content_pipeline.redact import load_style
+    from content.scripts.redact import load_style
 
     assert load_style(tmp_path) == "replace"  # no file: legacy behaviour
     (tmp_path / "redaction.json").write_text(
@@ -211,7 +208,7 @@ def test_style_roundtrips_through_redaction_json(tmp_path):
 
 
 def test_match_entity_accepts_ocr_fragments_of_entities():
-    from scripts.content_pipeline.redact import match_entity
+    from content.scripts.redact import match_entity
 
     known = ["10.44.91.15", "10.44.91.16", "tootflow"]
     # misread tail of a split IP ("91.15" read as "97.15")
@@ -229,7 +226,7 @@ def _tsv(*rows):
 
 
 def test_scan_tsv_ignores_confidence_for_entities_and_spans_ip_fragments():
-    from scripts.content_pipeline.redact import scan_tsv
+    from content.scripts.redact import scan_tsv
 
     # "10.44.91.15" read as three low-confidence fragments, then a table border
     tsv = _tsv(
@@ -248,7 +245,7 @@ def test_scan_tsv_ignores_confidence_for_entities_and_spans_ip_fragments():
 
 
 def test_scan_tsv_keeps_confidence_threshold_for_rule_matches():
-    from scripts.content_pipeline.redact import scan_tsv
+    from content.scripts.redact import scan_tsv
 
     tsv = _tsv((5, 1, 1, 1, 1, 1, 30, 30, 60, 30, 12.0, "nicococo"))
     classify = lambda w: "demo" if "nicococo" in w else None  # noqa: E731
@@ -260,7 +257,7 @@ def test_scan_tsv_keeps_confidence_threshold_for_rule_matches():
 def test_refine_patches_leaks_until_clean(tmp_path, monkeypatch):
     import json
 
-    from scripts.content_pipeline import redact
+    from content.scripts import redact
 
     (tmp_path / "redaction.json").write_text(json.dumps(
         {"style": "blur", "originals": ["10.44.91.15"], "patches": []}))
@@ -289,7 +286,7 @@ def test_refine_patches_leaks_until_clean(tmp_path, monkeypatch):
 def test_bridge_windows_fills_gaps_where_region_is_unchanged():
     import numpy as np
 
-    from scripts.content_pipeline.redact import bridge_windows
+    from content.scripts.redact import bridge_windows
 
     text = np.tile(np.array([[30, 200]], dtype=np.uint8), (4, 5))  # glyph-like texture
     blank = np.zeros((4, 10), dtype=np.uint8)
@@ -304,7 +301,7 @@ def test_bridge_windows_fills_gaps_where_region_is_unchanged():
 
 
 def test_bridge_windows_leaves_windows_without_reference_untouched():
-    from scripts.content_pipeline.redact import bridge_windows
+    from content.scripts.redact import bridge_windows
 
     assert bridge_windows({(1.0, 2.0)}, [], duration=5.0) == {(1.0, 2.0)}
 
@@ -312,7 +309,7 @@ def test_bridge_windows_leaves_windows_without_reference_untouched():
 def test_bridge_windows_extends_partially_into_a_changing_gap():
     import numpy as np
 
-    from scripts.content_pipeline.redact import bridge_windows
+    from content.scripts.redact import bridge_windows
 
     text = np.tile(np.array([[30, 200]], dtype=np.uint8), (4, 5))
     other = np.tile(np.array([[200, 30]], dtype=np.uint8), (4, 5))
@@ -327,7 +324,7 @@ def test_bridge_windows_extends_partially_into_a_changing_gap():
 def test_bridge_windows_never_spreads_through_empty_regions():
     import numpy as np
 
-    from scripts.content_pipeline.redact import bridge_windows
+    from content.scripts.redact import bridge_windows
 
     text = np.tile(np.array([[30, 200]], dtype=np.uint8), (4, 5))
     empty = np.full((4, 10), 25, dtype=np.uint8)
@@ -340,7 +337,7 @@ def test_bridge_windows_never_spreads_through_empty_regions():
 
 
 def test_scan_tsv_ip_span_does_not_swallow_neighbouring_columns():
-    from scripts.content_pipeline.redact import scan_tsv
+    from content.scripts.redact import scan_tsv
 
     # "10.44.165.102 otel 15.5% 7.4%" in a tightly packed monitor table
     tsv = _tsv(

@@ -1,25 +1,17 @@
 ---
-slug: pilot-demo
-title: "MLOX in two minutes: from command line to your infrastructure"
-type: demo
+slug: tui-teaser
+title: "MLOX in a minute: the terminal UI on real infrastructure"
+type: showcase
 status: draft
 chapters:
   - command-line
   - load-project
   - main-screen
   - navigate-tabs
-outputs:
-  - type: readme_gif
-    dest: mlox/resources/tui-demo.gif
-  - type: screenshot
-    dest: mlox/resources/tui-login.png
-  - type: screenshot
-    dest: mlox/resources/tui-overview.png
-  - type: screenshot
-    dest: mlox/resources/tui-tabs.png
+# Outputs are listed in content/registry.yaml.
 ---
 
-# MLOX in two minutes: from command line to your infrastructure
+# MLOX in a minute: the terminal UI on real infrastructure
 
 > Narration cues are blockquotes (speak them); on-screen steps are bullets
 > (do them). Start each chapter with a spoken `chapter: <name>` marker.

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.content_pipeline import ansi2html, capture, captures
+from content.scripts import ansi2html, capture, captures
 
 
 def test_capture_saves_only_changed_pane_frames(tmp_path, monkeypatch):

@@ -30,7 +30,7 @@ Each file has frontmatter (metadata between `---`) and content below:
 - **getting-started.md** - Install steps with copyable commands
 
 Screenshots and the hero video (`public/mlox_tui_*`) come from the content
-pipeline (`content/registry.yaml`, piece `website-tui`): they are recorded from a
+pipeline (`content/registry.yaml`, piece `tui-teaser`): they are recorded from a
 real project and redacted before they land here. See `docs/CONTENT_PIPELINE.md`.
 
 ## 🧞 Commands

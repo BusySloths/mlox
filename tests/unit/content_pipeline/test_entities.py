@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from scripts.content_pipeline import entities
+from content.scripts import entities
 
 
 SERVERS = [

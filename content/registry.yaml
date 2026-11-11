@@ -35,27 +35,23 @@ defaults:
     width: 960
 
 pieces:
-  - slug: pilot-demo
-    type: demo
-    title: "MLOX in two minutes: from command line to your infrastructure"
-    status: recorded
+  - slug: tui-teaser
+    type: showcase
+    title: "MLOX in a minute: the terminal UI on real infrastructure"
+    # Being redone from terminal captures; the published files below still come
+    # from the earlier screen recordings.
+    status: draft
     services: []
     outputs:
+      # README
       - type: readme_gif
         dest: mlox/resources/tui-demo.gif
       - type: screenshot
-        dest: mlox/resources/tui-login.png
-      - type: screenshot
         dest: mlox/resources/tui-overview.png
-      - type: screenshot
-        dest: mlox/resources/tui-tabs.png
-
-  - slug: website-tui
-    type: showcase
-    title: "Website gallery: the MLOX TUI on real infrastructure"
-    status: recorded
-    services: []
-    outputs:
+      # Website hero teaser
+      - type: clip
+        dest: website/public/mlox_tui_tour.mp4
+      # Website gallery, how-it-works and social preview
       - type: screenshot
         dest: website/public/mlox_tui_overview.png
       - type: screenshot
@@ -78,19 +74,6 @@ pieces:
         dest: website/public/mlox_tui_catalog.png
       - type: screenshot
         dest: website/public/mlox_tui_cli.png
-      - type: clip
-        dest: website/public/mlox_tui_tour.mp4
-
-  - slug: install-to-first-service
-    type: tutorial
-    title: "Install MLOX, open the TUI, deploy your first service"
-    status: draft
-    services: []
-    outputs:
-      - type: article
-        dest: docs/tutorial-install-to-first-service.md
-      - type: readme_gif
-        dest: mlox/resources/tui-demo.gif
 
   - slug: operator-demo
     type: demo

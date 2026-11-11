@@ -12,7 +12,7 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-from scripts.content_pipeline import redact
+from content.scripts import redact
 
 
 def _redaction_vf(

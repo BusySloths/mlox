@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.content_pipeline import normalize
+from content.scripts import normalize
 
 
 def test_video_filter_preserves_aspect_ratio_and_makes_dimensions_even():

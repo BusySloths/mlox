@@ -1,6 +1,6 @@
 """Content pipeline CLI.
 
-    uv run python -m scripts.content_pipeline <stage> …
+    uv run python -m content.scripts <stage> …
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-from scripts.content_pipeline import (
+from content.scripts import (
     config,
     cut,
     entities,
@@ -166,10 +166,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 def cmd_render(args: argparse.Namespace) -> int:
     piece, _ = piece_config(args)
-    timeline_path = work_dir(args) / "timeline.json"
-    timeline = None
-    if timeline_path.exists():
-        timeline = json.loads(timeline_path.read_text())
+    # Timeline chapters are not passed to the article yet (see docs/CONTENT_PIPELINE.md).
     for output in piece.outputs:
         if output.get("type") == "article":
             dest = render.publish_article(args.script, repo_root(args) / output["dest"])
@@ -207,14 +204,14 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
 
 
 def cmd_align(args: argparse.Namespace) -> int:
-    from scripts.content_pipeline import align as align_mod
+    from content.scripts import align as align_mod
 
     align_mod.align(args.video, args.script, str(work_dir(args) / "timeline.json"))
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="content_pipeline")
+    parser = argparse.ArgumentParser(prog="content.scripts")
     parser.add_argument("--repo-root", default=".")
     parser.add_argument("--registry", default=DEFAULT_REGISTRY)
     sub = parser.add_subparsers(dest="cmd", required=True)

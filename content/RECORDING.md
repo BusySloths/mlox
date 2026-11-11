@@ -39,7 +39,7 @@ supported alternative when it produces crisper terminal and UI text.
 
 ## After recording
 
-1. `uv run python -m scripts.content_pipeline ingest content/recordings/<slug>.mkv`
+1. `uv run python -m content.scripts ingest content/recordings/<slug>.mkv`
 2. Run `normalize` to create `content/.work/<slug>/normalized.mp4`.
 3. Use that normalized file for transcribe, redact (review `redaction.json`),
    cut, verify, render, and publish. See `docs/CONTENT_PIPELINE.md`.

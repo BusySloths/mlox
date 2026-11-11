@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.content_pipeline.transcribe import (
+from content.scripts.transcribe import (
     Segment,
     extract_markers,
     srt_from_segments,
@@ -58,7 +58,7 @@ def test_transcribe_uses_verbose_json_segments_when_present(tmp_path, monkeypatc
 
 
 def test_transcribe_falls_back_to_chunked_mode(tmp_path, monkeypatch):
-    import scripts.content_pipeline.transcribe as stt
+    import content.scripts.transcribe as stt
 
     audio = tmp_path / "audio.ogg"
     audio.write_bytes(b"fake")

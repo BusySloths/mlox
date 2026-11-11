@@ -14,6 +14,7 @@ artifacts only.
 | Item | Location | Versioned? |
 | --- | --- | --- |
 | Piece metadata and output destinations | `content/registry.yaml` | Yes |
+| Pipeline tooling (`python -m content.scripts …`) | `content/scripts/` | Yes |
 | Spoken/on-screen source script | `content/<slug>/script.md` | Yes |
 | Recording | `content/recordings/<slug>.<ext>` | No |
 | Normalized working video, transcript, timeline, redaction map, frames | `content/.work/<slug>/` | No |
@@ -29,7 +30,7 @@ recording. See the [recording checklist](../content/RECORDING.md).
 The operator demo deck was produced from real Herdr pane snapshots rather than
 desktop video. This keeps terminal text sharp at any PDF zoom and lets us
 redact text before rendering. The reusable helpers live in
-`scripts/content_pipeline`; they do not simulate model outputs or drive the demo.
+`content/scripts`; they do not simulate model outputs or drive the demo.
 Run the traffic and TUI normally and capture their visible panes while you work.
 
 ```sh
@@ -37,7 +38,7 @@ Run the traffic and TUI normally and capture their visible panes while you work.
 herdr pane --help
 
 # Replace these IDs with the traffic and TUI pane IDs.
-uv run python -m scripts.content_pipeline.capture \
+uv run python -m content.scripts.capture \
   --pane w1:p8 --pane w1:p7 \
   --out content/.work/operator-demo/frames --duration 600 --interval 2
 ```
@@ -74,7 +75,7 @@ optionally narrows Rich panels while redrawing their borders. These are edits
 for presentation; retain the raw snapshots for reference.
 
 ```sh
-uv run python -m scripts.content_pipeline.captures \
+uv run python -m content.scripts.captures \
   content/.work/operator-demo/captures.json \
   --frames content/.work/operator-demo/frames \
   --map content/.work/operator-demo/redact.json \
@@ -119,17 +120,17 @@ Python dependencies.
 
 ```bash
 # 1. Validate the recording preset. Fix warnings before continuing.
-uv run python -m scripts.content_pipeline ingest content/recordings/<slug>.mp4
+uv run python -m content.scripts ingest content/recordings/<slug>.mp4
 
 # 2. Create a local working master. It preserves aspect ratio and uses the
 #    registry limits (default: at most 1920x1440; 3000x2000 becomes 1920x1280).
-uv run python -m scripts.content_pipeline normalize content/recordings/<slug>.mp4 --slug <slug>
+uv run python -m content.scripts normalize content/recordings/<slug>.mp4 --slug <slug>
 
 # All remaining visual stages use the normalized working master.
 WORKING=content/.work/<slug>/normalized.mp4
 
 # 3. Create transcript.json and captions.srt; chapter markers are approximate.
-uv run python -m scripts.content_pipeline transcribe "$WORKING" --slug <slug>
+uv run python -m content.scripts transcribe "$WORKING" --slug <slug>
 
 # 4. Until automated visual alignment exists, review frames and create this
 #    local timeline by hand. Do not estimate chapter bounds from memory.
@@ -139,25 +140,25 @@ uv run python -m scripts.content_pipeline transcribe "$WORKING" --slug <slug>
 # 5. Collect the project's ground-truth sensitive strings (IPs, git owners,
 #    hostnames, emails) through the mlox CLI. The password is read from
 #    MLOX_PROJECT_PASSWORD_<NAME> (or MLOX_PROJECT_PASSWORD) and never put on argv.
-uv run python -m scripts.content_pipeline entities --slug <slug> --project <name>.mlox
+uv run python -m content.scripts entities --slug <slug> --project <name>.mlox
 
 # 6. Detect possible sensitive text, inspect redaction.json, then apply it.
 #    --style blur (default) | box | replace; --refine N re-OCRs the result.
-uv run python -m scripts.content_pipeline redact "$WORKING" --slug <slug>
+uv run python -m content.scripts redact "$WORKING" --slug <slug>
 
 # Re-run with --yes only after reviewing the mapping.
-uv run python -m scripts.content_pipeline redact "$WORKING" --slug <slug> --yes
+uv run python -m content.scripts redact "$WORKING" --slug <slug> --yes
 
 # 7. Make screenshots and one GIF from explicit, reviewed timestamps.
-uv run python -m scripts.content_pipeline cut "$WORKING" \
+uv run python -m content.scripts cut "$WORKING" \
   --slug <slug> --shots 12 48 --gif 54 66 --out /tmp/<slug>-artifacts
 
 # 8. Check every final visual artifact before committing or publishing.
-uv run python -m scripts.content_pipeline verify /tmp/<slug>-artifacts/*.png \
+uv run python -m content.scripts verify /tmp/<slug>-artifacts/*.png \
   /tmp/<slug>-artifacts/demo.gif --slug <slug>
 
 # 9. Render an article when the piece declares an article output.
-uv run python -m scripts.content_pipeline render --slug <slug> \
+uv run python -m content.scripts render --slug <slug> \
   --script content/<slug>/script.md
 ```
 

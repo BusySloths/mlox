@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.content_pipeline.config import RegistryError, load_registry
+from content.scripts.config import RegistryError, load_registry
 
 
 def write_registry(tmp_path, text: str):
