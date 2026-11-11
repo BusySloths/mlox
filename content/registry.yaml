@@ -38,8 +38,7 @@ pieces:
   - slug: tui-teaser
     type: showcase
     title: "MLOX in a minute: the terminal UI on real infrastructure"
-    # Terminal captures (content/.work/tui-teaser/); mlox_tui_repositories.png is
-    # still from the earlier screen recording.
+    # Rendered from terminal captures in content/.work/tui-teaser/ (see script.md).
     status: recorded
     services: []
     outputs:
