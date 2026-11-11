@@ -2299,3 +2299,18 @@ def test_models_describe_model_operations_adds_standalone_registry_group():
     assert result.success
     assert result.data["registries"][0]["name"] == "Standalone Endpoints"
     assert result.data["endpoints"][0]["registry_id"] == models.STANDALONE_REGISTRY_ID
+
+
+def test_models_curl_credentials_are_masked_for_display_and_restored_for_use():
+    example = "curl -k -u 'user:s3cret' \\\n  https://endpoint.example/invocations"
+
+    shown = models.mask_curl_credentials(example)
+
+    assert "s3cret" not in shown
+    assert f"-u 'user:{models.PASSWORD_MASK}'" in shown
+    assert models.unmask_curl_credentials(shown, example) == example
+    edited = shown.replace("invocations", "predict")
+    assert models.unmask_curl_credentials(edited, example) == example.replace("invocations", "predict")
+    typed = shown.replace(models.PASSWORD_MASK, "other")
+    assert models.unmask_curl_credentials(typed, example) == typed
+    assert models.mask_curl_credentials("curl https://x") == "curl https://x"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shlex
 from typing import Any, Dict, Optional
 
@@ -13,6 +14,8 @@ from mlox.project.state import WorkspaceState
 
 
 STANDALONE_REGISTRY_ID = "__standalone__"
+PASSWORD_MASK = "••••••••"
+_CURL_USER = re.compile(r"(-u|--user)(\s+)'([^':]*):([^']*)'")
 
 
 def describe_model_operations(infra) -> OperationResult:
@@ -64,6 +67,32 @@ def build_model_example(
     except Exception as exc:
         return OperationResult(False, 41, f"Could not build example: {exc}")
     return OperationResult(True, 0, "Model example loaded.", {"example": example})
+
+
+def mask_curl_credentials(example: str) -> str:
+    """Hide the password in a curl `-u 'user:password'` argument for display."""
+
+    return _CURL_USER.sub(
+        lambda m: f"{m.group(1)}{m.group(2)}'{m.group(3)}:{PASSWORD_MASK}'", example
+    )
+
+
+def unmask_curl_credentials(shown: str, example: str) -> str:
+    """Restore the credentials of `example` in a masked, possibly edited copy.
+
+    Only a masked password is replaced, so a password typed into the copy wins.
+    """
+
+    real = _CURL_USER.search(example)
+    if real is None:
+        return shown
+
+    def restore(m: re.Match[str]) -> str:
+        if m.group(4) != PASSWORD_MASK:
+            return m.group(0)
+        return f"{m.group(1)}{m.group(2)}'{m.group(3)}:{real.group(4)}'"
+
+    return _CURL_USER.sub(restore, shown)
 
 
 def call_model_example(example: str, *, timeout: int = 60) -> OperationResult:

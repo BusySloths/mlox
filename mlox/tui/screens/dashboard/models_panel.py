@@ -16,6 +16,8 @@ from mlox.application.use_cases.models import (
     build_model_example,
     call_model_example,
     describe_model_operations,
+    mask_curl_credentials,
+    unmask_curl_credentials,
 )
 
 from .model import SelectionInfo
@@ -52,6 +54,8 @@ class ModelsPanel(Static):
         self._endpoints: list[dict[str, Any]] = []
         self._models_by_endpoint: dict[str, list[dict[str, Any]]] = {}
         self._example_cache: dict[tuple[str, str], str] = {}
+        # The example with real credentials; the text area shows it masked.
+        self._example_raw = ""
         self._registry_ids: list[str] = []
         self._endpoint_ids: list[str] = []
         self._model_ids: list[str] = []
@@ -205,8 +209,15 @@ class ModelsPanel(Static):
     def handle_call_model(self, _: Button.Pressed) -> None:
         self.call_current_example()
 
+    def _show_example(self, example: str) -> None:
+        self._example_raw = example
+        self.example.text = mask_curl_credentials(example)
+
+    def _current_example(self) -> str:
+        return unmask_curl_credentials(self.example.text.strip(), self._example_raw)
+
     def copy_current_example(self) -> bool:
-        example = self.example.text.strip()
+        example = self._current_example()
         if not example or not example.startswith("curl"):
             self.app.notify("No curl example is available to copy.", severity="warning")
             return False
@@ -222,7 +233,7 @@ class ModelsPanel(Static):
         return True
 
     def call_current_example(self) -> bool:
-        example = self.example.text.strip()
+        example = self._current_example()
         if not example or not example.startswith("curl"):
             self.app.notify("Load a curl example before calling the model.", severity="warning")
             return False
@@ -308,7 +319,7 @@ class ModelsPanel(Static):
     def _show_example_prompt(self, endpoint_id: str, model_id: str) -> None:
         cached = self._example_cache.get((endpoint_id, model_id))
         if cached is not None:
-            self.example.text = cached
+            self._show_example(cached)
             return
         self.example.text = "Press Load Curl Example to build the serving example."
 
@@ -319,7 +330,7 @@ class ModelsPanel(Static):
         cache_key = (endpoint_id, model_id)
         cached = self._example_cache.get(cache_key)
         if cached is not None:
-            self.example.text = cached
+            self._show_example(cached)
             return
         endpoint = self._endpoint_by_id(endpoint_id)
         if not endpoint:
@@ -370,12 +381,15 @@ class ModelsPanel(Static):
             return
         example = str((result.data or {}).get("example") or "")
         self._example_cache[cache_key] = example
-        self.example.text = example or "No invocation example is available."
+        if example:
+            self._show_example(example)
+        else:
+            self.example.text = "No invocation example is available."
 
     def _show_call_result(self, request_id: int, example: str, result) -> None:
         if request_id != self._example_request_id:
             return
-        self.example.text = example
+        self._show_example(example)
         body = str((result.data or {}).get("body") or result.message)
         title = "Model Response" if result.success else "Model Call Failed"
         self.app.push_screen(ModelCallResultDialog(title, body))
