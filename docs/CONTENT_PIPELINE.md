@@ -24,6 +24,76 @@ Use `## Chapter: <name>` headings, bullets for on-screen actions, and `>`
 blockquotes for narration. Speak `chapter: <name>` before each chapter while
 recording. See the [recording checklist](../content/RECORDING.md).
 
+## Terminal captures without screen recording
+
+The operator demo deck was produced from real Herdr pane snapshots rather than
+desktop video. This keeps terminal text sharp at any PDF zoom and lets us
+redact text before rendering. The reusable helpers live in
+`scripts/content_pipeline`; they do not simulate model outputs or drive the demo.
+Run the traffic and TUI normally and capture their visible panes while you work.
+
+```sh
+# Find the pane IDs for your current session.
+herdr pane --help
+
+# Replace these IDs with the traffic and TUI pane IDs.
+uv run python -m scripts.content_pipeline.capture \
+  --pane w1:p8 --pane w1:p7 \
+  --out content/.work/operator-demo/frames --duration 600 --interval 2
+```
+
+Only changed snapshots are saved, as truecolour `.ansi` files. `frames.jsonl`
+records the pane and elapsed time for each frame. Ctrl+C stops capture cleanly.
+Raw snapshots and maps belong under the gitignored `content/.work/` directory.
+Capture uses the installed Herdr CLI and fails if a pane cannot be read.
+
+Create `content/.work/operator-demo/redact.json` as a reviewed JSON object
+mapping original strings to replacement strings. Use the existing `entities`
+stage to inventory project-specific names and addresses; add local usernames,
+repository names and identifiers visible in the panes. There are no hardcoded
+personal values in these helpers. Replacements preserve row lengths and colours;
+shorter values shift their spare spaces to the next column gap, and longer
+values are truncated to the original length.
+
+Select the moments to include in
+`content/.work/operator-demo/captures.json`, using filenames from `frames.jsonl`:
+
+```json
+{
+  "setup_traffic": {"frame": "FRAME_TRAFFIC.ansi", "rows": "0:1,4:27", "fit": 84},
+  "setup_tui": {"frame": "FRAME_TUI.ansi"},
+  "incident": {"frame": "FRAME_INCIDENT.ansi", "rows": "11:34,50:57", "crop": ":,70:219"}
+}
+```
+
+Row and column ranges are zero-based Python slices with exclusive ends.
+`rows` selects ranges first, `crop` then crops rows and columns, and `fit`
+optionally narrows Rich panels while redrawing their borders. These are edits
+for presentation; retain the raw snapshots for reference.
+
+```sh
+uv run python -m scripts.content_pipeline.captures \
+  content/.work/operator-demo/captures.json \
+  --frames content/.work/operator-demo/frames \
+  --map content/.work/operator-demo/redact.json \
+  --out content/operator-demo/deck/captures
+
+# Inline the fragments and print the deck using local Chrome.
+uv run python content/operator-demo/deck/build.py
+# Or build HTML for review without launching Chrome.
+uv run python content/operator-demo/deck/build.py --html-only
+```
+
+The deck template uses `{{capture:setup_traffic}}` slots for these fragments.
+The existing builder also embeds CSS and resolves local assets; the default PDF
+output is `content/.work/operator-demo/operator-demo-deck.pdf`. Review the
+fragments and final deck before committing captures. Rendering rejects known
+originals left in the text, but cannot detect sensitive strings missing from
+your map. The ANSI renderer supports SGR-coloured visible snapshots, not raw
+interactive terminal streams, cursor movement, or full Unicode cell-width
+emulation. This workflow produces HTML/PDF, not a timed video or narration;
+use the video stages below when those are needed.
+
 ## Before recording
 
 1. Add or update the piece in `content/registry.yaml`. Give every output a
