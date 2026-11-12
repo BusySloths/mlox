@@ -361,6 +361,7 @@ name = "busysloths-mlox"
 source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },
+    { name = "click" },
     { name = "cryptography" },
     { name = "dacite" },
     { name = "fabric" },
@@ -449,6 +450,7 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'dev'", specifier = ">=1.40.56" },
     { name = "boto3", marker = "extra == 'minio'", specifier = ">=1.40.56" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.1" },
+    { name = "click", specifier = ">=8.1" },
     { name = "colorama", marker = "extra == 'dev'", specifier = ">=0.4.6" },
     { name = "cryptography", specifier = ">=43.0.1" },
     { name = "dacite", specifier = ">=1.9.2" },
@@ -503,7 +505,7 @@ requires-dist = [
     { name = "textual-serve", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "textual-serve", marker = "extra == 'tui'", specifier = ">=1.1" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "typer", specifier = ">=0.17.4" },
+    { name = "typer", specifier = ">=0.17.4,<0.26" },
 ]
 provides-extras = ["ducklake", "gcp", "feast", "minio", "tui", "dev"]
 
