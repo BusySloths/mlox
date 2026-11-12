@@ -196,7 +196,7 @@ ProjectSwitchDialog {
 
 #sidebar {
   width: 32;
-  border: round #eccf2eff;
+  border: round #35635bff;
   padding: 0;
   margin-right: 1;
 }
@@ -3101,4 +3101,17 @@ Tree {
 #influx-message {
   height: auto;
   color: #94a3b8;
+}
+
+#infra-tree {
+  height: 1fr;
+  overflow-x: hidden;
+}
+
+#tree-selection-summary {
+  height: auto;
+  padding: 1;
+  color: #f5d0fe;
+  background: #351433;
+  border-top: solid #c85bb7;
 }

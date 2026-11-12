@@ -34,47 +34,37 @@ CAPABILITY_LABELS = {
     "llm": "LLM",
 }
 
-# Only capabilities that describe a service's purpose belong in the tree.
-# Operational contracts (health, logs, and bindings) remain available elsewhere.
-SERVICE_PURPOSE_CAPABILITIES = frozenset({
-    "app", "web_ui", "proxy", "secret_manager", "repository", "model_registry",
-    "model_server", "monitor", "observability", "data_warehouse", "object_storage",
-    "s3_object_storage", "spreadsheet", "database", "vector_database", "cache",
-    "message_broker", "workflow_orchestrator", "feature_store", "container_registry",
-    "deployment", "llm", "dashboard", "developer_tools",
-})
-
-# Muted colors stay consistent across services and dashboard refreshes. Plugin
+# Vivid colors stay consistent across services and dashboard refreshes. Plugin
 # capabilities use a stable hash so their appearance does not depend on order.
 CAPABILITY_COLORS = {
-    "app": "#a58bb8",
-    "proxy": "#b58979",
-    "secret_manager": "#bd9a68",
-    "secret_manager_binding": "#ad8e72",
-    "health": "#8da276",
-    "logs": "#899596",
-    "repository": "#a18c80",
-    "model_registry": "#b189a7",
-    "model_server": "#8d8eb7",
-    "monitor": "#83a39a",
-    "observability": "#779b9b",
-    "telemetry_binding": "#7995a9",
-    "data_warehouse": "#b39b70",
-    "object_storage": "#809fac",
-    "s3_object_storage": "#7890ab",
-    "spreadsheet": "#83a581",
-    "database": "#8d9cbd",
-    "vector_database": "#9d8fae",
-    "cache": "#bba477",
-    "message_broker": "#b58a84",
-    "workflow_orchestrator": "#83a6a1",
-    "feature_store": "#9da482",
-    "container_registry": "#9c92a8",
-    "deployment": "#9e9d78",
-    "llm": "#af87a0",
-    "dashboard": "#8d9ca0",
-    "developer_tools": "#ac947d",
-    "web_ui": "#a38ca8",
+    "app": "#e879f9",
+    "proxy": "#fb923c",
+    "secret_manager": "#fbbf24",
+    "secret_manager_binding": "#f9a8d4",
+    "health": "#a3e635",
+    "logs": "#67e8f9",
+    "repository": "#fdba74",
+    "model_registry": "#f472b6",
+    "model_server": "#a78bfa",
+    "monitor": "#5eead4",
+    "observability": "#2dd4bf",
+    "telemetry_binding": "#7dd3fc",
+    "data_warehouse": "#facc15",
+    "object_storage": "#38bdf8",
+    "s3_object_storage": "#60a5fa",
+    "spreadsheet": "#86efac",
+    "database": "#93c5fd",
+    "vector_database": "#c084fc",
+    "cache": "#fde047",
+    "message_broker": "#fb7185",
+    "workflow_orchestrator": "#5eead4",
+    "feature_store": "#bef264",
+    "container_registry": "#c4b5fd",
+    "deployment": "#d9f99d",
+    "llm": "#f0abfc",
+    "dashboard": "#67e8f9",
+    "developer_tools": "#fdba74",
+    "web_ui": "#f5a3ed",
 }
 
 
@@ -97,8 +87,49 @@ BACKEND_STYLES = {
 }
 
 
+
+def service_capability_badges(service: object) -> Text:
+    """Show every capability with stable colors in the selection summary."""
+    badges = Text()
+    for capability in get_service_capabilities(service):
+        if badges:
+            badges.append(" ")
+        badges.append(
+            f" {format_tree_token(capability)} ",
+            style=f"bold #25102d on {capability_color(capability)}",
+        )
+    return badges
+
+
+# Specific roles precede broad capabilities such as database, app, and web UI.
+PRIMARY_ROLE_PRIORITY = (
+    "secret_manager", "proxy", "workflow_orchestrator", "feature_store",
+    "model_registry", "model_server", "llm", "vector_database", "cache",
+    "object_storage", "s3_object_storage", "data_warehouse", "message_broker",
+    "container_registry", "repository", "observability", "monitor",
+    "spreadsheet", "database", "deployment", "developer_tools", "dashboard",
+    "app", "web_ui",
+)
+CAPABILITY_LABELS.update({
+    "secret_manager": "Secrets", "message_broker": "Messaging",
+    "observability": "Observability", "monitor": "Monitoring",
+    "s3_object_storage": "Object Storage",
+})
+
+
+def primary_service_role(service: object) -> str:
+    """Choose a stable, specific purpose independent of capability ordering."""
+    capabilities = set(get_service_capabilities(service))
+    for capability in PRIMARY_ROLE_PRIORITY:
+        if capability in capabilities:
+            return CAPABILITY_LABELS.get(capability, format_tree_token(capability))
+    return ""
+
+
 class InfraTree(Tree[SelectionInfo]):
     """Tree showing the current infrastructure bundles, servers and services."""
+
+    DEFAULT_CSS = "InfraTree { width: 1fr; height: 1fr; overflow-x: hidden; }"
 
     # Keep row selection separate from expansion. The disclosure arrow remains
     # the only way to collapse or expand a branch.
@@ -110,6 +141,8 @@ class InfraTree(Tree[SelectionInfo]):
     def __init__(self) -> None:
         super().__init__("Infrastructure", id="infra-tree")
         self.auto_expand = False
+        self.show_guides = True
+        self.guide_depth = 2
 
     def action_ignore_tree_toggle(self) -> None:
         """Prevent keyboard selection from toggling branch expansion."""
@@ -123,13 +156,7 @@ class InfraTree(Tree[SelectionInfo]):
         self.clear()
         workspace = getattr(self.app, "workspace", None)
         project_name = getattr(workspace, "name", None)
-        active_secret_manager = getattr(
-            workspace, "active_secret_manager_name", "Unknown"
-        )
-        root_label = Text(project_name or "Infrastructure")
-        root_label.append("  Secrets: ", style="dim")
-        root_label.append(active_secret_manager, style="bold green")
-        self.root.label = root_label
+        self.root.label = Text(project_name or "Infrastructure", style="bold")
         self.root.data = SelectionInfo(
             type="root", bundle=None, server=None, service=None
         )
@@ -144,7 +171,12 @@ class InfraTree(Tree[SelectionInfo]):
 
         for bundle in infra.bundles:
             server = getattr(bundle, "server", None)
-            bundle_label = Text(str(bundle.name))
+            backends = get_server_backends(server)
+            bundle_style = (
+                BACKEND_STYLES.get(backends[0], "bold bright_white")
+                if backends else "bold yellow"
+            )
+            bundle_label = Text(str(bundle.name).upper(), style=bundle_style)
             if not is_bundle_initialized(bundle):
                 bundle_label.append("  State: ", style="dim")
                 bundle_label.append("pending", style="bold yellow")
@@ -198,24 +230,19 @@ def server_tree_label(server: object | None) -> Text:
             )
     else:
         label.append("Unknown", style="bold yellow")
-    label.append(": ", style="dim")
+    label.append(" · ", style="dim")
     label.append(str(getattr(server, "ip", "unknown")), style="dim")
     return label
 
 
 def service_tree_label(service: object) -> Text:
-    """Return the compact service label used in the infrastructure tree."""
-
-    label = Text(str(getattr(service, "name", "-")), style="#ffffff")
-    capabilities = [capability for capability in get_service_capabilities(service)
-                    if capability in SERVICE_PURPOSE_CAPABILITIES]
-    if capabilities:
-        label.append("  ")
-        for index, capability in enumerate(capabilities):
-            if index:
-                label.append(" ")
-            name = CAPABILITY_LABELS.get(capability, format_tree_token(capability)).lower()
-            label.append(f" {name} ", style=f"#052628 on {capability_color(capability)}")
+    """Keep the main capability before the name at every sidebar width."""
+    label = Text()
+    role = primary_service_role(service)
+    if role:
+        label.append(role, style="dim")
+        label.append(" · ", style="dim")
+    label.append(str(getattr(service, "name", "-")))
     return label
 
 

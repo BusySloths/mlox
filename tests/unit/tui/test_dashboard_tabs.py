@@ -1065,7 +1065,7 @@ async def _activate_service_secret_manager() -> tuple[str, str]:
             await pilot.pause(0.05)
         await pilot.press("ctrl+a")
         deadline = time.monotonic() + 2
-        while "External Vault" not in app.query_one("#infra-tree").root.label.plain:
+        while app.workspace.active_secret_manager_name != "External Vault":
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for active manager switch.")
             await pilot.pause(0.05)
@@ -1079,7 +1079,7 @@ def test_secret_manager_ctrl_a_activates_selected_manager() -> None:
     active_name, root_label = asyncio.run(_activate_service_secret_manager())
 
     assert active_name == "External Vault"
-    assert root_label == "test-project  Secrets: External Vault"
+    assert root_label == "test-project"
 
 
 async def _secret_manager_revealed_text() -> str:
@@ -1263,7 +1263,7 @@ def test_project_rename_action_updates_workspace_and_root_label() -> None:
 
     assert project_name == "renamed-project"
     assert commits == ["renamed-project"]
-    assert root_label == "renamed-project  Secrets: Embedded Project Storage"
+    assert root_label == "renamed-project"
     assert "Infrastructure Overview" in overview
 
 
@@ -1273,9 +1273,9 @@ async def _root_label() -> str:
         return app.query_one("#infra-tree").root.label.plain
 
 
-def test_root_highlights_active_secret_manager() -> None:
+def test_root_shows_project_name() -> None:
     assert asyncio.run(_root_label()) == (
-        "test-project  Secrets: Embedded Project Storage"
+        "test-project"
     )
 
 
@@ -1306,14 +1306,14 @@ async def _server_tree_label_styles() -> tuple[str, list[str]]:
 def test_bundle_tree_label_keeps_backend_on_server_leaf() -> None:
     bundle_label, server_label = asyncio.run(_bundle_tree_labels())
 
-    assert bundle_label == "dev"
-    assert server_label == "Docker, K3s Agent: 10.0.0.5"
+    assert bundle_label == "DEV"
+    assert server_label == "Docker, K3s Agent · 10.0.0.5"
 
 
 def test_server_tree_label_styles_backend_and_host() -> None:
     label, styles = asyncio.run(_server_tree_label_styles())
 
-    assert label == "Docker, K3s Agent: 10.0.0.5"
+    assert label == "Docker, K3s Agent · 10.0.0.5"
     assert "bold bright_cyan" in styles
     assert "bold bright_green" in styles
     assert styles[-1] == "dim"
@@ -1334,28 +1334,23 @@ async def _service_capability_tree_label() -> str:
         return tree.root.children[0].children[1].label.plain
 
 
-def test_service_tree_label_shows_all_capabilities() -> None:
-    assert asyncio.run(_service_capability_tree_label()) == "Otel   monitor   web ui "
+def test_service_tree_label_shows_primary_role() -> None:
+    assert asyncio.run(_service_capability_tree_label()) == "Monitoring · Otel"
 
 
 def test_service_tree_label_styles_purpose_capabilities() -> None:
-    from mlox.tui.screens.dashboard.tree import capability_color, service_tree_label
+    from mlox.tui.screens.dashboard.tree import service_tree_label
 
-    label = service_tree_label(SimpleNamespace(
-        name="airflow", capabilities={ServiceCapability.APP, ServiceCapability.WORKFLOW_ORCHESTRATOR,
-                                      ServiceCapability.HEALTH, ServiceCapability.LOGS,
-                                      ServiceCapability.SECRET_MANAGER_BINDING, "custom_capability"}
-    ))
-    assert label.plain == "airflow   app   workflow "
-    assert str(label.style) == "#ffffff"
-    styles = [str(span.style) for span in label.spans]
-    assert f"#052628 on {capability_color('app')}" in styles
-    assert f"#052628 on {capability_color('workflow_orchestrator')}" in styles
-    assert capability_color("app") != capability_color("workflow_orchestrator")
-    assert all("bright" not in style for style in styles)
+    service = SimpleNamespace(name="airflow", capabilities={
+        ServiceCapability.APP, ServiceCapability.WORKFLOW_ORCHESTRATOR,
+        ServiceCapability.HEALTH, ServiceCapability.LOGS, "custom_capability",
+    })
+    label = service_tree_label(service)
+    assert label.plain == "Workflow · airflow"
+    assert [str(span.style) for span in label.spans] == ["dim", "dim"]
     assert service_tree_label(SimpleNamespace(name="bare", capabilities=set())).plain == "bare"
-    assert service_tree_label(SimpleNamespace(name="ops", capabilities={ServiceCapability.HEALTH, ServiceCapability.LOGS})).plain == "ops"
-    assert service_tree_label(SimpleNamespace(name="redis", capabilities={ServiceCapability.CACHE, ServiceCapability.DATABASE})).plain == "redis   cache   database "
+    assert service_tree_label(SimpleNamespace(name="redis", capabilities={ServiceCapability.CACHE, ServiceCapability.DATABASE})).plain.startswith("Cache · ")
+    assert service_tree_label(SimpleNamespace(name="minio", capabilities={ServiceCapability.APP, ServiceCapability.OBJECT_STORAGE, ServiceCapability.S3_OBJECT_STORAGE})).plain.startswith("Object Storage · ")
 
 
 async def _service_actions_display_for(selection: SelectionInfo) -> bool:
@@ -2007,7 +2002,7 @@ async def _rename_bundle_from_action_modal() -> tuple[str, list[str], str, str]:
         tree = screen.query_one("#infra-tree", InfraTree)
         deadline = time.monotonic() + 2
         while bundle.name != "renamed-dev" or tree.cursor_node.label.plain != (
-            "renamed-dev"
+            "RENAMED-DEV"
         ):
             if time.monotonic() > deadline:
                 raise AssertionError("Timed out waiting for bundle rename.")
@@ -2029,7 +2024,7 @@ def test_bundle_rename_action_updates_bundle_and_tree_label() -> None:
 
     assert bundle_name == "renamed-dev"
     assert commits == ["test-project"]
-    assert tree_label == "renamed-dev"
+    assert tree_label == "RENAMED-DEV"
     assert "renamed-dev" in overview
 
 
@@ -2212,7 +2207,7 @@ def test_setup_bundle_action_initializes_bundle_and_refreshes_tree() -> None:
     ) = asyncio.run(_setup_uninitialized_bundle_from_action())
 
     assert state == "running"
-    assert label == "dev"
+    assert label == "DEV"
     assert calls == ["10.0.0.5"]
     assert loading_while_setup is True
     assert loading_after_setup is False
@@ -2423,7 +2418,7 @@ async def _teardown_service_from_action() -> tuple[list[str], list[object], str]
         deadline = time.monotonic() + 2
         while (
             calls == []
-            or tree.cursor_node.label.plain != "dev"
+            or tree.cursor_node.label.plain != "DEV"
         ):
             if time.monotonic() > deadline:
                 raise AssertionError(
@@ -2440,7 +2435,7 @@ def test_teardown_service_action_uses_workspace_and_refreshes_tree() -> None:
 
     assert calls == ["tracking"]
     assert services == []
-    assert selected_label == "dev"
+    assert selected_label == "DEV"
 
 
 async def _remove_bundle_from_action() -> tuple[int, list[str]]:
@@ -2557,7 +2552,7 @@ def test_uninitialized_bundle_tree_entry_is_leaf() -> None:
     allow_expand, label = asyncio.run(_uninitialized_bundle_tree_entry())
 
     assert allow_expand is False
-    assert label == "dev  State: pending"
+    assert label == "DEV  State: pending"
 
 
 async def _empty_bundle_tree_children() -> list[str]:
@@ -2579,7 +2574,7 @@ async def _empty_bundle_tree_children() -> list[str]:
 def test_empty_bundle_tree_has_no_no_services_leaf() -> None:
     children = asyncio.run(_empty_bundle_tree_children())
 
-    assert children == ["Docker: 10.0.0.5"]
+    assert children == ["Docker · 10.0.0.5"]
 
 
 def test_bundle_selection_has_no_template_tabs() -> None:
@@ -2864,3 +2859,56 @@ def test_reload_binding_shows_loading_indicator(monkeypatch) -> None:
 
     assert loading_visible is True
     assert loading_after_reload is False
+
+
+async def _responsive_tree_roles() -> None:
+    class TreeApp(App):
+        def compose(self):
+            yield InfraTree()
+
+    app = TreeApp()
+    service = SimpleNamespace(name="my-minio", capabilities={ServiceCapability.APP, ServiceCapability.OBJECT_STORAGE})
+    server = SimpleNamespace(ip="10.0.0.5", backend=["docker"])
+    bundle = SimpleNamespace(name="dev", server=server, services=[service])
+    app.workspace = SimpleNamespace(name="demo", infrastructure=SimpleNamespace(bundles=[bundle]))
+    async with app.run_test(size=(44, 40)) as pilot:
+        tree = app.query_one(InfraTree)
+        node = tree.root.children[0].children[1]
+        assert node.label.plain.startswith("Object Storage · ")
+        await pilot.resize_terminal(24, 40)
+        await pilot.pause()
+        assert node.label.plain == "Object Storage · my-minio"
+        await pilot.resize_terminal(60, 40)
+        await pilot.pause()
+        assert node.label.plain.startswith("Object Storage · ")
+        assert node.data.service is service
+
+
+def test_tree_roles_follow_sidebar_width() -> None:
+    asyncio.run(_responsive_tree_roles())
+
+
+def test_selected_service_shows_all_colored_capabilities_below_tree() -> None:
+    async def exercise() -> None:
+        from mlox.tui.screens.dashboard.tree import service_capability_badges
+
+        app = DashboardTestApp()
+        service = SimpleNamespace(name="demo", capabilities={
+            ServiceCapability.APP, ServiceCapability.DATABASE,
+            ServiceCapability.HEALTH, ServiceCapability.LOGS, "custom_capability",
+        })
+        async with app.run_test():
+            screen = app.query_one(DashboardScreen)
+            summary = app.query_one("#tree-selection-summary", Static)
+            screen._apply_selection(SelectionInfo(type="service", service=service))
+            badges = service_capability_badges(service)
+            assert summary.display
+            assert summary.render().plain == badges.plain
+            assert all(name in badges.plain for name in ("App", "Database", "Health", "Logs", "Custom Capability"))
+            assert len(badges.spans) == 5
+            assert all(" on " in str(span.style) for span in badges.spans)
+            assert app.query_one(InfraTree).show_guides
+            screen._apply_selection(SelectionInfo(type="root"))
+            assert not summary.display
+
+    asyncio.run(exercise())

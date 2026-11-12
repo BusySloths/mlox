@@ -48,7 +48,7 @@ from .service_actions import (
 )
 from .secret_manager_panel import SecretManagerPanel
 from .template_panel import TemplateBrowserDialog
-from .tree import InfraTree
+from .tree import InfraTree, service_capability_badges
 from .workflow_panel import WorkflowPanel
 from mlox.application.use_cases.servers import (
     add_server_from_template,
@@ -166,6 +166,7 @@ class DashboardScreen(Screen):
         with Container(id="main-area"):
             with Container(id="sidebar"):
                 yield InfraTree()
+                yield Static("", id="tree-selection-summary", markup=False)
             with Container(id="detail-panel"):
                 with Container(id="upper-pane"):
                     with Horizontal(id="project-reload-loading"):
@@ -316,6 +317,14 @@ class DashboardScreen(Screen):
 
     def _apply_selection(self, selection: SelectionInfo | None) -> None:
         self._current_selection = selection
+        summary = self.query_one("#tree-selection-summary", Static)
+        if selection and selection.type == "service" and selection.service:
+            badges = service_capability_badges(selection.service)
+            summary.update(badges)
+            summary.display = bool(badges)
+        else:
+            summary.update("")
+            summary.display = False
         overview = self.query_one(OverviewPanel)
         overview.selection = selection
         server_actions = self.query_one(ServerActions)

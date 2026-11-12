@@ -76,6 +76,8 @@ class OverviewPanel(Static):
             return
 
         layout = Table.grid(expand=True, padding=(0, 1))
+        layout.add_row(Text.assemble(("Active secret manager: ", "dim"),
+                                     str(getattr(workspace, "active_secret_manager_name", "Unknown"))))
         layout.add_row(self._project_metric_panels(summary))
         layout.add_row(self._project_servers_table(summary["server_rows"]))
 
