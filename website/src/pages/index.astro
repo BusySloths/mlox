@@ -129,7 +129,7 @@ const featured = learnEntries[0];
     {featured && (
       <section id="learn" class="section">
         <div class="wrap">
-          <a class="learn-band reveal" href={`${base}learn/${featured.slug}/`}>
+          <a class:list={['learn-band', 'reveal', `learn-band--${featured.signal.tone}`]} href={`${base}learn/${featured.slug}/`}>
             <div class="learn-band__copy">
               <p class="eyebrow">Tutorials &amp; demos · new {featured.kind}</p>
               <h2 class="learn-band__title">{featured.title}</h2>
@@ -137,10 +137,10 @@ const featured = learnEntries[0];
               <span class="learn-band__cta mono">Read the walkthrough <span aria-hidden="true">→</span></span>
             </div>
             <div class="learn-band__signal" aria-hidden="true">
-              <span class="mono">pca.transform</span>
-              <span class="mono learn-band__vals">2.79 <i>→</i> 14.55</span>
-              <span class="learn-band__state mono">ANOMALOUS</span>
-              <span class="mono learn-band__origin">likely origin found in seconds</span>
+              <span class="mono">{featured.signal.label}</span>
+              <span class="mono learn-band__vals">{featured.signal.from && <>{featured.signal.from} <i>→</i> </>}{featured.signal.value}</span>
+              <span class="learn-band__state mono">{featured.signal.state}</span>
+              <span class="mono learn-band__origin">{featured.signal.note}</span>
             </div>
           </a>
         </div>
@@ -515,6 +515,13 @@ const featured = learnEntries[0];
   .learn-band__vals i { font-style: normal; color: #ff6b5e; }
   .learn-band__state { padding: 3px 8px; border-radius: 4px; background: #b3261e; color: #fff; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; }
   .learn-band__origin { color: var(--muted); font-size: 13px; }
+  .learn-band--ok {
+    background:
+      radial-gradient(600px 300px at 90% 50%, rgba(197, 240, 106, 0.10), transparent 70%),
+      linear-gradient(180deg, rgba(16, 36, 26, 0.85), rgba(11, 25, 18, 0.85));
+  }
+  .learn-band--ok .learn-band__signal { border-color: rgba(197, 240, 106, 0.45); }
+  .learn-band--ok .learn-band__state { background: var(--lime); color: var(--bg-deep); }
 
   /* ---------- features ---------- */
   .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; }

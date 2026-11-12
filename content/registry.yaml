@@ -91,7 +91,7 @@ pieces:
 
   - slug: first-steps
     type: tutorial
-    title: "Your first server, five minutes from now"
+    title: "Your first project, five minutes from now"
     # Rendered from terminal captures in content/.work/first-steps/ (captures.json, redact.json).
     status: recorded
     services: [catalog-app-memos]
