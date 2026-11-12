@@ -304,13 +304,6 @@ class UbuntuNativeServer(
             self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
-                "#PermitRootLogin",
-                "PermitRootLogin",
-                sudo=True,
-            )
-            self.exec.fs_find_and_replace(
-                conn,
-                "/etc/ssh/sshd_config",
                 "#PubkeyAuthentication",
                 "PubkeyAuthentication",
                 sudo=True,
@@ -360,10 +353,12 @@ class UbuntuNativeServer(
                 "AllowTcpForwarding no",
                 sudo=True,
             )
+            # Any value, commented or not (Ubuntu ships "#PermitRootLogin prohibit-password"),
+            # so root cannot log in at all, not even with a key.
             self.exec.fs_find_and_replace(
                 conn,
                 "/etc/ssh/sshd_config",
-                "PermitRootLogin yes",
+                "^#\\?PermitRootLogin .*",
                 "PermitRootLogin no",
                 sudo=True,
             )

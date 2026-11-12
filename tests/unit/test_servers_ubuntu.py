@@ -175,6 +175,19 @@ def test_ubuntu_native_setup_users_and_auth_toggles(monkeypatch):
     assert "execute" in names
 
 
+def test_disable_password_authentication_forces_root_login_off():
+    server = _new_native_server()
+    fake_exec = FakeExec()
+    server.exec = fake_exec
+    _server_conn(server)
+
+    server.disable_password_authentication()
+
+    replacements = [c[1][1:] for c in fake_exec.calls if c[0] == "fs_find_and_replace"]
+    assert ("^#\\?PermitRootLogin .*", "PermitRootLogin no") in replacements
+    assert ("PasswordAuthentication yes", "PasswordAuthentication no") in replacements
+
+
 def test_ubuntu_native_server_info_and_git_ops(monkeypatch):
     server = _new_native_server()
     fake_exec = FakeExec()
