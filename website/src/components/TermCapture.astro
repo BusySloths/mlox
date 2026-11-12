@@ -20,11 +20,13 @@ interface Props {
   max?: number;
   callouts?: Callout[];
   label: string;
+  /** Capture folder under src/captures/. */
+  set?: string;
 }
 
-const captures = import.meta.glob<string>('../captures/operations/*.html', { query: '?raw', import: 'default', eager: true });
-const { name, cols, title, max = 13, callouts = [], label } = Astro.props;
-const html = captures[`../captures/operations/${name}.html`];
+const captures = import.meta.glob<string>('../captures/*/*.html', { query: '?raw', import: 'default', eager: true });
+const { name, cols, title, max = 13, callouts = [], label, set = 'operations' } = Astro.props;
+const html = captures[`../captures/${set}/${name}.html`];
 if (!html) throw new Error(`Unknown capture: ${name}`);
 ---
 

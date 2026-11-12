@@ -14,6 +14,15 @@ export interface LearnEntry {
 
 export const learnEntries: LearnEntry[] = [
   {
+    slug: 'first-steps',
+    kind: 'tutorial',
+    title: 'Your first server, five minutes from now',
+    summary:
+      'Install MLOX, create a project, let it launch an Ubuntu VM with Docker on your laptop and run a first app on it, all from the terminal UI. Recorded on a real machine, with the time for every step.',
+    minutes: 5,
+    tags: ['Getting started', 'Multipass', 'Docker', 'App catalog'],
+  },
+  {
     slug: 'operations-demo',
     kind: 'demo',
     title: 'Catching a silent model failure, live',

@@ -88,3 +88,15 @@ pieces:
         dest: content/.work/operator-demo/operator-demo.mp4
       - type: page
         dest: website/src/pages/learn/operations-demo.astro
+
+  - slug: first-steps
+    type: tutorial
+    title: "Your first server, five minutes from now"
+    # Rendered from terminal captures in content/.work/first-steps/ (captures.json, redact.json).
+    status: recorded
+    services: [catalog-app-memos]
+    outputs:
+      - type: captures
+        dest: website/src/captures/first-steps/
+      - type: page
+        dest: website/src/pages/learn/first-steps.astro

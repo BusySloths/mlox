@@ -1,0 +1,610 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import TermCapture from '../../components/TermCapture.astro';
+
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const repo = 'https://github.com/BusySloths/mlox';
+
+const chapters = [
+  ['before', 'Before you start'],
+  ['install', 'Install MLOX'],
+  ['project', 'Create a project'],
+  ['server', 'Add a server'],
+  ['setup', 'Set up the server'],
+  ['app', 'Add an app'],
+  ['open', 'Open it'],
+  ['cleanup', 'Clean up'],
+  ['time', 'How long did it take?'],
+];
+
+// Measured on the recorded run (seconds), back to back from `mlox tui`; typing and reading time included.
+const timings = [
+  ['Install MLOX', 13],
+  ['Create a project', 18],
+  ['Add a Multipass server', 48],
+  ['Server setup (VM + Docker)', 104],
+  ['Add Memos from the catalog', 33],
+  ['Memos setup', 11],
+  ['Health check, open in browser', 26],
+] as const;
+const total = timings.reduce((sum, [, s]) => sum + s, 0);
+const fmt = (s: number) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s` : `${s} s`);
+---
+
+<BaseLayout
+  title="Your first MLOX server in five minutes · MLOX tutorial"
+  description="Install MLOX, create a project, launch a local Ubuntu VM with Docker and run your first app on it, all from the terminal UI. Recorded on a real machine, with the time for every step."
+>
+  <Header />
+
+  <main id="main">
+    <!-- ============ INTRO ============ -->
+    <header class="intro">
+      <div class="wrap intro__grid">
+        <div class="intro__copy">
+          <a class="back mono rise rise-1" href={`${base}learn/`}><span aria-hidden="true">←</span> Tutorials &amp; demos</a>
+          <p class="eyebrow rise rise-1">Tutorial · First steps · 5 min read</p>
+          <h1 class="h-display intro__title rise rise-2">Your first server, <span class="serif accent">five minutes</span> from now.</h1>
+          <p class="lede rise rise-3">
+            Install MLOX, create a project, let it launch an Ubuntu VM on your laptop with Docker, and run a first app on it.
+            No cloud account, no YAML, no SSH keys to copy around. Everything happens in the terminal UI.
+          </p>
+          <ul class="chips mono rise rise-4">
+            <li>one VM on your laptop</li>
+            <li>one app from the catalog</li>
+            <li>recorded, not staged</li>
+          </ul>
+        </div>
+
+        <aside class="facts rise rise-4" aria-label="At a glance">
+          <p class="facts__k mono">At a glance</p>
+          <dl>
+            <div><dt>Hands-on time</dt><dd>about {Math.round(total / 60)} minutes</dd></div>
+            <div><dt>Longest wait</dt><dd>{fmt(104)} for the VM</dd></div>
+            <div><dt>You need</dt><dd>uv, Multipass, 4 GB free RAM</dd></div>
+            <div><dt>MLOX version</dt><dd>0.6.1</dd></div>
+          </dl>
+        </aside>
+      </div>
+    </header>
+
+    <!-- ============ WHAT ============ -->
+    <section class="prose-section">
+      <div class="wrap prose-grid">
+        <div class="prose">
+          <h2 class="h-sub">What you will build</h2>
+          <p>
+            An MLOX <strong>project</strong> is an encrypted file that knows your servers, the services running on them and
+            every credential needed to reach them. In this tutorial the project gets one <strong>server</strong>: a local
+            Ubuntu VM that MLOX launches with Multipass and prepares as a Docker host. On that server we install one
+            <strong>service</strong>, Memos, a small note-taking app from the MLOX catalog.
+          </p>
+          <p>
+            The app is deliberately simple. The point is the loop you will repeat for everything else: pick a template, add
+            it, press <em>Setup</em>. MLflow, databases, telemetry and model serving all work the same way, and a dedicated
+            ML tutorial picks up where this one ends.
+          </p>
+        </div>
+        <nav class="toc" aria-label="Steps">
+          <p class="toc__k mono">In this tutorial</p>
+          <ol>
+            {chapters.map(([id, title], i) => (
+              <li><a href={`#${id}`}><span class="mono">{String(i).padStart(2, '0')}</span>{title}</a></li>
+            ))}
+          </ol>
+        </nav>
+      </div>
+    </section>
+
+    <!-- ============ 00 BEFORE ============ -->
+    <section id="before" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">00</p>
+          <h2 class="h-sub">Two tools and one <span class="serif accent">permission</span>.</h2>
+        </div>
+        <div class="checks">
+          <article class="check">
+            <h3>uv</h3>
+            <p>The Python package manager that installs MLOX as a standalone command.</p>
+            <pre class="snippet"><code><span class="p">$</span> curl -LsSf https://astral.sh/uv/install.sh | sh</code></pre>
+            <p class="small">Other platforms: <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener noreferrer">docs.astral.sh/uv</a></p>
+          </article>
+          <article class="check">
+            <h3>Multipass</h3>
+            <p>Canonical's tool for Ubuntu VMs on your laptop. MLOX drives it for you.</p>
+            <pre class="snippet"><code><span class="c"># macOS</span>
+<span class="p">$</span> brew install --cask multipass
+<span class="c"># Linux</span>
+<span class="p">$</span> sudo snap install multipass</code></pre>
+            <p class="small">Windows and details: <a href="https://canonical.com/multipass/install" target="_blank" rel="noopener noreferrer">canonical.com/multipass</a></p>
+          </article>
+          <article class="check">
+            <h3>Room for one VM</h3>
+            <p>The default VM uses <strong>2 CPUs, 4 GB RAM and 20 GB disk</strong>. Close what you can spare.</p>
+            <p class="note">
+              <b>On macOS:</b> open <em>System Settings › Privacy &amp; Security › Developer Tools</em> and allow Multipass and
+              the terminal you run MLOX from (Terminal, iTerm2, VS Code). Without it the VM launch fails.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 01 INSTALL ============ -->
+    <section id="install" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">01</p>
+          <h2 class="h-sub">Install MLOX with <span class="serif accent">one command</span>.</h2>
+        </div>
+        <div class="split">
+          <div class="chapter__text">
+            <p>
+              <code>uv tool install</code> puts MLOX in its own environment and adds the <code>mlox</code> command to your
+              path. The <code>[tui]</code> extra brings the terminal UI. On our machine this took under a second after the
+              download.
+            </p>
+            <pre class="snippet"><code><span class="p">$</span> uv tool install 'busysloths-mlox[tui]'</code></pre>
+            <p class="note">
+              <b>Says <code>No such command 'tui'</code>?</b> An older <code>mlox</code> from pip or conda comes first on
+              your path. <code>which mlox</code> should point to <code>~/.local/bin/mlox</code>; if not, uninstall the old one
+              or put <code>~/.local/bin</code> first.
+            </p>
+          </div>
+          <TermCapture
+            set="first-steps"
+            name="install"
+            cols={44}
+            max={16}
+            title="terminal"
+            label="uv installs busysloths-mlox 0.6.1 with 53 packages and one executable, mlox."
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 02 PROJECT ============ -->
+    <section id="project" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">02</p>
+          <h2 class="h-sub">Start the UI, <span class="serif accent">create</span> a project.</h2>
+        </div>
+        <div class="split">
+          <div class="chapter__text">
+            <pre class="snippet"><code><span class="p">$</span> mlox tui</code></pre>
+            <p>
+              The login screen lists the projects it finds in the current folder. There are none yet, so type a name and a
+              password and press <strong>Create</strong>. MLOX writes <code>&lt;name&gt;.mlox</code> next to you: one
+              encrypted, portable file holding the whole project.
+            </p>
+            <p class="note">
+              <b>Keep the password.</b> Everything in the project, including server credentials, is encrypted with it.
+              There is no reset.
+            </p>
+          </div>
+          <TermCapture
+            set="first-steps"
+            name="login"
+            cols={76}
+            max={13}
+            title="mlox tui"
+            label="The MLOX login screen with the project name my-awesome-project, a password field, and Open and Create buttons."
+            callouts={[{ kind: 'mark', r: 17, c: 72, label: '1' }, { kind: 'mark', r: 23, c: 66, label: '2' }]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 03 SERVER ============ -->
+    <section id="server" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">03</p>
+          <h2 class="h-sub">Add a server that <span class="serif accent">doesn't exist yet</span>.</h2>
+        </div>
+        <div class="stack">
+          <div class="chapter__text">
+            <p>
+              The new project is empty. Press <strong>Add Bundle</strong> to open the server templates. A template describes
+              what kind of machine it is and which backend MLOX should install on it: plain Ubuntu, Docker or Kubernetes, on
+              a server you already have or on a VM MLOX creates for you.
+            </p>
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>Ubuntu Multipass VM (Docker).</b> A local VM with Docker, the quickest way to try MLOX.</li>
+              <li><span class="n amber">2</span><b>Read the note.</b> The macOS permission from step 00 is repeated right here.</li>
+              <li><span class="n">3</span><b>Configure &amp; Add Server.</b> Opens a short form for this template.</li>
+            </ol>
+          </div>
+          <TermCapture
+            set="first-steps"
+            name="templates"
+            cols={153}
+            max={11}
+            title="mlox tui · Add Bundle › Server templates"
+            label="The server template picker with nine templates; Ubuntu Multipass VM (Docker) is selected and its overview explains the macOS permission."
+            callouts={[
+              { kind: 'ring', r: 10, c: 4, w: 40, h: 1 },
+              { kind: 'mark', r: 10, c: 2, label: '1' },
+              { kind: 'ring', r: 10, c: 63, w: 82, h: 3, tone: 'amber' },
+              { kind: 'mark', r: 11, c: 147, label: '2', tone: 'amber' },
+              { kind: 'mark', r: 50, c: 3, label: '3' },
+            ]}
+          />
+        </div>
+        <div class="split split--reverse">
+          <TermCapture
+            set="first-steps"
+            name="vm_dialog"
+            cols={78}
+            max={13}
+            title="mlox tui · Add Ubuntu Multipass VM (Docker)"
+            label="The add-server form with the VM name my-awesome-server, followed by CPUs and RAM fields and an Add Server button."
+            callouts={[{ kind: 'mark', r: 12, c: 74, label: '1' }, { kind: 'mark', r: 21, c: 59, label: '2' }]}
+          />
+          <div class="chapter__text">
+            <p>
+              Give the VM a name. CPUs, RAM, disk and the cloud-init file have sensible defaults, so scroll past them and
+              press <strong>Add Server</strong>. The server now appears in the tree as <em>pending</em>: MLOX knows about it,
+              but nothing has been launched yet.
+            </p>
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>VM name.</b> Also the name of the server in your project.</li>
+              <li><span class="n">2</span><b>Add Server.</b> Registers it; the launch happens in the next step.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 04 SETUP ============ -->
+    <section id="setup" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">04</p>
+          <h2 class="h-sub">Press <span class="serif accent">Setup</span>, get a coffee. A short one.</h2>
+        </div>
+        <div class="stack">
+          <div class="chapter__text">
+            <p>
+              Select the server and press <strong>Setup Bundle</strong>. MLOX launches the VM with Multipass, waits for it to
+              boot, creates its own user and SSH access, and installs Docker. This is the only real wait in the tutorial: in
+              our run it took <strong>{fmt(104)}</strong>.
+            </p>
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>In the tree.</b> The server, and below it the Docker backend with the VM's address.</li>
+              <li><span class="n">2</span><b>Running.</b> The server is reachable and ready for services.</li>
+              <li><span class="n">3</span><b>Add Service.</b> New in the actions now that a backend exists.</li>
+            </ol>
+          </div>
+          <TermCapture
+            set="first-steps"
+            name="server_ready"
+            cols={219}
+            max={9}
+            title="mlox tui · my-awesome-server"
+            label="The server my-awesome-server after setup: state running, the Docker backend with its address in the tree, and an Add Service button."
+            callouts={[
+              { kind: 'ring', r: 3, c: 3, w: 38, h: 2 },
+              { kind: 'mark', r: 3, c: 42, label: '1' },
+              { kind: 'ring', r: 9, c: 52, w: 13, h: 1 },
+              { kind: 'mark', r: 9.3, c: 74, label: '2' },
+              { kind: 'mark', r: 19, c: 49, label: '3' },
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 05 APP ============ -->
+    <section id="app" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">05</p>
+          <h2 class="h-sub">Pick an app from the <span class="serif accent">catalog</span>.</h2>
+        </div>
+        <div class="stack">
+          <div class="chapter__text">
+            <p>
+              <strong>Add Service</strong> opens the service catalog: 27 templates in this version, from MLflow and Feast to
+              databases, model serving and plain web apps. The <em>Application</em> entries are self-contained apps, a good
+              first pick because they need nothing else. Select <strong>Application: Memos</strong>, press
+              <strong>Configure &amp; Add Service</strong>, then <strong>Setup Service</strong> on the new entry.
+            </p>
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>Memos.</b> A self-hosted, Markdown note-taking app. One container, no database.</li>
+              <li><span class="n">2</span><b>What it needs.</b> Port 5230 for its web UI. MLOX assigns the final port when the service is added.</li>
+              <li><span class="n">3</span><b>Configure &amp; Add Service.</b> Adds it to the server. Setup took <strong>11 s</strong>.</li>
+            </ol>
+          </div>
+          <TermCapture
+            set="first-steps"
+            name="catalog"
+            cols={152}
+            max={11}
+            title="mlox tui · Add Service › Service templates"
+            label="The service catalog with 27 templates; Application: Memos 0.31.0 is selected and its overview lists capabilities, requirements and the web UI port 5230."
+            callouts={[
+              { kind: 'ring', r: 30, c: 4, w: 40, h: 1 },
+              { kind: 'mark', r: 30, c: 2, label: '1' },
+              { kind: 'ring', r: 25, c: 62, w: 18, h: 1 },
+              { kind: 'mark', r: 25, c: 83, label: '2' },
+              { kind: 'mark', r: 50, c: 2, label: '3' },
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 06 OPEN ============ -->
+    <section id="open" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">06</p>
+          <h2 class="h-sub">Check it, <span class="serif accent">open</span> it, write a note.</h2>
+        </div>
+        <div class="stack">
+          <div class="chapter__text">
+            <p>
+              <strong>Check Health</strong> asks the server whether the app is really up. <strong>Open Web UI</strong> opens
+              Memos in your browser. It is served over HTTPS with a certificate MLOX created, so the browser will warn you
+              once; accept it for this local VM. Create the Memos admin account and write your first note.
+            </p>
+            <ol class="legend-list legend-list--stacked">
+              <li><span class="n">1</span><b>The app in the tree.</b> Every service sits under the server it runs on.</li>
+              <li><span class="n">2</span><b>Open Web UI · Check Health.</b> The two buttons you will use most.</li>
+              <li><span class="n">3</span><b>Running.</b> Health confirmed, and the address that was opened.</li>
+            </ol>
+          </div>
+          <TermCapture
+            set="first-steps"
+            name="memos_ready"
+            cols={219}
+            max={9}
+            title="mlox tui · app-memos-0.31.0"
+            label="The Memos service under my-awesome-server with its details, the Open Web UI and Check Health buttons, and notifications that the service is running and its web UI was opened."
+            callouts={[
+              { kind: 'ring', r: 5, c: 3, w: 30, h: 1 },
+              { kind: 'mark', r: 5, c: 36, label: '1' },
+              { kind: 'ring', r: 22, c: 49, w: 36, h: 3 },
+              { kind: 'mark', r: 21, c: 49, label: '2' },
+              { kind: 'ring', r: 53, c: 158, w: 58, h: 6 },
+              { kind: 'mark', r: 53, c: 155, label: '3' },
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 07 CLEANUP ============ -->
+    <section id="cleanup" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">07</p>
+          <h2 class="h-sub">Give your laptop <span class="serif accent">back</span>.</h2>
+        </div>
+        <div class="split">
+          <div class="chapter__text">
+            <p>
+              Done playing? Quit MLOX with <kbd>q</kbd> and delete the VM with Multipass. That frees the RAM and disk
+              straight away.
+            </p>
+            <pre class="snippet"><code><span class="p">$</span> multipass delete my-awesome-server --purge</code></pre>
+            <p>
+              The project file still lists the server afterwards. If you want a completely fresh start, delete
+              <code>my-awesome-project.mlox</code> as well.
+            </p>
+          </div>
+          <TermCapture
+            set="first-steps"
+            name="cleanup"
+            cols={75}
+            max={13}
+            title="terminal"
+            label="multipass list shows my-awesome-server running; after multipass delete with purge, the list is empty."
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 08 TIME ============ -->
+    <section id="time" class="chapter">
+      <div class="wrap">
+        <div class="chapter__head">
+          <p class="chapter__num mono">08</p>
+          <h2 class="h-sub">How long did it take? <span class="serif accent">{fmt(total)}</span>.</h2>
+        </div>
+        <div class="split">
+          <div class="chapter__text">
+            <p>
+              These are the times from the recorded run on a MacBook, from typing the install command to the note in the
+              browser, including the time spent reading and typing. More than a third of it is the VM setup, which mostly
+              depends on your download speed.
+            </p>
+            <p>
+              Adding and setting up the app took under a minute. That is the part that stays fast: every further service in this
+              project starts from a server that is already set up.
+            </p>
+          </div>
+          <table class="timing">
+            <caption class="mono">Measured on the recorded run</caption>
+            <tbody>
+              {timings.map(([step, s]) => (
+                <tr>
+                  <th scope="row">{step}</th>
+                  <td class="timing__bar" aria-hidden="true"><span style={`--w:${(s / 104) * 100}%`}></span></td>
+                  <td class="mono">{fmt(s)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr><th scope="row">Total</th><td></td><td class="mono">{fmt(total)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ NEXT ============ -->
+    <section class="chapter chapter--last">
+      <div class="wrap">
+        <div class="ahead">
+          <p class="eyebrow">Where to go next</p>
+          <div class="ahead__grid">
+            <div><b>Same loop, more services</b><span>Try another catalog app, or MLflow and a database on the same server. Each one is a template, Add, Setup.</span></div>
+            <div><b>Prefer scripts?</b><span><code>mlox --help</code> lists the same operations as CLI commands, and <code>mlox ui</code> serves this UI in your browser.</span></div>
+            <div><b>See it at scale</b><span>The operations demo runs five services on Kubernetes and catches a silent model failure live.</span></div>
+          </div>
+          <div class="ahead__ctas">
+            <a class="btn" href={`${base}learn/operations-demo/`}>Watch the operations demo <span aria-hidden="true">→</span></a>
+            <a class="btn btn--ghost" href={repo} target="_blank" rel="noopener noreferrer">MLOX on GitHub</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .accent { color: var(--lime); }
+  code, kbd { font-family: var(--font-mono); font-size: 0.88em; color: var(--tree); }
+
+  /* ---------- intro ---------- */
+  .intro { padding: clamp(40px, 6vw, 80px) 0 20px; }
+  .intro__grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); align-items: end; }
+  .intro__copy { display: grid; gap: 22px; justify-items: start; }
+  .intro__title { font-size: clamp(42px, 6.2vw, 88px); }
+  .back { color: var(--muted); font-size: 13px; text-decoration: none; }
+  .back:hover { color: var(--lime); }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .chips li { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); }
+  .chips li::before { content: "●"; margin-right: 8px; color: var(--lime); }
+  .facts { padding: 24px 26px; border-radius: 16px; border: 1px solid var(--line); background: rgba(16, 36, 26, 0.55); }
+  .facts__k { margin: 0 0 14px; font-size: 12.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lime); }
+  .facts dl { display: grid; gap: 12px; margin: 0; }
+  .facts dl div { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .facts dl div:last-child { padding-bottom: 0; border-bottom: 0; }
+  .facts dt { color: var(--muted); font-size: 15.5px; }
+  .facts dd { margin: 0; color: var(--cream); font-size: 15.5px; text-align: right; }
+
+  /* ---------- prose ---------- */
+  .prose-section { padding: clamp(50px, 7vw, 90px) 0 0; }
+  .prose-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.8fr); gap: clamp(28px, 5vw, 72px); align-items: start; }
+  .h-sub { margin: 0; font-size: clamp(28px, 3.4vw, 46px); font-weight: 720; line-height: 1.06; letter-spacing: -0.03em; color: var(--cream); }
+  .prose { display: grid; gap: 16px; }
+  .prose p { margin: 0; }
+  .prose p, .chapter__text p { color: var(--muted); font-size: 18px; max-width: 68ch; }
+  .prose p strong, .chapter__text p strong, .chapter__text b, .legend-list b, .check strong { color: var(--cream); }
+  .toc {
+    position: sticky;
+    top: calc(var(--header-h) + 24px);
+    padding: 22px 24px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(16, 36, 26, 0.55);
+  }
+  .toc__k { margin: 0 0 12px; font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lime); }
+  .toc ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  .toc a { display: flex; gap: 12px; padding: 5px 0; color: var(--muted); text-decoration: none; font-size: 15.5px; }
+  .toc a:hover { color: var(--cream); }
+  .toc a .mono { color: var(--amber); font-size: 12.5px; padding-top: 3px; }
+
+  /* ---------- chapters ---------- */
+  .chapter { padding: clamp(70px, 9vw, 120px) 0 0; }
+  .chapter--last { padding-bottom: clamp(70px, 10vw, 120px); }
+  .chapter__head { display: grid; gap: 10px; margin-bottom: 22px; max-width: 1100px; }
+  .chapter__num { margin: 0; font-size: 14px; color: var(--amber); }
+  .chapter__text { display: grid; gap: 0; margin-bottom: 30px; }
+  .chapter__text p { margin: 0 0 16px; }
+  .chapter__text > .snippet { margin: 0 0 18px; }
+
+  .split { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(24px, 4vw, 56px); align-items: start; }
+  .split--reverse { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); margin-top: 48px; }
+  .stack { display: grid; gap: 4px; }
+  .stack .legend-list--stacked { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 30px; max-width: none; }
+
+  .legend-list { display: flex; flex-wrap: wrap; gap: 14px 30px; margin: 24px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: 16px; }
+  .legend-list--stacked { display: grid; gap: 14px; margin: 6px 0 22px; }
+  .legend-list--stacked li { display: block; position: relative; padding-left: 38px; }
+  .legend-list--stacked .n { position: absolute; left: 0; top: 0; }
+  .n {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--lime);
+    color: var(--bg-deep);
+    font: 700 13px/1 var(--font-display);
+    transform: translateY(-1px);
+  }
+  .n.amber { background: var(--amber); }
+
+  .note {
+    padding: 16px 20px;
+    border-left: 3px solid var(--amber);
+    background: rgba(242, 181, 65, 0.06);
+    border-radius: 0 12px 12px 0;
+    font-size: 16.5px !important;
+  }
+
+  .snippet {
+    margin: 0;
+    padding: 16px 20px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(7, 17, 12, 0.8);
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--cream);
+    overflow-x: auto;
+  }
+  .snippet code { color: inherit; font-size: inherit; }
+  .snippet .c { color: #6f8170; }
+  .snippet .p { color: var(--lime); user-select: none; }
+
+  /* ---------- prerequisites ---------- */
+  .checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+  .check { display: grid; align-content: start; gap: 14px; padding: 26px 28px; border-radius: 18px; border: 1px solid var(--line); background: rgba(16, 36, 26, 0.65); }
+  .check h3 { margin: 0; font-size: clamp(22px, 2.2vw, 28px); line-height: 1.1; color: var(--cream); letter-spacing: -0.02em; }
+  .check p { margin: 0; color: var(--muted); font-size: 16.5px; }
+  .check .small { font-size: 14.5px; }
+  .check a { color: var(--lime); text-underline-offset: 3px; }
+
+  /* ---------- timing ---------- */
+  .timing { width: 100%; border-collapse: collapse; font-size: 16px; }
+  .timing caption { margin-bottom: 12px; text-align: left; font-size: 12.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lime); }
+  .timing th, .timing td { padding: 10px 0; border-bottom: 1px solid var(--line); text-align: left; font-weight: 400; }
+  .timing th { color: var(--muted); padding-right: 18px; white-space: nowrap; }
+  .timing td.mono { color: var(--cream); text-align: right; white-space: nowrap; padding-left: 18px; }
+  .timing__bar { width: 100%; }
+  .timing__bar span { display: block; width: var(--w); min-width: 4px; height: 10px; border-radius: 5px; background: var(--lime); }
+  .timing tfoot th, .timing tfoot td { border-bottom: 0; color: var(--cream); font-weight: 700; }
+
+  /* ---------- ahead ---------- */
+  .ahead { padding-top: 40px; border-top: 1px solid var(--line); }
+  .ahead__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 22px; }
+  .ahead__grid div { padding-left: 22px; border-left: 2px solid rgba(242, 181, 65, 0.5); }
+  .ahead__grid b { display: block; margin-bottom: 8px; font-size: 20px; color: var(--cream); letter-spacing: -0.01em; }
+  .ahead__grid span { color: var(--muted); font-size: 16px; }
+  .ahead__ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 40px; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1000px) {
+    .intro__grid, .prose-grid, .split, .split--reverse, .checks, .ahead__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .toc { position: static; }
+  }
+  @media (max-width: 700px) {
+    .timing th { white-space: normal; }
+    .timing__bar { display: none; }
+  }
+</style>
