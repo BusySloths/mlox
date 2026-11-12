@@ -274,6 +274,12 @@ const fmt = (s: number) => (s >= 60 ? `${Math.floor(s / 60)} min ${String(s % 60
               boot, creates its own user and SSH access, and installs Docker. This is the only real wait in the tutorial: in
               our run it took <strong>{fmt(104)}</strong>.
             </p>
+            <p class="note">
+              <b>Secure by default.</b> As its last step, setup locks down SSH: password and keyboard-interactive logins are
+              turned off, root cannot log in at all, and MLOX connects with its own key. Password attacks such as
+              <a href="https://www.securityweek.com/hackers-exploiting-sshole-authentication-bypass-in-openssh/" target="_blank" rel="noopener noreferrer">sshole</a>
+              (CVE-2026-123158) are refused before they start.
+            </p>
             <ol class="legend-list legend-list--stacked">
               <li><span class="n">1</span><b>In the tree.</b> The server, and below it the Docker backend with the VM's address.</li>
               <li><span class="n">2</span><b>Running.</b> The server is reachable and ready for services.</li>

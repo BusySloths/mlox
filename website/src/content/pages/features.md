@@ -7,7 +7,7 @@ features:
     color: "lime"
     description: "Bring your own server, for example an Ubuntu VPS, then let MLOX handle the setup."
     items:
-      - "Add, tag and secure servers over SSH"
+      - "Add and tag servers; setup locks SSH to keys, no root or password logins"
       - "Run services natively, with Docker, or on Kubernetes (k3s)"
       - "Group servers and services into bundles"
       - "Firewall recommendations derived from what actually runs"
