@@ -88,9 +88,7 @@ def test_existing_catalog_app_displays_as_app_after_rename():
 
     app = make_app('catalog-app-memos-0.31.0-docker')
     app.name = 'My notes'
-    label = service_tree_label(app)
-    assert label.plain.startswith('My notes')
-    assert ' app ' in label.plain
+    assert service_tree_label(app).plain == 'App · My notes'
 
 
 def test_application_group_maps_to_app_capability():

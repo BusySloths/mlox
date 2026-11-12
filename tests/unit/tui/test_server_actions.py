@@ -513,7 +513,7 @@ def test_server_health_action_uses_workspace_and_refreshes_tree() -> None:
     tree_label, checked = asyncio.run(_check_server_health_from_action())
 
     assert checked == ["10.0.0.5"]
-    assert tree_label == "Docker: 10.0.0.5"
+    assert tree_label == "Docker · 10.0.0.5"
 
 
 async def _bundle_runtime_refresh_button_label() -> str:
