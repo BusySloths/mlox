@@ -157,6 +157,9 @@ See the [Installation Guide](docs/INSTALLATION.md) for user and developer setup 
 
 ## Project Structure
 
+Selected source directories and modules; see the [Architecture Guide](docs/ARCHITECTURE.md)
+for responsibilities and dependency boundaries.
+
 ```
 mlox/
 ├── mlox/                    # The busysloths-mlox package
@@ -165,15 +168,20 @@ mlox/
 │   ├── project/             # ProjectWorkspace, WorkspaceState, SQLCipher repository,
 │   │                        #   embedded secrets, knowledge entries, operations records
 │   ├── application/         # Frontend-independent use cases returning OperationResult
+│   ├── contracts/           # Domain-grouped service and server capability interfaces
 │   ├── infra.py             # Infrastructure topology: bundles of servers and services
-│   ├── server.py            # AbstractServer and backend/capability mixins
-│   ├── service.py           # AbstractService lifecycle contract and capability ABCs
+│   ├── server.py            # Server lifecycle/connection models + contract re-exports
+│   ├── service.py           # Service lifecycle model + contract re-exports
 │   ├── servers/             # Ubuntu (native/Docker/Kubernetes), local, and connector servers
 │   ├── services/            # Built-in services: YAML config, class, manifests, client.py
 │   ├── config.py            # YAML config loading and plugin entry-point discovery
-│   ├── execution/           # Target-agnostic execution base + Docker/K8s/Git/firewall helpers
-│   ├── executors.py         # UbuntuTaskExecutor, the current (Fabric/SSH) executor
+│   ├── execution/           # Execution base + runtime, filesystem, security, and host helpers
+│   ├── executors.py         # UbuntuTaskExecutor composing execution mixins
 │   ├── secret_manager.py    # Secret manager interface and TinySecretManager
+│   ├── object_storage.py    # Common binary object-storage client contract
+│   ├── logs.py              # Backend-neutral log retrieval contract
+│   ├── logging_config.py    # Shared logging configuration
+│   ├── terminal.py          # External terminals for interactive SSH sessions
 │   ├── ui/                  # Frontend handler registry
 │   ├── assets/              # Cloud-init and Multipass helper scripts
 │   └── resources/           # Logos and README media
