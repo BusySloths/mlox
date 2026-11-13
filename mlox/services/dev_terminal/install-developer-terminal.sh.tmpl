@@ -490,6 +490,43 @@ append_once 'ZSH_THEME=""'
 append_once 'plugins=(git direnv fzf pyenv)'
 append_once '[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"'
 append_once '[ -f "$(npm root -g 2>/dev/null)/spaceship-prompt/spaceship.zsh" ] && source "$(npm root -g)/spaceship-prompt/spaceship.zsh"'
+
+# Keep the prompt in a separate file so users can customize or disable it.
+PROMPT_DIR="$TARGET_HOME/.config/mlox-terminal"
+PROMPT_FILE="$PROMPT_DIR/prompt.zsh"
+install -d -o "$TARGET_USER" -g "$TARGET_USER" "$PROMPT_DIR"
+if [ -f "$PROMPT_FILE" ]; then
+  cp -p "$PROMPT_FILE" "$PROMPT_FILE.backup-$(date +%Y%m%d%H%M%S)"
+fi
+cat > "$PROMPT_FILE" <<'MLOX_PROMPT'
+autoload -Uz vcs_info add-zsh-hook
+zstyle ':vcs_info:git:*' check-for-changes true
+zstyle ':vcs_info:git:*' stagedstr '%F{green}+staged%f'
+zstyle ':vcs_info:git:*' unstagedstr '%F{yellow}*modified%f'
+zstyle ':vcs_info:git:*' formats '%F{magenta}git:%b%f %c%u'
+zstyle ':vcs_info:git:*' actionformats '%F{magenta}git:%b|%a%f %c%u'
+add-zsh-hook precmd vcs_info
+setopt PROMPT_SUBST
+PROMPT='%F{cyan}%n%f%F{white}@@%f%F{cyan}%m%f %F{blue}%~%f ${vcs_info_msg_0_}
+%(?.%F{green}.%F{red})>%f '
+RPROMPT='%(?..%F{red}exit %?%f  )%F{yellow}%D{%H:%M:%S}%f'
+alias gs='git status --short --branch'
+alias gd='git diff'
+alias gds='git diff --staged'
+alias glog='git log --oneline --graph --decorate -20'
+export CLICOLOR=1
+export LS_COLORS="$(dircolors -b | sed -n "s/^LS_COLORS='\(.*\)'; export LS_COLORS$/\1/p")"
+alias ls='ls --color=auto'
+alias ll='ls -lah --color=auto'
+alias la='ls -A --color=auto'
+alias grep='grep --color=auto'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+zstyle ':completion:*' menu select
+export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border --color=fg:#cdd6f4,bg:#1e1e2e,hl:#89b4fa,fg+:#cdd6f4,bg+:#313244,hl+:#89b4fa,info:#cba6f7,prompt:#a6e3a1,pointer:#f5c2e7,marker:#f9e2af,spinner:#f5c2e7,header:#89b4fa'
+MLOX_PROMPT
+chown "$TARGET_USER:$TARGET_USER" "$PROMPT_FILE" || true
+remove_line '[ -r "$HOME/.config/mlox-terminal/prompt.zsh" ] && source "$HOME/.config/mlox-terminal/prompt.zsh"'
+append_once '[ -r "$HOME/.config/mlox-terminal/prompt.zsh" ] && source "$HOME/.config/mlox-terminal/prompt.zsh"'
 chown "$TARGET_USER:$TARGET_USER" "$ZSHRC" || true
 
 if command -v zsh >/dev/null 2>&1; then

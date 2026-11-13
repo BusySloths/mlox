@@ -1,5 +1,16 @@
 # Developers Terminal Dream
 
+The zsh prompt shows the host, working directory, time, Git branch, and staged
+or modified tracked files. `gs`, `gd`, `gds`, and `glog` provide shortcuts for
+Git status, diff, staged diff, and recent history. Directory listings,
+completion menus, and fzf use color. The terminal application's font is set on
+the computer used to connect, not on the server.
+
+The prompt is configured in `~/.config/mlox-terminal/prompt.zsh`, sourced at
+the end of `~/.zshrc` after Spaceship. Edit that file to customize it, or remove
+its source line from `.zshrc` to disable it. Running setup again reinstalls the
+prompt and saves the previous file beside it with a timestamped `.backup-` suffix.
+
 Connect to the backend over SSH and run `herdr`. Open a pane in the desired
 project and start `claude`, `codex`, `opencode`, or `omp`. Authenticate each
 agent with its provider separately; installation does not supply credentials.
