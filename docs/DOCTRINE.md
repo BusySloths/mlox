@@ -26,7 +26,7 @@ architecture lives in `docs/ARCHITECTURE.md`; everything else derives.
 | Native / Docker execution | **Stable** | Primary execution paths. |
 | Persistence (SQLCipher `project.mlox`) | **Stable** | Single encrypted file per project. |
 | Project sync (PostgreSQL snapshot) | **Planned** | Local-first SQLCipher + optional Postgres sync point; see Roadmap. |
-| Operations (Team, Pipelines, Plan) | **Experimental** | Project-scoped workload observation, evidence, planning, and advisory agent workspaces; see Roadmap for boundaries. |
+| AI & Operations (Team, Pipelines, Plan) | **Experimental** | Project-scoped workload observation, evidence, planning, and advisory agent workspaces; see Roadmap for boundaries. |
 
 Not every bundled service has a uniform status; maturity labels (Functional /
 Beta / Experimental) per component are tracked here as they change, not in the
@@ -139,150 +139,146 @@ dependency tree, giving developers and CI reproducible environments.
 
 ---
 
+## Vision & long-term ambitions
+
+- **Ditch the cloud. Your infrastructure. Your rules.** An opinionated platform
+  for interconnected services, with AI as a first-class participant and you in
+  control of your data, infrastructure, and operational decisions.
+- **Grow with the operator.** Start with one person, collaborate as a small team,
+  and aspire to enterprise use with stronger governance, isolation, and reliability.
+
+These ambitions guide direction; they are not current capabilities or delivery
+commitments. Infrastructure ownership and operational authority stay with you.
+
+---
+
 ## Roadmap
 
-Prioritized open direction (absorbed from the former
-`ARCHITECTURE_REFACTOR_PLAN_01.md` and README "planned" markers). This is the
-authoritative list. It is deliberately coarse-to-fine: general themes at the
-top, concrete items nested underneath.
+- **Planning:** authoritative direction lives here; themes and items have no fixed
+  priority order yet. Sequencing will evolve as the product takes shape;
+  implementation details live in linked issues or service-local design notes.
+- **Issues:** use a theme prefix (e.g. `[Projects & lifecycle]`) and a
+  `[ROADMAP_ITEM]` body marker; maintain related issue links here when work changes.
+  GitHub owns issue status and acceptance criteria.
 
-**How this relates to GitHub issues:** this roadmap is the deliberately
-lightweight replacement for a GitHub Projects board — planning truth lives here,
-versioned and reviewable with the code. GitHub **issues are derived from
-roadmap items**: when the time comes to work on an item, open an issue, prefix
-its title with the roadmap item (`[Project advancement] …`), and start the body
-with a one-line `[ROADMAP_ITEM]` marker describing what the issue implements.
-The linkage is one-directional — the roadmap never lists issue numbers, so it
-never goes stale. The roadmap item stays the source of truth; the issue is the
-execution unit. If this ever moves to GitHub Projects (or another tool), that
-tool becomes the linked source of truth and this section must point to it —
-never duplicate the list in both places.
+### 1. Projects & lifecycle
 
-Service-local design documents may expand one of these items into implementation
-notes. They do not establish product priority or status; this roadmap does.
+- **Project sync (local-first + PostgreSQL snapshot).** Publish/pull snapshots
+  through PostgreSQL; encrypted SQLCipher stays the local working store.
+  - Related issues: [#92](https://github.com/BusySloths/mlox/issues/92).
+- **Multi-project support and RBAC-like access.** Add project discovery,
+  switching, and named credentials; build toward scoped access for shared projects.
+- **Migration & upgrade framework.** Plan and execute service and server
+  updates, version upgrades, and migrations with compatibility checks.
+  - Include data/configuration migration, backups, post-change verification,
+    and rollback or documented recovery when changes cannot be reversed.
+- **Project knowledge base.** Shipped; extend with named markdown templates,
+  Obsidian import/export, and an agent/LLM chat surface.
+  - Related issues: [#100](https://github.com/BusySloths/mlox/issues/100).
 
-1. **Project advancement** — deepen what a project is, and how people and
-   agents work with it.
-   1. **Project sync (local-first + PostgreSQL snapshot).** MLOX projects
-      remain local, encrypted SQLCipher databases. A PostgreSQL instance acts
-      as a sync point: a computer publishes the newest state of a project
-      there, and another computer working on the same project pulls it and
-      copies it into its local SQLCipher DB. Deliberately lightweight —
-      snapshot-based sync of a local-first store, not a server-side runtime.
-      (Behind the existing data-source boundary: `sqlcipher/self` → optional
-      `postgres` sync target.)
-   2. **Multi-project support and RBAC-like access.** Make working with
-      several projects practical: suffixed environment variables
-      (`MLOX_PROJECT_PATH_<NAME>` / `MLOX_PROJECT_PASSWORD_<NAME>`), a project
-      dropdown on the TUI login screen, a runtime project switcher, and
-      zero-config discovery of `*.mlox` project files in the current
-      directory. This is also the groundwork for RBAC-like access control —
-      per-user/per-role visibility of projects, servers, and services once
-      projects are shared across users via project sync.
-   3. **Project knowledge base.** ✅ Shipped: notes, todos, wiki pages, FAQ
-      entries, and markdown kanban boards attached to each project —
-      encrypted in the project file, TUI-first, markdown as the source of
-      truth (boards are `##` lanes with `- [ ]` cards; entries link via
-      `[[wiki-links]]`). Follow-ups: named markdown templates
-      (`template <kind> <name>`), Obsidian export/import, and the agent/LLM
-      chat surface on top of the search field.
-   4. **Operations: pipelines and agent team.** **Experimental, but already a
-      useful operational foundation.** The TUI Operations section is
-      workload-first: Pipelines observes model and general workload runs,
-      preserves incident evidence and postmortems, and projects the
-      project-scoped `Operations` plan board. Team persists a roster, work
-      items, messages, and reviewable proposals; the built-in Pipeline Observer
-      can investigate watched workload evidence through an optional
-      OpenAI-compatible reasoning provider. This is the first practical step
-      toward an agentic MLOps team built on the existing topology, service, and
-      health model.
+### 2. AI & Operations
 
-      Current boundaries are deliberate: Pipelines is an observed-workload view,
-      not an orchestrator or scheduler; watching is telemetry-dependent and
-      user-started, not a continuous alerting or incident-response system.
-      Custom Team roles are durable profiles but do not yet have independent
-      runtimes or authority. Reasoning is advisory, its credentials stay in the
-      active secret manager, and the small set of remediation actions is
-      explicitly selected and approved by a person. Evolve this into reliable
-      multi-source evidence, durable operational history, reviewable
-      recommendations, capability-scoped agent access, and audited,
-      human-controlled remediation — never autonomous free-form infrastructure
-      control.
-2. **Catalog & placement** — grow what can be deployed, and deploy it well.
-   1. **Catalog growth.** Deliberately grow the service/connector/server
-      catalog — it is the main compounding value of the platform. Candidate
-      integrations: 1Password or Vault (secret managers), Prometheus + Grafana
-      + Loki (observability), Qdrant or Weaviate (vector databases), n8n or
-      Temporal (workflow automation), Supabase, ClickHouse, Ray.
-   2. **Placement & requirement enforcement.** Verify at setup time that the
-      target server actually provides the capabilities a service requires
-      (declared in YAML `capabilities`/`requirements`), and enforce them at
-      runtime as the model matures. Today they are parsed but not enforced.
-   3. **Model-serving gateway reliability.** Make the MLflow Gateway safe and
-      predictable for real inference traffic: isolate model versions and their
-      dependencies, bound alias/registry work on the request path, expose
-      phase-level latency and saturation signals, and apply safe concurrency,
-      overload, and lifecycle controls. Detailed engineering options live in
-      `mlox/services/mlflow_gateway/ROADMAP.md`; they are implementation notes,
-      not a second product roadmap.
-3. **Security & trust** — earn and keep the trust of users running real
-   infrastructure on MLOX.
-   1. **Security policy and threat model.** A `SECURITY.md` with a
-      responsible-disclosure channel, and a written threat model for the trust
-      boundaries that matter here: encrypted project files, secret manager
-      keyfiles and credentials, SSH/remote execution against user servers, and
-      the PostgreSQL sync path once it exists.
-   2. **Secrets-handling audit.** Verify and enforce that credentials and
-      passwords never end up in logs, command output, rendered UI state, or
-      exported project data — redaction as a tested core invariant, not a
-      best effort.
-   3. **Release supply-chain hygiene.** In progress: the manually dispatched
-      release pipeline calculates semantic versions, validates and builds once,
-      publishes through PyPI Trusted Publishing with attestations, verifies the
-      exact package, creates the GitHub Release, and deploys release-tagged docs.
-      Its security-sensitive actions are commit-pinned. Remaining work is
-      repository-wide workflow pinning and version-pinned historical API docs.
-   4. **Safe host operations.** Define conservative, recoverable ownership of
-      host-level changes made by MLOX: firewall exposure, Docker daemon policy,
-      bounded logs, and cleanup after partial service setup. The controls must
-      avoid lock-out, disk exhaustion, and stale state while preserving explicit
-      operator ownership where MLOX should not take over.
-4. **Community & adoption** — make MLOX easy to discover, learn, and trust.
-   1. **Tutorial / cookbook series.** Written, end-to-end guides for common
-      deployment stories: install → TUI → first deployed service, plus
-      per-service recipes (e.g. MLflow tracking, n8n). Durable and reviewable
-      with the docs pipeline; the basis for videos.
-   2. **Video / demo series.** **In progress as maintainer tooling, not a
-      user-facing product capability.** The first content-pipeline draft has
-      produced a README demo GIF, but it is not yet fully proven through
-      repeated real recording and publishing workflows. Complete reviewed
-      alignment, artifact materialization, final-media verification, and
-      end-to-end testing before treating the process as routine. The eventual
-      short walkthroughs — install to first deployed service, then one per
-      major service category — remain derived from tutorials so they stay in
-      sync as the UI evolves.
-   3. **API documentation quality.** The generated pdoc reference today is
-      raw output over thin docstrings. Invest in narrative docstrings for the
-      public surface (`ProjectWorkspace` first), per-use-case examples for the
-      client-SDK path (open project → provision → read credentials via the
-      secret manager), a curated landing/structure, and version-pinned API
-      docs for releases.
-   4. **First-run program.** Keep structured first-run testing going: new
-      contributors exercise one install lane and one interface on a clean
-      machine and report friction. Findings feed back into docs, onboarding,
-      and error messages.
-5. **Engineering baseline** — keep the repository healthy as the codebase and
-   the contributor base grow.
-   1. **Tooling/CI baseline.** PR-gated lint + unit tests; adopt a formatter,
-      type checker, and pre-commit.
-   2. **Test suite depth and robustness.** Extend unit test coverage across
-      the core public surface (workspace, use cases, config/plugin loading)
-      and surface the numbers in CI so regressions are visible. Extend the
-      Multipass-backed integration suite to cover more of the service catalog,
-      and make it robust — timeouts, offline resilience, reliable cleanup.
-      It is highly valuable but currently fails when installs are slow.
-   3. **Docs governance enforcement.** Keep every surface a derived view via
-      `scripts/check_docs.py`.
+- **CLI for agents.** Make MLOX usable by external agents through discoverable
+  commands, structured output, predictable errors, and non-interactive workflows.
+  - Apply scoped access and explicit approval boundaries to infrastructure changes.
+- **Agents within MLOX.** Enable agents in the Operations pane to investigate,
+  coordinate work, and prepare proposals using project knowledge and live evidence.
+  - Develop role runtimes with bounded tools, durable context, and reviewable actions.
+- **Service-builder agent.** Develop an agent role that implements requested
+  service integrations, configuration, and documentation on demand.
+  - Test lifecycle, connectivity, and upgrades in isolated environments; submit
+    reviewable changes with test evidence before catalog publication or deployment.
+- **Observability & investigation.** Evolve experimental Pipelines and Team
+  into reliable multi-source evidence, durable history, and agent investigations.
+  - Today: user-started, telemetry-dependent observation and advisory reasoning;
+    no scheduler or independent custom-role runtimes.
+- **Practical anomaly detection.** Detect meaningful workload and service
+  deviations with actionable evidence and a low false-alarm burden.
+  - Compare simple statistical baselines with tailored models; measure detection
+    quality, alert noise, and resource use on representative operational data.
+- **Self-hosted operational models (R&D).** Research and develop task-adapted
+  models that run smoothly on ordinary CPUs and modest memory budgets.
+  - Explore [BitNet](https://github.com/microsoft/BitNet), compact models, and
+    adaptive inference budgets; benchmark suitability before choosing an approach.
+- **Controlled remediation.** Build capability-scoped agent access, reviewable
+  changes, audit trails, and recovery toward AI-operated infrastructure.
+  - Remediation stays explicitly selected and human-approved; autonomous
+    free-form infrastructure control remains outside scope.
+
+### 3. Catalog & placement
+
+- **Catalog growth.** Expand services, connectors, and servers across secrets,
+  observability, vector databases, workflows, data platforms, and compute.
+  - Related issues: [#54](https://github.com/BusySloths/mlox/issues/54),
+    [#115](https://github.com/BusySloths/mlox/issues/115).
+- **Everyday & personal apps.** Add Memos, Nextcloud, and other everyday apps
+  with secure hosting defaults, access controls, private connectivity, and backups.
+- **Public marketplace.** Enable discovery, contribution, and installation of
+  community-maintained services and integrations.
+  - Make provenance, versions, compatibility, permissions, and validation evidence
+    visible before installation.
+- **Placement & requirement enforcement.** Enforce YAML capabilities and
+  requirements at setup, then runtime; currently parsed but unenforced.
+- **Model-serving gateway reliability.** Isolate model versions; bound registry
+  work, latency, concurrency, overload, and lifecycle behavior.
+  - Related issues: [#106](https://github.com/BusySloths/mlox/issues/106),
+    [#114](https://github.com/BusySloths/mlox/issues/114).
+    Engineering notes: [gateway roadmap](../mlox/services/mlflow_gateway/ROADMAP.md).
+
+### 4. Security & trust
+
+- **Secure interconnectivity.** Connect operators, agents, and services through
+  private networks; start with Tailscale and explicit public exposure policies.
+  - Explore VPS-to-cloud VPC connectivity for private managed services, with
+    scoped routes, access rules, and connectivity checks.
+- **Identity & scoped authority.** Give people and agents revocable,
+  least-privilege access with approval boundaries and audit trails.
+- **Recovery & resilience.** Verify encrypted backups, restoration, and rollback
+  of infrastructure and access-policy changes.
+- **Security policy and threat model.** Define disclosure procedures and model
+  project-file, credential, remote-execution, and future sync trust boundaries.
+- **Secrets-handling audit.** Make redaction a tested invariant across logs,
+  command output, UI state, and project exports.
+- **Release supply-chain hygiene.** Attested publishing is in place; finish
+  repository-wide workflow pinning and version-pinned historical API docs.
+- **Safe host operations.** Make firewall exposure, Docker policy, bounded logs,
+  and partial-setup cleanup recoverable while preserving operator ownership.
+  - Related issues: [#110](https://github.com/BusySloths/mlox/issues/110),
+    [#111](https://github.com/BusySloths/mlox/issues/111),
+    [#112](https://github.com/BusySloths/mlox/issues/112).
+
+### 5. Community & adoption
+
+- **Tutorial / cookbook series.** Publish end-to-end deployment guides as the
+  shared source for service recipes and derived demos.
+  - Related issues: [#107](https://github.com/BusySloths/mlox/issues/107).
+- **Video / demo series.** Maintainer tooling has produced a first README GIF;
+  prove recording, alignment, artifact generation, and final-media verification.
+  - Related issues: [#108](https://github.com/BusySloths/mlox/issues/108).
+- **API documentation quality.** Improve public docstrings, SDK examples,
+  navigation, and version-pinned release references.
+- **First-run program.** Exercise clean-machine installs and interfaces;
+  turn friction into documentation, onboarding, and error-message improvements.
+  - Related issues: [#81](https://github.com/BusySloths/mlox/issues/81),
+    [#82](https://github.com/BusySloths/mlox/issues/82).
+- **Public documentation alignment.** Keep README, website, and wiki aligned
+  with current interfaces and product visuals.
+  - Related issues: [#91](https://github.com/BusySloths/mlox/issues/91).
+
+### 6. Engineering baseline
+
+- **Tooling/CI baseline.** Gate PRs on lint and unit tests; adopt formatting,
+  type checking, and pre-commit.
+- **Core abstraction and CLI hardening.** Separate backend runtime behavior;
+  unify workspace-open errors and plugin-aware server selection.
+  - Related issues: [#77](https://github.com/BusySloths/mlox/issues/77),
+    [#102](https://github.com/BusySloths/mlox/issues/102),
+    [#103](https://github.com/BusySloths/mlox/issues/103).
+- **Test suite depth and robustness.** Extend core coverage and CI reporting;
+  broaden integration tests with reliable timeouts, offline handling, and cleanup.
+  - Related issues: [#117](https://github.com/BusySloths/mlox/issues/117).
+- **Docs governance enforcement.** Keep documentation derived from its sources
+  through `scripts/check_docs.py`.
 
 ---
 
