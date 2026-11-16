@@ -9,7 +9,7 @@ from mlox.service import ServiceCapability
 
 
 def describe_databases(infra) -> OperationResult:
-    """List every service advertising the database capability."""
+    """List database and object-storage services for the data overview."""
 
     if infra is None:
         return OperationResult(False, 30, "Infrastructure is unavailable.")
@@ -35,7 +35,7 @@ def describe_databases(infra) -> OperationResult:
                 }
             )
 
-    message = "No database services found." if not rows else "Database services loaded."
+    message = "No database or object storage services found." if not rows else "Data services loaded."
     return OperationResult(True, 0, message, {"rows": rows})
 
 
@@ -44,7 +44,7 @@ def _is_database_service(infra, service) -> bool:
         capability.value if hasattr(capability, "value") else str(capability)
         for capability in (getattr(service, "capabilities", set()) or set())
     }
-    if ServiceCapability.DATABASE.value in capabilities:
+    if capabilities & {ServiceCapability.DATABASE.value, ServiceCapability.OBJECT_STORAGE.value}:
         return True
 
     get_config = getattr(infra, "get_service_config", None)
@@ -54,7 +54,10 @@ def _is_database_service(infra, service) -> bool:
         if config and hasattr(config, "service_capabilities")
         else set()
     )
-    return ServiceCapability.DATABASE.value in config_capabilities
+    return bool({ServiceCapability.DATABASE.value, ServiceCapability.OBJECT_STORAGE.value} & {
+        capability.value if hasattr(capability, "value") else str(capability)
+        for capability in config_capabilities
+    })
 
 
 def _service_endpoints(service) -> str:

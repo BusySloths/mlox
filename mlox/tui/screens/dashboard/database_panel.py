@@ -36,7 +36,7 @@ class DatabasePanel(Static):
                 yield Static(id="database-metric-engines", classes="database-metric")
                 yield Static(id="database-metric-endpoints", classes="database-metric")
             with Horizontal(id="database-actions"):
-                yield Static("Project Databases", id="database-title")
+                yield Static("Project Databases and Object Storage", id="database-title")
                 yield Button("Refresh", id="refresh-databases")
             table = DataTable(id="database-table")
             table.cursor_type = "row"
@@ -169,7 +169,7 @@ class DatabasePanel(Static):
 
     def _update_metrics(self) -> None:
         values = [
-            ("#database-metric-total", "Databases", len(self._rows), "cyan"),
+            ("#database-metric-total", "Data services", len(self._rows), "cyan"),
             (
                 "#database-metric-running",
                 "Running",

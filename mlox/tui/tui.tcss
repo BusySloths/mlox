@@ -1724,6 +1724,14 @@ EnableFirewallDialog {
   padding: 0 1 1 1;
 }
 
+.minio-title { text-style: bold; height: 2; }
+.minio-actions { height: 3; margin-bottom: 1; }
+.minio-actions Button { width: auto; margin-right: 1; }
+#minio-certificate, #minio-message, .minio-note { height: auto; margin-bottom: 1; }
+#minio-browser { height: 18; }
+#minio-buckets { width: 1fr; }
+#minio-objects { width: 2fr; }
+
 .openbao-section-title {
   height: 1;
   margin: 1 0 0 0;
@@ -1777,18 +1785,19 @@ EnableFirewallDialog {
 }
 
 #openbao-copy-keyfile-password,
-#openbao-renew-keyfile-password,
 #openbao-download-keyfile {
   background: #3b3f8fff;
   border: round #9aa7ffff;
 }
 
-#openbao-refresh-apps {
+#openbao-refresh-apps,
+#openbao-copy-keyfile-env {
   background: #24406fff;
   border: round #69b7ffff;
 }
 
 #openbao-rotate-client,
+#openbao-renew-keyfile-password,
 #openbao-unseal {
   background: #9d7a09ff;
   border: round #f4e223ff;

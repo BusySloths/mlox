@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from importlib import resources
+import ipaddress
 
 from fabric import Connection  # type: ignore
 
@@ -58,7 +59,7 @@ class SecurityMixin(FilesystemTaskRunnerABC):
             command=f"chmod u=rw,g=rw,o=rw {path}/cert.pem",
         )
 
-    def tls_setup(self, connection: Connection, ip: str, path: str) -> None:
+    def tls_setup(self, connection: Connection, ip: str, path: str, *, days: int = 365, private_key_mode: str = "666") -> None:
         """Create TLS assets on the remote host using an OpenSSL config."""
 
         self.fs_create_dir(connection, path)
@@ -68,11 +69,17 @@ class SecurityMixin(FilesystemTaskRunnerABC):
         self.fs_find_and_replace(
             connection, f"{path}/openssl-san.cnf", "<MY_IP>", f"{ip}"
         )
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            self.fs_find_and_replace(
+                connection, f"{path}/openssl-san.cnf", "IP.1", "DNS.1"
+            )
 
         self._run_task(
             connection,
             group=TaskGroup.SECURITY_ASSETS,
-            command=f"cd {path}; openssl genrsa -out key.pem 2048",
+            command=f"cd {path}; umask 077; openssl genrsa -out key.pem 2048",
         )
         self._run_task(
             connection,
@@ -84,7 +91,7 @@ class SecurityMixin(FilesystemTaskRunnerABC):
         cmd = (
             f"cd {path}; "
             "openssl x509 -req -in server.csr -signkey key.pem "
-            "-out cert.pem -days 365 -extensions req_ext -extfile openssl-san.cnf"
+            f"-out cert.pem -days {int(days)} -extensions req_ext -extfile openssl-san.cnf"
         )
         self._run_task(
             connection,
@@ -94,7 +101,7 @@ class SecurityMixin(FilesystemTaskRunnerABC):
         self._run_task(
             connection,
             group=TaskGroup.SECURITY_ASSETS,
-            command=f"chmod u=rw,g=rw,o=rw {path}/key.pem",
+            command=f"chmod {private_key_mode} {path}/key.pem",
         )
 
     def security_generate_ssh_key(

@@ -61,8 +61,8 @@ class FakeExec:
     def fs_copy_remote_file(self, conn, src, dst):
         self._record("fs_copy_remote_file", src, dst)
 
-    def tls_setup(self, conn, host, path):
-        self._record("tls_setup", host, path)
+    def tls_setup(self, conn, host, path, **kwargs):
+        self._record("tls_setup", host, path, **kwargs)
 
     def tls_setup_no_config(self, conn, host, path):
         self._record("tls_setup_no_config", host, path)
@@ -213,6 +213,10 @@ def test_minio_check_running_and_stopped(conn):
 
     service.setup(conn)
     service.exec.all_states = {"proj_minio_1": {"Status": "running"}}
+    assert any(
+        name == "tls_setup" and kwargs == {"days": 3650, "private_key_mode": "600"}
+        for name, _, kwargs in service.exec.calls
+    )
     assert any(
         name == "fs_copy"
         and Path(args[0]).name == "Dockerfile"

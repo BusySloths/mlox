@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,7 @@ from mlox.application.use_cases.openbao import (
     unseal_openbao,
 )
 from mlox.infra import Bundle, Infrastructure
+from mlox.secret_manager import SECRET_MANAGER_KEYFILE_ENV, SECRET_MANAGER_KEYFILE_PW_ENV
 from mlox.services.openbao import OpenBaoDockerService
 
 
@@ -95,20 +97,21 @@ class OpenBaoSettingsPanel(VerticalScroll):
                 )
                 yield Static("", id="openbao-keyfile-action-spacer")
                 yield Button(
-                    "Copy Keyfile Password",
-                    id="openbao-copy-keyfile-password",
-                    variant="success",
-                )
-                yield Button(
                     "Renew Keyfile Password",
                     id="openbao-renew-keyfile-password",
                     variant="warning",
+                )
+                yield Button(
+                    "Copy Keyfile Password",
+                    id="openbao-copy-keyfile-password",
+                    variant="success",
                 )
                 yield Button(
                     "Download Keyfile",
                     id="openbao-download-keyfile",
                     variant="success",
                 )
+                yield Button("Copy as Env", id="openbao-copy-keyfile-env", variant="primary")
             table = DataTable(id="openbao-application-table")
             table.cursor_type = "row"
             table.add_columns(
@@ -282,6 +285,38 @@ class OpenBaoSettingsPanel(VerticalScroll):
             lambda: create_application_keyfile(self.infra, self.service, application),
             after,
             group="openbao-download-keyfile",
+        )
+
+    @on(Button.Pressed, "#openbao-copy-keyfile-env")
+    def handle_copy_keyfile_env(self, _: Button.Pressed) -> None:
+        application = self._selected_application()
+        if not application:
+            self.notify("Select an application credential.", severity="warning")
+            return
+        self._set_busy(True)
+
+        def after(result) -> None:
+            if not result.success:
+                self._set_busy(False)
+                self.notify(result.message, severity="error")
+                return
+            payload = result.data or {}
+            self.app.copy_to_clipboard(
+                f'{SECRET_MANAGER_KEYFILE_ENV}={json.dumps(str(payload["keyfile"]))}\n'
+                f'{SECRET_MANAGER_KEYFILE_PW_ENV}={json.dumps(str(payload["password"]))}\n'
+            )
+            self._commit_workspace()
+            self.notify(f"Copied keyfile environment variables for {application}.")
+            self._run_operation(
+                lambda: describe_openbao(self.infra, self.service),
+                self._show_settings_result,
+                group="openbao-copy-keyfile-env-refresh",
+            )
+
+        self._run_operation(
+            lambda: create_application_keyfile(self.infra, self.service, application),
+            after,
+            group="openbao-copy-keyfile-env",
         )
 
     @on(Button.Pressed, "#openbao-revoke-app")

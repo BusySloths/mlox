@@ -5,12 +5,15 @@ import io
 from pathlib import Path
 from types import SimpleNamespace
 
+from dotenv import dotenv_values
 from rich.console import Console
 from textual.app import App, ComposeResult
 from textual.widgets import Button, Input, Select
 
 from mlox.application.use_cases import openbao
+from mlox.secret_manager import SECRET_MANAGER_KEYFILE_ENV, SECRET_MANAGER_KEYFILE_PW_ENV
 from mlox.tui.services.openbao import OpenBaoSettingsPanel, settings
+from mlox.utils import decrypt_dict
 
 
 class FakeOpenBaoManager:
@@ -297,6 +300,26 @@ def test_openbao_panel_copies_keyfile_password() -> None:
     clipboard, commits = asyncio.run(_copy_keyfile_password_from_panel())
 
     assert clipboard
+    assert commits >= 1
+
+
+async def _copy_keyfile_env_from_panel() -> tuple[str, str, int]:
+    service = FakeOpenBaoService()
+    panel = OpenBaoSettingsPanel(None, None, service)
+    app = OpenBaoPanelTestApp(panel)
+    async with app.run_test() as pilot:
+        await pilot.pause(0.2)
+        panel.query_one("#openbao-copy-keyfile-env", Button).press()
+        await pilot.pause(0.3)
+        return (app.copied_text, service.application_credentials["app"]["keyfile_password"], app.commits)
+
+
+def test_openbao_panel_copies_keyfile_environment() -> None:
+    clipboard, password, commits = asyncio.run(_copy_keyfile_env_from_panel())
+    values = dotenv_values(stream=io.StringIO(clipboard))
+    assert values[SECRET_MANAGER_KEYFILE_PW_ENV] == password
+    decrypted = decrypt_dict(values[SECRET_MANAGER_KEYFILE_ENV], password)
+    assert decrypted["access_secret"]["token"] == "keyfile-token"
     assert commits >= 1
 
 

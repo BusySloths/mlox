@@ -58,7 +58,7 @@ class MinioDockerService(AbstractService, AbstractAppService, AbstractLogService
             f"{self.target_path}/minio-build/Dockerfile",
         )
 
-        self.exec.tls_setup(conn, conn.host, self.target_path)
+        self.exec.tls_setup(conn, conn.host, self.target_path, days=3650, private_key_mode="600")
         self.certificate = self.exec.fs_read_file(
             conn, f"{self.target_path}/cert.pem", format="txt/plain"
         )

@@ -30,6 +30,9 @@ class S3ObjectStorageClient(AbstractObjectStorageClient):
                 self._certificate_file.close()
             raise
 
+    def list_buckets(self) -> list[str]:
+        return [bucket["Name"] for bucket in self._client.list_buckets().get("Buckets", [])]
+
     def list_keys(self, bucket: str, prefix: str = "") -> list[str]:
         paginator = self._client.get_paginator("list_objects_v2")
         return [obj["Key"] for page in paginator.paginate(Bucket=bucket, Prefix=prefix)
