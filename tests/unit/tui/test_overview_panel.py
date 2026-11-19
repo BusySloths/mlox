@@ -88,7 +88,7 @@ def test_bundle_overview_shows_firewall_summary_without_live_status() -> None:
 
     assert "Firewall" in overview
     assert "Supported" in overview
-    assert "2222, 5000" in overview
+    assert "Open the project Firewall tab" in overview
 
 
 async def _project_overview_text() -> str:

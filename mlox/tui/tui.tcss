@@ -886,8 +886,15 @@ ModelCallResultDialog {
 }
 
 #firewall-summary {
+  width: 1fr;
+  height: 1;
+  content-align: left middle;
+}
+
+#firewall-selected-server {
   height: auto;
   margin-bottom: 1;
+  color: #8fe388ff;
 }
 
 #firewall-actions {
@@ -896,9 +903,25 @@ ModelCallResultDialog {
 }
 
 #firewall-actions Button {
-  width: auto;
-  min-width: 18;
+  min-width: 0;
   margin-right: 1;
+  padding: 0;
+}
+
+#firewall-actions Button:last-child {
+  margin-right: 0;
+}
+
+#refresh-firewalls, #disable-firewall {
+  width: 11;
+}
+
+#persist-firewall {
+  width: 29;
+}
+
+#edit-firewall-draft {
+  width: 24;
 }
 
 #refresh-firewalls {
@@ -906,9 +929,14 @@ ModelCallResultDialog {
   border: round #69b7ffff;
 }
 
-#enable-firewall {
+#edit-firewall-draft {
   background: #0e9455ff;
   border: round #8fe388ff;
+}
+
+#persist-firewall {
+  background: #785511ff;
+  border: round #f4c85aff;
 }
 
 #disable-firewall {
@@ -922,7 +950,7 @@ ModelCallResultDialog {
 }
 
 #firewall-table {
-  width: 50;
+  width: 35;
   height: 1fr;
   margin-right: 1;
 }
@@ -938,11 +966,6 @@ ModelCallResultDialog {
   margin-bottom: 1;
 }
 
-#firewall-raw-status {
-  width: 1fr;
-  height: 1fr;
-  border: round #69b7ffff;
-}
 
 #monitor-content {
   height: 1fr;
@@ -1659,8 +1682,70 @@ RecommendationDialog {
   border: round #69b7ffff;
 }
 
-EnableFirewallDialog {
+FirewallDraftDialog, PersistFirewallDialog {
   align: center middle;
+}
+
+#firewall-draft-dialog {
+  width: 78;
+  max-width: 100%;
+  height: 90%;
+  padding: 0 1;
+  background: #17214aff;
+  border: round #69b7ffff;
+}
+
+#firewall-draft-table {
+  height: 1fr;
+  min-height: 3;
+}
+
+#firewall-source-add {
+  height: 3;
+}
+
+#firewall-source-add Input {
+  width: 1fr;
+}
+
+#firewall-source-add Button {
+  width: 12;
+  margin-left: 1;
+}
+
+#firewall-draft-note {
+  height: auto;
+  color: #c2d7ffff;
+}
+
+#firewall-draft-actions {
+  height: 3;
+}
+
+#firewall-draft-actions Button {
+  min-width: 0;
+  width: 1fr;
+  margin-right: 1;
+}
+
+#add-firewall-draft, #toggle-firewall-source {
+  background: #24406fff;
+  border: round #69b7ffff;
+}
+
+#save-firewall-draft {
+  background: #0e9455ff;
+  border: round #8fe388ff;
+}
+
+#apply-firewall-draft {
+  background: #785511ff;
+  border: round #f4c85aff;
+}
+
+#cancel-firewall-draft {
+  background: #30374fff;
+  border: round #6d789dff;
 }
 
 #enable-firewall-dialog {
@@ -1678,14 +1763,14 @@ EnableFirewallDialog {
   color: #f4e223ff;
 }
 
-#enable-firewall-help {
-  color: #c2d7ffff;
-  margin-bottom: 1;
-}
-
-#enable-firewall-error {
+#firewall-draft-error {
   color: #ff6b6b;
   height: auto;
+}
+
+.firewall-draft-button {
+  width: 1fr;
+  margin-right: 1;
 }
 
 .firewall-dialog-label {
@@ -1694,28 +1779,9 @@ EnableFirewallDialog {
   margin-top: 1;
 }
 
-#enable-firewall-custom-ports,
-#enable-firewall-exclude-ports,
-#enable-firewall-source-ips {
-  width: 1fr;
-}
-
 #enable-firewall-dialog-actions {
   height: 3;
   margin-top: 1;
-}
-
-#cancel-enable-firewall {
-  width: 1fr;
-  margin-right: 1;
-  background: #30374fff;
-  border: round #6d789dff;
-}
-
-#confirm-enable-firewall {
-  width: 1fr;
-  background: #0e9455ff;
-  border: round #8fe388ff;
 }
 
 #openbao-settings {

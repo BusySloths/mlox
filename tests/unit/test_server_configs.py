@@ -12,6 +12,7 @@ from mlox.config import (
 )
 from mlox.server import (
     AbstractGitServer,
+    AbstractFirewallServer,
     AbstractNativeServer,
     AbstractServer,
     ServerCapability,
@@ -328,7 +329,7 @@ def test_builtin_server_config_capabilities_match_classes():
             {"docker"},
         ),
         "ubuntu-k3s-24.04-server": (
-            {"git", "firewall", "health", "initial_auth_password", "terminal"},
+            {"git", "health", "initial_auth_password", "terminal"},
             {"kubernetes"},
         ),
         "ubuntu-multipass-native-24.04-server": (
@@ -340,7 +341,7 @@ def test_builtin_server_config_capabilities_match_classes():
             {"docker"},
         ),
         "ubuntu-multipass-k3s-24.04-server": (
-            {"git", "firewall", "health", "initial_auth_password", "terminal"},
+            {"git", "health", "initial_auth_password", "terminal"},
             {"kubernetes"},
         ),
     }
@@ -353,6 +354,9 @@ def test_builtin_server_config_capabilities_match_classes():
         assert config.backend_capabilities() == backend_capabilities
         module_path, class_name = config.build.class_name.rsplit(".", 1)
         server_class = getattr(importlib.import_module(module_path), class_name)
+        if "firewall" in config.server_capabilities():
+            assert issubclass(server_class, AbstractFirewallServer)
+            assert not server_class.__abstractmethods__
         class_capabilities = {
             (
                 capability.value

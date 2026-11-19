@@ -2,7 +2,8 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+
+from mlox.firewall import FirewallPolicy, FirewallPolicyRule, FirewallStatus
 
 
 @dataclass
@@ -24,27 +25,36 @@ class AbstractGitServer(ABC):
 @dataclass
 class AbstractFirewallServer(ABC):
     @abstractmethod
-    def firewall_up(
-        self,
-        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
-        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
-    ) -> None:
-        pass
+    def firewall_default_policy(self) -> FirewallPolicy:
+        """Propose a policy appropriate for this server."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def firewall_validate_policy(self, policy: FirewallPolicy) -> None:
+        """Reject a policy that cannot safely manage this server."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def firewall_policy_rules(self) -> tuple[FirewallPolicyRule, ...]:
+        """Describe backend-specific fixed rules in the policy."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def firewall_persist_policy(self, policy: FirewallPolicy) -> None:
+        """Persist an already applied policy, when supported by this server."""
+        raise NotImplementedError("Policy persistence is not supported by this server.")
+
+    @abstractmethod
+    def firewall_apply_policy(self, policy: FirewallPolicy) -> None:
+        """Apply a complete policy, when supported by this server."""
+        raise NotImplementedError("Policy application is not supported by this server.")
 
     @abstractmethod
     def firewall_down(self) -> None:
         pass
 
     @abstractmethod
-    def firewall_status(self) -> str | None:
-        pass
-
-    @abstractmethod
-    def firewall_update(
-        self,
-        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
-        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
-    ) -> None:
+    def firewall_status(self) -> FirewallStatus:
         pass
 
 

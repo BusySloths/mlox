@@ -39,6 +39,8 @@ class Bundle:
     descr: str = field(default="", init=False)
     tags: List[str] = field(default_factory=list, init=False)
     services: List[AbstractService] = field(default_factory=list, init=False)
+    # A local proposal only. It does not describe or change the live firewall.
+    firewall_policy_draft: Dict[str, object] | None = field(default=None, init=False)
 
 
 @dataclass

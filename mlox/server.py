@@ -301,6 +301,10 @@ class AbstractServer(ABC):
         if not self.discovered:
             self.discovered = datetime.now().isoformat()
 
+    def firewall_peer_address(self) -> str | None:
+        """Return an unverified address that can be proposed as a trusted peer."""
+        return None
+
     def create_new_task_executor(self) -> UbuntuTaskExecutor:
         new_task_exec = UbuntuTaskExecutor()
         if self.exec.supported_os_ids != new_task_exec.supported_os_ids:

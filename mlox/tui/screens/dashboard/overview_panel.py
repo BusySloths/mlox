@@ -193,7 +193,7 @@ class OverviewPanel(Static):
         if firewall["capable"]:
             details.add_row(
                 "Firewall",
-                self._firewall_summary_text(firewall["recommended_ports"]),
+                self._firewall_summary_text(),
             )
         if is_bundle_initialized(bundle) and not services:
             details.add_row(
@@ -433,10 +433,8 @@ class OverviewPanel(Static):
             return ", ".join(f"{key}:{value}" for key, value in ports.items())
         return "-"
 
-    def _firewall_summary_text(self, recommended_ports: list[int]) -> Text:
+    def _firewall_summary_text(self) -> Text:
         text = Text()
         text.append("Supported", style="bold white on dark_green")
-        text.append("  Recommended ports: ")
-        text.append(", ".join(str(port) for port in recommended_ports) or "none")
         text.append("  Open the project Firewall tab for live status.", style="dim")
         return text

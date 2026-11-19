@@ -27,7 +27,6 @@ class UbuntuK3sServer(
         ServerCapability.HEALTH,
         ServerCapability.LOGS,
         ServerCapability.GIT,
-        ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
         ServerCapability.TERMINAL,
         ServerCapability.KUBERNETES,
@@ -54,6 +53,12 @@ class UbuntuK3sServer(
             self.backend = ["kubernetes-agent", "k3s-agent"]
         else:
             self.backend = ["kubernetes", "k3s"]
+
+    def firewall_apply_policy(self, policy) -> None:
+        raise NotImplementedError("Firewall policy application is not yet supported for K3s.")
+
+    def firewall_persist_policy(self, policy) -> None:
+        raise NotImplementedError("Firewall policy persistence is not yet supported for K3s.")
 
     def setup_backend(self):
         self.state = "starting"

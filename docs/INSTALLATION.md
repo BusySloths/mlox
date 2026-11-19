@@ -106,6 +106,19 @@ For running a specific integration test use:
 task tests:integration:service SERVICE=service_name
 ```
 
+For the Ubuntu firewall integration suite, run this on a machine capable of
+running Multipass VMs and pulling Docker images:
+
+```bash
+uv run pytest tests/integration/test_ubuntu_firewall.py --run-integration -v
+```
+
+The suite provisions separate disposable native and Docker Ubuntu VMs, changes
+their firewall rules, creates guest-local test networks and services, and reboots
+the VMs. It deletes only the VMs it created. It does not use existing project
+servers. IPv4 and IPv6 support is required in the guests; the Docker cases
+require Docker's `DOCKER-USER` chain for both address families.
+
 All related commands:
 
 ```bash

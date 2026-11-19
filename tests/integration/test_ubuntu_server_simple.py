@@ -1,5 +1,7 @@
 import pytest
 
+from mlox.firewall import FirewallPolicy
+
 # Mark this module as an integration test
 pytestmark = pytest.mark.integration
 
@@ -30,12 +32,10 @@ def test_simple_server_debug_access_with_password(ubuntu_simple_server):
 
 def test_simple_server_firewall_toggle(ubuntu_simple_server):
     # Keep SSH open while firewall is enabled to avoid locking out remote access.
-    ubuntu_simple_server.firewall_up([22])
+    ubuntu_simple_server.firewall_apply_policy(FirewallPolicy((int(ubuntu_simple_server.port), 80, 443)))
     status = ubuntu_simple_server.firewall_status()
-    assert status is not None
-    assert "Status: active" in status
+    assert status.active is True
 
     ubuntu_simple_server.firewall_down()
     status = ubuntu_simple_server.firewall_status()
-    assert status is not None
-    assert "Status: inactive" in status
+    assert status.active is False

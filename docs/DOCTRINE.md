@@ -227,6 +227,24 @@ commitments. Infrastructure ownership and operational authority stay with you.
 
 ### 4. Security & trust
 
+- **Security audit & testing.** Provide project and server security assessments
+  that combine exposure, firewall, configuration, and service-security checks
+  into actionable findings with evidence, severity, and suggested remediation.
+  - Include a port scanner for authorized targets, with explicit target and
+    protocol scope, IPv4 and IPv6 coverage, and clearly identified scan vantage
+    points. Compare observed exposure with intended firewall policy and support
+    before-and-after checks; distinguish blocked, unreachable, and untested
+    results where evidence permits.
+  - Start with non-disruptive checks; make more intrusive tests explicit and
+    operator-controlled. Record when and how findings were obtained, protect
+    sensitive evidence, and make results available through the CLI and TUI.
+- **Firewall management.** Extend server firewall capabilities and security
+  audits around reviewable policies, trusted sources, temporary changes, and
+  optional reboot persistence. Account for host and container networking,
+  proxy-to-service traffic, and dynamic operator addresses.
+  - Add K3s-aware node firewall implementations for controllers and agents, with
+    cluster-specific network requirements and verification. Explore Kubernetes
+    NetworkPolicies separately for workload-to-workload isolation.
 - **Secure interconnectivity.** Connect operators, agents, and services through
   private networks; start with Tailscale and explicit public exposure policies.
   - Explore VPS-to-cloud VPC connectivity for private managed services, with

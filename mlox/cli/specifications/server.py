@@ -22,6 +22,37 @@ def _server_template_path(value: str) -> str:
 
 SERVER_COMMANDS = (
     WorkspaceCommand(
+        name="firewall-persist", method="persist_server_firewall",
+        help="Make the currently applied firewall draft survive server reboots.",
+        parameters=(CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),),
+        renderer=render_inspection,
+    ),
+    WorkspaceCommand(
+        name="firewall-apply", method="apply_server_firewall",
+        help="Apply this server's firewall draft; rules may not persist after reboot.",
+        parameters=(CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),),
+        renderer=render_inspection,
+    ),
+    *(
+        WorkspaceCommand(
+            name=f"firewall-draft-{action}-source",
+            method=f"{action}_firewall_draft_source",
+            help=f"{action.capitalize()} a trusted IP or CIDR in the local draft; does not change the server.",
+            parameters=(
+                CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),
+                CliParameter("source", "Trusted IP address or CIDR", kind="argument"),
+            ),
+            renderer=render_inspection,
+        )
+        for action in ("add", "remove")
+    ),
+    WorkspaceCommand(
+        name="firewall-preview", method="preview_server_firewall",
+        help="Preview the proposed default firewall policy without changing the server.",
+        parameters=(CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),),
+        renderer=render_inspection,
+    ),
+    WorkspaceCommand(
         name="logs", method="server_logs", help="Show recent server logs.",
         parameters=(
             CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),

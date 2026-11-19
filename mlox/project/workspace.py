@@ -21,7 +21,7 @@ from mlox.application.payloads import (
     ServiceLogsData,
 )
 from mlox.application.result import OperationResult
-from mlox.application.use_cases import docker_proxy, models, project, servers, services
+from mlox.application.use_cases import docker_proxy, firewall, models, project, servers, services
 from mlox.config import (
     ServiceConfig,
     get_stacks_path,
@@ -636,6 +636,54 @@ class ProjectWorkspace:
         """List servers registered in the project infrastructure."""
 
         return servers.list_servers(self._state)
+
+    def preview_server_firewall(self, *, ip: str) -> OperationResult[dict[str, Any]]:
+        """Preview a server's default firewall policy without changing it."""
+        bundle = self.infrastructure.get_bundle_by_ip(ip)
+        if bundle is None:
+            return OperationResult(False, 5, "Server not found or identifier is ambiguous.")
+        return firewall.preview_firewall_policy(self.infrastructure, bundle)
+
+    def apply_server_firewall(self, *, ip: str) -> OperationResult[dict[str, Any]]:
+        """Apply the selected server's saved policy draft."""
+        bundle = self.infrastructure.get_bundle_by_ip(ip)
+        if bundle is None:
+            return OperationResult(False, 5, "Server not found or identifier is ambiguous.")
+        result = firewall.apply_firewall_draft(bundle)
+        if result.success:
+            result.data["firewall"].pop("bundle_ref", None)
+        return result
+
+    def persist_server_firewall(self, *, ip: str) -> OperationResult[dict[str, Any]]:
+        """Persist an applied firewall draft across server reboots."""
+        bundle = self.infrastructure.get_bundle_by_ip(ip)
+        if bundle is None:
+            return OperationResult(False, 5, "Server not found or identifier is ambiguous.")
+        result = firewall.persist_firewall_draft(bundle)
+        if result.success:
+            result.data["firewall"].pop("bundle_ref", None)
+        return result
+
+    def add_firewall_draft_source(self, *, ip: str, source: str) -> OperationResult[dict[str, Any]]:
+        """Save a trusted source in the local firewall draft, without applying it."""
+        return self._change_firewall_draft_source(ip, source, remove=False)
+
+    def replace_firewall_draft_sources(self, *, ip: str, sources: list[str]) -> OperationResult[dict[str, Any]]:
+        """Replace trusted sources in the saved draft without applying it."""
+        bundle = self.infrastructure.get_bundle_by_ip(ip)
+        if bundle is None:
+            return OperationResult(False, 5, "Server not found or identifier is ambiguous.")
+        return self._mutate(lambda: firewall.replace_firewall_draft_sources(bundle, sources))
+
+    def remove_firewall_draft_source(self, *, ip: str, source: str) -> OperationResult[dict[str, Any]]:
+        """Remove a source from the local firewall draft, without applying it."""
+        return self._change_firewall_draft_source(ip, source, remove=True)
+
+    def _change_firewall_draft_source(self, ip: str, source: str, *, remove: bool) -> OperationResult[dict[str, Any]]:
+        bundle = self.infrastructure.get_bundle_by_ip(ip)
+        if bundle is None:
+            return OperationResult(False, 5, "Server not found or identifier is ambiguous.")
+        return self._mutate(lambda: firewall.update_firewall_draft_source(bundle, source, remove=remove))
 
     def server_logs(
         self, *, ip: str, label: str | None = None, tail: int = 200

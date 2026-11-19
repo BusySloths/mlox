@@ -4,117 +4,142 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from rich.columns import Columns
-from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
-from textual.renderables.digits import Digits as DigitsRenderable
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Input, Label, Static, TextArea
+from textual.widgets import Button, DataTable, Input, Label, Static
+
+from mlox.firewall import normalize_source
 
 from mlox.application.use_cases.firewall import (
     describe_project_firewalls,
+    describe_bundle_firewall,
     disable_bundle_firewall,
-    enable_bundle_firewall_with_options,
+    preview_firewall_policy,
+    apply_firewall_draft,
+    persist_firewall_draft,
 )
 
 from .model import SelectionInfo
 
 
-class EnableFirewallDialog(ModalScreen[dict[str, list[int] | list[str]] | None]):
-    """Collect firewall enable options before applying default-drop rules."""
+class FirewallDraftDialog(ModalScreen[tuple[str, list[str]] | None]):
+    """Review and edit one server's policy before saving or applying it."""
 
-    def __init__(self, bundle_name: str, recommended_ports: list[int]) -> None:
+    def __init__(self, data: dict[str, Any]) -> None:
         super().__init__()
-        self.bundle_name = bundle_name
-        self.recommended_ports = recommended_ports
+        self.data = data
+        self.sources = set(data["trusted_sources"])
+        self.entries: list[tuple[str, str]] = []
+
+    def compose(self) -> ComposeResult:
+        with Container(id="firewall-draft-dialog"):
+            yield Label(f"Firewall draft: {self.data['bundle']}", id="enable-firewall-title")
+            yield Static("Select an address to change trust; public TCP ports are fixed.", markup=False)
+            table = DataTable(id="firewall-draft-table")
+            table.cursor_type = "row"
+            table.add_columns("Policy", "Address / port", "Access")
+            yield table
+            with Horizontal(id="firewall-source-add"):
+                yield Input(placeholder="IP address or CIDR", id="firewall-draft-source")
+                yield Button("Add IP", id="add-firewall-draft", variant="success")
+            yield Static("Suggestions are unverified. Apply is temporary; reboot may restore a saved policy.", id="firewall-draft-note", markup=False)
+            yield Static("", id="firewall-draft-error", markup=False)
+            with Horizontal(id="firewall-draft-actions"):
+                yield Button("Toggle Trust", id="toggle-firewall-source")
+                yield Button("Cancel", id="cancel-firewall-draft")
+                yield Button("Save Draft", id="save-firewall-draft", variant="success")
+                yield Button("Apply Draft", id="apply-firewall-draft", variant="warning")
+
+    def on_mount(self) -> None:
+        self._populate()
+
+    def _populate(self) -> None:
+        table = self.query_one("#firewall-draft-table", DataTable)
+        table.clear()
+        self.entries = []
+        for port in self.data["public_tcp_ports"]:
+            self.entries.append(("port", str(port)))
+            table.add_row("Public TCP", str(port), "Everyone")
+        for source in sorted(self.sources):
+            self.entries.append(("trusted", source))
+            table.add_row("Trusted source", source, "All ports")
+        for peer in self.data["suggested_project_sources"]:
+            address = peer["address"]
+            if address not in self.sources:
+                self.entries.append(("suggested", address))
+                table.add_row(f"Suggested: {peer['bundle']}", address, "Unverified")
+        for rule in self.data["fixed_rules"]:
+            self.entries.append(("info", rule["description"]))
+            table.add_row(rule["name"], rule["description"], rule["access"])
+
+    @on(Button.Pressed)
+    def handle_button(self, event: Button.Pressed) -> None:
+        action = event.button.id
+        error = self.query_one("#firewall-draft-error", Static)
+        if action == "cancel-firewall-draft":
+            self.dismiss(None)
+        elif action == "add-firewall-draft":
+            input_widget = self.query_one("#firewall-draft-source", Input)
+            try:
+                source = normalize_source(input_widget.value)
+            except ValueError as exc:
+                error.update(f"Invalid source: {exc}")
+                return
+            self.sources.add(source)
+            input_widget.value = ""
+            error.update("")
+            self._populate()
+        elif action == "toggle-firewall-source":
+            index = self.query_one("#firewall-draft-table", DataTable).cursor_row
+            if index >= len(self.entries):
+                return
+            kind, value = self.entries[index]
+            if kind in ("port", "info"):
+                error.update("This server-provided rule cannot be changed here.")
+                return
+            if kind == "trusted":
+                self.sources.remove(value)
+            else:
+                self.sources.add(normalize_source(value))
+            error.update("")
+            self._populate()
+        elif action in ("save-firewall-draft", "apply-firewall-draft"):
+            if self.query_one("#firewall-draft-source", Input).value.strip():
+                error.update("Add the entered IP first or clear the field.")
+                return
+            self.dismiss(("apply" if action == "apply-firewall-draft" else "save", sorted(self.sources)))
+
+
+class PersistFirewallDialog(ModalScreen[bool]):
+    def __init__(self, name: str) -> None:
+        super().__init__()
+        self.server_name = name
 
     def compose(self) -> ComposeResult:
         with Container(id="enable-firewall-dialog"):
-            yield Label("Enable Firewall", id="enable-firewall-title")
+            yield Label(f"Make policy permanent: {self.server_name}", id="enable-firewall-title")
             yield Static(
-                (
-                    f"{self.bundle_name}: recommended ports "
-                    f"{self._format_ports(self.recommended_ports)}. "
-                    "SSH is required and cannot be excluded."
-                ),
-                id="enable-firewall-help",
-            )
-            yield Static("", id="enable-firewall-error")
-            yield Label("Additional ports", classes="firewall-dialog-label")
-            yield Input(
-                placeholder="8080, 9000",
-                id="enable-firewall-custom-ports",
-            )
-            yield Label("Exclude recommended ports", classes="firewall-dialog-label")
-            yield Input(
-                placeholder="5000",
-                id="enable-firewall-exclude-ports",
-            )
-            yield Label(
-                "Source whitelist for all open ports",
-                classes="firewall-dialog-label",
-            )
-            yield Input(
-                placeholder="203.0.113.10, 203.0.113.0/24",
-                id="enable-firewall-source-ips",
+                "The applied policy must match the saved draft. It will be restored on reboot; "
+                "rebooting will no longer remove this policy. On Docker servers restoration "
+                "runs after Docker starts.", markup=False,
             )
             with Horizontal(id="enable-firewall-dialog-actions"):
-                yield Button("Cancel", id="cancel-enable-firewall")
-                yield Button(
-                    "Enable Firewall",
-                    id="confirm-enable-firewall",
-                    variant="success",
-                )
+                yield Button("Cancel", id="cancel-firewall-persist", classes="firewall-draft-button")
+                yield Button("Make Permanent", id="confirm-firewall-persist", classes="firewall-draft-button", variant="warning")
 
-    def on_mount(self) -> None:
-        self.query_one("#enable-firewall-custom-ports", Input).focus()
+    @on(Button.Pressed, "#cancel-firewall-persist")
+    def cancel(self, _: Button.Pressed) -> None:
+        self.dismiss(False)
 
-    @on(Button.Pressed, "#cancel-enable-firewall")
-    def handle_cancel(self, _: Button.Pressed) -> None:
-        self.dismiss(None)
-
-    @on(Button.Pressed, "#confirm-enable-firewall")
-    def handle_confirm(self, _: Button.Pressed) -> None:
-        try:
-            custom_ports = self._parse_ports("#enable-firewall-custom-ports")
-            exclude_ports = self._parse_ports("#enable-firewall-exclude-ports")
-        except ValueError as exc:
-            self.query_one("#enable-firewall-error", Static).update(str(exc))
-            return
-
-        source_ips = self._parse_csv("#enable-firewall-source-ips")
-        self.dismiss(
-            {
-                "custom_ports": custom_ports,
-                "exclude_ports": exclude_ports,
-                "source_ips": source_ips,
-            }
-        )
-
-    def _parse_ports(self, selector: str) -> list[int]:
-        ports = []
-        for value in self._parse_csv(selector):
-            try:
-                port = int(value)
-            except ValueError as exc:
-                raise ValueError(f"Invalid port: {value}") from exc
-            if port < 1 or port > 65535:
-                raise ValueError(f"Port out of range: {port}")
-            ports.append(port)
-        return sorted(set(ports))
-
-    def _parse_csv(self, selector: str) -> list[str]:
-        value = self.query_one(selector, Input).value
-        return [part.strip() for part in value.split(",") if part.strip()]
-
-    def _format_ports(self, ports: list[int]) -> str:
-        return ", ".join(str(port) for port in ports) or "none"
+    @on(Button.Pressed, "#confirm-firewall-persist")
+    def confirm(self, _: Button.Pressed) -> None:
+        self.dismiss(True)
 
 
 class FirewallPanel(Static):
@@ -134,20 +159,19 @@ class FirewallPanel(Static):
             yield Static(id="firewall-summary", markup=False)
             with Horizontal(id="firewall-actions"):
                 yield Button("Refresh", id="refresh-firewalls", variant="primary")
-                yield Button("Enable Firewall", id="enable-firewall", variant="success")
-                yield Button("Disable Firewall", id="disable-firewall", variant="error")
+                yield Button("Edit and apply rules", id="edit-firewall-draft", variant="success")
+                yield Button("Persist rules for reboots", id="persist-firewall", variant="warning", tooltip="Save the applied policy for reboot")
+                yield Button("Disable", id="disable-firewall", variant="error")
             with Horizontal(id="firewall-browser"):
                 table = DataTable(id="firewall-table")
                 table.cursor_type = "row"
                 table.add_columns(
-                    "Bundle",
-                    "Server",
-                    "Firewall",
+                    "Server", "Firewall", "On reboot",
                 )
                 yield table
-                with Vertical(id="firewall-detail-pane"):
+                with VerticalScroll(id="firewall-detail-pane"):
+                    yield Static("Select a server to manage its policy.", id="firewall-selected-server")
                     yield Static(id="firewall-detail", markup=False)
-                    yield TextArea("", id="firewall-raw-status")
 
     @property
     def table(self) -> DataTable:
@@ -160,10 +184,6 @@ class FirewallPanel(Static):
     @property
     def detail(self) -> Static:
         return self.query_one("#firewall-detail", Static)
-
-    @property
-    def raw_status(self) -> TextArea:
-        return self.query_one("#firewall-raw-status", TextArea)
 
     def on_mount(self) -> None:
         self.watch_selection(self.selection)
@@ -183,7 +203,6 @@ class FirewallPanel(Static):
         self._set_loading(True)
         self.summary.update(Panel(Text("Loading firewall status..."), title="Firewall"))
         self.detail.update(self._help_panel())
-        self._show_raw_status("")
 
         def load_firewalls() -> None:
             result = describe_project_firewalls(infra)
@@ -207,11 +226,12 @@ class FirewallPanel(Static):
             return
 
         payload = result.data or {}
+        previous_selection = self._selected_id
         self._rows = list(payload.get("rows", []))
         self._populate_table()
         self.summary.update(self._summary_panel(payload.get("summary", {})))
         if self._row_ids:
-            self._select_row(self._row_ids[0])
+            self._select_row(previous_selection if previous_selection in self._row_ids else self._row_ids[0])
         else:
             self.detail.update(
                 Panel(
@@ -233,12 +253,15 @@ class FirewallPanel(Static):
             self._row_ids.append(row_id)
             table.add_row(
                 str(row.get("bundle", "-")),
-                str(row.get("server", "-")),
                 self._firewall_badge(row),
+                ("Saved" if row.get("persistence") == "enabled" else
+                 "Not saved" if row.get("is_active") and row.get("persistence") == "disabled" else
+                 "Off" if not row.get("is_active") and not row.get("status_error") and row.get("persistence") == "disabled" else "Unknown"),
                 key=row_id,
             )
         if self._row_ids:
-            table.cursor_coordinate = (0, 0)
+            index = self._row_ids.index(self._selected_id) if self._selected_id in self._row_ids else 0
+            table.cursor_coordinate = (index, 0)
 
     @on(DataTable.RowSelected, "#firewall-table")
     def handle_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -249,36 +272,43 @@ class FirewallPanel(Static):
     def handle_refresh(self, _: Button.Pressed) -> None:
         self.load()
 
-    @on(Button.Pressed, "#enable-firewall")
-    def handle_enable(self, _: Button.Pressed) -> None:
+    @on(Button.Pressed, "#edit-firewall-draft")
+    def handle_edit_draft(self, _: Button.Pressed) -> None:
+        row = self._selected_row()
+        workspace = getattr(self.app, "workspace", None)
+        if not row or workspace is None:
+            self.notify("Select a firewall-capable bundle.", severity="warning")
+            return
+        preview = preview_firewall_policy(workspace.infrastructure, row["bundle_ref"])
+        if not preview.success:
+            self.notify(preview.message, severity="error")
+            return
+
+        def edit(result: tuple[str, list[str]] | None) -> None:
+            if result is None:
+                return
+            action, sources = result
+            def save_and_apply():
+                saved = workspace.replace_firewall_draft_sources(ip=str(row["server"]), sources=sources)
+                if not saved.success or action == "save":
+                    return saved
+                return apply_firewall_draft(row["bundle_ref"])
+            self._run_bundle_action(save_and_apply, "firewall-draft", row,
+                                    refresh_on_failure=action == "apply")
+
+        self.app.push_screen(FirewallDraftDialog(preview.data), edit)
+
+    @on(Button.Pressed, "#persist-firewall")
+    def handle_persist(self, _: Button.Pressed) -> None:
         row = self._selected_row()
         if not row:
             self.notify("Select a firewall-capable bundle.", severity="warning")
             return
-        self.app.push_screen(
-            EnableFirewallDialog(
-                str(row.get("bundle", "-")),
-                list(row.get("recommended_ports", []) or []),
-            ),
-            lambda values: self._enable_firewall_from_dialog(row, values),
-        )
-
-    def _enable_firewall_from_dialog(
-        self,
-        row: dict[str, Any],
-        values: dict[str, list[int] | list[str]] | None,
-    ) -> None:
-        if values is None:
-            return
-        self._run_bundle_action(
-            lambda: enable_bundle_firewall_with_options(
-                row["bundle_ref"],
-                custom_ports=values.get("custom_ports", []),
-                exclude_ports=values.get("exclude_ports", []),
-                source_ips=values.get("source_ips", []),
-            ),
-            "firewall-enable",
-        )
+        def persist(confirmed: bool | None) -> None:
+            if confirmed:
+                self._run_bundle_action(lambda: persist_firewall_draft(row["bundle_ref"]),
+                                        "firewall-persist", row)
+        self.app.push_screen(PersistFirewallDialog(str(row["bundle"])), persist)
 
     @on(Button.Pressed, "#disable-firewall")
     def handle_disable(self, _: Button.Pressed) -> None:
@@ -289,31 +319,61 @@ class FirewallPanel(Static):
         self._run_bundle_action(
             lambda: disable_bundle_firewall(row["bundle_ref"]),
             "firewall-disable",
+            row,
         )
 
-    def _run_bundle_action(self, operation, group: str) -> None:
+    def _run_bundle_action(self, operation, group: str, row: dict[str, Any], *, refresh_on_failure: bool = True) -> None:
         self._set_loading(True)
+        row_id = str(row["id"])
 
         def run() -> None:
             result = operation()
-            self.app.call_from_thread(self._finish_bundle_action, result)
+            # On failure a remote operation may have partially changed the rules.
+            refreshed = None
+            if not result.success and refresh_on_failure:
+                refreshed = describe_bundle_firewall(row["bundle_ref"])
+            self.app.call_from_thread(self._finish_bundle_action, result, row_id, refreshed)
 
         self.app.run_worker(run, thread=True, exclusive=True, group=group)
 
-    def _finish_bundle_action(self, result) -> None:
+    def _finish_bundle_action(self, result, row_id: str, refreshed=None) -> None:
         self._set_loading(False)
         if not result.success:
             self.notify(result.message, severity="error")
-            self.load()
-            return
-        self.notify(result.message)
-        self.load()
+        else:
+            self.notify(result.message)
+        status_result = refreshed if refreshed is not None else result
+        updated = (status_result.data or {}).get("firewall")
+        if updated is not None:
+            for index, old_row in enumerate(self._rows):
+                if str(old_row.get("id")) == row_id:
+                    self._rows[index] = updated
+                    break
+        # A failed workspace mutation reloads the project graph; never retain stale
+        # bundle objects for a subsequent action.
+        workspace = getattr(self.app, "workspace", None)
+        infra = getattr(workspace, "infrastructure", None)
+        for item in self._rows:
+            current = next((b for b in getattr(infra, "bundles", [])
+                            if str(getattr(b.server, "uuid", "")) == str(item.get("id"))), None)
+            if current is not None:
+                item["bundle_ref"] = current
+        if updated is not None:
+            self._populate_table()
+            active = sum(bool(item.get("is_active")) and not item.get("status_error") for item in self._rows)
+            unknown = sum(bool(item.get("status_error")) for item in self._rows)
+            self.summary.update(self._summary_panel({"capable": len(self._rows), "active": active,
+                                                     "inactive": len(self._rows) - active - unknown, "unknown": unknown}))
+        self._select_row(self._selected_id)
 
     def _select_row(self, row_id: str) -> None:
         self._selected_id = row_id
         row = self._selected_row()
+        self.query_one("#firewall-selected-server", Static).update(
+            f"Selected: {row['bundle']} ({row['server']})"
+            if row else "Select a server to manage its policy draft."
+        )
         self.detail.update(self._detail_panel(row) if row else self._help_panel())
-        self._show_raw_status(str(row.get("raw_status") or "") if row else "")
         self._update_action_state()
 
     def _selected_row(self) -> dict[str, Any] | None:
@@ -322,79 +382,55 @@ class FirewallPanel(Static):
                 return row
         return None
 
-    def _summary_panel(self, summary: dict[str, Any]) -> Group:
-        metrics = [
-            Panel(
-                DigitsRenderable(str(summary.get("capable", 0))),
-                title="Capable",
-                border_style="cyan",
-            ),
-            Panel(
-                DigitsRenderable(str(summary.get("active", 0))),
-                title="Active",
-                border_style="green",
-            ),
-            Panel(
-                DigitsRenderable(str(summary.get("inactive", 0))),
-                title="Inactive",
-                border_style="yellow",
-            ),
-        ]
-        return Group(Columns(metrics, expand=True, equal=True))
+    def _summary_panel(self, summary: dict[str, Any]) -> Text:
+        unknown = f"  ·  {summary['unknown']} unknown" if summary.get("unknown") else ""
+        return Text(f"Firewall  ·  {summary.get('capable', 0)} servers  ·  "
+                    f"{summary.get('active', 0)} active  ·  {summary.get('inactive', 0)} inactive{unknown}", style="bold")
 
     def _detail_panel(self, row: dict[str, Any]) -> Panel:
+        workspace = getattr(self.app, "workspace", None)
+        infra = getattr(workspace, "infrastructure", None)
+        draft = preview_firewall_policy(infra, row["bundle_ref"]) if row.get("bundle_ref") else None
         layout = Table.grid(expand=True)
-        layout.add_column(justify="right", style="cyan", no_wrap=True)
+        layout.add_column(justify="right", style="cyan")
         layout.add_column(ratio=3)
-        layout.add_row("Bundle", str(row.get("bundle", "-")))
-        layout.add_row("Server", str(row.get("server", "-")))
-        layout.add_row("Firewall", self._firewall_badge(row))
-        layout.add_row(
-            "Open Ports",
-            self._ports_text(row.get("open_ports", []), row.get("open_ports_unknown")),
-        )
-        layout.add_row(
-            "Recommended",
-            self._ports_text(row.get("recommended_ports", []), False),
-        )
+        layout.add_row("MLOX LIVE", self._firewall_badge(row))
+        layout.add_row("Address", str(row.get("server", "-")))
+        persistence = {"enabled": "Saved for reboot (may differ from live)",
+                       "disabled": "Not saved for reboot", "unknown": "Unknown"}
+        layout.add_row("On reboot", persistence.get(row.get("persistence"), "Unknown"))
+        if row.get("status_error"):
+            layout.add_row("Public TCP", Text("unknown", style="yellow"))
+        elif not row.get("is_active"):
+            layout.add_row("Public TCP", "Not managed by MLOX")
+        else:
+            layout.add_row("Public TCP", self._ports_text(row.get("public_ports", []), row.get("open_ports_unknown")))
+        if row.get("is_active") and not row.get("status_error"):
+            trusted = "Per-port legacy rules" if row.get("legacy_policy") else ", ".join(row.get("trusted_sources", [])) or "none"
+            layout.add_row("Trusted sources", trusted)
+        if row.get("legacy_policy"):
+            layout.add_row("Previous policy", "Older rules detected; apply the draft to replace them.")
         error = str(row.get("status_error") or "")
         if error:
             layout.add_row("Status Error", Text(error, style="bold red"))
-        layout.add_row("Port Details", self._port_table(row))
+        layout.add_row("", "")
+        layout.add_row("DRAFT", "Saved in this project; not necessarily applied")
+        if draft is not None and draft.success:
+            layout.add_row("Public TCP", self._ports_text(draft.data["public_tcp_ports"]))
+            layout.add_row("Trusted sources", ", ".join(draft.data["trusted_sources"]) or "none")
+        elif draft is not None:
+            layout.add_row("Draft error", Text(draft.message, style="bold red"))
         return Panel(
             layout,
-            title=f"Firewall: {row.get('bundle', '-')}",
+            title=f"Policy: {row.get('bundle', '-')}",
             border_style="green" if row.get("is_active") else "yellow",
         )
-
-    def _port_table(self, row: dict[str, Any]) -> Table:
-        open_ports = set(row.get("open_ports", []) or [])
-        source_by_port = row.get("source_by_port", {}) or {}
-        table = Table(show_header=True, header_style="bold", expand=True)
-        table.add_column("Port", justify="right")
-        table.add_column("Service")
-        table.add_column("Name")
-        table.add_column("Open")
-        table.add_column("Sources")
-        for port_row in row.get("recommended_rows", []) or []:
-            port = int(port_row["port"])
-            table.add_row(
-                str(port),
-                str(port_row.get("service", "-")),
-                str(port_row.get("name", "-")),
-                "yes" if port in open_ports else "no",
-                ", ".join(source_by_port.get(port, [])) or "any",
-            )
-        if not (row.get("recommended_rows", []) or []):
-            table.add_row("-", "-", "-", "-", "-")
-        return table
 
     def _help_panel(self) -> Panel:
         return Panel(
             Text(
                 "Select a firewall-capable bundle to inspect open ports. "
-                "Enabling the firewall uses the recommended ports and always "
-                "includes SSH to avoid locking out remote access."
+                "Review and edit its draft, apply it, then make it permanent if desired."
             ),
             title="Firewall",
             border_style="cyan",
@@ -415,14 +451,6 @@ class FirewallPanel(Static):
             return Text("none", style="dim")
         return Text(", ".join(values))
 
-    def _show_raw_status(self, raw_status: str) -> None:
-        if not self.is_mounted:
-            return
-        editor = self.raw_status
-        editor.text = raw_status
-        editor.display = bool(raw_status)
-        editor.border_title = "Raw Status"
-
     def _set_loading(self, loading: bool) -> None:
         self._loading = loading
         self._update_action_state()
@@ -434,12 +462,13 @@ class FirewallPanel(Static):
         for button in self.query(Button):
             button.disabled = self._loading
         if selected is None:
-            self.query_one("#enable-firewall", Button).disabled = True
+            self.query_one("#edit-firewall-draft", Button).disabled = True
+            self.query_one("#persist-firewall", Button).disabled = True
             self.query_one("#disable-firewall", Button).disabled = True
             return
-        self.query_one("#enable-firewall", Button).disabled = (
-            self._loading or bool(selected.get("is_active"))
-        )
         self.query_one("#disable-firewall", Button).disabled = (
+            self._loading or (not bool(selected.get("is_active")) and selected.get("persistence") != "enabled")
+        )
+        self.query_one("#persist-firewall", Button).disabled = (
             self._loading or not bool(selected.get("is_active"))
         )

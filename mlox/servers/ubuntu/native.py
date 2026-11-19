@@ -1,9 +1,13 @@
 import logging
+from ipaddress import ip_address
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, ClassVar, Mapping, Sequence
+from typing import Dict, Any, ClassVar
 
 from mlox.executors import TaskGroup
+from mlox.firewall import FirewallPolicy, FirewallPolicyRule, FirewallStatus
+from mlox.execution.firewall_policy import validate_ssh_policy
+from mlox.servers.ubuntu.firewall import parse_firewall_status
 from mlox.server import (
     AbstractFirewallServer,
     AbstractGitServer,
@@ -456,26 +460,41 @@ class UbuntuNativeServer(
     def stop_backend_runtime(self) -> None:
         logger.info("Native backend stop.")
 
-    def firewall_up(
-        self,
-        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
-        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
-    ) -> None:
+    def firewall_peer_address(self) -> str | None:
+        try:
+            address = ip_address(self.ip)
+        except ValueError:
+            return None
+        return str(address) if address.is_global else None
+
+    def firewall_default_policy(self) -> FirewallPolicy:
+        return FirewallPolicy((int(self.port), 80, 443))
+
+    def firewall_validate_policy(self, policy: FirewallPolicy) -> None:
+        validate_ssh_policy(policy, int(self.port))
+
+    def firewall_policy_rules(self) -> tuple[FirewallPolicyRule, ...]:
+        return (
+            FirewallPolicyRule("Existing connections", "Established / related", "Allow"),
+            FirewallPolicyRule("IPv6 control", "ICMPv6", "Allow"),
+            FirewallPolicyRule("Container bridges", "Standard Docker bridges", "Host + Docker"),
+            FirewallPolicyRule("Other inbound", "All other traffic", "Block"),
+        )
+
+    def firewall_apply_policy(self, policy: FirewallPolicy) -> None:
+        self.firewall_validate_policy(policy)
         with self.get_server_connection() as conn:
-            self.exec.firewall_up(conn, ports, source_ips_by_port)
+            self.exec.firewall_apply_policy(conn, policy, int(self.port), docker=False)
+
+    def firewall_persist_policy(self, policy: FirewallPolicy) -> None:
+        self.firewall_validate_policy(policy)
+        with self.get_server_connection() as conn:
+            self.exec.firewall_persist_policy(conn, policy, int(self.port), docker=False)
 
     def firewall_down(self) -> None:
         with self.get_server_connection() as conn:
             self.exec.firewall_down(conn)
 
-    def firewall_status(self) -> str | None:
+    def firewall_status(self) -> FirewallStatus:
         with self.get_server_connection() as conn:
-            return self.exec.firewall_status(conn)
-
-    def firewall_update(
-        self,
-        ports: Sequence[int] | Mapping[int, Sequence[str] | None],
-        source_ips_by_port: Mapping[int, Sequence[str] | None] | None = None,
-    ) -> None:
-        with self.get_server_connection() as conn:
-            self.exec.firewall_update(conn, ports, source_ips_by_port)
+            return parse_firewall_status(self.exec.firewall_status(conn))

@@ -8,6 +8,8 @@ from mlox.servers.ubuntu.docker import UbuntuDockerServer
 from mlox.servers.ubuntu.k3s import UbuntuK3sServer
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 from mlox.servers.ubuntu.simple import UbuntuSimpleServer
+from mlox.firewall import FirewallPolicy
+import pytest
 
 
 class FakeExec:
@@ -56,9 +58,6 @@ class FakeExec:
         self._record("sys_user_id")
         return self.user_id
 
-    def firewall_up(self, conn, ports, source_ips_by_port=None):
-        self._record("firewall_up", tuple(ports), source_ips_by_port)
-
     def firewall_down(self, conn):
         self._record("firewall_down")
 
@@ -66,8 +65,12 @@ class FakeExec:
         self._record("firewall_status")
         return "Status: active"
 
-    def firewall_update(self, conn, ports, source_ips_by_port=None):
-        self._record("firewall_update", tuple(ports), source_ips_by_port)
+    def firewall_apply_policy(self, conn, policy, ssh_port, *, docker):
+        self._record("firewall_apply_policy", policy, ssh_port, docker=docker)
+
+    def firewall_persist_policy(self, conn, policy, ssh_port, *, docker):
+        self._record("firewall_persist_policy", policy, ssh_port, docker=docker)
+
 
 
 def _server_conn(server):
@@ -127,7 +130,6 @@ def test_ubuntu_server_capabilities():
         ServerCapability.LOGS,
         ServerCapability.HEALTH,
         ServerCapability.GIT,
-        ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
         ServerCapability.TERMINAL,
         ServerCapability.KUBERNETES,
@@ -496,14 +498,35 @@ def test_ubuntu_native_firewall_calls():
     server.exec = fake_exec
     _server_conn(server)
 
-    ports = [22, 8080, 9090, 50051]
-    server.firewall_up(ports)
-    server.firewall_update(ports)
     server.firewall_down()
     call_names = [name for name, _, _ in fake_exec.calls]
-    assert "firewall_up" in call_names
-    assert "firewall_update" in call_names
     assert "firewall_down" in call_names
+
+
+@pytest.mark.parametrize("factory,docker", [(_new_native_server, False), (_new_docker_server, True)])
+def test_server_firewall_dispatch_uses_its_own_backend(factory, docker):
+    server = factory()
+    server.exec = FakeExec()
+    _server_conn(server)
+    policy = server.firewall_default_policy()
+    server.firewall_apply_policy(policy)
+    server.firewall_persist_policy(policy)
+    assert [call[2]["docker"] for call in server.exec.calls] == [docker, docker]
+    assert server.firewall_status().active is True
+
+
+def test_k3s_does_not_advertise_or_apply_firewall_policy():
+    server = UbuntuK3sServer(ip="192.0.2.1", root="root", root_pw="", service_config_id="k3s")
+    assert ServerCapability.FIREWALL not in server.capabilities
+    with pytest.raises(NotImplementedError, match="K3s"):
+        server.firewall_apply_policy(FirewallPolicy((22, 80, 443)))
+
+
+@pytest.mark.parametrize("address,expected", [("8.8.8.8", "8.8.8.8"), ("10.0.0.1", None), ("host.example", None)])
+def test_ubuntu_peer_address_is_explicit_and_public(address, expected):
+    server = _new_native_server()
+    server.ip = address
+    assert server.firewall_peer_address() == expected
 
 
 def test_multipass_server_launches_before_ubuntu_setup(monkeypatch):

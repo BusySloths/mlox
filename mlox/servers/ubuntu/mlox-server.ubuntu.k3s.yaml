@@ -31,7 +31,6 @@ capabilities:
   - logs
   - health
   - git
-  - firewall
   - initial_auth_password
   - terminal
   backend:

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Dict
 
 from mlox.executors import TaskGroup
+from mlox.firewall import FirewallPolicy
 from mlox.server import AbstractDockerServer, AbstractHealthServer, ServerCapability
 from mlox.servers.ubuntu.native import UbuntuNativeServer
 
@@ -32,6 +33,16 @@ class UbuntuDockerServer(
     def __post_init__(self):
         super().__post_init__()
         self.backend = ["docker"]
+
+    def firewall_apply_policy(self, policy: FirewallPolicy) -> None:
+        self.firewall_validate_policy(policy)
+        with self.get_server_connection() as conn:
+            self.exec.firewall_apply_policy(conn, policy, int(self.port), docker=True)
+
+    def firewall_persist_policy(self, policy: FirewallPolicy) -> None:
+        self.firewall_validate_policy(policy)
+        with self.get_server_connection() as conn:
+            self.exec.firewall_persist_policy(conn, policy, int(self.port), docker=True)
 
     def setup_backend(self) -> None:
         self.state = "starting"
