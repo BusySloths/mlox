@@ -60,9 +60,25 @@ class FirewallGuest:
     docker: bool
 
     def reboot(self) -> None:
-        self.vm.restart()
-        self.server.ip = wait_for_ssh(self.vm, self.vm_name, timeout=180, interval=3)
-        wait_for_server_login(self.server, timeout=180, interval=3, force_root=False)
+        # MLOX hardens SSH during setup; Multipass's own SSH credentials may no
+        # longer work for its restart command. Schedule a guest reboot using
+        # the MLOX credentials instead, and confirm a new kernel boot ID.
+        with self.server.get_server_connection() as conn:
+            boot_id = _run(conn, ["cat", "/proc/sys/kernel/random/boot_id"])
+            _sudo(conn, ["systemd-run", "--on-active=3s", "/usr/bin/systemctl", "reboot"])
+
+        deadline = time.monotonic() + 180
+        last_error = None
+        while time.monotonic() < deadline:
+            try:
+                self.server.ip = wait_for_ssh(self.vm, self.vm_name, timeout=10, interval=1)
+                with self.server.get_server_connection() as conn:
+                    if _run(conn, ["cat", "/proc/sys/kernel/random/boot_id"]) != boot_id:
+                        return
+            except Exception as exc:
+                last_error = exc
+            time.sleep(3)
+        raise TimeoutError(f"VM {self.vm_name} did not complete a reboot: {last_error!r}")
 
 
 @pytest.fixture(scope="module", params=["native", "docker"])
