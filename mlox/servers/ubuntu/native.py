@@ -475,7 +475,7 @@ class UbuntuNativeServer(
 
     def firewall_policy_rules(self) -> tuple[FirewallPolicyRule, ...]:
         return (
-            FirewallPolicyRule("Existing connections", "Established / related", "Allow"),
+            FirewallPolicyRule("Existing connections", "Already tracked: established / related", "Allow"),
             FirewallPolicyRule("IPv6 control", "ICMPv6", "Allow"),
             FirewallPolicyRule("Container bridges", "Standard Docker bridges", "Host + Docker"),
             FirewallPolicyRule("Other inbound", "All other traffic", "Block"),

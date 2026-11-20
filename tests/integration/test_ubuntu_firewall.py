@@ -286,14 +286,22 @@ def test_host_public_trusted_and_blocked_traffic(network_probe, family, host, tr
 def test_existing_connection_survives_policy_but_new_connection_is_blocked(network_probe):
     guest = network_probe.guest
     with guest.server.get_server_connection() as conn:
-        port = network_probe.start_http(conn, 4)
-        with socket.create_connection((guest.server.ip, port), timeout=5) as existing:
-            guest.server.firewall_apply_policy(_policy(guest))
-            existing.settimeout(5)
-            existing.sendall(b"GET / HTTP/1.0\r\nHost: test\r\n\r\n")
-            assert existing.recv(128).startswith(b"HTTP/")
-        with pytest.raises(TimeoutError):
-            socket.create_connection((guest.server.ip, port), timeout=2)
+        # A fresh native host may not track connections until the first
+        # conntrack rule is installed. Only previously tracked connections can
+        # be recognized as established when applying the policy.
+        tracking_rule = ["iptables", "-I", "INPUT", "1", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"]
+        _sudo(conn, tracking_rule)
+        try:
+            port = network_probe.start_http(conn, 4)
+            with socket.create_connection((guest.server.ip, port), timeout=5) as existing:
+                guest.server.firewall_apply_policy(_policy(guest))
+                existing.settimeout(5)
+                existing.sendall(b"GET / HTTP/1.0\r\nHost: test\r\n\r\n")
+                assert existing.recv(128).startswith(b"HTTP/")
+            with pytest.raises(TimeoutError):
+                socket.create_connection((guest.server.ip, port), timeout=2)
+        finally:
+            _sudo(conn, ["iptables", "-D", "INPUT", *tracking_rule[4:]])
 
 
 @pytest.mark.parametrize(
