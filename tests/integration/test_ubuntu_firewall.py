@@ -71,7 +71,8 @@ class FirewallGuest:
         last_error = None
         while time.monotonic() < deadline:
             try:
-                self.server.ip = wait_for_ssh(self.vm, self.vm_name, timeout=10, interval=1)
+                # The existing VM address remains valid across its guest reboot.
+                # Multipass info may itself require the SSH access MLOX disabled.
                 with self.server.get_server_connection() as conn:
                     if _run(conn, ["cat", "/proc/sys/kernel/random/boot_id"]) != boot_id:
                         return
