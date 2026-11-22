@@ -84,9 +84,14 @@ class UbuntuK3sServer(
         if status.active is not True:
             return status
         with self.get_server_connection() as conn:
+            check = (
+                "iptables -t mangle -C PREROUTING -j MLOX-INGRESS && "
+                "ip6tables -t mangle -C PREROUTING -j MLOX-INGRESS && "
+                "echo MLOX_INGRESS_ACTIVE"
+            )
             output = self.exec.execute(
                 conn,
-                "iptables -t mangle -C PREROUTING -j MLOX-INGRESS && ip6tables -t mangle -C PREROUTING -j MLOX-INGRESS && echo MLOX_INGRESS_ACTIVE",
+                f"sh -c {shlex.quote(check)}",
                 group=TaskGroup.NETWORKING, sudo=True,
             )
         if output is None or "MLOX_INGRESS_ACTIVE" not in output:

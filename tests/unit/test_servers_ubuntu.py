@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import shlex
 from types import SimpleNamespace
 
+from mlox.executors import TaskGroup
 from mlox.server import MloxUser, RemoteUser, ServerCapability
 from mlox.servers.ubuntu.docker import UbuntuDockerServer
 from mlox.servers.ubuntu.k3s import UbuntuK3sServer
@@ -539,6 +541,18 @@ def test_k3s_firewall_status_reports_missing_forwarded_ingress_protection():
     status = server.firewall_status()
     assert status.active is True
     assert "ingress policy is missing" in status.error
+
+
+def test_k3s_status_checks_both_address_families_in_privileged_shell():
+    server = UbuntuK3sServer(ip="192.0.2.1", root="root", root_pw="", service_config_id="k3s")
+    server.exec = FakeExec()
+    _server_conn(server)
+    check = ("iptables -t mangle -C PREROUTING -j MLOX-INGRESS && "
+             "ip6tables -t mangle -C PREROUTING -j MLOX-INGRESS && echo MLOX_INGRESS_ACTIVE")
+    command = f"sh -c {shlex.quote(check)}"
+    server.exec.responses[command] = "MLOX_INGRESS_ACTIVE"
+    assert server.firewall_status().error == ""
+    assert ("execute", (command,), {"group": TaskGroup.NETWORKING, "sudo": True}) in server.exec.calls
 
 
 @pytest.mark.parametrize("address,expected", [("8.8.8.8", "8.8.8.8"), ("10.0.0.1", None), ("host.example", None)])
