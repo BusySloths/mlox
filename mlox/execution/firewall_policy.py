@@ -23,6 +23,22 @@ class CompiledFirewallRules:
     docker_rules: tuple[tuple[str, ...], ...]
 
 
+@dataclass(frozen=True)
+class FirewallIngressExtension:
+    """Server-provided rules for pre-DNAT ingress and trusted host interfaces."""
+
+    input_interfaces: tuple[str, ...]
+    ipv4_rules: tuple[tuple[str, ...], ...]
+    ipv6_rules: tuple[tuple[str, ...], ...]
+
+
+def _extended_rules(rules: CompiledFirewallRules, extension: FirewallIngressExtension | None) -> CompiledFirewallRules:
+    if extension is None:
+        return rules
+    extra = tuple(("-i", interface, "-j", "ACCEPT") for interface in extension.input_interfaces)
+    return CompiledFirewallRules(rules.family, (*rules.input_rules[:-1], *extra, rules.input_rules[-1]), rules.docker_rules)
+
+
 def prepare_firewall_rules(policy: FirewallPolicy, ssh_port: int) -> tuple[CompiledFirewallRules, CompiledFirewallRules]:
     """Validate management access and compile both families before installation."""
     validate_ssh_policy(policy, ssh_port)
@@ -53,7 +69,7 @@ def render_unattached_chains(rules: CompiledFirewallRules) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_apply_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool) -> str:
+def render_apply_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool, ingress: FirewallIngressExtension | None = None) -> str:
     """Prepare and apply both filter tables. A failure may leave a partial change."""
     compiled = prepare_firewall_rules(policy, ssh_port)
     lines = [
@@ -61,6 +77,7 @@ def render_apply_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool) 
         "trap 'rm -rf \"$d\"' EXIT HUP INT TERM",
     ]
     for rules in compiled:
+        rules = _extended_rules(rules, ingress)
         tool = "iptables" if rules.family == 4 else "ip6tables"
         path = f'"$d/v{rules.family}"'
         payload = render_unattached_chains(rules)
@@ -80,6 +97,13 @@ def render_apply_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool) 
         lines.append(f"  printf '%s\\n' '-I DOCKER-USER 1 -j MLOX-POLICY-DOCKER' >> {path}")
         lines.append("fi")
         lines.append(f"printf '%s\\n' COMMIT >> {path}")
+        if ingress is not None:
+            entries = ingress.ipv4_rules if rules.family == 4 else ingress.ipv6_rules
+            payload = "*mangle\n:MLOX-INGRESS - [0:0]\n-F MLOX-INGRESS\n"
+            payload += "".join(shlex.join(("-A", "MLOX-INGRESS", *entry)) + "\n" for entry in entries)
+            lines.append(f"printf %s {shlex.quote(payload)} >> {path}")
+            lines.append(f"if {tool} -t mangle -C PREROUTING -j MLOX-INGRESS 2>/dev/null; then printf '%s\\n' '-D PREROUTING -j MLOX-INGRESS' >> {path}; fi")
+            lines.append(f"printf '%s\\n' '-I PREROUTING 1 -j MLOX-INGRESS' COMMIT >> {path}")
         lines.append(f"{tool}-restore --test --noflush < {path}")
     lines.extend([
         'iptables-restore --noflush < "$d/v4"',
@@ -89,10 +113,10 @@ def render_apply_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool) 
     return "\n".join(lines)
 
 
-def render_persist_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool) -> str:
+def render_persist_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool, ingress: FirewallIngressExtension | None = None) -> str:
     """Persist only a draft that exactly matches both live managed rule chains."""
     compiled = prepare_firewall_rules(policy, ssh_port)
-    startup = "#!/bin/sh\n" + render_apply_script(policy, ssh_port, docker=docker) + "\n"
+    startup = "#!/bin/sh\n" + render_apply_script(policy, ssh_port, docker=docker, ingress=ingress) + "\n"
     ordering = "After=network-pre.target docker.service\nRequires=docker.service" if docker else "After=network-pre.target"
     unit = (
         "[Unit]\nDescription=Restore MLOX firewall policy\n"
@@ -102,6 +126,7 @@ def render_persist_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool
     )
     lines = ["set -eu", "umask 077", "exec 9>/run/lock/mlox-firewall.lock", "flock -x 9"]
     for rules in compiled:
+        rules = _extended_rules(rules, ingress)
         tool = "iptables" if rules.family == 4 else "ip6tables"
         for chain, entries in (("MLOX-POLICY-IN", rules.input_rules), ("MLOX-POLICY-DOCKER", rules.docker_rules)):
             lines.append(f"test \"$({tool} -S {chain} | grep -c '^-A {chain} ')\" -eq {len(entries)}")
@@ -110,6 +135,12 @@ def render_persist_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool
         lines.append(f"test \"$({tool} -S INPUT | grep '^-A INPUT ' | head -n 1)\" = '-A INPUT -j MLOX-POLICY-IN'")
         if docker:
             lines.append(f"test \"$({tool} -S DOCKER-USER | grep '^-A DOCKER-USER ' | head -n 1)\" = '-A DOCKER-USER -j MLOX-POLICY-DOCKER'")
+        if ingress is not None:
+            entries = ingress.ipv4_rules if rules.family == 4 else ingress.ipv6_rules
+            lines.append(f"test \"$({tool} -t mangle -S MLOX-INGRESS | grep -c '^-A MLOX-INGRESS ')\" -eq {len(entries)}")
+            for entry in entries:
+                lines.append(shlex.join((tool, "-t", "mangle", "-C", "MLOX-INGRESS", *entry)))
+            lines.append(f"test \"$({tool} -t mangle -S PREROUTING | grep '^-A PREROUTING ' | head -n 1)\" = '-A PREROUTING -j MLOX-INGRESS'")
     lines.extend([
         "install -d -m 0700 /etc/mlox/firewall",
         "p=$(mktemp /etc/mlox/firewall/.policy.XXXXXX)",

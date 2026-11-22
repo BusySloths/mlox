@@ -6,8 +6,11 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict
 
 from mlox.executors import TaskGroup
+from mlox.firewall import FirewallPolicyRule, FirewallStatus
 from mlox.server import AbstractKubernetesServer, ServerCapability
 from mlox.servers.ubuntu.docker import UbuntuDockerServer
+from mlox.servers.ubuntu.k3s_firewall import k3s_ingress_extension
+from mlox.servers.ubuntu.native import UbuntuNativeServer
 
 # Configure logging (optional, but recommended)
 logging.basicConfig(
@@ -55,10 +58,40 @@ class UbuntuK3sServer(
             self.backend = ["kubernetes", "k3s"]
 
     def firewall_apply_policy(self, policy) -> None:
-        raise NotImplementedError("Firewall policy application is not yet supported for K3s.")
+        self.firewall_validate_policy(policy)
+        with self.get_server_connection() as conn:
+            self.exec.firewall_apply_policy(conn, policy, int(self.port), docker=False, ingress=k3s_ingress_extension(policy))
 
     def firewall_persist_policy(self, policy) -> None:
-        raise NotImplementedError("Firewall policy persistence is not yet supported for K3s.")
+        self.firewall_validate_policy(policy)
+        with self.get_server_connection() as conn:
+            self.exec.firewall_persist_policy(conn, policy, int(self.port), docker=False, ingress=k3s_ingress_extension(policy))
+
+    def firewall_policy_rules(self) -> tuple[FirewallPolicyRule, ...]:
+        return (
+            FirewallPolicyRule("Existing connections", "Already tracked: established / related", "Allow"),
+            FirewallPolicyRule("K3s networking", "Trust every cluster node address before applying", "Trusted sources"),
+            FirewallPolicyRule("Cluster interfaces", "Default CNI bridge and Flannel VXLAN", "Host access"),
+            FirewallPolicyRule("NodePort ingress", "Original destination port before forwarding", "Public + trusted"),
+            FirewallPolicyRule("IPv6 control", "ICMPv6", "Allow"),
+            FirewallPolicyRule("Other inbound", "All other traffic", "Block"),
+        )
+
+    def firewall_status(self) -> FirewallStatus:
+        from dataclasses import replace
+
+        status = UbuntuNativeServer.firewall_status(self)
+        if status.active is not True:
+            return status
+        with self.get_server_connection() as conn:
+            output = self.exec.execute(
+                conn,
+                "iptables -t mangle -C PREROUTING -j MLOX-INGRESS && ip6tables -t mangle -C PREROUTING -j MLOX-INGRESS && echo MLOX_INGRESS_ACTIVE",
+                group=TaskGroup.NETWORKING, sudo=True,
+            )
+        if output is None or "MLOX_INGRESS_ACTIVE" not in output:
+            return replace(status, error="K3s ingress policy is missing in at least one address family.")
+        return status
 
     def setup_backend(self):
         self.state = "starting"

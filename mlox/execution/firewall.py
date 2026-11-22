@@ -8,20 +8,20 @@ import shlex
 from fabric import Connection  # type: ignore
 
 from mlox.execution.base import TaskGroup, TaskRunnerABC
-from mlox.execution.firewall_policy import render_apply_script, render_persist_script
+from mlox.execution.firewall_policy import FirewallIngressExtension, render_apply_script, render_persist_script
 from mlox.firewall import FirewallPolicy
 
 
 class FirewallMixin(TaskRunnerABC):
-    def firewall_persist_policy(self, connection: Connection, policy: FirewallPolicy, ssh_port: int, *, docker: bool) -> None:
-        script = render_persist_script(policy, ssh_port, docker=docker)
+    def firewall_persist_policy(self, connection: Connection, policy: FirewallPolicy, ssh_port: int, *, docker: bool, ingress: FirewallIngressExtension | None = None) -> None:
+        script = render_persist_script(policy, ssh_port, docker=docker, ingress=ingress)
         result = self._run_task(connection, group=TaskGroup.NETWORKING,
                                 command=self._root_shell_command(script), sudo=True)
         if result is None or "MLOX_POLICY_PERSISTED" not in result.splitlines():
             raise RuntimeError("Could not persist firewall policy. Ensure the applied rules match the draft and systemd is available; persistence may be partially configured.")
 
-    def firewall_apply_policy(self, connection: Connection, policy: FirewallPolicy, ssh_port: int, *, docker: bool) -> None:
-        script = render_apply_script(policy, ssh_port, docker=docker)
+    def firewall_apply_policy(self, connection: Connection, policy: FirewallPolicy, ssh_port: int, *, docker: bool, ingress: FirewallIngressExtension | None = None) -> None:
+        script = render_apply_script(policy, ssh_port, docker=docker, ingress=ingress)
         result = self._run_task(connection, group=TaskGroup.NETWORKING,
                                 command=self._root_shell_command(script), sudo=True)
         if result is None or "MLOX_POLICY_APPLIED" not in result.splitlines():
@@ -88,6 +88,8 @@ class FirewallMixin(TaskRunnerABC):
             "set -e",
             "if systemctl is-enabled --quiet mlox-firewall-policy.service 2>/dev/null; then systemctl disable mlox-firewall-policy.service; fi",
             "for tool in iptables ip6tables; do",
+            "  while $tool -t mangle -C PREROUTING -j MLOX-INGRESS 2>/dev/null; do $tool -t mangle -D PREROUTING -j MLOX-INGRESS; done",
+            "  if $tool -t mangle -S MLOX-INGRESS >/dev/null 2>&1; then $tool -t mangle -F MLOX-INGRESS; $tool -t mangle -X MLOX-INGRESS; fi",
             "  while $tool -C INPUT -j MLOX-POLICY-IN 2>/dev/null; do $tool -D INPUT -j MLOX-POLICY-IN; done",
             "  while $tool -C DOCKER-USER -j MLOX-POLICY-DOCKER 2>/dev/null; do $tool -D DOCKER-USER -j MLOX-POLICY-DOCKER; done",
             "  if $tool -S MLOX-POLICY-IN >/dev/null 2>&1; then $tool -F MLOX-POLICY-IN; $tool -X MLOX-POLICY-IN; fi",

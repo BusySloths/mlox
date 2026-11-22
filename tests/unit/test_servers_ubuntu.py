@@ -65,11 +65,11 @@ class FakeExec:
         self._record("firewall_status")
         return "Status: active"
 
-    def firewall_apply_policy(self, conn, policy, ssh_port, *, docker):
-        self._record("firewall_apply_policy", policy, ssh_port, docker=docker)
+    def firewall_apply_policy(self, conn, policy, ssh_port, *, docker, **kwargs):
+        self._record("firewall_apply_policy", policy, ssh_port, docker=docker, **kwargs)
 
-    def firewall_persist_policy(self, conn, policy, ssh_port, *, docker):
-        self._record("firewall_persist_policy", policy, ssh_port, docker=docker)
+    def firewall_persist_policy(self, conn, policy, ssh_port, *, docker, **kwargs):
+        self._record("firewall_persist_policy", policy, ssh_port, docker=docker, **kwargs)
 
 
 
@@ -515,11 +515,30 @@ def test_server_firewall_dispatch_uses_its_own_backend(factory, docker):
     assert server.firewall_status().active is True
 
 
-def test_k3s_does_not_advertise_or_apply_firewall_policy():
-    server = UbuntuK3sServer(ip="192.0.2.1", root="root", root_pw="", service_config_id="k3s")
+@pytest.mark.parametrize("agent", [False, True])
+def test_k3s_firewall_uses_k3s_ingress_not_docker(agent):
+    server = UbuntuK3sServer(ip="192.0.2.1", root="root", root_pw="", service_config_id="k3s",
+                             controller_url="https://192.0.2.2:6443" if agent else "",
+                             controller_token="token-123456" if agent else "")
+    server.exec = FakeExec()
+    _server_conn(server)
     assert ServerCapability.FIREWALL not in server.capabilities
-    with pytest.raises(NotImplementedError, match="K3s"):
-        server.firewall_apply_policy(FirewallPolicy((22, 80, 443)))
+    policy = FirewallPolicy((22, 80, 443))
+    server.firewall_apply_policy(policy)
+    server.firewall_persist_policy(policy)
+    for name, _, kwargs in server.exec.calls:
+        if name in ("firewall_apply_policy", "firewall_persist_policy"):
+            assert kwargs["docker"] is False
+            assert kwargs["ingress"].input_interfaces == ("cni0", "flannel.1")
+
+
+def test_k3s_firewall_status_reports_missing_forwarded_ingress_protection():
+    server = UbuntuK3sServer(ip="192.0.2.1", root="root", root_pw="", service_config_id="k3s")
+    server.exec = FakeExec()
+    _server_conn(server)
+    status = server.firewall_status()
+    assert status.active is True
+    assert "ingress policy is missing" in status.error
 
 
 @pytest.mark.parametrize("address,expected", [("8.8.8.8", "8.8.8.8"), ("10.0.0.1", None), ("host.example", None)])
