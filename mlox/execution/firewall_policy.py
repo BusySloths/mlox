@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from ipaddress import ip_network
+import re
 import shlex
 from typing import Literal
 
@@ -37,6 +38,16 @@ def _extended_rules(rules: CompiledFirewallRules, extension: FirewallIngressExte
         return rules
     extra = tuple(("-i", interface, "-j", "ACCEPT") for interface in extension.input_interfaces)
     return CompiledFirewallRules(rules.family, (*rules.input_rules[:-1], *extra, rules.input_rules[-1]), rules.docker_rules)
+
+
+def _render_ingress_restore_payload(entries: tuple[tuple[str, ...], ...]) -> str:
+    """Render restore syntax, which does not interpret shell single quotes."""
+    lines = ["*mangle", ":MLOX-INGRESS - [0:0]", "-F MLOX-INGRESS"]
+    for entry in entries:
+        if any(re.fullmatch(r"[A-Za-z0-9_./,:+!\-]+", token) is None for token in entry):
+            raise ValueError("Unsupported character in firewall restore rule.")
+        lines.append(" ".join(("-A", "MLOX-INGRESS", *entry)))
+    return "\n".join(lines) + "\n"
 
 
 def prepare_firewall_rules(policy: FirewallPolicy, ssh_port: int) -> tuple[CompiledFirewallRules, CompiledFirewallRules]:
@@ -99,8 +110,7 @@ def render_apply_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool, 
         lines.append(f"printf '%s\\n' COMMIT >> {path}")
         if ingress is not None:
             entries = ingress.ipv4_rules if rules.family == 4 else ingress.ipv6_rules
-            payload = "*mangle\n:MLOX-INGRESS - [0:0]\n-F MLOX-INGRESS\n"
-            payload += "".join(shlex.join(("-A", "MLOX-INGRESS", *entry)) + "\n" for entry in entries)
+            payload = _render_ingress_restore_payload(entries)
             lines.append(f"printf %s {shlex.quote(payload)} >> {path}")
             lines.append(f"if {tool} -t mangle -C PREROUTING -j MLOX-INGRESS 2>/dev/null; then printf '%s\\n' '-D PREROUTING -j MLOX-INGRESS' >> {path}; fi")
             lines.append(f"printf '%s\\n' '-I PREROUTING 1 -j MLOX-INGRESS' COMMIT >> {path}")

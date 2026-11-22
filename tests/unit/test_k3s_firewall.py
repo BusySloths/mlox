@@ -4,7 +4,7 @@ import subprocess
 import pytest
 
 from mlox.firewall import FirewallPolicy
-from mlox.execution.firewall_policy import render_apply_script, render_persist_script
+from mlox.execution.firewall_policy import _render_ingress_restore_payload, render_apply_script, render_persist_script
 from mlox.servers.ubuntu.k3s_firewall import compile_k3s_ingress_rules, k3s_ingress_extension
 
 
@@ -64,3 +64,16 @@ def test_k3s_scripts_prepare_and_verify_both_address_families():
     assert "ip6tables-restore --test --noflush" in apply
     assert "iptables -t mangle -C MLOX-INGRESS" in persist
     assert "ip6tables -t mangle -C MLOX-INGRESS" in persist
+
+
+def test_restore_payload_uses_iptables_negation_syntax():
+    policy = FirewallPolicy((22, 443))
+    for family in (4, 6):
+        payload = _render_ingress_restore_payload(compile_k3s_ingress_rules(policy, family))
+        assert "-m addrtype ! --dst-type LOCAL -j RETURN\n" in payload
+        assert "'!'" not in payload
+
+
+def test_restore_payload_rejects_unsafe_tokens():
+    with pytest.raises(ValueError, match="Unsupported character"):
+        _render_ingress_restore_payload((("-s", "bad\nCOMMIT", "-j", "RETURN"),))
