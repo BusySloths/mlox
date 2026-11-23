@@ -50,6 +50,22 @@ def _render_ingress_restore_payload(entries: tuple[tuple[str, ...], ...]) -> str
     return "\n".join(lines) + "\n"
 
 
+def _render_input_hook_check(tool: str, *, ingress: bool) -> str:
+    first = f"$({tool} -S INPUT | grep '^-A INPUT ' | head -n 1)"
+    expected = "-A INPUT -j MLOX-POLICY-IN"
+    if not ingress:
+        return f"test \"{first}\" = '{expected}'"
+    # The K3s network-policy controller reconciles this jump to the head of
+    # INPUT. The pre-DNAT ingress hook must independently remain first.
+    second = f"$({tool} -S INPUT | grep '^-A INPUT ' | head -n 2 | tail -n 1)"
+    kube_router = r'^-A INPUT -m comment --comment "kube-router netpol - [A-Z0-9]+" -j KUBE-ROUTER-INPUT$'
+    return (f"first=\"{first}\"\n"
+            f"if test \"$first\" != '{expected}'; then\n"
+            f"  printf '%s\\n' \"$first\" | grep -Eq '{kube_router}'\n"
+            f"  test \"{second}\" = '{expected}'\n"
+            "fi")
+
+
 def prepare_firewall_rules(policy: FirewallPolicy, ssh_port: int) -> tuple[CompiledFirewallRules, CompiledFirewallRules]:
     """Validate management access and compile both families before installation."""
     validate_ssh_policy(policy, ssh_port)
@@ -142,7 +158,7 @@ def render_persist_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool
             lines.append(f"test \"$({tool} -S {chain} | grep -c '^-A {chain} ')\" -eq {len(entries)}")
             for entry in entries:
                 lines.append(shlex.join((tool, "-C", chain, *entry)))
-        lines.append(f"test \"$({tool} -S INPUT | grep '^-A INPUT ' | head -n 1)\" = '-A INPUT -j MLOX-POLICY-IN'")
+        lines.append(_render_input_hook_check(tool, ingress=ingress is not None))
         if docker:
             lines.append(f"test \"$({tool} -S DOCKER-USER | grep '^-A DOCKER-USER ' | head -n 1)\" = '-A DOCKER-USER -j MLOX-POLICY-DOCKER'")
         if ingress is not None:

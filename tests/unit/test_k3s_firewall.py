@@ -1,10 +1,11 @@
 from ipaddress import ip_address, ip_network
+import os
 import subprocess
 
 import pytest
 
 from mlox.firewall import FirewallPolicy
-from mlox.execution.firewall_policy import _render_ingress_restore_payload, render_apply_script, render_persist_script
+from mlox.execution.firewall_policy import _render_ingress_restore_payload, _render_input_hook_check, render_apply_script, render_persist_script
 from mlox.servers.ubuntu.k3s_firewall import compile_k3s_ingress_rules, k3s_ingress_extension
 
 
@@ -77,3 +78,21 @@ def test_restore_payload_uses_iptables_negation_syntax():
 def test_restore_payload_rejects_unsafe_tokens():
     with pytest.raises(ValueError, match="Unsupported character"):
         _render_ingress_restore_payload((("-s", "bad\nCOMMIT", "-j", "RETURN"),))
+
+
+@pytest.mark.parametrize("family", ["iptables", "ip6tables"])
+@pytest.mark.parametrize("preceding,expected", [
+    ("", 0),
+    ('-A INPUT -m comment --comment "kube-router netpol - 4IA2OSFRMVNDXBVV" -j KUBE-ROUTER-INPUT\n', 0),
+    ("-A INPUT -j ACCEPT\n", 1),
+    ('-A INPUT -m comment --comment "kube-router netpol - BAD" -j ACCEPT\n', 1),
+])
+def test_k3s_persistence_accepts_only_known_input_predecessor(tmp_path, family, preceding, expected):
+    tool = tmp_path / family
+    tool.write_text('#!/bin/sh\nprintf "%s\\n" "$TEST_RULES"\n')
+    tool.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}",
+           "TEST_RULES": preceding + "-A INPUT -j MLOX-POLICY-IN"}
+    command = _render_input_hook_check(family, ingress=True)
+    result = subprocess.run(["sh", "-eu", "-c", command], env=env, capture_output=True)
+    assert result.returncode == expected
