@@ -329,7 +329,7 @@ def test_builtin_server_config_capabilities_match_classes():
             {"docker"},
         ),
         "ubuntu-k3s-24.04-server": (
-            {"git", "health", "initial_auth_password", "terminal"},
+            {"git", "firewall", "health", "initial_auth_password", "terminal"},
             {"kubernetes"},
         ),
         "ubuntu-multipass-native-24.04-server": (
@@ -341,7 +341,7 @@ def test_builtin_server_config_capabilities_match_classes():
             {"docker"},
         ),
         "ubuntu-multipass-k3s-24.04-server": (
-            {"git", "health", "initial_auth_password", "terminal"},
+            {"git", "firewall", "health", "initial_auth_password", "terminal"},
             {"kubernetes"},
         ),
     }

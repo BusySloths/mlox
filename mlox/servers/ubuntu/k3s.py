@@ -30,6 +30,7 @@ class UbuntuK3sServer(
         ServerCapability.HEALTH,
         ServerCapability.LOGS,
         ServerCapability.GIT,
+        ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
         ServerCapability.TERMINAL,
         ServerCapability.KUBERNETES,

@@ -132,6 +132,7 @@ def test_ubuntu_server_capabilities():
         ServerCapability.LOGS,
         ServerCapability.HEALTH,
         ServerCapability.GIT,
+        ServerCapability.FIREWALL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
         ServerCapability.TERMINAL,
         ServerCapability.KUBERNETES,
@@ -524,7 +525,7 @@ def test_k3s_firewall_uses_k3s_ingress_not_docker(agent):
                              controller_token="token-123456" if agent else "")
     server.exec = FakeExec()
     _server_conn(server)
-    assert ServerCapability.FIREWALL not in server.capabilities
+    assert ServerCapability.FIREWALL in server.capabilities
     policy = FirewallPolicy((22, 80, 443))
     server.firewall_apply_policy(policy)
     server.firewall_persist_policy(policy)
