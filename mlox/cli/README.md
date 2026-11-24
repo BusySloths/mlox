@@ -51,7 +51,9 @@ retry. A per-user identifier in `$XDG_STATE_HOME/mlox` (or
 computers. Removing one grant does not remove another grant for the same IP or
 change permanently trusted sources.
 
-Ubuntu hosts need the `ipset` package for temporary access. The address is what
+Ubuntu hosts need the `ipset` package for temporary access; MLOX installs it
+during server setup. On an existing server without it, install the Ubuntu
+`ipset` package before adding temporary access. The address is what
 each server observes as the SSH client: computers behind the same NAT share
 access, and an SSH jump host may be the observed address. With a browser-hosted
 TUI, “this computer” is the machine running MLOX, not the browser. A grant trusts that

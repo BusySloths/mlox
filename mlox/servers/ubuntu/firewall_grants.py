@@ -99,15 +99,15 @@ def render_grant_mutation(grant_id: str, *, address: str | None, duration_second
         raise ValueError("A server cannot use both Docker and K3s firewall paths.")
 
     lines = ["set -eu", "umask 077", "exec 9>/run/lock/mlox-firewall.lock", "flock -x 9",
-             "command -v ipset >/dev/null", "install -d -m 0700 /run/mlox-firewall-grants"]
+             "command -v ipset >/dev/null || { echo 'ipset is missing; install the Ubuntu ipset package on this server' >&2; exit 1; }", "install -d -m 0700 /run/mlox-firewall-grants"]
     # Check *both* names before touching either family. An ipset's 31-character
     # limit requires a truncated UUID; a collision must fail closed.
     for family in (4, 6):
         name = grant_set_name(grant, family)
         owner = f"/run/mlox-firewall-grants/{name}.owner"
         lines.extend([
-            f"if test -e {owner}; then test \"$(cat {owner})\" = {grant} || exit 1;",
-            f"elif ipset list {name} >/dev/null 2>&1; then exit 1; fi",
+            f"if test -e {owner}; then test \"$(cat {owner})\" = {grant} || {{ echo 'Temporary firewall grant identifier collision' >&2; exit 1; }};",
+            f"elif ipset list {name} >/dev/null 2>&1; then echo 'Temporary firewall set is already in use' >&2; exit 1; fi",
         ])
     if source is not None:
         lines.extend(["iptables -C INPUT -j MLOX-POLICY-IN", "ip6tables -C INPUT -j MLOX-POLICY-IN"])

@@ -161,6 +161,14 @@ class UbuntuNativeServer(
                 group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
             )
+            installed = self.exec.execute(
+                conn,
+                "sh -c 'command -v ipset >/dev/null && echo MLOX_IPSET_READY'",
+                group=TaskGroup.SYSTEM_PACKAGES,
+                sudo=True,
+            )
+            if not installed or "MLOX_IPSET_READY" not in installed:
+                raise RuntimeError("Server setup could not install ipset, which is required for temporary firewall access.")
 
     def get_server_info(self, no_cache: bool = False) -> Dict[str, str | int | float]:
         if not no_cache:
@@ -501,9 +509,17 @@ class UbuntuNativeServer(
         return False, False
 
     def _run_grant_script(self, conn, script: str) -> str:
-        result = self.exec.execute(conn, f"sh -c {shlex.quote(script)}", group=TaskGroup.NETWORKING, sudo=True)
+        # Keep the executor's normal audit trail while returning the remote
+        # command's stderr to the caller, including for a nonzero exit status.
+        wrapped = (f"if output=$(sh -c {shlex.quote(script)} 2>&1); then "
+                   "printf '%s\\n' \"$output\"; else code=$?; "
+                   "printf 'MLOX_GRANT_ERROR %s\\n%s\\n' \"$code\" \"$output\"; fi")
+        result = self.exec.execute(conn, f"sh -c {shlex.quote(wrapped)}", group=TaskGroup.NETWORKING, sudo=True)
         if result is None:
-            raise RuntimeError("Temporary firewall access failed. Ensure ipset is installed and the firewall is healthy.")
+            raise RuntimeError("Could not execute the temporary firewall operation over sudo. Check the SSH connection and sudo credentials.")
+        if result.startswith("MLOX_GRANT_ERROR "):
+            header, _, detail = result.partition("\n")
+            raise RuntimeError(f"Temporary firewall operation failed ({header.removeprefix('MLOX_GRANT_ERROR ')}): {detail.strip() or 'the remote command returned no error output.'}")
         return result
 
     def firewall_grant_current_client(self, grant_id: str, duration_seconds: int) -> FirewallAccessGrant | None:

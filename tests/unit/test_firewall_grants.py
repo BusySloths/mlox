@@ -143,6 +143,53 @@ def test_ubuntu_grants_use_the_observed_session_and_report_host_expiry():
     assert server.exec.execute.call_args.kwargs["sudo"] is True
 
 
+def test_ubuntu_reports_missing_dependency_without_installing_packages():
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from mlox.servers.ubuntu.native import UbuntuNativeServer
+
+    server = UbuntuNativeServer.__new__(UbuntuNativeServer)
+    connection = SimpleNamespace(run=Mock(return_value=SimpleNamespace(stdout="192.0.2.42 41234 198.51.100.3 22")))
+    server.get_server_connection = Mock(return_value=nullcontext(connection))
+    server.exec = SimpleNamespace(firewall_status=Mock(return_value="Status: active"), execute=Mock(
+        return_value="MLOX_GRANT_ERROR 1\nipset is missing; install the Ubuntu ipset package on this server"))
+    with pytest.raises(RuntimeError, match="ipset is missing"):
+        server.firewall_grant_current_client("12a6eb4e0e8d4b878adc59c09d343749", 900)
+    assert server.exec.execute.call_count == 1
+    assert "apt-get" not in server.exec.execute.call_args.args[1]
+
+
+def test_ubuntu_surfaces_firewall_command_errors():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from mlox.servers.ubuntu.native import UbuntuNativeServer
+
+    server = UbuntuNativeServer.__new__(UbuntuNativeServer)
+    server.exec = SimpleNamespace(execute=Mock(return_value="MLOX_GRANT_ERROR 1\niptables: permission denied"))
+    with pytest.raises(RuntimeError, match="iptables: permission denied"):
+        server._run_grant_script(object(), "false")
+
+
+def test_ubuntu_setup_installs_and_verifies_ipset():
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from mlox.servers.ubuntu.native import UbuntuNativeServer
+
+    server = UbuntuNativeServer.__new__(UbuntuNativeServer)
+    server.get_server_connection = Mock(return_value=nullcontext(object()))
+    server._apt_wait = Mock()
+    server.exec = SimpleNamespace(execute=Mock(side_effect=["", "", "", "MLOX_IPSET_READY"]))
+    server.install_packages()
+    commands = [call.args[1] for call in server.exec.execute.call_args_list]
+    assert "install mc git zsh host curl openssl iptables ipset" in commands[2]
+    assert "command -v ipset" in commands[3]
+    server.exec.execute = Mock(side_effect=["", "", "", None])
+    with pytest.raises(RuntimeError, match="could not install ipset"):
+        server.install_packages()
+
+
 def test_ubuntu_skips_inactive_firewall_without_opening_a_grant():
     from contextlib import nullcontext
     from types import SimpleNamespace

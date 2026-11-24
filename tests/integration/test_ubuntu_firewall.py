@@ -453,9 +453,9 @@ def test_temporary_grants_survive_policy_reapply_but_are_not_persisted(network_p
     server = guest.server
     first, second = uuid.uuid4().hex, uuid.uuid4().hex
     with server.get_server_connection() as conn:
-        if not conn.sudo("command -v ipset", hide=True, warn=True, pty=False).ok:
-            _sudo(conn, ["apt-get", "update"], timeout=300)
-            _sudo(conn, ["apt-get", "install", "-y", "ipset"], timeout=300)
+        # server.setup() must install the firewall dependency. The test must
+        # not repair a missing package and thereby mask a setup regression.
+        assert _sudo(conn, ["sh", "-c", "command -v ipset"])
         port = network_probe.start_http(conn, 4)
         policy = _policy(guest)
         server.firewall_apply_policy(policy)

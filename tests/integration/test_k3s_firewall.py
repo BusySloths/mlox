@@ -36,9 +36,8 @@ def test_nodeport_ingress_and_cluster_network_survive_policy(network_probe: Netw
     grant_id = uuid.uuid4().hex
     with server.get_server_connection() as conn:
         try:
-            if not conn.sudo("command -v ipset", hide=True, warn=True, pty=False).ok:
-                _sudo(conn, ["apt-get", "update"], timeout=300)
-                _sudo(conn, ["apt-get", "install", "-y", "ipset"], timeout=300)
+            # The K3s server fixture runs setup, which must install ipset.
+            assert _sudo(conn, ["sh", "-c", "command -v ipset"])
             _sudo(conn, ["kubectl", "run", name, "--image=nginx:alpine", "--port=80"])
             _sudo(conn, ["kubectl", "expose", "pod", name, "--type=NodePort", "--port=80"])
             _sudo(conn, ["kubectl", "wait", "--for=condition=Ready", f"pod/{name}", "--timeout=180s"], timeout=200)
