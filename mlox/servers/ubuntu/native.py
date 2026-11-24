@@ -1,13 +1,19 @@
 import logging
 from ipaddress import ip_address
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
+import shlex
 from typing import Dict, Any, ClassVar
 
 from mlox.executors import TaskGroup
 from mlox.firewall import FirewallPolicy, FirewallPolicyRule, FirewallStatus
 from mlox.execution.firewall_policy import validate_ssh_policy
+from mlox.contracts.servers import AbstractTunnelServer
 from mlox.servers.ubuntu.firewall import parse_firewall_status
+from mlox.servers.ubuntu.firewall_grants import observed_ssh_client, parse_grant_listing, render_grant_mutation, render_list_grants
+from mlox.firewall_grants import FirewallAccessGrant
+from mlox.servers.ubuntu.tunnel import open_ssh_tunnel
 from mlox.server import (
     AbstractFirewallServer,
     AbstractGitServer,
@@ -33,10 +39,12 @@ class UbuntuNativeServer(
     AbstractInitialPasswordAuthServer,
     AbstractNativeServer,
     AbstractLogServer,
+    AbstractTunnelServer,
 ):
     capabilities: ClassVar[set[ServerCapability]] = {
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
+        ServerCapability.TUNNEL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
         ServerCapability.TERMINAL,
         ServerCapability.NATIVE,
@@ -56,6 +64,9 @@ class UbuntuNativeServer(
     def __post_init__(self):
         super().__post_init__()
         self.backend = ["native"]
+
+    def open_tunnel(self, endpoint):
+        return open_ssh_tunnel(self, endpoint)
 
     def log_labels(self) -> list[str]:
         return ["System journal"]
@@ -145,7 +156,7 @@ class UbuntuNativeServer(
                 (
                     "DEBIAN_FRONTEND=noninteractive apt-get -yq "
                     "-o DPkg::Lock::Timeout=300 install "
-                    "mc git zsh host curl openssl iptables || true"
+                    "mc git zsh host curl openssl iptables ipset || true"
                 ),
                 group=TaskGroup.SYSTEM_PACKAGES,
                 sudo=True,
@@ -486,6 +497,42 @@ class UbuntuNativeServer(
         with self.get_server_connection() as conn:
             self.exec.firewall_apply_policy(conn, policy, int(self.port), docker=False)
 
+    def _firewall_grant_profile(self) -> tuple[bool, bool]:
+        return False, False
+
+    def _run_grant_script(self, conn, script: str) -> str:
+        result = self.exec.execute(conn, f"sh -c {shlex.quote(script)}", group=TaskGroup.NETWORKING, sudo=True)
+        if result is None:
+            raise RuntimeError("Temporary firewall access failed. Ensure ipset is installed and the firewall is healthy.")
+        return result
+
+    def firewall_grant_current_client(self, grant_id: str, duration_seconds: int) -> FirewallAccessGrant | None:
+        with self.get_server_connection() as conn:
+            status = parse_firewall_status(self.exec.firewall_status(conn))
+            if status.active is False:
+                return None
+            if status.active is not True or status.error:
+                raise RuntimeError(status.error or "Firewall status is unknown.")
+            address = observed_ssh_client(conn)
+            docker, k3s = self._firewall_grant_profile()
+            output = self._run_grant_script(conn, render_grant_mutation(grant_id, address=address, duration_seconds=duration_seconds, docker=docker, k3s=k3s))
+            line = next((line for line in output.splitlines() if line.startswith("MLOX_GRANT ")), None)
+            if line is None:
+                raise RuntimeError("Temporary firewall grant was not confirmed.")
+            _, ident, actual_address, expiry = line.split()
+            return FirewallAccessGrant(ident, actual_address, datetime.fromtimestamp(int(expiry), timezone.utc))
+
+    def firewall_remove_client_grant(self, grant_id: str) -> None:
+        docker, k3s = self._firewall_grant_profile()
+        with self.get_server_connection() as conn:
+            output = self._run_grant_script(conn, render_grant_mutation(grant_id, address=None, duration_seconds=None, docker=docker, k3s=k3s))
+            if "MLOX_GRANT_REMOVED" not in output.splitlines():
+                raise RuntimeError("Temporary firewall grant removal was not confirmed.")
+
+    def firewall_list_client_grants(self) -> tuple[FirewallAccessGrant, ...]:
+        with self.get_server_connection() as conn:
+            return parse_grant_listing(self._run_grant_script(conn, render_list_grants()))
+
     def firewall_persist_policy(self, policy: FirewallPolicy) -> None:
         self.firewall_validate_policy(policy)
         with self.get_server_connection() as conn:
@@ -497,4 +544,10 @@ class UbuntuNativeServer(
 
     def firewall_status(self) -> FirewallStatus:
         with self.get_server_connection() as conn:
-            return parse_firewall_status(self.exec.firewall_status(conn))
+            status = parse_firewall_status(self.exec.firewall_status(conn))
+            if status.active is True:
+                try:
+                    status = replace(status, temporary_grants=parse_grant_listing(self._run_grant_script(conn, render_list_grants())))
+                except Exception:
+                    pass  # Preserve the firewall status; the grant list remains unknown.
+            return status

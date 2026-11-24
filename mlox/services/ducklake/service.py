@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from mlox.service import AbstractService, ServiceCapability
+from mlox.contracts.services import AbstractTunnelService
+from mlox.tunnel import TunnelPlan
 
 if TYPE_CHECKING:
     from mlox.infra import Infrastructure
@@ -12,8 +14,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class DuckLakeService(AbstractService):
-    capabilities = {ServiceCapability.DATA_WAREHOUSE}
+class DuckLakeService(AbstractService, AbstractTunnelService):
+    capabilities = {ServiceCapability.DATA_WAREHOUSE, ServiceCapability.TUNNEL}
     postgres_service_uuid: str
     storage_service_uuid: str
     data_path: str
@@ -23,6 +25,28 @@ class DuckLakeService(AbstractService):
     secret_manager_uuid: str = ""
     postgres_secret_name: str = ""
     s3_secret_name: str = ""
+
+    def tunnel_plan(self, infra):
+        endpoints = []
+        for service in self._dependencies(infra).values():
+            make_plan = getattr(service, "tunnel_dependency_plan", None) or getattr(service, "tunnel_plan", None)
+            if callable(make_plan):
+                endpoints.extend(make_plan(infra).endpoints)
+        return TunnelPlan(str(self.uuid), tuple(endpoints))
+
+    def tunnel_secrets(self, infra, bindings):
+        dependencies = self._dependencies(infra)
+        secrets = self._connection_secret(infra)
+        pg = dependencies["PostgreSQL"]
+        if callable(getattr(pg, "tunnel_secrets", None)):
+            local = pg.tunnel_secrets(infra, bindings)["postgres_connection"]
+            secrets["postgres_connection"].update({key: local[key] for key in ("host", "port", "tls_server_name") if key in local})
+            secrets["postgres_connection"].pop("dsn", None)
+        storage = dependencies["object storage"]
+        if callable(getattr(storage, "tunnel_secrets", None)):
+            local = storage.tunnel_secrets(infra, bindings)["s3_connection"]
+            secrets["s3_connection"].update({key: local[key] for key in ("endpoint", "tls_server_name") if key in local})
+        return secrets
 
     def _dependencies(self, infra):
         dependencies = {}

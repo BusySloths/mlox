@@ -24,6 +24,7 @@ from .app_log_panel import AppLogPanel
 from .bundle_tags import EditBundleTagsDialog, RenameBundleDialog
 from .database_panel import DatabasePanel
 from .firewall_panel import FirewallPanel
+from .tunnels_panel import TunnelsPanel
 from .history_panel import HistoryPanel
 from .knowledge_panel import KnowledgePanel
 from .log_panel import LogPanel
@@ -88,6 +89,7 @@ from mlox.tui.template_forms import (
 
 
 FIREWALL_TAB_ID = "firewall-tab"
+TUNNELS_TAB_ID = "tunnels-tab"
 DATABASES_TAB_ID = "databases-tab"
 KNOWLEDGE_TAB_ID = "knowledge-tab"
 MONITOR_TAB_ID = "monitor-tab"
@@ -206,6 +208,8 @@ class DashboardScreen(Screen):
                                 yield HistoryPanel(id="selection-history")
                             with TabPane("Firewall", id=FIREWALL_TAB_ID):
                                 yield FirewallPanel(id="firewall-panel")
+                            with TabPane("Tunnels", id=TUNNELS_TAB_ID):
+                                yield TunnelsPanel(id="tunnels-panel")
                             with TabPane("Secret Manager", id=SECRET_MANAGER_TAB_ID):
                                 yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Monitor", id=MONITOR_TAB_ID):

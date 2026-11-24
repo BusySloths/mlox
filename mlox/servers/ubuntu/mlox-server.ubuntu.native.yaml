@@ -32,6 +32,7 @@ capabilities:
   - firewall
   - initial_auth_password
   - terminal
+  - tunnel
   backend:
   - native
 build:

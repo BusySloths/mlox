@@ -22,6 +22,17 @@ def _server_template_path(value: str) -> str:
 
 SERVER_COMMANDS = (
     WorkspaceCommand(
+        name="firewall-access-add", method="grant_firewall_access",
+        help="Grant this computer temporary access to all active project firewalls.",
+        parameters=(CliParameter("duration", "Access duration: 15m or 1h", default="15m"),),
+        renderer=render_inspection, render_failure=True,
+    ),
+    WorkspaceCommand(
+        name="firewall-access-remove", method="revoke_firewall_access",
+        help="Remove this computer's temporary access from project firewalls.",
+        renderer=render_inspection, render_failure=True,
+    ),
+    WorkspaceCommand(
         name="firewall-persist", method="persist_server_firewall",
         help="Make the currently applied firewall draft survive server reboots.",
         parameters=(CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),),

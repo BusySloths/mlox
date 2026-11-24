@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from ipaddress import ip_network
 from typing import Literal
 
+from mlox.firewall_grants import FirewallAccessGrant
 
 @dataclass(frozen=True)
 class FirewallStatus:
@@ -23,6 +24,7 @@ class FirewallStatus:
     error: str = ""
     previous_policy: bool = False
     raw: str = ""
+    temporary_grants: tuple[FirewallAccessGrant, ...] | None = None
 
 
 @dataclass(frozen=True)

@@ -33,6 +33,7 @@ capabilities:
   - app
   - object_storage
   - s3_object_storage
+  - tunnel
   backend:
   - docker
 ports:

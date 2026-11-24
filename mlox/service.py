@@ -68,6 +68,7 @@ from mlox.contracts.services import (
     AbstractModelRegistryService,
     AbstractModelServerService,
     AbstractWorkflowOrchestratorService,
+    AbstractTunnelService,
 )
 
 logger = logging.getLogger(__name__)

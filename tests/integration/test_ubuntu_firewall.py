@@ -26,6 +26,7 @@ import pytest
 from mlox.firewall import FirewallPolicy
 from mlox.servers.ubuntu.docker import UbuntuDockerServer
 from mlox.servers.ubuntu.native import UbuntuNativeServer
+from mlox.servers.ubuntu.firewall_grants import render_grant_mutation
 from tests.integration.conftest import (
     MultipassClient,
     _HAS_MULTIPASS,
@@ -445,6 +446,43 @@ def test_docker_ipv6_published_port_respects_trusted_sources(network_probe):
         assert network_probe.probe(conn, V6_TRUSTED, V6_HOST, port) == "open"
         guest.server.firewall_apply_policy(_policy(guest, ports=(port,)))
         assert network_probe.probe(conn, V6_OTHER, V6_HOST, port) == "open"
+
+
+def test_temporary_grants_survive_policy_reapply_but_are_not_persisted(network_probe):
+    guest = network_probe.guest
+    server = guest.server
+    first, second = uuid.uuid4().hex, uuid.uuid4().hex
+    with server.get_server_connection() as conn:
+        if not conn.sudo("command -v ipset", hide=True, warn=True, pty=False).ok:
+            _sudo(conn, ["apt-get", "update"], timeout=300)
+            _sudo(conn, ["apt-get", "install", "-y", "ipset"], timeout=300)
+        port = network_probe.start_http(conn, 4)
+        policy = _policy(guest)
+        server.firewall_apply_policy(policy)
+        assert network_probe.probe(conn, V4_OTHER, V4_HOST, port) == "timeout"
+        def mutate(ident, address, duration):
+            script = render_grant_mutation(ident, address=address, duration_seconds=duration, docker=guest.docker, k3s=False)
+            _sudo(conn, ["sh", "-c", script])
+        try:
+            mutate(first, V4_OTHER, 120)
+            mutate(second, V4_OTHER, 120)
+            assert network_probe.probe(conn, V4_OTHER, V4_HOST, port) == "open"
+            assert {item.grant_id for item in server.firewall_list_client_grants()} >= {first, second}
+            server.firewall_apply_policy(policy)
+            server.firewall_persist_policy(policy)
+            assert V4_OTHER not in _sudo(conn, ["cat", "/etc/mlox/firewall/policy.sh"])
+            mutate(first, None, None)
+            assert network_probe.probe(conn, V4_OTHER, V4_HOST, port) == "open"
+            mutate(second, None, None)
+            assert network_probe.probe(conn, V4_OTHER, V4_HOST, port) == "timeout"
+            mutate(first, V4_OTHER, 3)
+            assert network_probe.probe(conn, V4_OTHER, V4_HOST, port) == "open"
+            time.sleep(5)
+            assert network_probe.probe(conn, V4_OTHER, V4_HOST, port) == "timeout"
+            assert first not in {item.grant_id for item in server.firewall_list_client_grants()}
+        finally:
+            mutate(first, None, None)
+            mutate(second, None, None)
 
 
 def test_persistence_rejects_mismatched_draft_and_survives_reboot(firewall_guest):

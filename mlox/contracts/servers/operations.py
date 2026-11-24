@@ -2,8 +2,18 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import ContextManager
 
 from mlox.firewall import FirewallPolicy, FirewallPolicyRule, FirewallStatus
+from mlox.firewall_grants import FirewallAccessGrant
+from mlox.tunnel import TunnelBinding, TunnelEndpoint
+
+
+class AbstractTunnelServer(ABC):
+    @abstractmethod
+    def open_tunnel(self, endpoint: TunnelEndpoint) -> ContextManager[TunnelBinding]:
+        """Open a local-only forwarding context; closing it releases resources."""
+        raise NotImplementedError
 
 
 @dataclass
@@ -24,6 +34,18 @@ class AbstractGitServer(ABC):
 
 @dataclass
 class AbstractFirewallServer(ABC):
+    def firewall_grant_current_client(self, grant_id: str, duration_seconds: int) -> FirewallAccessGrant | None:
+        """Grant the observed SSH client temporary access, or skip an inactive firewall."""
+        raise NotImplementedError("Temporary firewall access is not supported by this server.")
+
+    def firewall_remove_client_grant(self, grant_id: str) -> None:
+        """Remove one temporary grant without changing other grants or the policy."""
+        raise NotImplementedError("Temporary firewall access is not supported by this server.")
+
+    def firewall_list_client_grants(self) -> tuple[FirewallAccessGrant, ...]:
+        """List active temporary grants without exposing the persistent policy."""
+        raise NotImplementedError("Temporary firewall access is not supported by this server.")
+
     @abstractmethod
     def firewall_default_policy(self) -> FirewallPolicy:
         """Propose a policy appropriate for this server."""

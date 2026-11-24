@@ -27,6 +27,7 @@ from .models import (
     AbstractModelServerService,
 )
 from .workflow import AbstractWorkflowOrchestratorService
+from .tunnel import AbstractTunnelService
 
 __all__ = [
     "ServiceCapability",
@@ -46,4 +47,5 @@ __all__ = [
     "AbstractModelRegistryService",
     "AbstractModelServerService",
     "AbstractWorkflowOrchestratorService",
+    "AbstractTunnelService",
 ]

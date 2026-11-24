@@ -25,6 +25,7 @@ class UbuntuDockerServer(
         ServerCapability.LOGS,
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
+        ServerCapability.TUNNEL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
         ServerCapability.TERMINAL,
         ServerCapability.DOCKER,
@@ -38,6 +39,9 @@ class UbuntuDockerServer(
         self.firewall_validate_policy(policy)
         with self.get_server_connection() as conn:
             self.exec.firewall_apply_policy(conn, policy, int(self.port), docker=True)
+
+    def _firewall_grant_profile(self) -> tuple[bool, bool]:
+        return True, False
 
     def firewall_persist_policy(self, policy: FirewallPolicy) -> None:
         self.firewall_validate_policy(policy)

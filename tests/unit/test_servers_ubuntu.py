@@ -112,6 +112,7 @@ def _new_docker_server() -> UbuntuDockerServer:
 
 def test_ubuntu_server_capabilities():
     assert UbuntuNativeServer.capabilities == {
+        ServerCapability.TUNNEL,
         ServerCapability.LOGS,
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
@@ -120,6 +121,7 @@ def test_ubuntu_server_capabilities():
         ServerCapability.NATIVE,
     }
     assert UbuntuDockerServer.capabilities == {
+        ServerCapability.TUNNEL,
         ServerCapability.LOGS,
         ServerCapability.HEALTH,
         ServerCapability.GIT,
@@ -129,6 +131,7 @@ def test_ubuntu_server_capabilities():
         ServerCapability.DOCKER,
     }
     assert UbuntuK3sServer.capabilities == {
+        ServerCapability.TUNNEL,
         ServerCapability.LOGS,
         ServerCapability.HEALTH,
         ServerCapability.GIT,
@@ -138,6 +141,7 @@ def test_ubuntu_server_capabilities():
         ServerCapability.KUBERNETES,
     }
     assert UbuntuSimpleServer.capabilities == {
+        ServerCapability.TUNNEL,
         ServerCapability.LOGS,
         ServerCapability.NATIVE,
         ServerCapability.TERMINAL,

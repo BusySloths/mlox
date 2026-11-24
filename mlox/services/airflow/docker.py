@@ -37,6 +37,8 @@ from mlox.service import (
     service_health_payload,
 )
 from mlox.utils import generate_password
+from mlox.contracts.services import AbstractTunnelService
+from mlox.tunnel import TunnelPlan, direct_endpoint, find_binding
 
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,7 @@ class AirflowDockerService(
     AbstractAppService,
     AbstractWorkflowOrchestratorService,
     AbstractLogService,
+    AbstractTunnelService,
 ):
     capabilities = {
         ServiceCapability.WORKFLOW_ORCHESTRATOR,
@@ -57,6 +60,7 @@ class AirflowDockerService(
         ServiceCapability.HEALTH,
         ServiceCapability.SECRET_MANAGER_BINDING,
         ServiceCapability.LOGS,
+        ServiceCapability.TUNNEL,
     }
     web_ui_url_label = "Airflow UI"
     web_ui_login_fields = ("username", "password")
@@ -84,6 +88,24 @@ class AirflowDockerService(
             "Redis": "redis",
         },
     )
+
+    def tunnel_plan(self, infra):
+        return TunnelPlan(str(self.uuid), (direct_endpoint(infra, self, "Airflow Webserver", int(self.port), "https"),))
+
+    def tunnel_secrets(self, infra, bindings):
+        binding = find_binding(bindings, str(self.uuid), "Airflow Webserver")
+        credentials = dict(self.get_secrets()["airflow_ui_credentials"])
+        credentials.update(port=str(binding.local_port), base_url=f"https://{binding.local_host}:{binding.local_port}", tls_server_name=binding.endpoint.tls_server_name)
+        return {"airflow_ui_credentials": credentials}
+
+    def tunnel_health(self, infra, bindings):
+        from copy import copy
+
+        binding = find_binding(bindings, str(self.uuid), "Airflow Webserver")
+        local = copy(self)
+        local.service_urls = dict(self.service_urls)
+        local.service_urls["Airflow UI"] = f"https://{binding.local_host}:{binding.local_port}"
+        return local.get_health(None)
 
     def get_proxy_endpoint(self, *, app_host: str, proxy_host: str) -> dict[str, str]:
         """Preserve the public Host header for Airflow login redirect checks."""
