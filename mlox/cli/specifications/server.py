@@ -22,48 +22,6 @@ def _server_template_path(value: str) -> str:
 
 SERVER_COMMANDS = (
     WorkspaceCommand(
-        name="firewall-access-add", method="grant_firewall_access",
-        help="Grant this computer temporary access to all active project firewalls.",
-        parameters=(CliParameter("duration", "Access duration: 15m or 1h", default="15m"),),
-        renderer=render_inspection, render_failure=True,
-    ),
-    WorkspaceCommand(
-        name="firewall-access-remove", method="revoke_firewall_access",
-        help="Remove this computer's temporary access from project firewalls.",
-        renderer=render_inspection, render_failure=True,
-    ),
-    WorkspaceCommand(
-        name="firewall-persist", method="persist_server_firewall",
-        help="Make the currently applied firewall draft survive server reboots.",
-        parameters=(CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),),
-        renderer=render_inspection,
-    ),
-    WorkspaceCommand(
-        name="firewall-apply", method="apply_server_firewall",
-        help="Apply this server's firewall draft; rules may not persist after reboot.",
-        parameters=(CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),),
-        renderer=render_inspection,
-    ),
-    *(
-        WorkspaceCommand(
-            name=f"firewall-draft-{action}-source",
-            method=f"{action}_firewall_draft_source",
-            help=f"{action.capitalize()} a trusted IP or CIDR in the local draft; does not change the server.",
-            parameters=(
-                CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),
-                CliParameter("source", "Trusted IP address or CIDR", kind="argument"),
-            ),
-            renderer=render_inspection,
-        )
-        for action in ("add", "remove")
-    ),
-    WorkspaceCommand(
-        name="firewall-preview", method="preview_server_firewall",
-        help="Preview the proposed default firewall policy without changing the server.",
-        parameters=(CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),),
-        renderer=render_inspection,
-    ),
-    WorkspaceCommand(
         name="logs", method="server_logs", help="Show recent server logs.",
         parameters=(
             CliParameter("ip", "Server IP, unique suffix, or bundle name", kind="argument"),

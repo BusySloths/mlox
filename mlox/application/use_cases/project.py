@@ -240,6 +240,9 @@ def summarize_infrastructure(workspace) -> OperationResult:
             "bundles": 0,
             "servers": 0,
             "services": 0,
+            "running_services": 0,
+            "services_needing_attention": 0,
+            "firewall_capable_servers": 0,
             "cpu": 0.0,
             "ram": 0.0,
         },
@@ -266,8 +269,16 @@ def summarize_infrastructure(workspace) -> OperationResult:
         services = getattr(bundle, "services", []) or []
         server = getattr(bundle, "server", None)
         service_states = _count_service_states(services)
+        summary["totals"]["running_services"] += service_states.get("running", 0)
+        summary["totals"]["services_needing_attention"] += service_states.get("error", 0)
         if server:
             summary["totals"]["servers"] += 1
+            capabilities = getattr(server, "capabilities", set()) or set()
+            if "firewall" in capabilities or any(
+                str(getattr(capability, "value", capability)) == "firewall"
+                for capability in capabilities
+            ):
+                summary["totals"]["firewall_capable_servers"] += 1
             summary["server_rows"].append(
                 {
                     "bundle": getattr(bundle, "name", "-"),

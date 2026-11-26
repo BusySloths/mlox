@@ -23,6 +23,8 @@ class TunnelsPanel(Vertical):
         self._snapshot = None
         self._health = {}
         self._health_in_progress = set()
+        self._table_timer = None
+        self._health_timer = None
 
     def compose(self) -> ComposeResult:
         yield Static("Tunnels listen on this computer only and close when MLOX exits.", markup=False)
@@ -39,24 +41,36 @@ class TunnelsPanel(Vertical):
 
     def on_mount(self) -> None:
         workspace = getattr(self.app, "workspace", None)
-        if workspace is None:
+        infra = getattr(workspace, "infrastructure", None)
+        if infra is None:
             return
-        infra = workspace.infrastructure
         self.manager = TunnelManager(getattr(infra, "get_server_by_uuid", lambda _: None))
         options = []
         for bundle in getattr(infra, "bundles", ()):
             server = getattr(bundle, "server", None)
             if server is not None:
-                self._server_names[str(server.uuid)] = str(getattr(bundle, "name", getattr(server, "ip", "")))
+                server_uuid = getattr(server, "uuid", None)
+                server_key = server_uuid or getattr(server, "ip", None) or getattr(bundle, "name", "")
+                self._server_names[str(server_key)] = str(getattr(bundle, "name", getattr(server, "ip", "")))
             for service in getattr(bundle, "services", ()):
-                if ServiceCapability.TUNNEL in getattr(service, "capabilities", set()):
-                    self._services[str(service.uuid)] = service
-                    options.append((f"{getattr(bundle, 'name', '')} / {service.name}", str(service.uuid)))
+                service_uuid = getattr(service, "uuid", None)
+                # A tunnel needs stable server and service identifiers. Incomplete
+                # in-memory objects are common in tests and imported workspaces;
+                # leave those out of discovery instead of preventing the TUI from
+                # mounting.
+                if service_uuid and ServiceCapability.TUNNEL in getattr(service, "capabilities", set()):
+                    service_id = str(service_uuid)
+                    self._services[service_id] = service
+                    options.append((f"{getattr(bundle, 'name', '')} / {getattr(service, 'name', service_id)}", service_id))
         self.query_one("#tunnel-service", Select).set_options(options)
-        self.set_interval(1, self._refresh_table)
-        self.set_interval(30, self._refresh_health)
+        if options:
+            self._table_timer = self.set_interval(1, self._refresh_table)
+            self._health_timer = self.set_interval(30, self._refresh_health)
 
     def on_unmount(self) -> None:
+        for timer in (self._table_timer, self._health_timer):
+            if timer is not None:
+                timer.stop()
         if self.manager is not None:
             self.manager.shutdown()
 

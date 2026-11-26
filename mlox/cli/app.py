@@ -15,6 +15,7 @@ import typer
 import click
 
 from mlox.cli.commands.model import model_app
+from mlox.cli.commands.firewall import firewall_app
 from mlox.cli.commands.project import project_app
 from mlox.cli.commands.server import server_app
 from mlox.cli.commands.service import service_app
@@ -53,6 +54,7 @@ app.add_typer(project_app, name="project")
 app.add_typer(server_app, name="server")
 app.add_typer(service_app, name="service")
 app.add_typer(model_app, name="model")
+app.add_typer(firewall_app, name="firewall")
 
 
 class OutputFormat(str, Enum):

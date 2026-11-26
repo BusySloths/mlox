@@ -23,10 +23,8 @@ from textual.widgets import (
 from .app_log_panel import AppLogPanel
 from .bundle_tags import EditBundleTagsDialog, RenameBundleDialog
 from .database_panel import DatabasePanel
-from .firewall_panel import FirewallPanel
-from .tunnels_panel import TunnelsPanel
+from .security_panel import SecurityPanel
 from .history_panel import HistoryPanel
-from .knowledge_panel import KnowledgePanel
 from .log_panel import LogPanel
 from .model import (
     SelectionChanged, SelectionInfo, is_bundle_initialized, log_target_for_selection,
@@ -88,10 +86,10 @@ from mlox.tui.template_forms import (
 )
 
 
-FIREWALL_TAB_ID = "firewall-tab"
+FIREWALL_TAB_ID = "security-tab"  # Kept as an import alias for existing integrations.
 TUNNELS_TAB_ID = "tunnels-tab"
+SECURITY_TAB_ID = "security-tab"
 DATABASES_TAB_ID = "databases-tab"
-KNOWLEDGE_TAB_ID = "knowledge-tab"
 MONITOR_TAB_ID = "monitor-tab"
 OPERATIONS_TAB_ID = "operations-tab"
 MODELS_TAB_ID = "models-tab"
@@ -197,8 +195,6 @@ class DashboardScreen(Screen):
                                     yield ServiceActions(id="selection-service-actions")
                             with TabPane("Operations (EXPERIMENTAL)", id=OPERATIONS_TAB_ID):
                                 yield OperationsPanel(id="operations-panel")
-                            with TabPane("Knowledge", id=KNOWLEDGE_TAB_ID):
-                                yield KnowledgePanel(id="knowledge-panel")
                             with TabPane("History & Logs", id=LOGS_TAB_ID):
                                 with Horizontal(id="activity-view-switcher"):
                                     yield Button("Logs", id="show-service-logs", variant="primary")
@@ -206,10 +202,8 @@ class DashboardScreen(Screen):
                                     yield Static("", id="activity-context", markup=False)
                                 yield LogPanel(id="selection-logs")
                                 yield HistoryPanel(id="selection-history")
-                            with TabPane("Firewall", id=FIREWALL_TAB_ID):
-                                yield FirewallPanel(id="firewall-panel")
-                            with TabPane("Tunnels", id=TUNNELS_TAB_ID):
-                                yield TunnelsPanel(id="tunnels-panel")
+                            with TabPane("Security", id=SECURITY_TAB_ID):
+                                yield SecurityPanel(id="security-panel")
                             with TabPane("Secret Manager", id=SECRET_MANAGER_TAB_ID):
                                 yield SecretManagerPanel(id="secret-manager-panel")
                             with TabPane("Monitor", id=MONITOR_TAB_ID):
@@ -380,7 +374,7 @@ class DashboardScreen(Screen):
 
     def _clear_lazy_root_panels(self) -> None:
         self.query_one(SecretManagerPanel).selection = None
-        self.query_one(FirewallPanel).selection = None
+        self.query_one(SecurityPanel).selection = None
         self.query_one(MonitorPanel).selection = None
         operations = self.query_one(OperationsPanel)
         # A watcher must keep its live session mounted while the user reads the
@@ -403,7 +397,7 @@ class DashboardScreen(Screen):
         tabs = self.query_one("#main-tabs", TabbedContent)
         panel_by_tab = {
             SECRET_MANAGER_TAB_ID: self.query_one(SecretManagerPanel),
-            FIREWALL_TAB_ID: self.query_one(FirewallPanel),
+            SECURITY_TAB_ID: self.query_one(SecurityPanel),
             MONITOR_TAB_ID: self.query_one(MonitorPanel),
             OPERATIONS_TAB_ID: self.query_one(OperationsPanel),
             DATABASES_TAB_ID: self.query_one(DatabasePanel),
@@ -1446,7 +1440,7 @@ class DashboardScreen(Screen):
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(
-            FIREWALL_TAB_ID,
+            SECURITY_TAB_ID,
             selection.type == "root" if selection else False,
         )
         self._set_tab_visible(

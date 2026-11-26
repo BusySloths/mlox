@@ -32,15 +32,29 @@ The former positional project argument is replaced by `--project`.
 
 ### Temporary firewall access
 
-The Firewall tab can grant this computer access to every active MLOX project
-firewall for 15 minutes, one hour, or while the TUI remains open. From the CLI:
+The Security tab's Firewall section can grant this computer access to every
+active MLOX project firewall for 15 minutes, one hour, or while the TUI remains
+open. From the CLI:
 
 ```sh
-mlox server firewall-access-add --duration 15m
-mlox server firewall-access-add --duration 1h
-mlox server firewall-access-hold
-mlox server firewall-access-remove
+mlox firewall access-add --duration 15m
+mlox firewall access-add --duration 1h
+mlox firewall access-hold
+mlox firewall access-remove
 ```
+
+Firewall policy commands follow the same edit-to-apply flow:
+
+```sh
+mlox firewall draft-add my-server 203.0.113.8/32
+mlox firewall draft-remove my-server 203.0.113.8/32
+mlox firewall preview my-server
+mlox firewall apply my-server
+mlox firewall persist my-server
+```
+
+Draft edits stay local until `apply`; `persist` saves the applied policy for
+reboots.
 
 `hold` renews a five-minute server-side lease every two minutes; Ctrl-C removes
 the CLI lease, and a crash or lost connection lets it expire. The TUI hold also

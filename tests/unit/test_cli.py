@@ -26,7 +26,7 @@ def test_schema_describes_nested_commands():
 def test_firewall_access_cli_passes_duration_and_reports_partial_failure(monkeypatch):
     result_data = {"servers": [{"server": "one", "status": "added"}, {"server": "two", "status": "failed"}]}
     operation = _patch_application(monkeypatch, "grant_firewall_access", OperationResult(False, 4, "partial", result_data))
-    result = runner.invoke(cli.app, ["--output", "json", "server", "firewall-access-add", "--project", "p", "--password", "pw", "--duration", "1h"])
+    result = runner.invoke(cli.app, ["--output", "json", "firewall", "access-add", "--project", "p", "--password", "pw", "--duration", "1h"])
     assert result.exit_code == 4
     assert json.loads(result.stdout)["data"] == result_data
     operation.assert_called_once_with(duration="1h")
