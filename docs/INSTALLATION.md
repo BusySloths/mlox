@@ -39,6 +39,13 @@ Launch the TUI and hit the **Create** button on the login screen to make your
 first encrypted project — no manual setup needed. The CLI (`mlox --help`) can
 operate the same project, as can the Python SDK.
 
+When a project's firewall is enabled, use `mlox firewall access-add` with a
+duration such as `15m` to grant the current computer temporary access to
+firewall-capable servers, or `mlox firewall access-hold` for access maintained
+while the command runs. Remove the grant with `mlox firewall access-remove`.
+Temporary grants are not saved by firewall policy persistence. See the
+[CLI guide](../mlox/cli/README.md) for expiration, NAT, and per-computer details.
+
 ## Developers (from source)
 
 ```bash

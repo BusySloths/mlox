@@ -84,7 +84,7 @@ A `Bundle` (`mlox/infra.py`) ties one server to its deployed services;
   `build.class_name`. Third-party plugins register via `mlox.service_plugins` /
   `mlox.server_plugins` entry points (see `docs/PLUGIN_CONFIGS.md`).
 - **Capability ABCs, not type-switch branching:** behavior comes from capability
-  ABCs (Docker, Kubernetes, Native, Firewall, Git, Health, ...) — a
+  ABCs (Docker, Kubernetes, Native, Firewall, Tunnel, Git, Health, ...) — a
   service/server's abilities are determined by which mixins it implements.
 
 ## Important Modules
@@ -111,7 +111,11 @@ A `Bundle` (`mlox/infra.py`) ties one server to its deployed services;
 Service contracts are grouped by domain under `mlox/contracts/services/`,
 including storage, secrets, observability, models, repositories and workflow.
 Server contracts under `mlox/contracts/servers/` cover backends, operations,
-and health. New code can import from `mlox.contracts.services` or
+health, firewall management, and server-side tunnel creation. Service contracts
+include tunnel endpoint discovery and temporary local connection details. A
+tunnel-capable server opens a loopback-only SSH forward; a tunnel-capable service
+describes its required endpoints and derives local connection details without
+mutating persisted secrets. New code can import from `mlox.contracts.services` or
 `mlox.contracts.servers`; existing imports from `mlox.service` and `mlox.server`
 resolve to the same classes. Concrete implementations remain in `mlox/services/`
 and `mlox/servers/`.
