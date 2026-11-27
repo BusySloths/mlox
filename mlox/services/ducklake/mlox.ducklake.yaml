@@ -23,6 +23,7 @@ groups:
 capabilities:
   service:
   - data_warehouse
+  - tunnel
   backend:
   - connector
 build:

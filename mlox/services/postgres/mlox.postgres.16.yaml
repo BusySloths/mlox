@@ -30,6 +30,7 @@ capabilities:
   service:
   - logs
   - database
+  - tunnel
   backend:
   - docker
 ports:

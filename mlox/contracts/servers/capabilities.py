@@ -10,6 +10,7 @@ class ServerCapability(StrEnum):
     LOGS = "logs"
     GIT = "git"
     FIREWALL = "firewall"
+    TUNNEL = "tunnel"
     INITIAL_AUTH_PASSWORD = "initial_auth_password"
     TERMINAL = "terminal"
     NATIVE = "native"

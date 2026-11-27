@@ -51,6 +51,7 @@ from mlox.project.operations import (
 )
 
 from .model import SelectionInfo
+from .knowledge_panel import KnowledgePanel
 
 
 def _pipeline_detail_rows(details: dict[str, Any]) -> list[tuple[str, str, str]]:
@@ -451,6 +452,7 @@ class OperationsPanel(Static):
                     yield Button("Pipelines", id="operations-nav-pipelines")
                     yield Button("Plan", id="operations-nav-plan")
                     yield Button("Activity", id="operations-nav-activity")
+                    yield Button("Knowledge", id="operations-nav-knowledge")
                     yield Button("Settings", id="operations-nav-settings")
                     yield Static(
                         "Observe\nPlan\nRecover",
@@ -572,6 +574,8 @@ class OperationsPanel(Static):
                     "events are persisted in the project audit trail.",
                     id="operations-activity-help",
                 )
+            with TabPane("Knowledge", id="operations-knowledge-tab"):
+                yield KnowledgePanel(id="knowledge-panel")
             with TabPane("Settings", id="operations-settings-tab"):
                 with VerticalScroll(id="operations-settings-scroll"):
                     yield Static("Telemetry watcher", classes="operations-heading")
@@ -682,6 +686,7 @@ class OperationsPanel(Static):
     @on(Button.Pressed, "#operations-nav-pipelines")
     @on(Button.Pressed, "#operations-nav-plan")
     @on(Button.Pressed, "#operations-nav-activity")
+    @on(Button.Pressed, "#operations-nav-knowledge")
     @on(Button.Pressed, "#operations-nav-settings")
     def handle_operations_navigation(self, event: Button.Pressed) -> None:
         section = str(event.button.id or "").removeprefix("operations-nav-")
@@ -692,7 +697,7 @@ class OperationsPanel(Static):
         tabs = self.query_one("#operations-tabs", TabbedContent)
         tabs.active = tab_id
         self._show_operations_hero(tab_id)
-        for name in ("team", "pipelines", "plan", "activity", "settings"):
+        for name in ("team", "pipelines", "plan", "activity", "knowledge", "settings"):
             button = self.query_one(f"#operations-nav-{name}", Button)
             button.set_class(name == section, "operations-nav-active")
 
@@ -713,6 +718,10 @@ class OperationsPanel(Static):
             "operations-activity-tab": (
                 "Activity & audit",
                 "A durable account of what was detected, decided, and reviewed.",
+            ),
+            "operations-knowledge-tab": (
+                "Project knowledge",
+                "Notes, boards, decisions, and shared project references.",
             ),
             "operations-settings-tab": (
                 "Watcher & reasoning",

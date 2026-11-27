@@ -312,6 +312,9 @@ def test_project_summarize_infrastructure_builds_rows_and_resource_totals():
         "bundles": 1,
         "servers": 1,
         "services": 4,
+        "running_services": 1,
+        "services_needing_attention": 1,
+        "firewall_capable_servers": 0,
         "cpu": 8.0,
         "ram": 16.0,
     }

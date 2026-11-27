@@ -7,6 +7,7 @@ class ServiceCapability(StrEnum):
     """User-facing service capabilities advertised by service configs/classes."""
 
     APP = "app"
+    TUNNEL = "tunnel"
     PROXY = "proxy"
     HEALTH = "health"
     LOGS = "logs"

@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from mlox.service import AbstractLogService, AbstractService, ServiceCapability
+from mlox.contracts.services import AbstractTunnelService
+from mlox.tunnel import TunnelPlan, direct_endpoint, find_binding
 
 
 # Configure logging (optional, but recommended)
@@ -31,8 +33,8 @@ logging.basicConfig(
 
 
 @dataclass
-class PostgresDockerService(AbstractService, AbstractLogService):
-    capabilities = {ServiceCapability.DATABASE, ServiceCapability.LOGS}
+class PostgresDockerService(AbstractService, AbstractLogService, AbstractTunnelService):
+    capabilities = {ServiceCapability.DATABASE, ServiceCapability.LOGS, ServiceCapability.TUNNEL}
     user: str
     pw: str
     db: str
@@ -41,6 +43,17 @@ class PostgresDockerService(AbstractService, AbstractLogService):
         init=False,
         default_factory=lambda: {"Postgres": "postgres"},
     )
+
+    def tunnel_plan(self, infra):
+        return TunnelPlan(str(self.uuid), (direct_endpoint(infra, self, "Postgres", int(self.port), "postgres"),))
+
+    def tunnel_secrets(self, infra, bindings):
+        binding = find_binding(bindings, str(self.uuid), "Postgres")
+        connection = dict(self.get_secrets()["postgres_connection"])
+        connection.update(host=binding.local_host, port=str(binding.local_port), tls_server_name=binding.endpoint.tls_server_name)
+        # The original DSN points to the remote host; do not return a stale one.
+        connection.pop("dsn", None)
+        return {"postgres_connection": connection}
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)

@@ -21,6 +21,7 @@ class UbuntuSimpleServer(UbuntuNativeServer):
         ServerCapability.NATIVE,
         ServerCapability.LOGS,
         ServerCapability.TERMINAL,
+        ServerCapability.TUNNEL,
     }
 
     root_private_key: str | None = None

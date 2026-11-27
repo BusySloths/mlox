@@ -11,7 +11,7 @@ from rich.text import Text
 
 from textual.reactive import reactive
 from textual.widgets import Static
-from textual.renderables.digits import Digits as DigitsRenderable
+from mlox.project.entries import parse_board
 
 from mlox.application.use_cases.firewall import firewall_summary_for_bundle
 from mlox.application.use_cases.project import summarize_infrastructure
@@ -25,7 +25,7 @@ from .model import (
     is_bundle_initialized,
 )
 
-PROJECT_SERVER_ROW_LIMIT = 40
+PROJECT_SERVER_ROW_LIMIT = 8
 
 
 class OverviewPanel(Static):
@@ -55,11 +55,7 @@ class OverviewPanel(Static):
         self.show_default()
 
     def show_default(self) -> None:
-        self.update(
-            Panel(
-                Text(WELCOME_TEXT, style="bold"), title="Overview", border_style="green"
-            )
-        )
+        self.update(Panel(Text(WELCOME_TEXT, style="bold"), title="MLOX", border_style="#35635b"))
 
     def show_infrastructure_overview(self) -> None:
         workspace = getattr(self.app, "workspace", None)
@@ -68,74 +64,138 @@ class OverviewPanel(Static):
         if not summary["has_data"]:
             self.update(
                 Panel(
-                    Text("No infrastructure available."),
+                    Text("No infrastructure available.\nAdd a server to start building this project.", style="bold #cbd5e1"),
                     title="Infrastructure Overview",
-                    border_style="green",
+                    border_style="#35635b",
+                    padding=(2, 3),
                 )
             )
             return
 
         layout = Table.grid(expand=True, padding=(0, 1))
-        layout.add_row(Text.assemble(("Active secret manager: ", "dim"),
-                                     str(getattr(workspace, "active_secret_manager_name", "Unknown"))))
+        layout.add_row(self._dashboard_heading(workspace, summary))
         layout.add_row(self._project_metric_panels(summary))
+        layout.add_row(Columns(
+            [self._system_checks(summary), self._knowledge_tasks(workspace)],
+            expand=True,
+            equal=True,
+        ))
         layout.add_row(self._project_servers_table(summary["server_rows"]))
 
         self.update(
             Panel(
                 layout,
-                title="Infrastructure Overview",
-                border_style="green",
+                title="PROJECT DASHBOARD  ·  Infrastructure Overview",
+                border_style="#35635b",
+                padding=(1, 1),
             )
         )
 
-    def _project_metric_panels(self, summary: dict) -> Columns:
+    def _dashboard_heading(self, workspace, summary: dict) -> Text:
         totals = summary["totals"]
-        metrics: list[tuple[str, str]] = [
-            ("Bundles", str(totals["bundles"])),
-            ("Services", str(totals["services"])),
-            (
-                "CPU Cores",
-                f"{totals['cpu']:g}" if summary["cpu_available"] else "--",
-            ),
-            (
-                "RAM (GiB)",
-                f"{totals['ram']:.1f}" if summary["ram_available"] else "--",
-            ),
-        ]
-        return Columns(
-            [
-                Panel(
-                    DigitsRenderable(value),
-                    title=label,
-                    border_style="green",
-                    padding=(0, 1),
-                )
-                for label, value in metrics
-            ],
-            expand=True,
-            equal=True,
+        return Text.assemble(
+            (f"{getattr(workspace, 'name', 'Project')}  ", "bold #f8fafc"),
+            ("·  ", "#35635b"),
+            (f"{totals['bundles']} Bundles  ·  ", "#94a3b8"),
+            (f"{getattr(workspace, 'active_secret_manager_name', 'No secret manager')}", "#94a3b8"),
         )
+
+    def _project_metric_panels(self, summary: dict) -> Table:
+        totals = summary["totals"]
+        metrics = (
+            ("Servers", str(totals["servers"]), "#69b7ff"),
+            ("Services", str(totals["services"]), "#61d394"),
+            ("Running", str(totals["running_services"]), "#8fe388"),
+            ("Issues", str(totals["services_needing_attention"]), "#f4c95d" if totals["services_needing_attention"] else "#64748b"),
+        )
+        cards = []
+        for label, value, color in metrics:
+            cards.append(Panel(Text(value, style=f"bold {color}"), title=label, border_style=color, padding=(0, 1)))
+        return Columns(cards, expand=True, equal=True)
+
+    def _system_checks(self, summary: dict) -> Panel:
+        totals = summary["totals"]
+        rows = summary["server_rows"]
+        running_servers = sum(str(row["state"]).casefold() == "running" for row in rows)
+        servers = totals["servers"]
+        firewall_servers = totals["firewall_capable_servers"]
+        errors = totals["services_needing_attention"]
+        checks = Table.grid(expand=True, padding=(0, 1))
+        checks.add_column(width=2)
+        checks.add_column()
+        has_servers = servers > 0
+        checks.add_row(
+            self._check_mark(has_servers and running_servers == servers),
+            Text(
+                f"Server status  {running_servers}/{servers} running"
+                if has_servers else "No servers registered"
+            ),
+        )
+        checks.add_row(self._check_mark(errors == 0), Text("No reported service errors" if errors == 0 else f"Investigate {errors} service error(s)"))
+        firewall_state = (
+            f"Firewall capability  {firewall_servers}/{servers} servers; "
+            "check active policy in Security"
+        )
+        checks.add_row(self._check_mark(has_servers and firewall_servers == servers), Text(firewall_state))
+        resources = []
+        if summary["cpu_available"]:
+            resources.append(f"{totals['cpu']:g} CPU cores")
+        if summary["ram_available"]:
+            resources.append(f"{totals['ram']:.1f} GiB RAM")
+        resource_text = (
+            f"Resources reported  {totals['cpu']:g} CPU Cores · {totals['ram']:.1f} RAM (GiB)"
+            if summary["cpu_available"] and summary["ram_available"]
+            else "Resources reported  " + (" · ".join(resources) if resources else "not reported")
+        )
+        checks.add_row("·", Text(resource_text, style="dim"))
+        return Panel(checks, title="SYSTEM CHECKS", border_style="#35635b", padding=(0, 1))
+
+    def _check_mark(self, passed: bool) -> Text:
+        return Text("✓" if passed else "!", style="bold #61d394" if passed else "bold #f4c95d")
+
+    def _knowledge_tasks(self, workspace) -> Panel:
+        rows = Table.grid(expand=True, padding=(0, 1))
+        rows.add_column(width=2)
+        rows.add_column()
+        entries = []
+        list_entries = getattr(workspace, "list_entries", None)
+        if callable(list_entries):
+            try:
+                entries = list(list_entries())
+            except Exception:
+                entries = []
+        tasks: list[tuple[str, str]] = []
+        for entry in entries:
+            if getattr(entry, "kind", "") not in {"todo", "board"}:
+                continue
+            for column in parse_board(str(getattr(entry, "body_md", "") or "")):
+                for item in column.items:
+                    if item.text.strip() and not item.checked:
+                        tasks.append((str(getattr(entry, "title", "Task")), item.text.strip()))
+        if tasks:
+            for title, task in tasks[:5]:
+                rows.add_row(Text("○", style="#f4c95d"), Text.assemble((task, "#cbd5e1"), (f"  · {title}", "dim")))
+            if len(tasks) > 5:
+                rows.add_row("·", Text(f"and {len(tasks) - 5} more open task(s)", style="dim"))
+        else:
+            rows.add_row(Text("✓", style="#61d394"), Text("No open tasks in Knowledge", style="#cbd5e1"))
+            rows.add_row("·", Text("Add project follow-up in Operations → Knowledge", style="dim"))
+        return Panel(rows, title=f"KNOWLEDGE  ·  {len(tasks)} OPEN", border_style="#35635b", padding=(0, 1))
 
     def _project_servers_table(self, server_rows: list[dict]) -> Table:
         table = Table(
-            title="Servers",
+            title="Server inventory",
             show_header=True,
             header_style="bold",
             expand=True,
         )
-        table.add_column("Bundle", style="cyan")
-        table.add_column("Server", style="cyan")
+        table.add_column("Bundle / Server", style="#69b7ff")
         table.add_column("Backend")
-        table.add_column("State")
-        table.add_column("Services", justify="right")
-        table.add_column("Uninitialized", justify="right")
-        table.add_column("Running", justify="right")
-        table.add_column("Error", justify="right")
-        table.add_column("Other", justify="right")
+        table.add_column("Server", width=13)
+        table.add_column("Service states")
 
         if not server_rows:
-            table.add_row("-", "-", "-", "-", "-", "-", "-", "-", "-")
+            table.add_row("-", "-", "-", "-")
             return table
 
         for row in server_rows[:PROJECT_SERVER_ROW_LIMIT]:
@@ -144,22 +204,22 @@ class OverviewPanel(Static):
             table,
             total=len(server_rows),
             shown=min(len(server_rows), PROJECT_SERVER_ROW_LIMIT),
-            columns=9,
+            columns=4,
         )
         return table
 
     def _project_server_cells(self, row: dict) -> tuple:
         counts = row["service_states"]
         return (
-            row["bundle"],
-            row["server"],
+            f"{row['bundle']}  ·  {row['server']}",
             row["backend"],
             self._state_badge(str(row["state"])),
-            str(row["services"]),
-            self._service_count_badge(counts, "un-initialized"),
-            self._service_count_badge(counts, "running"),
-            self._service_count_badge(counts, "error"),
-            self._service_count_badge(counts, "other"),
+            Text.assemble(
+                (f"{counts.get('running', 0)} Running", "#61d394"),
+                (f"   {counts.get('error', 0)} Errors", "#f4c95d" if counts.get("error", 0) else "dim"),
+                (f"   {counts.get('un-initialized', 0)} Uninitialized", "dim"),
+                (f"   {counts.get('other', 0)} Other", "dim"),
+            ),
         )
 
     def _add_more_row(

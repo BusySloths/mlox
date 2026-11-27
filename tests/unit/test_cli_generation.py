@@ -3,7 +3,7 @@ import inspect
 import pytest
 import typer
 
-from mlox.cli.commands import model, server, service
+from mlox.cli.commands import firewall, model, server, service
 from mlox.cli.generation import (
     CliParameter,
     WorkspaceCommand,
@@ -109,11 +109,6 @@ def test_registration_rejects_duplicate_command_names():
 
 def test_simple_commands_are_generated_but_model_deploy_stays_explicit():
     assert set(server.GENERATED_SERVER_COMMANDS) == {
-        "firewall-persist",
-        "firewall-apply",
-        "firewall-draft-add-source",
-        "firewall-draft-remove-source",
-        "firewall-preview",
         "logs",
         "inspect",
         "exec",
@@ -124,6 +119,10 @@ def test_simple_commands_are_generated_but_model_deploy_stays_explicit():
         "save-key",
         "add-ssh-key",
         "remove-ssh-key",
+    }
+    assert set(firewall.GENERATED_FIREWALL_COMMANDS) == {
+        "access-add", "access-remove", "persist", "apply",
+        "draft-add", "draft-remove", "preview",
     }
     assert set(service.GENERATED_SERVICE_COMMANDS) == {
         "proxy-routes",

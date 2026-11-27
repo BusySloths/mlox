@@ -40,6 +40,8 @@ from mlox.server import (
     AbstractServer,
     ServerCapability,
 )
+from mlox.contracts.servers import AbstractTunnelServer
+from mlox.contracts.services import AbstractTunnelService
 
 from mlox.ui.registry import get_handler
 
@@ -47,6 +49,7 @@ PluginKind = Literal["service", "server"]
 
 
 SERVER_CAPABILITY_ABCS = {
+    ServerCapability.TUNNEL.value: AbstractTunnelServer,
     ServerCapability.HEALTH.value: AbstractHealthServer,
     ServerCapability.LOGS.value: AbstractLogServer,
     ServerCapability.GIT.value: AbstractGitServer,
@@ -61,6 +64,7 @@ SERVER_CAPABILITY_ABCS = {
 
 
 SERVICE_CAPABILITY_ABCS = {
+    ServiceCapability.TUNNEL.value: AbstractTunnelService,
     ServiceCapability.OBJECT_STORAGE.value: AbstractObjectStorageService,
     ServiceCapability.S3_OBJECT_STORAGE.value: AbstractS3ObjectStorageService,
     ServiceCapability.PROXY.value: AbstractProxyService,

@@ -644,6 +644,23 @@ class ProjectWorkspace:
             return OperationResult(False, 5, "Server not found or identifier is ambiguous.")
         return firewall.preview_firewall_policy(self.infrastructure, bundle)
 
+    def grant_firewall_access(self, *, duration: str = "15m") -> OperationResult[dict[str, Any]]:
+        """Grant this computer temporary access to all active project firewalls."""
+        from mlox.application.firewall_client import firewall_client_id
+        from mlox.application.use_cases.firewall_grants import grant_current_computer
+
+        durations = {"15m": 900, "1h": 3600}
+        if duration not in durations:
+            return OperationResult(False, 2, "Duration must be 15m or 1h.")
+        return grant_current_computer(self.infrastructure, grant_id=firewall_client_id(), duration_seconds=durations[duration])
+
+    def revoke_firewall_access(self) -> OperationResult[dict[str, Any]]:
+        """Remove only this computer's temporary grant from project firewalls."""
+        from mlox.application.firewall_client import firewall_client_id
+        from mlox.application.use_cases.firewall_grants import remove_computer_grant
+
+        return remove_computer_grant(self.infrastructure, grant_id=firewall_client_id())
+
     def apply_server_firewall(self, *, ip: str) -> OperationResult[dict[str, Any]]:
         """Apply the selected server's saved policy draft."""
         bundle = self.infrastructure.get_bundle_by_ip(ip)

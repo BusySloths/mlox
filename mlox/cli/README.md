@@ -30,6 +30,52 @@ Ubuntu servers currently expose the system journal. The optional `--label`
 selects a source for either service or server logs.
 The former positional project argument is replaced by `--project`.
 
+### Temporary firewall access
+
+The Security tab's Firewall section can grant this computer access to every
+active MLOX project firewall for 15 minutes, one hour, or while the TUI remains
+open. From the CLI:
+
+```sh
+mlox firewall access-add --duration 15m
+mlox firewall access-add --duration 1h
+mlox firewall access-hold
+mlox firewall access-remove
+```
+
+Firewall policy commands follow the same edit-to-apply flow:
+
+```sh
+mlox firewall draft-add my-server 203.0.113.8/32
+mlox firewall draft-remove my-server 203.0.113.8/32
+mlox firewall preview my-server
+mlox firewall apply my-server
+mlox firewall persist my-server
+```
+
+Draft edits stay local until `apply`; `persist` saves the applied policy for
+reboots.
+
+`hold` renews a five-minute server-side lease every two minutes; Ctrl-C removes
+the CLI lease, and a crash or lost connection lets it expire. The TUI hold also
+stops renewing when the TUI closes. Add/remove reports the result for each
+server; inactive firewalls are skipped, and unreachable servers may need a
+retry. A per-user identifier in `$XDG_STATE_HOME/mlox` (or
+`~/.local/state/mlox`) identifies this computer's grant separately from other
+computers. Removing one grant does not remove another grant for the same IP or
+change permanently trusted sources.
+
+Ubuntu hosts need the `ipset` package for temporary access; MLOX installs it
+during server setup. On an existing server without it, install the Ubuntu
+`ipset` package before adding temporary access. The address is what
+each server observes as the SSH client: computers behind the same NAT share
+access, and an SSH jump host may be the observed address. With a browser-hosted
+TUI, “this computer” is the machine running MLOX, not the browser. A grant trusts that
+source for all ports and protocols controlled by the firewall. It does not
+change service authentication, and expiration does not terminate connections
+that the existing-connection rule already permits. Temporary grants are kept in
+runtime state and are not saved by “Persist rules for reboots”.
+
 `mlox project push --ip my-server` and `mlox project pull --ip my-server`
 transfer encrypted project snapshots through a registered server. Add `--name project-name` to
 select a project; see the [project-file guide](../../docs/PROJECT_FILES.md#copy-projects-between-computers)

@@ -23,6 +23,7 @@ capabilities:
   server:
   - logs
   - terminal
+  - tunnel
   backend:
   - native
 build:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Any, Optional
+from datetime import datetime, timezone
+from threading import Lock
 
 from rich.panel import Panel
 from rich.table import Table
@@ -12,7 +14,7 @@ from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Input, Label, Static
+from textual.widgets import Button, DataTable, Input, Label, Select, Static
 
 from mlox.firewall import normalize_source
 
@@ -153,6 +155,10 @@ class FirewallPanel(Static):
         self._row_ids: list[str] = []
         self._selected_id = ""
         self._loading = False
+        self._access_lock = Lock()
+        self._hold_timer = None
+        self._hold_workspace = None
+        self._access_generation = 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="firewall-content"):
@@ -162,11 +168,16 @@ class FirewallPanel(Static):
                 yield Button("Edit and apply rules", id="edit-firewall-draft", variant="success")
                 yield Button("Persist rules for reboots", id="persist-firewall", variant="warning", tooltip="Save the applied policy for reboot")
                 yield Button("Disable", id="disable-firewall", variant="error")
+            with Horizontal(id="firewall-access-actions"):
+                yield Label("This computer:")
+                yield Select([("15 minutes", "15m"), ("1 hour", "1h"), ("Hold while open", "hold")], value="15m", allow_blank=False, id="firewall-access-duration")
+                yield Button("Add to all", id="firewall-access-add", variant="success")
+                yield Button("Remove from all", id="firewall-access-remove", variant="warning")
             with Horizontal(id="firewall-browser"):
                 table = DataTable(id="firewall-table")
                 table.cursor_type = "row"
                 table.add_columns(
-                    "Server", "Firewall", "On reboot",
+                    "Server", "Firewall", "On reboot", "Temporary access",
                 )
                 yield table
                 with VerticalScroll(id="firewall-detail-pane"):
@@ -187,6 +198,91 @@ class FirewallPanel(Static):
 
     def on_mount(self) -> None:
         self.watch_selection(self.selection)
+        self.set_interval(30, self._refresh_expiry_display)
+
+    def _refresh_expiry_display(self) -> None:
+        if self.display and self._rows:
+            self._populate_table()
+            if self._selected_id:
+                self._select_row(self._selected_id)
+
+    def _stop_access_hold(self) -> None:
+        self._access_generation += 1
+        self._hold_workspace = None
+        if self._hold_timer is not None:
+            self._hold_timer.stop()
+            self._hold_timer = None
+
+    @on(Button.Pressed, "#firewall-access-add")
+    def add_this_computer(self) -> None:
+        duration = self.query_one("#firewall-access-duration", Select).value
+        self._stop_access_hold()
+        self._run_access_action(str(duration))
+
+    @on(Button.Pressed, "#firewall-access-remove")
+    def remove_this_computer(self) -> None:
+        self._stop_access_hold()
+        self._run_access_action(None)
+
+    def _run_access_action(self, duration: str | None, *, renewal: bool = False) -> None:
+        from mlox.application.firewall_client import firewall_client_id
+        from mlox.application.use_cases.firewall_grants import grant_current_computer, remove_computer_grant
+
+        workspace = getattr(self.app, "workspace", None)
+        infra = getattr(workspace, "infrastructure", None)
+        generation = self._access_generation
+        if not renewal:
+            self._set_loading(True)
+
+        def run() -> None:
+            with self._access_lock:
+                if renewal and generation != self._access_generation:
+                    return
+                try:
+                    ident = firewall_client_id()
+                    if duration is None:
+                        result = remove_computer_grant(infra, grant_id=ident)
+                    else:
+                        seconds = {"15m": 900, "1h": 3600, "hold": 300}[duration]
+                        result = grant_current_computer(infra, grant_id=ident, duration_seconds=seconds)
+                except Exception as exc:
+                    from mlox.application.result import OperationResult
+                    result = OperationResult(False, 1, str(exc))
+                self.app.call_from_thread(self._finish_access_action, result, duration, renewal, workspace)
+
+        self.app.run_worker(run, thread=True, group="firewall-access")
+
+    def _finish_access_action(self, result, duration: str | None, renewal: bool, workspace=None) -> None:
+        if not renewal:
+            self._set_loading(False)
+        if workspace is not None and workspace is not getattr(self.app, "workspace", None):
+            return
+        data = result.data or {}
+        ident = data.get("grant_id")
+        for change in data.get("servers", []):
+            row = next((row for row in self._rows if row.get("bundle") == change.get("server")), None)
+            if row is None or row.get("temporary_grants") is None:
+                continue
+            if change["status"] in ("added", "removed"):
+                grants = [grant for grant in row["temporary_grants"] if grant.get("grant_id") != ident]
+                if change["status"] == "added":
+                    grants.append({"grant_id": ident, "address": change["address"], "expires_at": change["expires_at"]})
+                row["temporary_grants"] = grants
+        self._populate_table()
+        if self._selected_id:
+            self._select_row(self._selected_id)
+        failures = [f"{row['server']}: {row.get('message', 'failed')}" for row in data.get("servers", []) if row["status"] == "failed"]
+        if not renewal or failures:
+            self.notify(result.message + (" " + "; ".join(failures) if failures else ""), severity="information" if result.success else "error")
+        if duration == "hold" and not renewal and any(row["status"] == "added" for row in data.get("servers", [])):
+            self._hold_workspace = getattr(self.app, "workspace", None)
+            self._hold_timer = self.set_interval(120, self._renew_access_hold)
+
+    def _renew_access_hold(self) -> None:
+        if getattr(self.app, "workspace", None) is not self._hold_workspace:
+            self._stop_access_hold()
+            return
+        self._run_access_action("hold", renewal=True)
 
     def watch_selection(self, selection: Optional[SelectionInfo]) -> None:
         if not self.is_mounted:
@@ -257,11 +353,31 @@ class FirewallPanel(Static):
                 ("Saved" if row.get("persistence") == "enabled" else
                  "Not saved" if row.get("is_active") and row.get("persistence") == "disabled" else
                  "Off" if not row.get("is_active") and not row.get("status_error") and row.get("persistence") == "disabled" else "Unknown"),
+                self._temporary_access_summary(row),
                 key=row_id,
             )
         if self._row_ids:
             index = self._row_ids.index(self._selected_id) if self._selected_id in self._row_ids else 0
             table.cursor_coordinate = (index, 0)
+
+    @staticmethod
+    def _temporary_access_summary(row: dict[str, Any]) -> str:
+        grants = row.get("temporary_grants")
+        if grants is None:
+            return "Unavailable"
+        if not grants:
+            return "None"
+        try:
+            expiries = [datetime.fromisoformat(str(grant["expires_at"])) for grant in grants]
+            if any(expiry.tzinfo is None or expiry.utcoffset() is None for expiry in expiries):
+                raise ValueError("Missing timezone")
+            expiries = [expiry for expiry in expiries if expiry.astimezone(timezone.utc) > datetime.now(timezone.utc)]
+            if not expiries:
+                return "None"
+            next_expiry = min(expiries, key=lambda expiry: expiry.astimezone(timezone.utc))
+            return f"{len(expiries)} · {next_expiry.astimezone().strftime('%d %b %H:%M')}"
+        except (KeyError, ValueError, TypeError):
+            return f"{len(grants)} · expiry unknown"
 
     @on(DataTable.RowSelected, "#firewall-table")
     def handle_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -408,6 +524,20 @@ class FirewallPanel(Static):
         if row.get("is_active") and not row.get("status_error"):
             trusted = "Per-port legacy rules" if row.get("legacy_policy") else ", ".join(row.get("trusted_sources", [])) or "none"
             layout.add_row("Trusted sources", trusted)
+            grants = row.get("temporary_grants")
+            if grants is None:
+                layout.add_row("Temporary access", "Unavailable")
+            elif self._temporary_access_summary(row) == "None":
+                layout.add_row("Temporary access", "None")
+            else:
+                for grant in grants:
+                    try:
+                        expiry = datetime.fromisoformat(str(grant["expires_at"]))
+                        if expiry.tzinfo is not None and expiry.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+                            continue
+                    except (KeyError, ValueError, TypeError):
+                        pass
+                    layout.add_row("Temporary access", f"{grant.get('address', '?')} · {grant.get('expires_at', '?')}")
         if row.get("legacy_policy"):
             layout.add_row("Previous policy", "Older rules detected; apply the draft to replace them.")
         error = str(row.get("status_error") or "")

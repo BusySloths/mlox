@@ -220,6 +220,10 @@ def _describe_bundle(bundle) -> dict[str, Any]:
         "open_ports": list(status.allowed_ports),
         "public_ports": list(status.public_ports),
         "trusted_sources": list(status.trusted_sources),
+        "temporary_grants": (None if status.temporary_grants is None else [
+            {"grant_id": grant.grant_id, "address": grant.address, "expires_at": grant.expires_at.isoformat()}
+            for grant in status.temporary_grants
+        ]),
         "legacy_policy": status.previous_policy,
         "open_ports_unknown": status.active is None,
         "raw_status": status.raw,

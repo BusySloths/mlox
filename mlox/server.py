@@ -59,6 +59,7 @@ from mlox.contracts.servers import (
     AbstractGitServer,
     AbstractFirewallServer,
     AbstractInitialPasswordAuthServer,
+    AbstractTunnelServer,
     AbstractBackendServer,
     AbstractNativeServer,
     AbstractDockerServer,

@@ -15,6 +15,47 @@ from typing import Literal
 from mlox.firewall import FirewallPolicy
 
 
+# Runs on the host while the firewall lock is held. Only our exact generated
+# rules, backed by root-owned runtime metadata, can be excluded from the
+# permanent-policy comparison or replayed after a chain replacement.
+_TEMP_RULES_PROGRAM = r'''import pathlib, shlex, subprocess, sys, uuid
+tool, table, chain, mode = sys.argv[1:]
+args = [tool] + (["-t", table] if table else []) + ["-S", chain]
+result = subprocess.run(args, capture_output=True, text=True)
+if result.returncode and any(pathlib.Path("/run/mlox-firewall-grants").glob("*.grant")):
+    print("Cannot inspect firewall chain while temporary grants exist", file=sys.stderr)
+    sys.exit(1)
+family = "4" if tool == "iptables" else "6"
+target = "ACCEPT" if chain == "MLOX-POLICY-IN" else "RETURN"
+base = 0
+for line in result.stdout.splitlines():
+    try: t = shlex.split(line)
+    except ValueError:
+        base += 1
+        continue
+    if not t or t[0] != "-A": continue
+    valid = (len(t) == 13 and t[:5] == ["-A", chain, "-m", "set", "--match-set"]
+             and t[6:10] == ["src", "-m", "comment", "--comment"]
+             and t[11:] == ["-j", target] and t[10].startswith("mlox-temp-"))
+    if valid:
+        ident = t[10][10:]
+        try: valid = len(ident) == 32 and uuid.UUID(ident).hex == ident
+        except ValueError: valid = False
+        if valid:
+            name = "mlx" + family + ident[:24]
+            try: valid = t[5] == name and pathlib.Path("/run/mlox-firewall-grants", name + ".owner").read_text() == ident and pathlib.Path("/run/mlox-firewall-grants", ident + ".grant").is_file()
+            except OSError: valid = False
+    if valid and mode == "restore":
+        print(" ".join(["-I", chain, "1"] + t[2:]))
+    if not valid: base += 1
+if mode == "count": print(base)
+'''
+
+
+def _temporary_rules_command(tool: str, chain: str, mode: str, *, table: str = "") -> str:
+    return shlex.join(("python3", "-c", _TEMP_RULES_PROGRAM, tool, table, chain, mode))
+
+
 @dataclass(frozen=True)
 class CompiledFirewallRules:
     """Rules for two *unattached* chains in one address family."""
@@ -123,11 +164,14 @@ def render_apply_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool, 
         lines.append(f"  if {tool} -C DOCKER-USER -p tcp -j MLOX-DOCKER-FIREWALL 2>/dev/null; then printf '%s\\n' '-D DOCKER-USER -p tcp -j MLOX-DOCKER-FIREWALL' >> {path}; fi")
         lines.append(f"  printf '%s\\n' '-I DOCKER-USER 1 -j MLOX-POLICY-DOCKER' >> {path}")
         lines.append("fi")
+        for chain in ("MLOX-POLICY-IN", "MLOX-POLICY-DOCKER"):
+            lines.append(f"{_temporary_rules_command(tool, chain, 'restore')} >> {path}")
         lines.append(f"printf '%s\\n' COMMIT >> {path}")
         if ingress is not None:
             entries = ingress.ipv4_rules if rules.family == 4 else ingress.ipv6_rules
             payload = _render_ingress_restore_payload(entries)
             lines.append(f"printf %s {shlex.quote(payload)} >> {path}")
+            lines.append(f"{_temporary_rules_command(tool, 'MLOX-INGRESS', 'restore', table='mangle')} >> {path}")
             lines.append(f"if {tool} -t mangle -C PREROUTING -j MLOX-INGRESS 2>/dev/null; then printf '%s\\n' '-D PREROUTING -j MLOX-INGRESS' >> {path}; fi")
             lines.append(f"printf '%s\\n' '-I PREROUTING 1 -j MLOX-INGRESS' COMMIT >> {path}")
         lines.append(f"{tool}-restore --test --noflush < {path}")
@@ -155,7 +199,7 @@ def render_persist_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool
         rules = _extended_rules(rules, ingress)
         tool = "iptables" if rules.family == 4 else "ip6tables"
         for chain, entries in (("MLOX-POLICY-IN", rules.input_rules), ("MLOX-POLICY-DOCKER", rules.docker_rules)):
-            lines.append(f"test \"$({tool} -S {chain} | grep -c '^-A {chain} ')\" -eq {len(entries)}")
+            lines.append(f"test \"$({_temporary_rules_command(tool, chain, 'count')})\" -eq {len(entries)}")
             for entry in entries:
                 lines.append(shlex.join((tool, "-C", chain, *entry)))
         lines.append(_render_input_hook_check(tool, ingress=ingress is not None))
@@ -163,7 +207,7 @@ def render_persist_script(policy: FirewallPolicy, ssh_port: int, *, docker: bool
             lines.append(f"test \"$({tool} -S DOCKER-USER | grep '^-A DOCKER-USER ' | head -n 1)\" = '-A DOCKER-USER -j MLOX-POLICY-DOCKER'")
         if ingress is not None:
             entries = ingress.ipv4_rules if rules.family == 4 else ingress.ipv6_rules
-            lines.append(f"test \"$({tool} -t mangle -S MLOX-INGRESS | grep -c '^-A MLOX-INGRESS ')\" -eq {len(entries)}")
+            lines.append(f"test \"$({_temporary_rules_command(tool, 'MLOX-INGRESS', 'count', table='mangle')})\" -eq {len(entries)}")
             for entry in entries:
                 lines.append(shlex.join((tool, "-t", "mangle", "-C", "MLOX-INGRESS", *entry)))
             lines.append(f"test \"$({tool} -t mangle -S PREROUTING | grep '^-A PREROUTING ' | head -n 1)\" = '-A PREROUTING -j MLOX-INGRESS'")

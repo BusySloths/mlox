@@ -86,6 +86,8 @@ class FirewallMixin(TaskRunnerABC):
     def firewall_down(self, connection: Connection) -> str | None:
         command = "\n".join([
             "set -e",
+            "exec 9>/run/lock/mlox-firewall.lock",
+            "flock -x 9",
             "if systemctl is-enabled --quiet mlox-firewall-policy.service 2>/dev/null; then systemctl disable mlox-firewall-policy.service; fi",
             "for tool in iptables ip6tables; do",
             "  while $tool -t mangle -C PREROUTING -j MLOX-INGRESS 2>/dev/null; do $tool -t mangle -D PREROUTING -j MLOX-INGRESS; done",
@@ -95,6 +97,17 @@ class FirewallMixin(TaskRunnerABC):
             "  if $tool -S MLOX-POLICY-IN >/dev/null 2>&1; then $tool -F MLOX-POLICY-IN; $tool -X MLOX-POLICY-IN; fi",
             "  if $tool -S MLOX-POLICY-DOCKER >/dev/null 2>&1; then $tool -F MLOX-POLICY-DOCKER; $tool -X MLOX-POLICY-DOCKER; fi",
             "done",
+            # Disable clears runtime grants too: they must not reappear if a
+            # policy is subsequently enabled again.
+            "for f in /run/mlox-firewall-grants/*.owner; do",
+            "  test -f \"$f\" || continue",
+            "  name=${f##*/}; name=${name%.owner}",
+            "  if printf '%s\\n' \"$name\" | grep -Eq '^mlx[46][0-9a-f]{24}$'; then",
+            "    if command -v ipset >/dev/null; then ipset flush \"$name\" 2>/dev/null || true; ipset destroy \"$name\" 2>/dev/null || true; fi",
+            "    rm -f \"$f\"",
+            "  fi",
+            "done",
+            "rm -f /run/mlox-firewall-grants/*.grant",
             "echo MLOX_POLICY_DISABLED",
         ])
         result = self._run_task(connection, group=TaskGroup.NETWORKING, command=self._root_shell_command(command), sudo=True)

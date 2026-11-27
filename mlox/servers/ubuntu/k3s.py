@@ -31,6 +31,7 @@ class UbuntuK3sServer(
         ServerCapability.LOGS,
         ServerCapability.GIT,
         ServerCapability.FIREWALL,
+        ServerCapability.TUNNEL,
         ServerCapability.INITIAL_AUTH_PASSWORD,
         ServerCapability.TERMINAL,
         ServerCapability.KUBERNETES,
@@ -62,6 +63,9 @@ class UbuntuK3sServer(
         self.firewall_validate_policy(policy)
         with self.get_server_connection() as conn:
             self.exec.firewall_apply_policy(conn, policy, int(self.port), docker=False, ingress=k3s_ingress_extension(policy))
+
+    def _firewall_grant_profile(self) -> tuple[bool, bool]:
+        return False, True
 
     def firewall_persist_policy(self, policy) -> None:
         self.firewall_validate_policy(policy)

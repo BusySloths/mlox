@@ -32,6 +32,7 @@ capabilities:
   - workflow_orchestrator
   - health
   - secret_manager_binding
+  - tunnel
   backend:
   - docker
 ports:

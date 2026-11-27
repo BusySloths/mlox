@@ -9,6 +9,7 @@ from .operations import (
     AbstractGitServer,
     AbstractFirewallServer,
     AbstractInitialPasswordAuthServer,
+    AbstractTunnelServer,
 )
 from .backends import (
     AbstractBackendServer,
@@ -26,6 +27,7 @@ __all__ = [
     "AbstractGitServer",
     "AbstractFirewallServer",
     "AbstractInitialPasswordAuthServer",
+    "AbstractTunnelServer",
     "AbstractBackendServer",
     "AbstractNativeServer",
     "AbstractDockerServer",

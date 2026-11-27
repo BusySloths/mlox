@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from mlox.service import AbstractLogService, AbstractService, AbstractS3ObjectStorageService, AbstractAppService, ServiceCapability
+from mlox.contracts.services import AbstractTunnelService
+from mlox.tunnel import TunnelPlan, direct_endpoint, find_binding
 
 
 logging.basicConfig(
@@ -30,8 +32,8 @@ logging.basicConfig(
 
 
 @dataclass
-class MinioDockerService(AbstractService, AbstractAppService, AbstractLogService, AbstractS3ObjectStorageService):
-    capabilities = {ServiceCapability.OBJECT_STORAGE, ServiceCapability.S3_OBJECT_STORAGE, ServiceCapability.APP, ServiceCapability.LOGS}
+class MinioDockerService(AbstractService, AbstractAppService, AbstractLogService, AbstractS3ObjectStorageService, AbstractTunnelService):
+    capabilities = {ServiceCapability.OBJECT_STORAGE, ServiceCapability.S3_OBJECT_STORAGE, ServiceCapability.APP, ServiceCapability.LOGS, ServiceCapability.TUNNEL}
     web_ui_url_label = "MinIO Console"
     web_ui_login_fields = ("username", "password")
     root_user: str
@@ -44,6 +46,26 @@ class MinioDockerService(AbstractService, AbstractAppService, AbstractLogService
         init=False,
         default_factory=lambda: {"MinIO": "minio"},
     )
+
+    def tunnel_plan(self, infra):
+        return TunnelPlan(str(self.uuid), (
+            direct_endpoint(infra, self, "MinIO API", int(self.api_port), "https"),
+            direct_endpoint(infra, self, "MinIO Console", int(self.console_port), "https"),
+        ))
+
+    def tunnel_dependency_plan(self, infra):
+        """S3 consumers need the API, not the interactive console."""
+        return TunnelPlan(str(self.uuid), (direct_endpoint(infra, self, "MinIO API", int(self.api_port), "https"),))
+
+    def tunnel_secrets(self, infra, bindings):
+        binding = find_binding(bindings, str(self.uuid), "MinIO API")
+        result = {name: dict(value) for name, value in self.get_secrets().items()}
+        for connection in result.values():
+            connection.update(endpoint=f"https://{binding.local_host}:{binding.local_port}", tls_server_name=binding.endpoint.tls_server_name)
+        console = next((item for item in bindings if item.endpoint.service_uuid == str(self.uuid) and item.endpoint.name == "MinIO Console"), None)
+        if console is not None and "minio_root_credentials" in result:
+            result["minio_root_credentials"]["console_url"] = f"https://{console.local_host}:{console.local_port}"
+        return result
 
     def setup(self, conn) -> None:
         self.exec.fs_create_dir(conn, self.target_path)
