@@ -77,8 +77,8 @@ pieces:
   - slug: operator-demo
     type: demo
     title: "MLOX Operations: catching a silent model failure, live"
-    # Deck finished (content/operator-demo/deck/); narrated video not yet produced.
-    status: draft
+    # Deck (content/operator-demo/deck/) and narrated video (content/operator-demo/video.py) done.
+    status: published
     services: [mlflow-gateway, mlflow, otel, influx, openbao]
     outputs:
       # Deck and video stay local until a commit is explicitly requested (no media in git).
@@ -93,10 +93,22 @@ pieces:
     type: tutorial
     title: "Your first project, five minutes from now"
     # Rendered from terminal captures in content/.work/first-steps/ (captures.json, redact.json).
-    status: recorded
+    status: published
     services: [catalog-app-memos]
     outputs:
       - type: captures
         dest: website/src/captures/first-steps/
       - type: page
         dest: website/src/pages/learn/first-steps.astro
+
+  - slug: first-models
+    type: tutorial
+    title: "Track, register and serve your first model"
+    # Planned: the first service-specific recipe, continuing from first-steps.
+    status: draft
+    services: [mlflow, mlflow-mlserver]
+    outputs:
+      - type: captures
+        dest: website/src/captures/first-models/
+      - type: page
+        dest: website/src/pages/learn/first-models.astro

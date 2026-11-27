@@ -104,8 +104,31 @@ fragments and final deck before committing captures. Rendering rejects known
 originals left in the text, but cannot detect sensitive strings missing from
 your map. The ANSI renderer supports SGR-coloured visible snapshots, not raw
 interactive terminal streams, cursor movement, or full Unicode cell-width
-emulation. This workflow produces HTML/PDF, not a timed video or narration;
-use the video stages below when those are needed.
+emulation. This workflow produces HTML/PDF, not a timed video; for a narrated
+video of a deck, see the next section.
+
+## Narrated slide videos
+
+A deck built from captures can become a narrated video without any screen
+recording. In the piece's `script.md`, each `## Chapter:` is one slide, in deck
+order, and its blockquote is the narration. `content/operator-demo/video.py`
+renders the PDF slides, voices each chapter with OpenAI text-to-speech
+(`OPENAI_API_KEY`, read from the repo `.env` when unset), holds each slide for
+its narration, and joins the clips at web loudness (-16 LUFS).
+
+```sh
+uv run python -m content.operator-demo.video \
+  [--pdf content/.work/operator-demo/operator-demo-deck.pdf] \
+  [--out content/.work/operator-demo/operator-demo.mp4]
+```
+
+Voice clips are cached by their text in `content/.work/<slug>/voice/`, so after
+a script edit only the changed chapters are voiced again. The renderer stops
+when the number of slides and chapters differ. Names the voice gets wrong get a
+spoken form in its `SAY` map; the script keeps the written form. Listen to the
+final video before publishing: the leak gate does not cover synthesized audio,
+and transcribing it only shows what a speech model hears, not the
+pronunciation. The video stays local, like every other video (no media in Git).
 
 ## Before recording
 
@@ -221,6 +244,9 @@ each final clip, so manually review audio in published videos as well.
 
 ## Current limitations and follow-up work
 
+These apply to the screen-recording path. The terminal-capture path and
+narrated slide videos above don't use those stages.
+
 - `align` is a placeholder. Hand-authored `timeline.json` is the supported
   workflow until visual alignment is implemented.
 - Outputs are not yet materialized directly from registry destinations, and
@@ -230,5 +256,5 @@ each final clip, so manually review audio in published videos as well.
 - The automated verifier cannot prove absence of an entity that OCR missed.
 
 Record these limitations in reviews and resolve them before treating the
-pipeline as fully hands-off. The implementation work is tracked in the content
-pipeline issue and its linked pull request.
+pipeline as fully hands-off. The implementation work is tracked in
+[#119](https://github.com/BusySloths/mlox/issues/119).
