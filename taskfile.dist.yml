@@ -135,12 +135,12 @@ tasks:
           exit 1; \
         fi
       - |
-        if ! uv run python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
+        if ! uv run --extra dev --extra ducklake python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"; then \
           printf '\n\033[1;31m✖ pytest not installed.\033[0m\n'; \
           printf 'Install dev deps first: \033[1mtask first:steps\033[0m\n\n'; \
           exit 1; \
         fi
-      - 'uv run python -m pytest tests/integration -m integration --run-integration {{.CLI_ARGS}}'
+      - 'uv run --extra dev --extra ducklake python -m pytest tests/integration -m integration --run-integration {{.CLI_ARGS}}'
 
   tests:integration:k8s:
     aliases: [tests:integration:kubernetes]
